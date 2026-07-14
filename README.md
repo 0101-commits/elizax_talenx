@@ -35,8 +35,46 @@ talenx HR·성과관리 SaaS 사용자 앱 화면 복제 목업 (단일 HTML).
 | `inkichoi@allinone.com` | 최인기 | HR·팀장 | 전체 접근(인재검색·인원현황 포함) |
 | `minsoopark@allinone.com` | 박민수 | 조직원(미주팀) | HR 메뉴 없음, 360 생성 권한 없음(안내 모달), 대시보드 기본·개인커스텀 |
 
+## elizax — 성과관리/평가 AI Agent (신규)
+
+talenx의 AI Assistant `elizax`를 **성과관리·평가 전 주기 에이전트**로 고도화하여 동일 `index.html`에 상주 모듈로 탑재했습니다. 우하단 **elizax** 런처(⌘/Ctrl+J)로 실행하며, 3계정 관점(HR·조직장·조직원)에 따라 내용이 자동 전환됩니다.
+
+### 4대 검증가능 답변(Verifiable Answer) 원칙
+
+`elizax_verifiable_answer_mockup.html`의 4원칙에 따라, 모든 에이전트 답변을 **검증 가능한 객체(answer receipt)**로 렌더링합니다. 공통 스키마 `{ answer, as_of, scope, trace[], rules[], evidence[], excluded[], actions[], audit_ref }`.
+
+1. **기준 시점 칩** — bitemporal as-of 셀렉터. 과거 주기 기준 재조회 진입점.
+2. **계산·근거 트레이스** — 규칙 버전 배지 · 법령/규정 칩 · 원천 recordId(클릭 시 원문 스냅샷 팝오버).
+3. **감사 가능 배지** — "감사 로그 기록됨" + 권한 내 탐색 범위 명시.
+4. **What-if 재계산** — 규칙 버전/가정을 바꿔 실제로 다시 계산(엔진 실증).
+
+### 3가지 노출 형태 · S1–S8 프로토콜
+
+- **도킹 대화창**(상주) · **선제 팝업**(이상 신호 감지 시 먼저 제시) · **전체화면 딥워크**(병렬 심의·대형 객체).
+- 응답은 `S1 감지 → S2 정합 → S3 계획 → S4 수행(병렬) → S5 정초 → S6 객체화 → S7 게이팅 → S8 자산화` 상태기계로 전개.
+- **불변식 A(읽기/쓰기 하드 분리)**: 계획·조회·판단은 자율 실행하되 발송·저장·확정은 `propose → approve → commit` — **승인 게이트 전 side-effect 0**.
+
+### Quick-Win 7과제 + 추가 3과제 (모두 시뮬레이션 동작)
+
+| ID | 과제 | 형태 | 자율성 | 관점 |
+|---|---|---|---|---|
+| QW1 | 주간 중간점검 · 진척 요약 | 팝업→도킹 | auto(발송만 승인) | 조직장·HR |
+| QW2 | 개인 맥락 기반 목표 초안(왼쪽 실시간 채움) | 전체화면 | suggest | 조직원·조직장 |
+| QW3 | 평가 코멘트·등급 근거 초안 | 도킹 | human_approve | 조직장·HR |
+| QW4 | 성과 근거 자동수집 · 타임라인 | 전체화면 | suggest | 조직장·HR·조직원 |
+| QW5 | 평가 편향·등급 분포 Calibration(다자 심의) | 전체화면 | human_approve | HR |
+| QW6 | 피드백 문장 정제 · SBI 구조화 | 도킹 | suggest | 조직장 |
+| QW7 | 팀 목표 정합성·중복 점검 | 전체화면 | suggest | 조직장·HR |
+| EX1 | 목표 Cascading 정렬 맵(전사→개인) | 전체화면 | suggest | HR·조직장 |
+| EX2 | 리뷰 초안 실시간 co-editing | 전체화면 | suggest | 조직장·HR |
+| EX3 | 이의 신청 검토 보조(as-of 재조회 + What-if) | 패널 | human_approve | HR |
+
+- 10대 공통 UX 패턴(과정 노드 뷰 · 편집가능 산출물 · 근거 인용칩 · 승인 게이트 · 선제 알림 · 톤 diff · 교차맥락 · 자율성 배지 · 다자 심의 그래프 · 연결 소스 상태바) 구현.
+- 가상 데이터레이크(조직도·직무·OKR·근거·평가·규칙)는 talenx Wiki 기반, 외부 시스템(ERP·Jira·Slack·MS365·HRIS)은 mock 커넥터로 연출.
+- 순수 vanilla JS/CSS, 외부 의존성 없음. 전역 네임스페이스 `window.EZ`(런타임)·`window.ezLake`(데이터). 모든 CSS는 `.ez-*`로 스코프, 기존 `.tx-*`/`#s-*` 미간섭. 다크 테마 대응.
+
 ## 보기
 
-`index.html`을 브라우저로 열거나 GitHub Pages로 배포.
+`index.html`을 브라우저로 열거나 GitHub Pages로 배포. 우하단 **elizax** 버튼으로 에이전트 실행.
 
-> 데이터는 테스트 워크스페이스 기준 샘플입니다.
+> 데이터는 테스트 워크스페이스 기준 샘플입니다. 성과관리/평가 에이전트의 모든 발송·저장·확정은 승인 게이트 뒤 목업 동작이며 서버 반영은 없습니다.

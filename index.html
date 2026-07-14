@@ -6154,3 +6154,2522 @@ button{font-family:inherit;cursor:pointer;border:0;background:none}
   applyPersona(PERSONAS[stored] ? stored : 'inkichoi');
 })();
 </script>
+
+<!-- ═══════════════ elizax · 성과관리/평가 AI Agent (검증가능 답변 표준) ═══════════════ -->
+<style id="ez-style">
+/* ═══ elizax · scoped styles (.ez-*) — talenx 토큰 기반, 다크 지원 ═══ */
+.ez-root{
+  --ez-accent:var(--blue); --ez-accent-2:var(--blue-2); --ez-accent-soft:var(--blue-soft);
+  --ez-auto:var(--green);   --ez-auto-soft:#E6F4EC;
+  --ez-suggest:var(--blue); --ez-suggest-soft:var(--blue-soft);
+  --ez-appr:var(--orange);  --ez-appr-soft:#FDF3E1;
+  --ez-good:var(--green); --ez-warn:var(--orange); --ez-bad:var(--red);
+  --ez-run:var(--blue); --ez-wait:var(--ink-4); --ez-done:var(--green); --ez-fail:var(--red);
+  --ez-graph:var(--purple);
+  --ez-rad:12px; --ez-rad-sm:8px;
+  font-family:var(--sans); color:var(--ink); font-size:14px; line-height:1.55;
+}
+:root[data-theme="dark"] .ez-root{ --ez-auto-soft:#12271C; --ez-suggest-soft:#152540; --ez-appr-soft:#33260F; }
+.ez-root *{ box-sizing:border-box; }
+@keyframes ez-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes ez-spin{to{transform:rotate(360deg)}}
+@keyframes ez-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ez-pop{from{transform:scale(0)}to{transform:scale(1)}}
+.ez-ic{display:inline-block;vertical-align:-2px;flex:none}
+@media (prefers-reduced-motion: reduce){ .ez-root *{animation-duration:.01ms!important;transition-duration:.01ms!important} }
+
+/* ── receipt ── */
+.ez-rcpt{background:var(--card);border:1px solid var(--line);border-radius:var(--ez-rad);padding:15px 17px;display:flex;flex-direction:column;gap:12px;animation:ez-rise .3s ease}
+.ez-rcpt-h{display:flex;align-items:center;gap:8px}
+.ez-rcpt-title{font-size:14px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.ez-rcpt-h .ez-autobadge{margin-left:auto}
+.ez-rcpt-asof{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ez-rcpt-scope{font-size:12px;color:var(--ink-3);font-weight:600}
+.ez-rcpt-answer{font-size:14.5px;font-weight:600;color:var(--ink);line-height:1.55;background:var(--soft);border-radius:var(--ez-rad-sm);padding:12px 14px}
+.ez-rcpt-answer b,.ez-rcpt-answer strong{font-weight:800}
+.ez-rcpt-answer.is-grade{display:flex;align-items:center;gap:12px;font-size:15px}
+.ez-rcpt-answer .ez-grade{font-size:30px;font-weight:900;color:var(--ez-accent-2);letter-spacing:-.02em;line-height:1}
+.ez-sec-lbl{font-size:11px;font-weight:800;color:var(--ink-3);letter-spacing:.02em;margin-bottom:2px}
+.ez-rcpt-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ez-rcpt.is-approved{border-color:var(--ez-good)}
+.ez-rcpt.is-held{border-style:dashed;border-color:var(--ez-warn)}
+
+/* ── as-of chip (원칙1) ── */
+.ez-asof{display:inline-flex;align-items:center;gap:6px;background:var(--ez-accent-soft);color:var(--ez-accent-2);border:1px solid transparent;border-radius:20px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer}
+.ez-asof:hover{border-color:var(--ez-accent)}
+.ez-asof .ez-ic{width:13px;height:13px}
+.ez-asof.is-past{background:var(--warn-bg,#FBF0D9);color:var(--warn,#8A5A08)}
+.ez-recalc-badge{font-size:11px;font-weight:700;color:var(--ez-warn);background:var(--ez-appr-soft);border-radius:6px;padding:2px 8px}
+
+/* ── trace (원칙2) ── */
+.ez-trace{list-style:none;margin:0;padding:0 0 0 16px;display:flex;flex-direction:column;gap:1px;border-left:2px solid var(--line)}
+.ez-tr{display:flex;align-items:flex-start;gap:9px;padding:7px 0;font-size:13px;position:relative;flex-wrap:wrap}
+.ez-tr .st{position:absolute;left:-24px;top:8px;width:15px;height:15px;border-radius:50%;display:grid;place-items:center;font-size:9px;color:#fff;background:var(--ez-wait)}
+.ez-tr[data-st="done"] .st{background:var(--ez-done)}
+.ez-tr[data-st="run"]  .st{background:var(--ez-run);animation:ez-pulse 1s infinite}
+.ez-tr[data-st="fail"] .st{background:var(--ez-fail)}
+.ez-tr[data-st="wait"] .st{background:var(--card);border:1.5px solid var(--ez-wait)}
+.ez-tr .lbl{font-weight:600;color:var(--ink);flex:1;min-width:60%}
+.ez-tr .expr{font-family:var(--mono,ui-monospace,monospace);font-size:12px;color:var(--ink-2);background:var(--soft);border-radius:5px;padding:1px 7px}
+.ez-tr .val{margin-left:auto;font-weight:800;color:var(--ink);background:var(--soft);border-radius:6px;padding:2px 8px;font-size:12px}
+.ez-tr .val.up{color:var(--ez-good)} .ez-tr .val.down{color:var(--ez-bad)}
+.ez-tr-sub{display:flex;flex-wrap:wrap;gap:5px;width:100%;padding-left:0;margin-top:2px}
+.ez-path{display:flex;flex-wrap:wrap;align-items:center;gap:5px;width:100%;margin-top:3px}
+.ez-node-pill{font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;background:var(--soft);color:var(--ink-2);border:1px solid var(--line)}
+.ez-node-pill[data-t="goal"]{color:var(--ez-accent-2);background:var(--ez-accent-soft)}
+.ez-node-pill[data-t="skill"]{color:var(--ez-graph);background:#EFEBFF}
+.ez-node-pill[data-t="rule"]{color:var(--ez-warn);background:var(--ez-appr-soft)}
+.ez-node-pill[data-t="org"]{color:var(--ink-2)}
+.ez-node-pill.is-cut{border-color:var(--ez-bad);color:var(--ez-bad);border-style:dashed}
+.ez-path .arw{color:var(--ink-4);font-size:11px}
+:root[data-theme="dark"] .ez-node-pill[data-t="skill"]{background:#241C4A}
+
+/* ── rule chip ── */
+.ez-rule{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:11.5px;font-weight:700;color:var(--ink-2);background:var(--card);cursor:pointer}
+.ez-rule:hover{border-color:var(--ez-accent);color:var(--ez-accent-2)}
+.ez-rule .ver{font-size:10px;font-weight:800;color:#fff;background:var(--ink-3);border-radius:4px;padding:1px 5px}
+.ez-rule[data-kind="law"] .ver{background:var(--ez-warn)}
+.ez-rule[data-kind="policy"] .ver{background:var(--ez-accent)}
+
+/* ── evidence chip + popover (원칙2) ── */
+.ez-ev{display:inline-flex;align-items:center;gap:6px;border-radius:6px;padding:3px 9px;font-size:11.5px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink-2)}
+.ez-ev .src{width:7px;height:7px;border-radius:50%;background:var(--_src,var(--ink-3))}
+.ez-ev:hover{border-color:var(--_src,var(--ez-accent))}
+.ez-ev sup{color:var(--ez-accent-2);font-weight:800;font-size:9px}
+.ez-popover{position:fixed;z-index:9400;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 34px rgba(17,20,28,.18);max-width:340px;font-size:12.5px;animation:ez-rise .14s ease}
+:root[data-theme="dark"] .ez-popover{box-shadow:0 12px 34px rgba(0,0,0,.55)}
+.ez-snap-h{display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid var(--line-2)}
+.ez-snap-src{font-size:10px;font-weight:800;color:#fff;border-radius:5px;padding:2px 7px;background:var(--_src,var(--ink-3))}
+.ez-snap-rid{font-family:var(--mono,monospace);font-size:10.5px;color:var(--ink-3);margin-left:auto}
+.ez-snap-ttl{padding:9px 13px 0;font-weight:700;color:var(--ink);font-size:13px}
+.ez-snap-body{padding:6px 13px 11px;line-height:1.55;color:var(--ink-2);white-space:pre-wrap;max-height:220px;overflow:auto}
+.ez-snap-f{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line-2);font-size:11px;color:var(--ink-3)}
+.ez-snap-open{color:var(--ez-accent-2);font-weight:700;cursor:default;opacity:.6}
+.ez-conf{height:4px;flex:1;border-radius:3px;background:var(--line);overflow:hidden;min-width:60px}
+.ez-conf>i{display:block;height:100%;background:var(--ez-good)}
+
+/* ── excluded ── */
+.ez-excl{font-size:12px}
+.ez-excl>summary{cursor:pointer;color:var(--ink-3);font-weight:700;list-style:none;display:flex;align-items:center;gap:6px}
+.ez-excl>summary::-webkit-details-marker{display:none}
+.ez-excl-item{display:flex;gap:8px;padding:5px 0 5px 20px;color:var(--ink-3)}
+.ez-excl-item .lb{text-decoration:line-through} .ez-excl-item .rs{color:var(--ink-4)}
+
+/* ── what-if (원칙4) ── */
+.ez-whatif{border:1px dashed var(--line-2);border-radius:var(--ez-rad-sm);padding:12px 14px;background:var(--soft)}
+.ez-whatif-h{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:var(--ink-2);margin-bottom:10px}
+.ez-wf-ctrls{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.ez-wf-ctrls label{font-size:12px;font-weight:600;color:var(--ink-2);display:flex;flex-direction:column;gap:4px}
+.ez-wf-ctrls select,.ez-wf-ctrls input[type="number"]{border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:var(--card);color:var(--ink);font-size:12.5px;font-family:inherit}
+.ez-wf-ctrls input[type="range"]{width:150px}
+.ez-wf-out{background:var(--card);border-radius:7px;padding:10px 12px;font-size:13px;font-weight:700;transition:opacity .2s}
+.ez-wf-delta{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;font-weight:600}
+.ez-wf-delta .from{color:var(--ink-3);text-decoration:line-through}
+.ez-wf-delta .arw{color:var(--ink-4)}
+.ez-wf-delta .to.up{color:var(--ez-good)} .ez-wf-delta .to.down{color:var(--ez-bad)}
+.ez-whatif.is-calc .ez-wf-out{opacity:.35;filter:blur(1px)}
+.ez-wf-block{margin-top:8px;font-size:12px;font-weight:700;color:var(--ez-bad);background:var(--red-soft);border-radius:6px;padding:7px 10px}
+
+/* ── audit badge (원칙3) ── */
+.ez-audit{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:var(--ez-good);background:var(--ez-auto-soft);border-radius:20px;padding:5px 12px;cursor:pointer;align-self:flex-start}
+.ez-audit .ref{color:var(--ink-3);font-family:var(--mono,monospace);font-weight:600}
+.ez-audit .scope{color:var(--ink-2);border-left:1px solid var(--line);padding-left:7px}
+
+/* ── autonomy badge (패턴8) ── */
+.ez-autobadge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:800;line-height:1.4;white-space:nowrap}
+.ez-autobadge[data-k="auto"]{color:var(--ez-auto);background:var(--ez-auto-soft)}
+.ez-autobadge[data-k="suggest"]{color:var(--ez-suggest);background:var(--ez-suggest-soft)}
+.ez-autobadge[data-k="human_approve"]{color:var(--ez-appr);background:var(--ez-appr-soft)}
+.ez-autobadge .ez-ic{width:12px;height:12px}
+
+/* ── approval gate (패턴4, S7) ── */
+.ez-gate{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ez-gate button{font-size:12.5px;font-weight:700;border-radius:8px;padding:9px 16px;cursor:pointer;font-family:inherit;border:1px solid var(--line)}
+.ez-gate .is-primary{background:var(--ez-accent);color:#fff;border-color:var(--ez-accent)}
+.ez-gate .is-primary:hover{background:var(--ez-accent-2)}
+.ez-gate .is-ghost{background:var(--card);color:var(--ink-2)}
+.ez-gate .is-ghost:hover{background:var(--soft)}
+.ez-gate .is-hold{color:var(--ink-3)}
+.ez-gate button:disabled{opacity:.45;cursor:default}
+.ez-gate-note{font-size:11.5px;color:var(--ez-warn);font-weight:700;width:100%}
+.ez-gate-done{display:inline-flex;align-items:center;gap:6px;color:var(--ez-good);font-size:12.5px;font-weight:800}
+
+/* ── process node view (패턴1, S3/S4) ── */
+.ez-flow{display:flex;flex-direction:column;gap:0}
+.ez-flow-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--ink);margin-bottom:8px}
+.ez-flow-h .ez-node-pct{margin-left:auto;font-size:13px;font-weight:900;color:var(--ez-accent-2)}
+.ez-flow-bar{height:5px;border-radius:4px;background:var(--line);overflow:hidden;margin-bottom:12px}
+.ez-flow-bar>i{display:block;height:100%;width:0;background:var(--ez-accent);transition:width .4s ease}
+.ez-fnode{position:relative;display:flex;gap:10px;padding:9px 0}
+.ez-fnode .dot{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-size:11px;background:var(--ink-3);z-index:1}
+.ez-fnode[data-kind="query"] .dot{background:var(--ez-accent)}
+.ez-fnode[data-kind="judge"] .dot{background:var(--ez-graph)}
+.ez-fnode[data-kind="output"] .dot{background:var(--ez-good)}
+.ez-fnode[data-st="wait"] .dot{background:var(--card);border:2px solid var(--line);color:var(--ink-4)}
+.ez-fnode[data-st="run"] .dot .ez-spin{width:13px;height:13px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:ez-spin .7s linear infinite}
+.ez-fnode[data-st="done"] .dot{animation:ez-pop .16s ease}
+.ez-fnode .conn{position:absolute;left:12px;top:35px;bottom:-2px;width:2px;background:var(--line);z-index:0}
+.ez-fnode[data-st="done"] .conn{background:var(--ez-done)}
+.ez-fnode:last-child .conn{display:none}
+.ez-fnode .body{flex:1;min-width:0}
+.ez-fnode .body .nm{font-size:13.5px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
+.ez-fnode[data-st="wait"] .body .nm{color:var(--ink-3)}
+.ez-fnode .body .src{font-size:10.5px;font-weight:800;color:var(--ink-3);background:var(--soft);border-radius:5px;padding:1px 6px}
+.ez-fnode .body .dt{font-size:12px;color:var(--ink-3);margin-top:2px}
+.ez-fpar{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding-left:6px}
+.ez-fpar .sub{display:flex;align-items:center;gap:6px;background:var(--soft);border-radius:20px;padding:4px 11px;font-size:11.5px;font-weight:700;color:var(--ink-2)}
+.ez-fpar .sub .sd{width:8px;height:8px;border-radius:50%;background:var(--ez-wait);flex:none}
+.ez-fpar .sub[data-st="run"] .sd{background:var(--ez-run);animation:ez-pulse 1s infinite}
+.ez-fpar .sub[data-st="done"] .sd{background:var(--ez-done)}
+
+/* ── deliberation graph (패턴9, QW5) ── */
+.ez-delib{position:relative;min-height:320px}
+.ez-delib-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ez-delib-svg path{fill:none;stroke:var(--ink-4);stroke-width:1.5;transition:stroke .4s}
+.ez-delib-svg path[data-stance="support"]{stroke:var(--ez-good)}
+.ez-delib-svg path[data-stance="consensus"]{stroke:var(--ez-good);stroke-width:2.5}
+.ez-delib-svg path[data-stance="conflict"]{stroke:var(--ez-bad);stroke-dasharray:5 4}
+.ez-delib-svg path[data-stance="propose"]{stroke:var(--ez-accent)}
+.ez-orch{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;background:var(--dark);color:#fff;border-radius:12px;padding:10px 16px;font-size:12.5px;font-weight:800;text-align:center;max-width:150px}
+.ez-agent{position:absolute;z-index:2;width:158px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 11px;box-shadow:0 4px 14px rgba(17,20,28,.08)}
+:root[data-theme="dark"] .ez-agent{box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.ez-agent .role{font-size:10px;font-weight:800;color:var(--ez-accent-2);background:var(--ez-accent-soft);border-radius:5px;padding:1px 6px;display:inline-flex;align-items:center;gap:4px}
+.ez-agent .stance{font-size:10px;font-weight:800;margin-left:4px}
+.ez-agent .msg{font-size:11.5px;color:var(--ink-2);line-height:1.5;margin-top:6px}
+.ez-agent[data-stance="conflict"]{border-color:var(--ez-bad)}
+.ez-agent[data-stance="consensus"]{border-color:var(--ez-good)}
+.ez-delib-verdict{margin-top:12px;background:var(--ez-auto-soft);color:var(--ez-good);font-weight:800;font-size:12.5px;border-radius:8px;padding:9px 14px;line-height:1.5}
+@media(max-width:560px){.ez-delib{min-height:0}.ez-delib-svg{display:none}.ez-orch,.ez-agent{position:static;transform:none;width:auto;margin-bottom:8px}}
+
+/* ── source status bar (패턴10) ── */
+.ez-srcbar{display:flex;align-items:center;gap:13px;flex-wrap:wrap;background:var(--soft);border-top:1px solid var(--line);padding:8px 16px;font-size:11.5px;font-weight:600;color:var(--ink-2)}
+.ez-src{display:inline-flex;align-items:center;gap:5px}
+.ez-src .sd{width:7px;height:7px;border-radius:50%;background:var(--ez-good);flex:none}
+.ez-src[data-st="sync"] .sd{background:var(--ez-run);animation:ez-pulse 1s infinite}
+.ez-src[data-st="off"]{color:var(--ink-4)} .ez-src[data-st="off"] .sd{background:var(--ez-wait)}
+.ez-src .cnt{color:var(--ink-3)}
+.ez-srcbar .ez-jobs{margin-left:auto;display:inline-flex;align-items:center;gap:6px;color:var(--ez-accent-2);font-weight:700;cursor:pointer}
+.ez-srcbar .ez-jobs .sd{width:8px;height:8px;border-radius:50%;background:var(--ez-run);animation:ez-pulse 1s infinite}
+
+/* ── cross-context (패턴7) ── */
+.ez-cc-h{display:flex;align-items:center;border-bottom:1px solid var(--line);gap:20px}
+.ez-cc-tabs{display:flex;gap:18px}
+.ez-cc-tabs button{font-size:13.5px;font-weight:600;color:var(--ink-4);padding:0 0 10px;background:none;border:0;cursor:pointer;font-family:inherit}
+.ez-cc-tabs button.on{color:var(--ink);font-weight:800;box-shadow:inset 0 -2px 0 var(--ink)}
+.ez-cc-cycle{margin-left:auto;padding-bottom:8px}
+.ez-cc-cycle select{border:1px solid var(--line);border-radius:7px;padding:5px 10px;background:var(--card);color:var(--ink);font-size:12.5px;font-weight:600;font-family:inherit}
+.ez-cc-body{padding-top:14px}
+
+/* ── diff (패턴6) ── */
+.ez-diff{font-size:13.5px;line-height:1.8}
+.ez-diff .del{background:var(--red-soft);color:var(--ez-bad);text-decoration:line-through;border-radius:3px;padding:0 3px}
+.ez-diff .ins{background:var(--ez-auto-soft);color:var(--ez-good);border-radius:3px;padding:0 3px}
+.ez-diff-seg{display:block;padding:6px 0;border-bottom:1px dashed var(--line-2)}
+.ez-diff-seg:last-child{border-bottom:0}
+.ez-diff-seg .ops{display:inline-flex;gap:4px;margin-left:6px}
+.ez-diff-seg .ops button{font-size:10.5px;font-weight:800;border-radius:5px;padding:2px 8px;cursor:pointer;border:1px solid var(--line);background:var(--card);font-family:inherit}
+.ez-diff-seg .ops .ok{color:var(--ez-good)} .ez-diff-seg .ops .no{color:var(--ink-3)}
+.ez-diff-seg[data-state="accepted"] .del{display:none}
+.ez-diff-seg[data-state="accepted"] .ins{text-decoration:none}
+.ez-diff-seg[data-state="rejected"] .ins{display:none}
+.ez-diff-seg[data-state="rejected"] .del{text-decoration:none;background:none;color:var(--ink)}
+.ez-diff-seg[data-state] .ops{opacity:.4}
+
+/* ── tone editor (패턴6) ── */
+.ez-tone{display:inline-flex;background:var(--soft);border-radius:20px;padding:3px}
+.ez-tone button{font-size:12px;font-weight:700;color:var(--ink-3);padding:5px 14px;border-radius:18px;cursor:pointer;border:0;background:none;font-family:inherit}
+.ez-tone button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+/* ── metric tiles ── */
+.ez-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.ez-metric{background:var(--card);border:1px solid var(--line);border-radius:var(--ez-rad-sm);padding:13px 15px}
+.ez-metric .lb{font-size:11.5px;font-weight:700;color:var(--ink-3)}
+.ez-metric .vl{font-size:23px;font-weight:900;color:var(--ink);letter-spacing:-.02em;margin-top:3px;line-height:1.1}
+.ez-metric .vl .un{font-size:13px;font-weight:700;color:var(--ink-3);margin-left:2px}
+.ez-metric[data-tone="good"] .vl{color:var(--ez-good)}
+.ez-metric[data-tone="warn"] .vl{color:var(--ez-warn)}
+.ez-metric[data-tone="bad"] .vl{color:var(--ez-bad)}
+.ez-metric .dl{font-size:11px;font-weight:800;margin-top:4px}
+.ez-metric .dl.up{color:var(--ez-good)} .ez-metric .dl.down{color:var(--ez-bad)}
+.ez-metric .sb{font-size:11px;color:var(--ink-4);margin-top:4px}
+
+/* ── progress ── */
+.ez-prog{display:flex;align-items:center;gap:10px}
+.ez-prog .lb{font-size:12px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+.ez-prog .track{flex:1;height:7px;border-radius:4px;background:var(--line);overflow:hidden;display:flex}
+.ez-prog .track>i{height:100%;background:var(--ez-accent);transition:width .5s ease}
+.ez-prog .track>i[data-tone="good"]{background:var(--ez-good)}
+.ez-prog .pct{font-size:12px;font-weight:800;color:var(--ink);min-width:40px;text-align:right}
+.ez-prog .track.seg>i{border-right:1px solid var(--card)}
+.ez-prog .track.seg>i:last-child{border-right:0}
+
+/* ═══════════ SHELL SURFACES ═══════════ */
+/* FAB */
+#ez-fab{position:fixed;bottom:24px;right:24px;z-index:9000;display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 18px 0 15px;border-radius:24px;background:var(--blue);color:#fff;border:0;cursor:pointer;font-family:var(--sans);font-size:14px;font-weight:800;box-shadow:0 6px 20px rgba(31,122,240,.38);transition:transform .16s,background .16s}
+#ez-fab:hover{background:var(--blue-2);transform:scale(1.03)}
+#ez-fab .ez-fab-mark{width:20px;height:20px}
+#ez-fab .ez-fab-badge{position:absolute;top:-6px;right:-4px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--pink);color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center;box-shadow:0 0 0 2px var(--page)}
+#ez-fab.is-open .ez-fab-lbl{display:none}
+#ez-fab.is-open{padding:0;width:48px;justify-content:center}
+@media(max-width:560px){#ez-fab .ez-fab-lbl{display:none}#ez-fab{padding:0;width:48px;justify-content:center}}
+
+/* DOCK */
+#ez-dock{position:fixed;top:0;right:0;height:100vh;width:min(400px,94vw);z-index:9100;background:var(--card);border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(28,31,40,.10);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .22s cubic-bezier(.32,.72,0,1)}
+#ez-dock.is-open{transform:translateX(0)}
+:root[data-theme="dark"] #ez-dock{box-shadow:-8px 0 30px rgba(0,0,0,.5)}
+.ez-dk-head{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;border-bottom:1px solid var(--line);flex:none}
+.ez-dk-id{display:flex;align-items:center;gap:9px;min-width:0}
+.ez-dk-ava{width:30px;height:30px;border-radius:9px;background:var(--blue);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+.ez-dk-nm{font-size:15px;font-weight:800;letter-spacing:-.02em}
+.ez-dk-sub{font-size:11.5px;color:var(--ink-3);font-weight:600}
+.ez-dk-tools{margin-left:auto;display:flex;gap:4px}
+.ez-dk-tools button{width:30px;height:30px;border-radius:8px;border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:16px;display:grid;place-items:center}
+.ez-dk-tools button:hover{background:var(--soft);color:var(--ink)}
+.ez-thread{flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.ez-msg-user{align-self:flex-end;max-width:82%;background:var(--blue);color:#fff;font-size:13.5px;padding:9px 13px;border-radius:13px 13px 4px 13px}
+.ez-msg-agent{display:flex;gap:9px}
+.ez-msg-agent .m{width:26px;height:26px;border-radius:8px;background:var(--dark);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800;flex:none}
+.ez-msg-agent .tx{flex:1;min-width:0;font-size:13.5px;color:var(--ink);padding-top:3px;line-height:1.55}
+.ez-msg-ctx{align-self:center;font-size:11.5px;color:var(--ink-3);background:var(--soft);border-radius:20px;padding:4px 12px;font-weight:600}
+.ez-card-wrap{display:flex;flex-direction:column;gap:10px}
+.ez-composer{flex:none;border-top:1px solid var(--line);padding:10px 12px 12px}
+.ez-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.ez-chip{font-size:12px;font-weight:700;color:var(--ez-accent-2);background:var(--ez-accent-soft);border:0;border-radius:16px;padding:6px 12px;cursor:pointer;font-family:inherit}
+.ez-chip:hover{background:var(--blue);color:#fff}
+.ez-input-row{display:flex;align-items:flex-end;gap:8px;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:6px 6px 6px 12px}
+.ez-input-row textarea{flex:1;border:0;background:none;resize:none;font-family:inherit;font-size:13.5px;color:var(--ink);line-height:1.5;max-height:120px;outline:none;padding:6px 0}
+#ez-send{width:32px;height:32px;border-radius:9px;border:0;background:var(--blue);color:#fff;cursor:pointer;font-size:15px;flex:none;display:grid;place-items:center}
+#ez-send:hover{background:var(--blue-2)}
+
+/* POPUP */
+#ez-popstack{position:fixed;bottom:88px;right:24px;z-index:9200;display:flex;flex-direction:column-reverse;gap:10px;transition:right .22s}
+#ez-popstack.dock-open{right:calc(min(400px,94vw) + 16px)}
+.ez-popup{width:320px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--ez-accent);border-radius:12px;box-shadow:0 10px 30px rgba(28,31,40,.18);padding:13px 15px;animation:ez-rise .18s ease}
+:root[data-theme="dark"] .ez-popup{box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.ez-popup[data-sev="deadline"]{border-left-color:var(--ez-warn)}
+.ez-popup[data-sev="bias"],.ez-popup[data-sev="anomaly"]{border-left-color:var(--ez-bad)}
+.ez-popup[data-sev="info"]{border-left-color:var(--ez-accent)}
+.ez-pop-h{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.ez-pop-mark{color:var(--ez-accent);font-size:14px}
+.ez-pop-x{margin-left:auto;border:0;background:none;color:var(--ink-4);cursor:pointer;font-size:14px}
+.ez-pop-ttl{font-size:13.5px;font-weight:800;color:var(--ink)}
+.ez-pop-sum{font-size:12px;color:var(--ink-2);margin-top:4px;line-height:1.5}
+.ez-pop-act{display:flex;gap:8px;margin-top:11px}
+.ez-pop-open{flex:1;font-size:12.5px;font-weight:700;color:#fff;background:var(--blue);border:0;border-radius:8px;padding:8px;cursor:pointer;font-family:inherit}
+.ez-pop-open:hover{background:var(--blue-2)}
+.ez-pop-snooze{font-size:12.5px;font-weight:700;color:var(--ink-2);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;font-family:inherit}
+.ez-pop-more{align-self:flex-end;font-size:11.5px;font-weight:700;color:var(--ink-3);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:5px 11px;cursor:pointer;font-family:inherit}
+
+/* FULLSCREEN */
+#ez-fs-scrim{position:fixed;inset:0;z-index:9550;background:rgba(15,20,30,.45);opacity:0;pointer-events:none;transition:opacity .2s}
+#ez-fs-scrim.is-open{opacity:1;pointer-events:auto}
+:root[data-theme="dark"] #ez-fs-scrim{background:rgba(0,0,0,.6)}
+#ez-fs{position:fixed;inset:16px;z-index:9600;background:var(--page);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;opacity:0;transform:scale(.985);pointer-events:none;transition:opacity .2s,transform .2s;box-shadow:0 30px 80px rgba(0,0,0,.3)}
+#ez-fs.is-open{opacity:1;transform:none;pointer-events:auto}
+.ez-fs-head{display:flex;align-items:center;gap:12px;height:56px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--card);flex:none}
+.ez-fs-mark{font-size:14px;font-weight:800;color:var(--ez-accent-2);display:flex;align-items:center;gap:6px}
+.ez-fs-ttl{font-size:15px;font-weight:800;letter-spacing:-.01em}
+.ez-fs-cyc{font-size:12px;color:var(--ink-3);font-weight:600}
+.ez-fs-tools{margin-left:auto;display:flex;gap:4px}
+.ez-fs-tools button{width:32px;height:32px;border-radius:8px;border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:16px;display:grid;place-items:center}
+.ez-fs-tools button:hover{background:var(--soft);color:var(--ink)}
+.ez-fs-body{flex:1;min-height:0;display:grid;grid-template-columns:1fr 400px}
+.ez-fs-canvas{overflow:auto;padding:24px 26px;background:linear-gradient(var(--page),var(--soft))}
+.ez-fs-rail{overflow-y:auto;border-left:1px solid var(--line);background:var(--card);padding:18px;display:flex;flex-direction:column;gap:14px}
+@media(max-width:820px){.ez-fs-body{grid-template-columns:1fr}.ez-fs-rail{border-left:0;border-top:1px solid var(--line)}}
+
+/* canvas shared bits */
+.ez-canvas-h{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.ez-canvas-h h3{margin:0;font-size:17px;font-weight:800}
+.ez-flag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:7px;padding:5px 10px}
+.ez-flag.warn{background:var(--red-soft);color:var(--ez-bad)}
+.ez-flag.ok{background:var(--ez-auto-soft);color:var(--ez-good)}
+.ez-flag.info{background:var(--ez-accent-soft);color:var(--ez-accent-2)}
+.ez-card{background:var(--card);border:1px solid var(--line);border-radius:var(--ez-rad);padding:16px 18px;margin-bottom:14px}
+.ez-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.ez-tbl th{text-align:left;font-size:11.5px;font-weight:700;color:var(--ink-3);padding:8px 10px;border-bottom:1px solid var(--line)}
+.ez-tbl td{padding:11px 10px;border-bottom:1px solid var(--line-2);color:var(--ink);vertical-align:top}
+.ez-tbl tr[data-flag="dup"]{background:var(--ez-appr-soft)}
+.ez-tbl tr[data-flag="unaligned"]{background:var(--red-soft)}
+.ez-tbl tr.is-merged{opacity:.5}
+.ez-goalcard{background:var(--card);border:1px solid var(--line);border-radius:var(--ez-rad);padding:14px 16px;margin-bottom:10px;transition:border-color .3s}
+.ez-goalcard.is-filling{border-color:var(--ez-accent);border-style:dashed}
+.ez-goalcard.flag{border-color:var(--ez-warn)}
+.ez-goalcard .gc-h{display:flex;align-items:center;gap:8px}
+.ez-goalcard .gc-w{margin-left:auto;font-size:13px;font-weight:800;color:var(--ink)}
+.ez-goalcard .gc-t{font-size:14px;font-weight:700;color:var(--ink);margin:4px 0}
+.ez-goalcard .gc-meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3);flex-wrap:wrap}
+.ez-timeline{position:relative;padding-left:22px;border-left:2px solid var(--line)}
+.ez-tl-item{position:relative;padding:0 0 16px 8px}
+.ez-tl-item::before{content:"";position:absolute;left:-27px;top:4px;width:11px;height:11px;border-radius:50%;background:var(--ez-accent);border:2px solid var(--card)}
+.ez-tl-item[data-type="프로젝트"]::before{background:var(--ez-graph)}
+.ez-tl-item[data-type="1:1"]::before{background:var(--ez-warn)}
+.ez-tl-item[data-type="피드백"]::before{background:var(--ez-good)}
+.ez-tl-date{font-size:11px;font-weight:700;color:var(--ink-3)}
+.ez-tl-card{background:var(--card);border:1px solid var(--line);border-radius:var(--ez-rad-sm);padding:10px 12px;margin-top:4px;display:flex;align-items:center;gap:10px;animation:ez-rise .3s ease}
+.ez-tl-card .tag{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 8px;background:var(--soft);color:var(--ink-2);flex:none}
+.ez-tl-card .tt{flex:1;font-size:13px;font-weight:600;color:var(--ink)}
+.ez-tl-card.is-excluded{opacity:.4}
+.ez-distbars{display:flex;flex-direction:column;gap:10px}
+.ez-distrow{display:flex;align-items:center;gap:12px}
+.ez-distrow .g{width:20px;font-weight:800;font-size:14px;color:var(--ink)}
+.ez-distrow .bars{flex:1;display:flex;flex-direction:column;gap:3px}
+.ez-distrow .bwrap{height:14px;background:var(--line);border-radius:4px;overflow:hidden;position:relative}
+.ez-distrow .bwrap>i{display:block;height:100%;border-radius:4px;transition:width .6s ease}
+.ez-distrow .bwrap.before>i{background:var(--ink-4)}
+.ez-distrow .bwrap.after>i{background:var(--ez-accent)}
+.ez-distrow .bwrap.after.over>i{background:var(--ez-bad)}
+.ez-distrow .pcts{width:96px;font-size:12px;font-weight:700;color:var(--ink-2);text-align:right}
+
+/* PANEL (EX3) */
+#ez-panel{position:fixed;top:0;right:0;height:100vh;width:min(440px,96vw);z-index:9300;background:var(--card);border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(28,31,40,.12);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .22s cubic-bezier(.32,.72,0,1)}
+#ez-panel.is-open{transform:translateX(0)}
+.ez-pn-body{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+.ez-toggle3{display:inline-flex;background:var(--soft);border-radius:9px;padding:3px}
+.ez-toggle3 button{font-size:11.5px;font-weight:700;color:var(--ink-3);padding:6px 11px;border-radius:7px;cursor:pointer;border:0;background:none;font-family:inherit}
+.ez-toggle3 button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.ez-tag{display:inline-block;font-size:11px;font-weight:700;color:var(--ez-accent-2);background:var(--ez-accent-soft);border-radius:6px;padding:2px 8px;margin:2px 3px 2px 0}
+.ez-readonly{background:var(--soft);border-radius:var(--ez-rad-sm);padding:12px 14px;font-size:13px;color:var(--ink-2);line-height:1.55}
+.ez-ta{width:100%;border:1px solid var(--line);border-radius:var(--ez-rad-sm);padding:11px 13px;font-family:inherit;font-size:13px;color:var(--ink);line-height:1.6;background:var(--card);resize:vertical;min-height:96px}
+.ez-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);cursor:pointer}
+</style>
+<script id="ez-boot">
+/* ═══════════════════════════════════════════════════════════════════════
+   elizax · 성과관리/평가 AI Agent — 가상 데이터 레이크 (window.ezLake)
+   출처: talenx Wiki(성과/평가) 그라운딩. 등급 S/A/B/C/D. 가중치 합 100%.
+   평가 프로세스: 본인 평가 → 1차 상위자 평가 → 2차 등급 조정 → 결과 확정.
+   ═══════════════════════════════════════════════════════════════════════ */
+window.ezLake = (function () {
+  var meta = {
+    workspace: "올인원컴퍼니", hrisLinked: true,
+    gradeScale: ["S", "A", "B", "C", "D"], today: "2026-07-14",
+    activeGoalCycle: "C-2026H2", activeEvalCycle: "C-2026H1", checkinCycle: "C-2026H1"
+  };
+
+  // 1. personas — talenx 3계정 매핑 (roleTag는 perms 기반, id 무관)
+  var personas = {
+    choiInki:  { id:"choiInki",  memberId:"m_choiig", name:"최인기", role:"평가자·HR",
+                 view:"HR",     color:"#1F7AF0", perms:["hr","manager"], teamId:"t_hrplan",
+                 scopeLabel:"권한 내 2개 본부·전사" },
+    kimSuhyun: { id:"kimSuhyun", memberId:"m_kimsh",  name:"김수현", role:"평가자·조직장",
+                 view:"LEADER", color:"#2FA36B", perms:["manager"], teamId:"t_us",
+                 scopeLabel:"권한 내 미주팀 1개 조직" },
+    parkMinsu: { id:"parkMinsu", memberId:"m_parkms", name:"박민수", role:"피평가자·조직원",
+                 view:"MEMBER", color:"#F5A623", perms:[], teamId:"t_us",
+                 scopeLabel:"본인 데이터" }
+  };
+
+  // 2. orgChart — 전사→본부→실→팀
+  var orgChart = {
+    id:"o_corp", name:"올인원컴퍼니", type:"전사", managerId:"m_ceo", memberCount:312, hrisLocked:true,
+    children:[
+      { id:"o_glb", name:"글로벌사업본부", type:"본부", managerId:"m_kangto", memberCount:48,
+        children:[
+          { id:"o_na", name:"북미영업실", type:"실", managerId:"m_jeongha", memberCount:19,
+            children:[
+              { id:"t_us", name:"미주팀", type:"팀", managerId:"m_kimsh", memberCount:5,
+                memberIds:["m_kimsh","m_parkms","m_parksh","m_kimsy","m_leejh"] }
+            ]}
+        ]},
+      { id:"o_ppl", name:"피플본부", type:"본부", managerId:"m_leesy", memberCount:27,
+        children:[
+          { id:"o_hr", name:"인사실", type:"실", managerId:"m_parkdh", memberCount:14,
+            children:[
+              { id:"t_hrplan", name:"인사기획팀", type:"팀", managerId:"m_choiig", memberCount:3,
+                memberIds:["m_choiig","m_kimsohi","m_kimjh"] },
+              { id:"t_hrd", name:"인재개발팀", type:"팀", managerId:"m_kimdh", memberCount:2,
+                memberIds:["m_kimdh","m_ryuny"] }
+            ]}
+        ]}
+    ]
+  };
+
+  // 3. members — 14인
+  var members = [
+    {id:"m_kangto", name:"강태오", teamId:"o_glb", position:"본부장", jobLevel:"상무(임원)", jobFamilyId:"jf_sales_glb", managerId:"m_ceo",    gradeHistory:{ "C-2025H1":"A","C-2025H2":"A" }},
+    {id:"m_jeongha",name:"정하람", teamId:"o_na",  position:"실장",   jobLevel:"수석(G4)",  jobFamilyId:"jf_sales_glb", managerId:"m_kangto", gradeHistory:{ "C-2025H1":"B","C-2025H2":"A" }},
+    {id:"m_kimsh",  name:"김수현", teamId:"t_us",  position:"팀장(조직장)", jobLevel:"책임(G3)", jobFamilyId:"jf_sales_glb", managerId:"m_jeongha", gradeHistory:{ "C-2025H1":"A","C-2025H2":"B" }, personaId:"kimSuhyun"},
+    {id:"m_parkms", name:"박민수", teamId:"t_us",  position:"팀원",   jobLevel:"선임(G2)",  jobFamilyId:"jf_sales_glb", managerId:"m_kimsh",  gradeHistory:{ "C-2025H1":"B","C-2025H2":"A" }, personaId:"parkMinsu"},
+    {id:"m_parksh", name:"박성현", teamId:"t_us",  position:"팀원",   jobLevel:"책임(G3)",  jobFamilyId:"jf_sales_glb", managerId:"m_kimsh",  gradeHistory:{ "C-2025H1":"A","C-2025H2":"B" }},
+    {id:"m_kimsy",  name:"김서연", teamId:"t_us",  position:"팀원",   jobLevel:"선임(G2)",  jobFamilyId:"jf_sales_glb", managerId:"m_kimsh",  gradeHistory:{ "C-2025H1":"B","C-2025H2":"B" }},
+    {id:"m_leejh",  name:"이준호", teamId:"t_us",  position:"팀원",   jobLevel:"사원(G1)",  jobFamilyId:"jf_sales_glb", managerId:"m_kimsh",  gradeHistory:{ "C-2025H1":"C","C-2025H2":"B" }},
+    {id:"m_leesy",  name:"이서연", teamId:"o_ppl", position:"본부장", jobLevel:"상무(임원)", jobFamilyId:"jf_hr_plan", managerId:"m_ceo",    gradeHistory:{ "C-2025H1":"A","C-2025H2":"A" }},
+    {id:"m_parkdh", name:"박도현", teamId:"o_hr",  position:"실장",   jobLevel:"수석(G4)",  jobFamilyId:"jf_hr_plan", managerId:"m_leesy",  gradeHistory:{ "C-2025H1":"A","C-2025H2":"B" }},
+    {id:"m_choiig", name:"최인기", teamId:"t_hrplan", position:"팀장", jobLevel:"책임(G3)", jobFamilyId:"jf_hr_plan", managerId:"m_parkdh", gradeHistory:{ "C-2025H1":"A","C-2025H2":"A" }, personaId:"choiInki"},
+    {id:"m_kimsohi",name:"김소희", teamId:"t_hrplan", position:"팀원", jobLevel:"선임(G2)", jobFamilyId:"jf_hr_plan", managerId:"m_choiig", gradeHistory:{ "C-2025H1":"B","C-2025H2":"B" }},
+    {id:"m_kimjh",  name:"김정현", teamId:"t_hrplan", position:"팀원", jobLevel:"사원(G1)", jobFamilyId:"jf_hr_plan", managerId:"m_choiig", gradeHistory:{ "C-2025H1":"C","C-2025H2":"B" }},
+    {id:"m_kimdh",  name:"김도현", teamId:"t_hrd",  position:"팀장",   jobLevel:"책임(G3)",  jobFamilyId:"jf_hr_hrd",  managerId:"m_parkdh", gradeHistory:{ "C-2025H1":"B","C-2025H2":"A" }},
+    {id:"m_ryuny",  name:"류나영", teamId:"t_hrd",  position:"팀원",   jobLevel:"선임(G2)",  jobFamilyId:"jf_hr_hrd",  managerId:"m_kimdh",  gradeHistory:{ "C-2025H1":"B","C-2025H2":"B" }},
+    {id:"m_ceo",    name:"정운호", teamId:"o_corp",position:"대표이사", jobLevel:"대표", jobFamilyId:null, managerId:null, gradeHistory:{} }
+  ];
+
+  // 4. jobs — 직무 관리 체계
+  var jobs = [
+    { id:"jf_sales_glb", name:"해외영업", path:"영업직군 > 해외영업",
+      roleProfile:"글로벌 신규시장 개척 및 매출 목표 달성",
+      rrItems:["신규 시장·엔터프라이즈 계정 발굴","파트너/채널 온보딩 및 관리","매출·파이프라인 목표 달성","계약 협상 및 갱신","고객 업셀/크로스셀"],
+      skills:["시장분석","B2B 협상","계약·법무 검토","영어 비즈니스 커뮤니케이션","CRM(Salesforce) 운용","파이프라인 관리"],
+      competencyForm:"CF-SALES-2026" },
+    { id:"jf_hr_plan", name:"인사기획", path:"경영지원직군 > 인사 > 인사기획",
+      roleProfile:"인사 제도·평가·보상 정책 기획 및 운영",
+      rrItems:["평가/보상 제도 설계","조직 운영 지표 관리","인사 규정·컴플라이언스","HR 데이터 분석"],
+      skills:["인사제도 설계","노동법 이해","HR 애널리틱스","이해관계자 커뮤니케이션"], competencyForm:"CF-HRPLAN-2026" },
+    { id:"jf_hr_hrd", name:"인재개발", path:"경영지원직군 > 인사 > 인재개발",
+      roleProfile:"구성원 역량 개발 및 교육 체계 운영",
+      rrItems:["교육 프로그램 기획·운영","역량 갭 분석","리더십 파이프라인"],
+      skills:["교수설계(ID)","역량모델링","퍼실리테이션"], competencyForm:"CF-HRD-2026" }
+  ];
+
+  // 5. okr — 캐스케이드
+  var okr = {
+    corp:{ id:"OBJ-CORP-2026", owner:"m_ceo", cycle:"C-2026H1", title:"2026 매출 3.8조 달성 · 글로벌 리더십 강화",
+      krs:[ {id:"KR-CORP-1", text:"연매출 3.8조 (전년 3.22조 대비 +18%)", progress:54},
+            {id:"KR-CORP-2", text:"해외 매출 비중 35%→42%", progress:61},
+            {id:"KR-CORP-3", text:"영업이익률 12% 유지", progress:100} ]},
+    divisions:[
+      { id:"OBJ-GLB-2026", owner:"m_kangto", org:"o_glb", align:"KR-CORP-2", title:"해외 매출 42% 견인 · 북미 확대",
+        krs:[ {id:"KR-GLB-1", text:"북미 신규 매출 4,200억", align:"KR-CORP-1", progress:58},
+              {id:"KR-GLB-2", text:"글로벌 신규 파트너 30개사", align:"KR-CORP-2", progress:47},
+              {id:"KR-GLB-3", text:"해외 이탈률 8%→5%", progress:40} ]},
+      { id:"OBJ-NA-2026", owner:"m_jeongha", org:"o_na", align:"KR-GLB-1", title:"북미 4,200억 · 채널 다각화",
+        krs:[ {id:"KR-NA-1", text:"미주 직판 매출 2,600억", align:"KR-GLB-1", progress:60},
+              {id:"KR-NA-2", text:"신규 대형 계정 12개", align:"KR-GLB-1", progress:50},
+              {id:"KR-NA-3", text:"파트너 채널 매출 1,600억", align:"KR-GLB-2", progress:44} ]},
+      { id:"OBJ-US-2026", owner:"m_kimsh", org:"t_us", align:"KR-NA-1", title:"미주 직판 2,600억 · 신규계정 확대",
+        krs:[ {id:"KR-US-1", text:"미주 직판 매출 2,600억 달성", align:"KR-NA-1", progress:63},
+              {id:"KR-US-2", text:"신규 엔터프라이즈 계정 8개", align:"KR-NA-2", progress:50},
+              {id:"KR-US-3", text:"기존 고객 업셀 매출 720억", align:"KR-NA-1", progress:55},
+              {id:"KR-US-4", text:"파이프라인 전환율 22%→28%", align:"KR-NA-1", progress:38} ]}
+    ],
+    individual:[
+      {id:"G1", owner:"m_parkms", cycle:"C-2026H1", title:"미주 신규 엔터프라이즈 계정 4개 신규 계약", align:"KR-US-2", weight:40, progress:125, difficulty:"도전", importance:"상", lastKrUpdate:"2026-06-28"},
+      {id:"G2", owner:"m_parkms", cycle:"C-2026H1", title:"기존 Top20 고객 업셀 파이프라인 320억 확보", align:"KR-US-3", weight:35, progress:108, difficulty:"표준", importance:"중", lastKrUpdate:"2026-06-25"},
+      {id:"G3", owner:"m_parkms", cycle:"C-2026H1", title:"영업 리드 대응 SLA 24h 정착", align:"KR-US-4", weight:25, progress:96, difficulty:"표준", importance:"중", lastKrUpdate:"2026-06-20"},
+      {id:"G4", owner:"m_parksh", cycle:"C-2026H1", title:"미주 신규 엔터프라이즈 고객 발굴 및 초기 계약 체결", align:"KR-US-2", weight:40, progress:72, difficulty:"도전", importance:"상", lastKrUpdate:"2026-07-02"},
+      {id:"G5", owner:"m_parksh", cycle:"C-2026H1", title:"북미 파트너 채널 신규 3개사 온보딩", align:"KR-NA-3", weight:35, progress:66, difficulty:"표준", importance:"중", lastKrUpdate:"2026-06-30"},
+      {id:"G6", owner:"m_parksh", cycle:"C-2026H1", title:"영업 프로세스 자동화 및 CRM 데이터 품질 개선", align:"미연결", weight:15, progress:40, difficulty:"기본", importance:"하", lastKrUpdate:"2026-06-24"},
+      {id:"G7", owner:"m_kimsy", cycle:"C-2026H1", title:"미주 고객 업셀·크로스셀 매출 확대", align:"KR-US-3", weight:60, progress:42, difficulty:"표준", importance:"중", lastKrUpdate:"2026-06-12"},
+      {id:"G8", owner:"m_leejh", cycle:"C-2026H1", title:"파이프라인 전환율 개선 위한 세일즈 인에이블먼트", align:"KR-US-4", weight:40, progress:70, difficulty:"표준", importance:"중", lastKrUpdate:"2026-05-30"}
+    ],
+    qw7Scan:{ team:"t_us", scannedCount:8, elapsedMs:900,
+      duplicatePairs:[ {a:"G1", b:"G4", similarity:0.90, reason:"신규 엔터프라이즈 계정 발굴/계약 — 대상·지표 중복", suggest:"병합 또는 담당 분리"},
+                       {a:"G2", b:"G7", similarity:0.76, reason:"기존 고객 업셀 매출 — 상위KR(KR-US-3) 동일", suggest:"범위 구분 권고"} ],
+      unaligned:[ {goal:"G6", owner:"m_parksh", suggest:"KR-US-4 또는 KR-GLB-2에 연결"} ] },
+    qw2Draft:{ target:"m_parksh", cycle:"C-2026H2", confidence:0.86,
+      grounding:{ jobRR:"jf_sales_glb.rrItems", parentOKR:"KR-US-2", priorGoals:["G4@C-2025H2"], context:"H1 조직개편(북미영업실 신설)" },
+      drafts:[ {w:40, text:"H2 내 미주 엔터프라이즈 신규 계정 4개, 계약금액 240억 달성", align:"KR-US-2", ok:true},
+               {w:35, text:"북미 파트너 채널 신규 3개사 온보딩 완료, 채널 매출 180억", align:"KR-NA-3", ok:true},
+               {w:15, text:"CRM 데이터 정합률 95% 및 리드→상담 전환 리드타임 30% 단축", align:"KR-US-4", ok:false} ],
+      flags:[ {type:"가중치", detail:"합계 90% — 100% 대비 10%p 부족", rule:"RULE-GOAL-WEIGHT"},
+              {type:"미연결", detail:"목표3(CRM 개선) 전사목표 미연결", rule:"RULE-GOAL-ALIGN"} ] }
+  };
+
+  // 6. checkin — QW1 (4 팀원, 팀장 제외)
+  var checkin = { cycle:"C-2026H1", asOf:"2026-07-14", team:"t_us",
+    signals:[
+      {memberId:"m_parksh", flags:["KR 12일 무변동","1:1 21일 미실시"], status:"체크인대상",
+       draft:"박성현님, KR-US-2(신규계정) 진척 로그가 12일간 갱신되지 않았고 1:1이 21일째 미실시입니다. 이번 주 10분 체크인으로 막힌 지점을 같이 짚어볼까요?"},
+      {memberId:"m_kimsy",  flags:["진척지연: 달성률 42% vs 잔여기간 20%"], status:"부진지연",
+       draft:"김서연님, KR-US-3 업셀 진척이 달성률 42%로 잔여기간 대비 지연 구간에 들어왔어요. 톤은 질책이 아닌 지원입니다 — 필요한 리소스를 이번 주 1:1에서 정리해봐요."},
+      {memberId:"m_leejh",  flags:["1:1 16일 미실시"], status:"체크인대상",
+       draft:"이준호님, 최근 1:1이 16일째 미실시예요. 파이프라인 전환율 목표 관련해 짧게라도 진행 상황을 나눠요."},
+      {memberId:"m_parkms", flags:[], status:"정상"}
+    ],
+    summary:{ 체크인대상:2, 부진지연:1, 정상:1 } };
+  var oneOnOne = { m_parkms:"2026-06-16", m_parksh:"2026-04-24", m_kimsy:"2026-05-06", m_leejh:"2026-04-29" };
+
+  // 7. evidenceStore — 박민수 24건
+  var evidenceStore = { m_parkms:[
+    {date:"2026-01-31", type:"달성",   source:"ERP",    title:"1월 미주 직판 매출 마감",           metric:"412억 (목표 380억·108%)", recordId:"ERP-SAL-2601", snap:"품목별 마감 집계 · 확정 412.3억 / 목표 380억 · 달성률 108.5%"},
+    {date:"2026-02-28", type:"달성",   source:"ERP",    title:"신규 엔터프라이즈 A사 계약 체결",   metric:"계약 68억",              recordId:"ERP-CNT-0221", snap:"A사 3개년 라이선스 계약 · TCV 68억 · 서명 완료 2026-02-27"},
+    {date:"2026-03-31", type:"달성",   source:"ERP",    title:"1분기 누적 달성률",                 metric:"118%",                   recordId:"ERP-QTR-26Q1", snap:"1Q 누적 매출 1,180억 / 목표 1,000억 · 달성률 118%"},
+    {date:"2026-04-30", type:"달성",   source:"ERP",    title:"B사 업셀 계약",                     metric:"24억",                   recordId:"ERP-CNT-0417", snap:"B사 모듈 확장 업셀 · 증분 ARR 24억 · KR-US-3 반영"},
+    {date:"2026-05-15", type:"달성",   source:"talenx", title:"KR-US-2 신규계정 진척",             metric:"4/8건 (50%)",            recordId:"TX-KR-US2-04", snap:"핵심성과 KR-US-2 진척 로그 · 신규 계정 4건 확정 / 목표 8건"},
+    {date:"2026-05-31", type:"달성",   source:"ERP",    title:"5월 미주 직판 매출",                metric:"96%",                    recordId:"ERP-SAL-2605", snap:"5월 매출 355억 / 목표 370억 · 달성률 96%"},
+    {date:"2026-06-20", type:"달성",   source:"ERP",    title:"상반기 신규계정 5개(목표 4)",       metric:"125%",                   recordId:"ERP-CNT-H1",   snap:"상반기 신규 엔터프라이즈 계약 5건 확정 / 목표 4건 · 달성률 125%"},
+    {date:"2026-06-30", type:"달성",   source:"ERP",    title:"상반기 누적 달성률 마감",           metric:"125%",                   recordId:"ERP-QTR-26H1", snap:"H1 가중 달성률 125% (G1 125·G2 108·G3 96, 가중 40/35/25)"},
+    {date:"2026-02-10", type:"프로젝트", source:"Jira",  title:"미주 파이프라인 대시보드 구축",     metric:"완료 GTM-142",           recordId:"JIRA-GTM-142", snap:"GTM-142 Done · 스토리포인트 13 · 리뷰어 정하람"},
+    {date:"2026-03-05", type:"프로젝트", source:"Jira",  title:"리드 스코어링 룰 개편",             metric:"완료 GTM-156",           recordId:"JIRA-GTM-156", snap:"GTM-156 Done · 전환율 +4%p 기여"},
+    {date:"2026-03-28", type:"프로젝트", source:"Jira",  title:"Salesforce-ERP 연동 안정화",        metric:"완료 OPS-88",            recordId:"JIRA-OPS-88",  snap:"OPS-88 Done · 데이터 정합 이슈 0건 전환"},
+    {date:"2026-04-22", type:"프로젝트", source:"Jira",  title:"엔터프라이즈 제안서 템플릿 표준화", metric:"완료 GTM-171",           recordId:"JIRA-GTM-171", snap:"GTM-171 Done · 제안서 작성 리드타임 -35%"},
+    {date:"2026-05-30", type:"프로젝트", source:"Jira",  title:"미주 고객 QBR 자동화",              metric:"완료 GTM-190",           recordId:"JIRA-GTM-190", snap:"GTM-190 Done · QBR 준비 공수 -50%"},
+    {date:"2026-06-18", type:"프로젝트", source:"Jira",  title:"SLA 24h 대응 워크플로우 배포",      metric:"완료 OPS-103",           recordId:"JIRA-OPS-103", snap:"OPS-103 Done · 리드 응답 SLA 24h 정착 (G3)"},
+    {date:"2026-01-20", type:"피드백", source:"talenx", title:"김수현→박민수: A사 딜 클로징 리드", metric:"배지 '결정적기여'",       recordId:"TX-FB-3301",   snap:"‘결정적 기여’ 배지 · \"A사 계약을 팀 최전선에서 이끌어 마감\""},
+    {date:"2026-02-25", type:"피드백", source:"Slack",  title:"동료 김서연: 파이프라인 데이터 공유", metric:"👍",                    recordId:"SLK-FB-1189", snap:"#us-sales · \"민수님 파이프라인 정리 덕에 QBR 수월했어요 👍\""},
+    {date:"2026-03-15", type:"피드백", source:"talenx", title:"고객사 C 담당자 칭찬 전달",          metric:"외부피드백",             recordId:"TX-FB-3355",   snap:"고객 C사 구매팀 → \"대응 속도와 정확도가 인상적\" (영업기록 전달)"},
+    {date:"2026-04-10", type:"피드백", source:"Slack",  title:"이준호: 제안서 리뷰 도움",           metric:"👍",                     recordId:"SLK-FB-1244", snap:"#proposal · \"제안서 구조 잡아주셔서 감사합니다\""},
+    {date:"2026-05-02", type:"피드백", source:"talenx", title:"김수현→박민수: 리스크 관리 우수",    metric:"—",                      recordId:"TX-FB-3402",   snap:"수시 피드백 · \"딜 리스크를 선제적으로 관리하는 점이 강점\""},
+    {date:"2026-05-28", type:"피드백", source:"talenx", title:"감사 선물: 팀 매출 견인",            metric:"감사 선물 수령",         recordId:"TX-GIFT-207",  snap:"팀 감사 선물 · \"상반기 매출 견인에 대한 감사\""},
+    {date:"2026-06-12", type:"피드백", source:"Slack",  title:"정하람 실장: QBR 발표 인상적",       metric:"—",                      recordId:"SLK-FB-1301", snap:"#na-sales · \"QBR 발표 구성이 명확했습니다\""},
+    {date:"2026-02-14", type:"1:1",   source:"talenx", title:"김수현 1:1: 신규계정 우선순위 조정",  metric:"노트",                   recordId:"TX-121-0455", snap:"아젠다: 신규계정 우선순위 · 합의: A/B사 우선, C사 후순위"},
+    {date:"2026-04-16", type:"1:1",   source:"talenx", title:"김수현 1:1: 업셀 파이프라인 코칭",    metric:"노트",                   recordId:"TX-121-0489", snap:"업셀 320억 파이프라인 점검 · 코칭: 의사결정자 접근 전략"},
+    {date:"2026-06-16", type:"1:1",   source:"talenx", title:"김수현 1:1: 상반기 성과 리뷰",        metric:"강점 3가지 정리",        recordId:"TX-121-0522", snap:"강점: 클로징·리스크관리·협업. 개선: 발표 자신감. 하반기 목표 재정렬"}
+  ]};
+  var evidenceSummary = { m_parkms:{ "목표달성":8, "프로젝트":6, "수시피드백":7, "1:1기록":3, total:24 } };
+
+  // 8. evalData
+  var evalData = {
+    cycles:[
+      {id:"C-2026H2", label:"2026 하반기", period:["2026-07-01","2026-12-31"], status:"목표수립"},
+      {id:"C-2026H1", label:"2026 상반기 정기평가", period:["2026-01-01","2026-06-30"], status:"진행 중", process:"1차 상위자 평가", gradeForm:"GF-STD5"},
+      {id:"C-2025H2", label:"2025 하반기", period:["2025-07-01","2025-12-31"], status:"마감"},
+      {id:"C-2025H1", label:"2025 상반기", period:["2025-01-01","2025-06-30"], status:"마감"}
+    ],
+    gradeForms:[ {id:"GF-STD5", name:"정기평가 표준 5등급", grades:["S","A","B","C","D"],
+      scoreBands:{S:"4.5 이상", A:"3.8~4.5", B:"2.8~3.8", C:"1.8~2.8", D:"1.8 미만"}} ],
+    records:[
+      {memberId:"m_parkms", cycle:"C-2026H1", self:{grade:"S", score:4.6}, manager:{grade:"A", score:4.2},
+        gapLevel:1, outlier:false, achievement:125, jobFamily:"jf_sales_glb", jfPercentile:"상위 32%",
+        proposedGrade:"A", rationale:"달성률 125%(목표 대비 초과), 해외영업 직무군 상위 32%, 평가규정 §4.2 초과달성 상향 요건 충족 → A 제안",
+        draftStatus:"human_approve",
+        commentDraft:[ {text:"상반기 신규 엔터프라이즈 계정 5건으로 목표 4건을 초과 달성(달성률 125%)했습니다.", src:["ERP-CNT-H1","ERP-QTR-26H1"]},
+                       {text:"해외영업 직무군 내 상위 32% 성과로, 동일 직무 대비 상위권입니다.", src:["DIST-SAL-GLB-H1"]},
+                       {text:"업셀 파이프라인 320억을 확보하여 KR-US-3 견인에 기여했습니다.", src:["ERP-CNT-0417","TX-121-0489"]} ]},
+      {memberId:"m_parksh", cycle:"C-2026H1", self:{grade:"S", score:4.7}, manager:{grade:"C", score:2.5}, gapLevel:3, outlier:true,  achievement:88,  jobFamily:"jf_sales_glb", jfPercentile:"상위 61%", proposedGrade:"B"},
+      {memberId:"m_leejh",  cycle:"C-2026H1", self:{grade:"A", score:4.1}, manager:{grade:"D", score:1.6}, gapLevel:3, outlier:true,  achievement:70,  jobFamily:"jf_sales_glb", jfPercentile:"상위 78%", proposedGrade:"C"},
+      {memberId:"m_kimsy",  cycle:"C-2026H1", self:{grade:"S", score:4.5}, manager:{grade:"B", score:3.2}, gapLevel:2, outlier:true,  achievement:80,  jobFamily:"jf_sales_glb", jfPercentile:"상위 55%", proposedGrade:"B"},
+      {memberId:"m_kimsh",  cycle:"C-2026H1", self:{grade:"A", score:4.2}, manager:{grade:"A", score:4.0}, gapLevel:0, outlier:false, achievement:110, jobFamily:"jf_sales_glb", jfPercentile:"상위 25%", proposedGrade:"A"},
+      {memberId:"m_jeongha",cycle:"C-2026H1", self:{grade:"A", score:4.0}, manager:{grade:"B", score:3.6}, gapLevel:1, outlier:false, achievement:98,  jobFamily:"jf_sales_glb", jfPercentile:"상위 40%", proposedGrade:"B"},
+      {memberId:"m_kangto", cycle:"C-2026H1", self:{grade:"A", score:4.3}, manager:{grade:"A", score:4.3}, gapLevel:0, outlier:false, achievement:105, jobFamily:"jf_sales_glb", jfPercentile:"상위 18%", proposedGrade:"A"}
+    ]
+  };
+
+  // 9. calibration — QW5
+  var calibration = {
+    scopeOrg:"o_glb", scopeLabel:"글로벌사업본부 48명", cycle:"C-2026H1", autonomy:"human_approve",
+    caps:{ S:10, A:25 }, capHeadline:"강제배분 상한 25% (A등급)",
+    distribution:{
+      before:{ S:8,  A:32, B:44, C:12, D:4 }, after:{ S:6, A:25, B:50, C:15, D:4 },
+      beforeCount:{ S:4, A:15, B:21, C:6, D:2 }, afterCount:{ S:3, A:12, B:24, C:7, D:2 } },
+    outliers:{ before:3, after:0, members:["m_parksh","m_leejh","m_kimsy"] },
+    roundtable:{ orchestrator:"ag_orch",
+      agents:[
+        {agentId:"ag_evidence", name:"증거검증", stance:"propose", stanceKo:"발의", msg:"박성현 자기평가 S이나 ERP 달성률 88%, 미연결 목표 1건(G6). S 근거 부족 → 하향 검토."},
+        {agentId:"ag_politics", name:"정치배제", stance:"support", stanceKo:"보강", msg:"상사평가 C는 H1 조직개편 갈등 영향 가능성. 정치적 요인 배제하면 C도 과함."},
+        {agentId:"ag_bias",     name:"편향필터", stance:"conflict", stanceKo:"충돌", msg:"최신효과 의심: 6월 계약 실패 1건 과대반영. 상반기 전체 기준 B가 타당."},
+        {agentId:"ag_strategy", name:"전략기여", stance:"consensus", stanceKo:"합의", msg:"KR-US-2 기여 중간 수준. B가 분포·기여도 모두 부합."}
+      ],
+      verdict:"박성현 B 제안 — 자기평가 S ↔ 상사 C (gap 3단계) 해소. 강제배분 A 상한 25% 준수. Human 최종 승인 요청." }
+  };
+
+  // 10. rules — 버전드 룰 엔진 (+ reconcile §1.8 신규 규칙)
+  var rules = [
+    {id:"RULE-PAY-OT", name:"통상임금 산정", version:"v2.3", effectiveDate:"2025-01-01", kind:"law",
+      lawRef:"근로기준법 §2①5, 시행령 §6 · 대법원 2024 전합", supersedes:"v2.2",
+      summary:"재직조건부 정기상여금을 통상임금에 포함. 시간외·연차수당 산정 기준 상향.", clause:"§2①5"},
+    {id:"RULE-PAY-OT@v2.2", name:"통상임금 산정(구)", version:"v2.2", effectiveDate:"2021-04-01", deprecated:true, kind:"law",
+      lawRef:"근로기준법 시행령 §6", summary:"재직조건부 정기상여금 통상임금 제외(구 기준). what-if 비교용.", clause:"시행령 §6"},
+    {id:"RULE-GOAL-WEIGHT", name:"목표 가중치 합계", version:"v1.4", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"평가규정 §3.1", summary:"개인 목표 가중치 합계 = 100%. 미달/초과 시 경고.", clause:"§3.1"},
+    {id:"RULE-GOAL-ALIGN", name:"상위목표 연계", version:"v1.1", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"평가규정 §3.2", summary:"모든 개인 목표는 상위 KR 1개 이상에 연결. 미연결 목표 플래그.", clause:"§3.2"},
+    {id:"RULE-SMART", name:"SMART 목표 검증", version:"v2.0", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"평가규정 §2", summary:"구체성·측정가능·달성가능·관련성·기한 5요소 충족 여부 판정.", clause:"§2"},
+    {id:"RULE-GRADE-DIST", name:"등급 강제배분(상대평가)", version:"v3.1", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"평가규정 §4.3 · 등급 양식 GF-STD5", summary:"S≤10%, A≤25% 상한. 초과 시 하위 등급으로 재배분.", clause:"§4.3"},
+    {id:"RULE-GRADE-ADJ-RANGE", name:"등급 조정 범위 제한", version:"v1.2", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"평가규정 §4.2", summary:"현 등급 기준 상향 2·하향 1단계 내 조정. 초과달성 시 상향 요건(§4.2).", clause:"§4.2"},
+    {id:"RULE-DEV-ADJ", name:"평균 편차 조정(정규화)", version:"v2.0", effectiveDate:"2025-07-01", kind:"policy",
+      lawRef:"평가규정 §4.4", summary:"조정점수 = 전체평균 + (피평가자점수 − 평가자평균) × 전체σ / 평가자σ.", clause:"§4.4"},
+    {id:"RULE-OUTLIER", name:"평가 이상치 탐지", version:"v1.0", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"평가규정 §4.5", summary:"자기평가−상사평가 등급 단계차 ≥2 → 이상치. 캘리 심의 대상.", clause:"§4.5"},
+    {id:"RULE-BIAS", name:"평가 편향 모델", version:"v4.0", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"평가규정 §5.1", summary:"관대화·후광효과·최신효과·중심화 경향 탐지 및 스코어링.", clause:"§5.1"},
+    {id:"RULE-CHECKIN", name:"중간점검 체크인 규칙", version:"v4.0", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"목표관리지침 §5.2", summary:"KR 7일+ 무변동 시 체크인 대상. 진척 로그 기준.", clause:"§5.2"},
+    {id:"RULE-PACE", name:"진척 지연 판정", version:"v2.0", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"목표관리지침 §5.3", summary:"달성률 < 50% AND 잔여기간 < 30% → 진척 지연.", clause:"§5.3"},
+    {id:"RULE-ONE21", name:"1:1 미팅 주기 규칙", version:"v1.0", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"1:1 미팅 운영지침 §1", summary:"최근 1:1 후 14일 초과 시 실시 권고.", clause:"§1"},
+    {id:"RULE-DUP-SIM", name:"목표 중복 유사도", version:"v1.0", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"목표관리지침 §3.2", summary:"임베딩 유사도 ≥0.75 중복 의심, ≥0.9 병합 권고.", clause:"§3.2"},
+    {id:"RULE-SBI", name:"피드백 SBI 구조·민감도", version:"v1.0", effectiveDate:"2026-01-01", kind:"policy",
+      lawRef:"피드백 가이드 §4", summary:"상황-행동-영향 구조 필수. 저성과·부정 피드백은 HR 1:1 가이드 확인 권고.", clause:"§4"}
+  ];
+
+  // 11. agents · sources · asOfPoints · audit · appeal(EX3)
+  var agents = [
+    {id:"ag_draft",    name:"초안생성",     autonomy:"suggest",       flows:["qw2","qw3","qw4","qw6"], role:"목표·평가코멘트·등급초안·피드백 문장 생성"},
+    {id:"ag_rule",     name:"규칙검증",     autonomy:"auto",          flows:["qw2","qw7"],            role:"가중치 합·SMART·연계·중복 규칙 검증"},
+    {id:"ag_biasan",   name:"편향분석",     autonomy:"suggest",       flows:["qw3","qw5"],            role:"최신효과·후광효과 등 평가 편향 탐지"},
+    {id:"ag_meeting",  name:"면담보조",     autonomy:"suggest",       flows:["qw1"],                  role:"체크인 대상 산출·1:1 준비 브리핑·초안 메시지"},
+    {id:"ag_evidence", name:"증거검증",     autonomy:"human_approve", flows:["qw3","qw4","qw5"],       role:"ERP/Jira/talenx 근거 수집·문장별 출처 매핑·진위 검증"},
+    {id:"ag_politics", name:"정치배제",     autonomy:"human_approve", flows:["qw5"],                  role:"조직정치·관계 편향 요인 배제 권고"},
+    {id:"ag_strategy", name:"전략기여",     autonomy:"suggest",       flows:["qw5","qw7"],            role:"상위 KR 전략 기여도 관점 평가"},
+    {id:"ag_bias",     name:"편향필터",     autonomy:"human_approve", flows:["qw5"],                  role:"분포·이상치 기반 편향 필터링"},
+    {id:"ag_orch",     name:"조정오케스트레이터", autonomy:"human_approve", flows:["qw5"],            role:"다자 심의(발의/보강/합의/충돌) 종합·최종 제안"}
+  ];
+  var sources = {
+    connected:[
+      {id:"talenx", name:"talenx", status:"ok",   note:"조직·구성원 인사 모듈 연동"},
+      {id:"erp",    name:"ERP",    status:"ok",   note:"매출·실적·계약"},
+      {id:"slack",  name:"Slack",  status:"ok",   note:"수시 피드백"},
+      {id:"ms365",  name:"MS365",  status:"ok",   note:"문서·캘린더"},
+      {id:"jira",   name:"Jira",   status:"ok",   note:"프로젝트 완료 이슈"},
+      {id:"hunel",  name:"HRIS(hunel)", status:"sync", note:"직무·직급 마스터 동기화중"}
+    ] };
+  var asOfPoints = [
+    {cycle:"C-2026H1", label:"목표 확정",   date:"2026-01-15", orgSnapshotId:"OS-26H1-a", ruleSet:{pay:"v2.3", dist:"v3.1", weight:"v1.4"}},
+    {cycle:"C-2026H1", label:"중간점검",   date:"2026-04-15", orgSnapshotId:"OS-26H1-a", ruleSet:{pay:"v2.3", dist:"v3.1", weight:"v1.4"}},
+    {cycle:"C-2026H1", label:"평가 시작(조직 스냅샷)", date:"2026-07-01", orgSnapshotId:"OS-26H1-b", ruleSet:{pay:"v2.3", dist:"v3.1", weight:"v1.4"}},
+    {cycle:"C-2025H2", label:"결과 확정",   date:"2026-01-10", orgSnapshotId:"OS-25H2",   ruleSet:{pay:"v2.2", dist:"v3.0", weight:"v1.3"}}
+  ];
+  var audit = { refFormat:"AUD-{flow}-{cycle}-{seq}", seq:471 };
+
+  // EX3 이의신청 (박성현, C-2026H1)
+  var appeal = { target:"m_parksh", cycle:"C-2026H1", confirmedGrade:"B", confirmedAchievement:105,
+    confirmedAt:"2026-07-01T15:00", filedAt:"2026-07-10T11:20", status:"검토 이전",
+    claimText:"상반기 완료한 'Salesforce-ERP 연동 안정화(OPS-88)' 프로젝트가 실적에 반영되지 않았습니다. 반영 시 달성률이 상향되어야 한다고 판단합니다.",
+    claimTags:["#프로젝트 미반영","#가중치 이의"],
+    whatIf:{ base:{achievement:105, grade:"B"}, claimed:{achievement:118, grade:"A"},
+      delta:[{label:"OPS-88 프로젝트 성과 반영", from:"105%", to:"118%", dir:"up"}],
+      blocked:{rule:"RULE-GRADE-DIST", detail:"A 승격 시 강제배분 A 상한 25% 초과(현 26%)"} },
+    reviewDraft:"이의 신청하신 OPS-88 프로젝트 완료 사실은 Jira 기록으로 확인됩니다(2026-03-28). 다만 확정 시점(2026-06-20) 이후 반영분이 아니며, 재계산 시 달성률 118%로 A 요건에 근접하나 강제배분 A 상한(25%) 초과로 등급 상향은 불가합니다. 현 B 등급 유지를 권고하며, 하반기 목표에 해당 성과를 반영하겠습니다." };
+
+  var lake = { meta:meta, personas:personas, orgChart:orgChart, members:members, jobs:jobs, okr:okr,
+    checkin:checkin, oneOnOne:oneOnOne, evidenceStore:evidenceStore, evidenceSummary:evidenceSummary,
+    evalData:evalData, calibration:calibration, rules:rules, agents:agents, sources:sources,
+    asOfPoints:asOfPoints, audit:audit, appeal:appeal };
+
+  // 편의 조회 (reconcile §3 gap 1)
+  lake.member = function(id){ for(var i=0;i<members.length;i++) if(members[i].id===id) return members[i]; return null; };
+  lake.name   = function(id){ var m=lake.member(id); return m?m.name:id; };
+  lake.rule   = function(id){ for(var i=0;i<rules.length;i++) if(rules[i].id===id) return rules[i]; return {id:id,name:id,version:"",kind:"policy"}; };
+  var _evReg = {};
+  lake.regEv   = function(list){ (list||[]).forEach(function(e){ if(!e) return; if(e.recordId) _evReg[e.recordId]=e; if(e.id) _evReg[e.id]=e; }); };
+  lake.ev     = function(recordId){ var all=evidenceStore.m_parkms||[]; for(var i=0;i<all.length;i++) if(all[i].recordId===recordId) return all[i]; return _evReg[recordId] || null; };
+  lake.job    = function(id){ for(var i=0;i<jobs.length;i++) if(jobs[i].id===id) return jobs[i]; return null; };
+  lake.agent  = function(id){ for(var i=0;i<agents.length;i++) if(agents[i].id===id) return agents[i]; return null; };
+  lake.goals  = function(ownerId){ return okr.individual.filter(function(g){return g.owner===ownerId;}); };
+  lake.evalRec= function(memberId, cycle){ cycle=cycle||"C-2026H1"; for(var i=0;i<evalData.records.length;i++){ var r=evalData.records[i]; if(r.memberId===memberId && r.cycle===cycle) return r; } return null; };
+  lake.nextAuditRef = function(flow, cycle){ audit.seq++; return "AUD-"+(flow||"EZ").toUpperCase()+"-"+(cycle||"C2026H1").replace(/-/g,"")+"-"+String(audit.seq).padStart(6,"0"); };
+  lake.cycleLabel = function(id){ for(var i=0;i<evalData.cycles.length;i++) if(evalData.cycles[i].id===id) return evalData.cycles[i].label; return id; };
+  return lake;
+})();
+/* ═══ elizax · 컴포넌트 라이브러리 (EZ.*) — 검증가능 답변 렌더 레이어 ═══ */
+window.EZ = window.EZ || {};
+(function (EZ) {
+  "use strict";
+
+  /* ── core: el / frag / mount / tpl ── */
+  EZ.el = function (tag, props, children) {
+    var m = String(tag).match(/^([a-zA-Z0-9]+)?((?:[.#][\w-]+)*)$/);
+    var tagName = (m && m[1]) || "div", extra = (m && m[2]) || "";
+    var node = document.createElement(tagName), id = null, cls = [];
+    extra.replace(/([.#])([\w-]+)/g, function (_, s, v) { if (s === "#") id = v; else cls.push(v); return ""; });
+    if (id) node.id = id;
+    if (cls.length) node.className = cls.join(" ");
+    if (props && typeof props === "object" && !(props instanceof Node) && !Array.isArray(props)) {
+      for (var k in props) {
+        if (!Object.prototype.hasOwnProperty.call(props, k)) continue;
+        var v = props[k];
+        if (v == null || v === false) continue;
+        if (k === "class" || k === "className") { node.className = (node.className ? node.className + " " : "") + v; }
+        else if (k === "id") node.id = v;
+        else if (k === "text") node.textContent = v;
+        else if (k === "html") node.innerHTML = v;
+        else if (k === "style" && typeof v === "object") { for (var s in v) node.style[s] = v[s]; }
+        else if (k === "on" && typeof v === "object") { for (var e in v) node.addEventListener(e, v[e]); }
+        else if (k === "data" && typeof v === "object") { for (var d in v) node.setAttribute("data-" + d, v[d]); }
+        else if (k === "attrs" && typeof v === "object") { for (var a in v) node.setAttribute(a, v[a]); }
+        else if (typeof v === "function") node[k] = v;
+        else if (v === true) node.setAttribute(k, "");
+        else node.setAttribute(k, v);
+      }
+    } else if (props != null) { children = props; }
+    EZ._append(node, children);
+    return node;
+  };
+  EZ._append = function (node, children) {
+    if (children == null || children === false) return;
+    if (Array.isArray(children)) { children.forEach(function (c) { EZ._append(node, c); }); return; }
+    if (children instanceof Node) { node.appendChild(children); return; }
+    node.appendChild(document.createTextNode(String(children)));
+  };
+  EZ.frag = function (children) { var f = document.createDocumentFragment(); EZ._append(f, children); return f; };
+  EZ.mount = function (t) { return typeof t === "string" ? document.querySelector(t) : t; };
+  EZ.esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  EZ.tpl = function (strings) { var vals = [].slice.call(arguments, 1), out = strings[0]; for (var i = 0; i < vals.length; i++) out += EZ.esc(vals[i]) + strings[i + 1]; return out; };
+
+  /* ── icons ── */
+  var ICONS = {
+    check: "M20 6L9 17l-5-5", x: "M18 6L6 18M6 6l12 12", dot: "M12 12h.01",
+    clock: "M12 7v5l3 2M12 3a9 9 0 100 18 9 9 0 000-18z", alert: "M12 9v4m0 4h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z",
+    info: "M12 16v-4m0-4h.01M12 3a9 9 0 100 18 9 9 0 000-18z", spark: "M12 3l1.9 5.5L19 10l-5.1 1.5L12 17l-1.9-5.5L5 10l5.1-1.5L12 3z",
+    chevron: "M6 9l6 6 6-6", "chevron-r": "M9 6l6 6-6 6", bot: "M12 7V4M8 7h8a2 2 0 012 2v7a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2zM9 13h.01M15 13h.01",
+    doc: "M14 3v4a1 1 0 001 1h4M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z", link: "M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1",
+    search: "M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-4.3-4.3", calc: "M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-4M8 7h8M8 11h2m4 0h2M8 15h2m4 0h2",
+    graph: "M4 4v16h16M8 16l3-4 3 2 4-6", source: "M4 7h16M4 12h16M4 17h10", undo: "M9 14L4 9l5-5M4 9h11a5 5 0 010 10h-3",
+    send: "M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z", edit: "M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z",
+    pause: "M10 4H6v16h4V4zM18 4h-4v16h4V4z", plus: "M12 5v14M5 12h14", eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z M12 15a3 3 0 100-6 3 3 0 000 6z"
+  };
+  EZ.icon = function (name, size) {
+    size = size || 16;
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ez-ic"); svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", size); svg.setAttribute("height", size);
+    svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2"); svg.setAttribute("stroke-linecap", "round"); svg.setAttribute("stroke-linejoin", "round");
+    var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", ICONS[name] || ICONS.dot); svg.appendChild(p);
+    return svg;
+  };
+
+  /* ── popover (single open) ── */
+  EZ._layer = function () { var l = document.getElementById("ez-layer"); if (!l) { l = EZ.el("div#ez-layer.ez-root"); document.body.appendChild(l); } return l; };
+  EZ._openPop = null;
+  EZ.popover = function (anchor, content, opts) {
+    opts = opts || {};
+    var api = { isOpen: false };
+    var el = null;
+    function place() {
+      var r = anchor.getBoundingClientRect(), pr = el.getBoundingClientRect();
+      var top = r.bottom + 6, left = r.left;
+      if (opts.align === "end") left = r.right - pr.width;
+      if (opts.align === "center") left = r.left + r.width / 2 - pr.width / 2;
+      if (top + pr.height > window.innerHeight - 8) top = r.top - pr.height - 6;
+      if (left + pr.width > window.innerWidth - 8) left = window.innerWidth - pr.width - 8;
+      if (left < 8) left = 8; if (top < 8) top = 8;
+      el.style.top = top + "px"; el.style.left = left + "px";
+    }
+    function onDoc(e) { if (el && !el.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) api.close(); }
+    function onKey(e) { if (e.key === "Escape") api.close(); }
+    api.open = function () {
+      if (EZ._openPop && EZ._openPop !== api) EZ._openPop.close();
+      if (api.isOpen) return; api.isOpen = true; EZ._openPop = api;
+      el = EZ.el("div.ez-popover" + (opts.className ? "." + opts.className : ""), [typeof content === "function" ? content() : content]);
+      EZ._layer().appendChild(el); place();
+      setTimeout(function () { document.addEventListener("mousedown", onDoc); document.addEventListener("keydown", onKey); }, 0);
+    };
+    api.close = function () { if (!api.isOpen) return; api.isOpen = false; if (EZ._openPop === api) EZ._openPop = null; document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); if (el) { el.remove(); el = null; } };
+    api.toggle = function () { api.isOpen ? api.close() : api.open(); };
+    return api;
+  };
+
+  EZ.toast = function (msg, kind) { if (window.tx && tx.toast) return tx.toast(msg); console.log("[ez]", msg); };
+
+  /* ── fmt / meta ── */
+  EZ.fmt = {
+    pct: function (n) { return Math.round(n) + "%"; },
+    delta: function (n) { return (n > 0 ? "+" : "") + n + "%p"; },
+    grade: function (g) { return g; },
+    date: function (iso) { return (iso || "").slice(0, 10); },
+    won: function (n) { return n; }
+  };
+  EZ.autonomyMeta = function (kind) {
+    return ({
+      auto: { label: "자동 실행", color: "var(--ez-auto)", soft: "var(--ez-auto-soft)", ic: "spark" },
+      suggest: { label: "제안", color: "var(--ez-suggest)", soft: "var(--ez-suggest-soft)", ic: "bot" },
+      human_approve: { label: "승인 필요", color: "var(--ez-appr)", soft: "var(--ez-appr-soft)", ic: "eye" }
+    })[kind] || { label: kind, color: "var(--ink-3)", soft: "var(--soft)", ic: "dot" };
+  };
+  EZ.sourceMeta = { talenx: "#1F7AF0", ERP: "#2FA36B", Slack: "#7B61FF", MS365: "#D24726", Jira: "#2684FF", HRIS: "#5C6474", "규정": "#8A5A08" };
+
+  /* ── autonomy badge (패턴8) ── */
+  EZ.autonomyBadge = function (kind) {
+    var m = EZ.autonomyMeta(kind);
+    return EZ.el("span.ez-autobadge", { data: { k: kind } }, [EZ.icon(m.ic, 12), m.label]);
+  };
+
+  /* ── as-of chip (원칙1) ── */
+  EZ.asOfChip = function (as_of, opts) {
+    opts = opts || {}; as_of = as_of || {};
+    var past = !!as_of.isPast;
+    var label = (as_of.date ? EZ.fmt.date(as_of.date) : EZ.data.meta.today) + (as_of.cycleLabel ? " · " + as_of.cycleLabel : "");
+    var chip = EZ.el("button.ez-asof" + (past ? ".is-past" : ""), { attrs: { "aria-label": "기준 시점" } }, [
+      EZ.icon("clock", 13), "기준 " + label, EZ.icon("chevron", 12)
+    ]);
+    if (as_of.editable === false) { chip.disabled = true; chip.style.cursor = "default"; return chip; }
+    var cycles = (EZ.data.evalData.cycles || []);
+    var pop = EZ.popover(chip, function () {
+      return EZ.el("div", { style: { padding: "8px", minWidth: "200px" } }, [
+        EZ.el("div", { style: { fontSize: "11px", fontWeight: "800", color: "var(--ink-3)", padding: "4px 8px" }, text: "기준 시점 변경 (재조회)" }),
+        cycles.map(function (c) {
+          var on = c.id === as_of.cycle;
+          return EZ.el("button", {
+            style: { display: "flex", width: "100%", gap: "8px", alignItems: "center", padding: "8px 10px", border: "0", background: on ? "var(--ez-accent-soft)" : "none", borderRadius: "7px", cursor: "pointer", fontFamily: "inherit", fontSize: "12.5px", color: "var(--ink)", fontWeight: on ? "800" : "600", textAlign: "left" },
+            on: { click: function () { pop.close(); if (opts.onChange) opts.onChange(c); } }
+          }, [c.label, c.status ? EZ.el("span", { style: { marginLeft: "auto", fontSize: "10.5px", color: "var(--ink-3)" }, text: c.status }) : null]);
+        })
+      ]);
+    }, { align: "start" });
+    chip.addEventListener("click", function () { pop.toggle(); });
+    return chip;
+  };
+
+  /* ── rule chip (원칙2) ── */
+  EZ.ruleChip = function (rule) {
+    if (typeof rule === "string") rule = EZ.data.rule(rule);
+    var chip = EZ.el("button.ez-rule", { data: { kind: rule.kind || "policy" } }, [
+      (rule.clause ? rule.name.split("(")[0].trim() + " " + rule.clause : rule.name),
+      rule.version ? EZ.el("span.ver", { text: rule.version }) : null
+    ]);
+    var pop = EZ.popover(chip, function () {
+      return EZ.el("div", { style: { padding: "0", maxWidth: "300px" } }, [
+        EZ.el("div.ez-snap-h", [
+          EZ.el("span.ez-snap-src", { style: { background: rule.kind === "law" ? "var(--ez-warn)" : "var(--ez-accent)" }, text: rule.kind === "law" ? "법령" : "규정" }),
+          EZ.el("b", { style: { fontSize: "12.5px" }, text: rule.name }),
+          EZ.el("span.ez-snap-rid", { text: rule.version })
+        ]),
+        rule.lawRef ? EZ.el("div", { style: { padding: "8px 13px 0", fontSize: "11.5px", color: "var(--ez-accent-2)", fontWeight: "700" }, text: rule.lawRef }) : null,
+        EZ.el("div.ez-snap-body", { text: rule.summary || "" }),
+        rule.effectiveDate ? EZ.el("div.ez-snap-f", { text: "시행일 " + rule.effectiveDate + (rule.supersedes ? " · 이전 " + rule.supersedes : "") }) : null
+      ]);
+    });
+    chip.addEventListener("click", function () { pop.toggle(); });
+    return chip;
+  };
+
+  /* ── evidence chip + snapshot popover (원칙2) ── */
+  EZ.evidenceChip = function (ev, seq) {
+    if (typeof ev === "string") { var r = EZ.data.ev(ev); ev = r ? { id: ev, source: r.source, label: r.title || r.label, meta: r.metric || r.meta, snapshot: r.snap || r.snapshot, ts: r.date || r.ts, confidence: r.confidence, recordId: r.recordId || ev } : { id: ev, source: "talenx", label: ev, snapshot: "원문 스냅샷 준비 중", recordId: ev }; }
+    var color = EZ.sourceMeta[ev.source] || "var(--ink-3)";
+    var chip = EZ.el("button.ez-ev", { style: { "--_src": color }, data: { ev: ev.id || ev.recordId || "" } }, [
+      EZ.el("span.src"), (seq ? EZ.el("sup", { text: seq }) : null), ev.source + " " + (ev.label || ev.recordId || "")
+    ]);
+    var pop = EZ.popover(chip, function () {
+      return EZ.el("div", { style: { "--_src": color, maxWidth: "320px" } }, [
+        EZ.el("div.ez-snap-h", [
+          EZ.el("span.ez-snap-src", { text: ev.source }),
+          EZ.el("span.ez-snap-rid", { text: ev.recordId || ev.id || "" })
+        ]),
+        EZ.el("div.ez-snap-ttl", { text: ev.label || "" }),
+        EZ.el("div.ez-snap-body", { text: (ev.snapshot || ev.meta || "원문 스냅샷 없음") }),
+        EZ.el("div.ez-snap-f", [
+          ev.ts ? EZ.el("span", { text: "기록 " + EZ.fmt.date(ev.ts) }) : null,
+          ev.confidence != null ? EZ.el("span.ez-conf", [EZ.el("i", { style: { width: Math.round(ev.confidence * 100) + "%" } })]) : null,
+          ev.confidence != null ? EZ.el("span", { text: "신뢰도 " + ev.confidence }) : null,
+          EZ.el("span.ez-snap-open", { style: { marginLeft: "auto" } }, ["talenx에서 열기 ↗"])
+        ])
+      ]);
+    });
+    chip.addEventListener("click", function () { pop.toggle(); });
+    return chip;
+  };
+
+  /* ── trace steps (원칙2) ── */
+  EZ.trace = function (steps) {
+    var rows = [];
+    var ol = EZ.el("ol.ez-trace");
+    (steps || []).forEach(function (s, i) {
+      var row = EZ.el("li.ez-tr", { data: { st: s.status || "done" } }, [
+        EZ.el("span.st", [s.status === "run" ? "" : (s.status === "fail" ? "!" : (s.status === "wait" ? "" : String(i + 1)))]),
+        EZ.el("span.lbl", { text: s.label })
+      ]);
+      if (s.kind === "calculation") {
+        if (s.expr) row.appendChild(EZ.el("span.expr", { text: s.expr }));
+        if (s.value != null) row.appendChild(EZ.el("span.val" + (s.dir ? "." + s.dir : ""), { text: s.value }));
+      } else if (s.kind === "graph_path" && s.path) {
+        var pathWrap = EZ.el("span.ez-path");
+        s.path.forEach(function (p, j) {
+          pathWrap.appendChild(EZ.el("span.ez-node-pill" + (p.cut ? ".is-cut" : ""), { data: { t: p.type || "org" }, text: p.node }));
+          if (j < s.path.length - 1) pathWrap.appendChild(EZ.el("span.arw", { text: "▸" }));
+        });
+        row.appendChild(pathWrap);
+      }
+      if (s.chips && s.chips.length) {
+        var sub = EZ.el("span.ez-tr-sub");
+        s.chips.forEach(function (c) { sub.appendChild(EZ.ruleChip(c)); });
+        row.appendChild(sub);
+      }
+      if (s.refs && s.refs.length) {
+        var sub2 = EZ.el("span.ez-tr-sub");
+        s.refs.forEach(function (rid, k) { sub2.appendChild(EZ.evidenceChip(rid, k + 1)); });
+        row.appendChild(sub2);
+      }
+      rows.push(row); ol.appendChild(row);
+    });
+    ol._update = function (i, patch) { if (!rows[i]) return; if (patch.status) rows[i].setAttribute("data-st", patch.status); };
+    return ol;
+  };
+
+  /* ── excluded fold ── */
+  EZ.excluded = function (list) {
+    if (!list || !list.length) return null;
+    return EZ.el("details.ez-excl", [
+      EZ.el("summary", [EZ.icon("info", 13), "제외 " + list.length + "건 (투명성)"]),
+      list.map(function (x) { return EZ.el("div.ez-excl-item", [EZ.el("span.lb", { text: x.label }), EZ.el("span.rs", { text: "— " + x.reason })]); })
+    ]);
+  };
+
+  /* ── what-if (원칙4) ── */
+  EZ.whatIf = function (spec, ctx) {
+    ctx = ctx || {};
+    var params = {}; (spec.params || []).forEach(function (p) { params[p.id] = p.value; });
+    var out = EZ.el("div.ez-wf-out");
+    var panel = EZ.el("section.ez-whatif", [
+      EZ.el("div.ez-whatif-h", [EZ.icon("calc", 14), "What-if 재계산 — 실제로 다시 계산합니다"]),
+      EZ.el("div.ez-wf-ctrls", (spec.params || []).map(function (p) {
+        var input;
+        if (p.type === "select") {
+          input = EZ.el("select", { on: { change: function () { params[p.id] = this.value; run(); } } },
+            p.options.map(function (o) { return EZ.el("option", { value: o.v, text: o.t, selected: o.v === p.value }); }));
+        } else if (p.type === "range" || p.type === "number") {
+          input = EZ.el("input", { type: p.type, value: p.value, min: p.min, max: p.max, step: p.step || 1, on: { input: function () { params[p.id] = +this.value; run(); } } });
+        } else { input = EZ.el("input", { type: "text", value: p.value, on: { input: function () { params[p.id] = this.value; run(); } } }); }
+        return EZ.el("label", [p.label, input]);
+      })),
+      out
+    ]);
+    var t = null;
+    function run() {
+      panel.classList.add("is-calc");
+      clearTimeout(t);
+      t = setTimeout(function () {
+        panel.classList.remove("is-calc");
+        var res = spec.recompute(params) || {};
+        out.innerHTML = "";
+        if (res.answer) out.appendChild(EZ.el("div", { style: { marginBottom: (res.deltas && res.deltas.length) ? "8px" : "0" }, html: res.answer }));
+        (res.deltas || []).forEach(function (d) {
+          out.appendChild(EZ.el("div.ez-wf-delta", [
+            EZ.el("span", { style: { flex: "1", color: "var(--ink-2)" }, text: d.label }),
+            EZ.el("span.from", { text: d.from }), EZ.el("span.arw", { text: "→" }),
+            EZ.el("span.to" + (d.dir ? "." + d.dir : ""), { text: d.to })
+          ]));
+        });
+        if (res.blocked) out.appendChild(EZ.el("div.ez-wf-block", [EZ.icon("alert", 13), " " + res.blocked]));
+      }, 250);
+    }
+    run();
+    return panel;
+  };
+
+  /* ── audit badge (원칙3) ── */
+  EZ.auditBadge = function (audit_ref, scope) {
+    audit_ref = audit_ref || {};
+    var badge = EZ.el("span.ez-audit", [
+      EZ.icon("check", 13), "감사 로그 기록됨",
+      audit_ref.ref ? EZ.el("span.ref", { text: audit_ref.ref }) : null,
+      scope && scope.label ? EZ.el("span.scope", { text: scope.label }) : null
+    ]);
+    var pop = EZ.popover(badge, function () {
+      return EZ.el("div", { style: { padding: "11px 13px", maxWidth: "300px", fontSize: "12px", lineHeight: "1.6" } }, [
+        EZ.el("b", { style: { fontSize: "12.5px" }, text: "감사 로그 항목" }),
+        EZ.el("div", { style: { marginTop: "6px", color: "var(--ink-2)" } }, [
+          audit_ref.ref ? EZ.el("div", { html: "<b>ref</b> " + EZ.esc(audit_ref.ref) }) : null,
+          audit_ref.ts ? EZ.el("div", { html: "<b>시각</b> " + EZ.esc(audit_ref.ts) }) : null,
+          scope ? EZ.el("div", { html: "<b>탐색 범위</b> " + EZ.esc(scope.label) + " · 권한 밖 데이터 미포함" }) : null
+        ])
+      ]);
+    });
+    badge.addEventListener("click", function () { pop.toggle(); });
+    return badge;
+  };
+
+  /* ── approval gate (패턴4, S7) — commit은 여기서만 ── */
+  EZ.approvalGate = function (actions, ctx) {
+    ctx = ctx || {};
+    var gate = EZ.el("div.ez-gate", { data: { run: (ctx.run && ctx.run.id) || "" } });
+    var defLabel = { approve: "승인·확정", send: "승인 후 발송", revise: "수정 요청", hold: "보류" };
+    (actions || []).forEach(function (a) {
+      var kind = a.kind || "custom";
+      var cls = (kind === "approve" || kind === "send" || a.primary) ? "is-primary" : (kind === "hold" ? "is-ghost is-hold" : "is-ghost");
+      var btn = EZ.el("button." + cls.split(" ").join("."), { text: a.label || defLabel[kind] || kind, disabled: a.disabled });
+      if (kind === "send") btn.prepend(EZ.icon("send", 13), " ");
+      btn.addEventListener("click", function () { if (a.onClick) a.onClick(ctx.receiptEl, a, gate); });
+      gate.appendChild(btn);
+    });
+    if (ctx.note) gate.appendChild(EZ.el("span.ez-gate-note", [EZ.icon("alert", 12), " " + ctx.note]));
+    gate.done = function (label) { gate.innerHTML = ""; gate.appendChild(EZ.el("span.ez-gate-done", [EZ.icon("check", 14), label || "확정됨 · 감사 로그 기록됨"])); };
+    return gate;
+  };
+
+  /* ── receipt assembler (form-agnostic) ── */
+  EZ.receipt = function (r) {
+    r = r || {};
+    var art = EZ.el("article.ez-rcpt", { data: { id: r.id || "", autonomy: r.autonomy || "" } });
+    // header
+    art.appendChild(EZ.el("header.ez-rcpt-h", [
+      EZ.el("span.ez-rcpt-title", { text: r.title || "" }),
+      r.autonomy ? EZ.autonomyBadge(r.autonomy) : null
+    ]));
+    // as-of + scope (원칙1)
+    if (r.as_of || r.scope) {
+      var asRow = EZ.el("div.ez-rcpt-asof");
+      if (r.as_of) asRow.appendChild(EZ.asOfChip(r.as_of, { onChange: r.onAsOf }));
+      if (r.scope) asRow.appendChild(EZ.el("span.ez-rcpt-scope", { text: (r.scope.label || "") + (r.scope.count != null ? " · " + r.scope.count + "명" : "") }));
+      art.appendChild(asRow);
+    }
+    // answer
+    if (r.answer != null) {
+      var ans = EZ.el("div.ez-rcpt-answer" + (r.answer_kind === "grade" ? ".is-grade" : ""));
+      if (r.answer_kind === "grade" && r.grade) { ans.appendChild(EZ.el("span.ez-grade", { text: r.grade })); ans.appendChild(EZ.el("span", { html: r.answer })); }
+      else ans.innerHTML = (r.answer instanceof Node) ? "" : r.answer;
+      if (r.answer instanceof Node) ans.appendChild(r.answer);
+      art.appendChild(ans);
+    }
+    // trace (원칙2)
+    if (r.trace && r.trace.length) { art.appendChild(EZ.el("div.ez-sec-lbl", { text: "계산·근거 트레이스" })); art.appendChild(EZ.trace(r.trace)); }
+    // rules + evidence chips (원칙2)
+    var chips = EZ.el("div.ez-rcpt-chips");
+    (r.rules || []).forEach(function (rl) { chips.appendChild(EZ.ruleChip(rl)); });
+    (r.evidence || []).forEach(function (ev, i) { chips.appendChild(EZ.evidenceChip(ev)); });
+    if (chips.children.length) { art.appendChild(EZ.el("div.ez-sec-lbl", { text: "규정 · 근거" })); art.appendChild(chips); }
+    // excluded
+    var ex = EZ.excluded(r.excluded); if (ex) art.appendChild(ex);
+    // what-if (원칙4)
+    if (r.what_if) art.appendChild(EZ.whatIf(r.what_if, { receiptEl: art }));
+    // audit (원칙3)
+    if (r.audit_ref) art.appendChild(EZ.auditBadge(r.audit_ref, r.scope));
+    // gate (패턴4)
+    if (r.actions && r.actions.length) { var g = EZ.approvalGate(r.actions, { receiptEl: art, run: r._run, note: r.gateNote }); art._gate = g; art.appendChild(g); }
+    art._receipt = r;
+    return art;
+  };
+  EZ.receipt.setState = function (el, state) {
+    el.classList.remove("is-approved", "is-revising", "is-held");
+    if (state === "approved") el.classList.add("is-approved");
+    else if (state === "held") el.classList.add("is-held");
+    else if (state === "revising") el.classList.add("is-revising");
+  };
+
+  /* ── process node view (패턴1) ── */
+  EZ.nodeFlow = function (spec) {
+    spec = spec || {}; var nodes = spec.nodes || [];
+    var head = EZ.el("div.ez-flow-h", [spec.title || "작업 진행", EZ.el("b.ez-node-pct", { text: "0%" })]);
+    var bar = EZ.el("div.ez-flow-bar", [EZ.el("i")]);
+    var list = EZ.el("div");
+    var map = {};
+    nodes.forEach(function (n) {
+      var dot = EZ.el("span.dot");
+      var body = EZ.el("div.body", [
+        EZ.el("div.nm", [n.label, n.src ? EZ.el("span.src", { text: n.src }) : null]),
+        n.detail ? EZ.el("div.dt", { text: n.detail }) : null
+      ]);
+      var row = EZ.el("div.ez-fnode", { data: { kind: n.kind || "query", st: n.status || "wait", node: n.id } }, [dot, EZ.el("span.conn"), body]);
+      if (n.parallel && n.parallel.length) {
+        var par = EZ.el("div.ez-fpar");
+        n.parallel.forEach(function (sn) { par.appendChild(EZ.el("span.sub", { data: { st: sn.status || "wait", sub: sn.id } }, [EZ.el("span.sd"), sn.label])); });
+        body.appendChild(par);
+      }
+      map[n.id] = { row: row, dot: dot };
+      list.appendChild(row);
+    });
+    var el = EZ.el("div.ez-flow", [head, bar, list]);
+    function paint(id) {
+      var m = map[id]; if (!m) return;
+      var st = m.row.getAttribute("data-st");
+      m.dot.innerHTML = "";
+      if (st === "done") m.dot.appendChild(EZ.icon("check", 14));
+      else if (st === "run") m.dot.appendChild(EZ.el("span.ez-spin"));
+    }
+    var api = { el: el };
+    api.update = function (id, patch) {
+      var m = map[id]; if (!m) return;
+      if (patch.status) { m.row.setAttribute("data-st", patch.status); paint(id); }
+      if (patch.sub) { var s = m.row.querySelector('[data-sub="' + patch.sub + '"]'); if (s) s.setAttribute("data-st", patch.subStatus || "done"); }
+      if (patch.pct != null) { el.querySelector(".ez-node-pct").textContent = Math.round(patch.pct) + "%"; el.querySelector(".ez-flow-bar>i").style.width = patch.pct + "%"; }
+    };
+    Object.keys(map).forEach(paint);
+    return api;
+  };
+
+  /* ── deliberation graph (패턴9) ── */
+  EZ.deliberationGraph = function (spec) {
+    spec = spec || {};
+    var wrap = EZ.el("div.ez-delib");
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ez-delib-svg"); wrap.appendChild(svg);
+    var orch = EZ.el("div.ez-orch", { text: spec.orchestrator || "조정 오케스트레이터" });
+    wrap.appendChild(orch);
+    var agentEls = {}, paths = {};
+    var positions = [{ l: "6%", t: "8%" }, { l: "68%", t: "8%" }, { l: "6%", t: "62%" }, { l: "68%", t: "62%" }];
+    (spec.agents || []).forEach(function (a, i) {
+      var p = positions[i] || { l: "6%", t: "8%" };
+      var el = EZ.el("div.ez-agent", { data: { stance: a.stance, agent: a.id }, style: { left: p.l, top: p.t } }, [
+        EZ.el("span.role", { text: a.name || a.role }),
+        EZ.el("span.stance", { style: { color: stanceColor(a.stance) }, text: a.stanceKo || "" }),
+        EZ.el("div.msg", { text: a.msg })
+      ]);
+      agentEls[a.id] = el; wrap.appendChild(el);
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("data-stance", a.stance); svg.appendChild(path); paths[a.id] = path;
+    });
+    if (spec.verdict) wrap.appendChild(EZ.el("div.ez-delib-verdict", [EZ.icon("check", 14), " " + spec.verdict]));
+    function stanceColor(s) { return s === "conflict" ? "var(--ez-bad)" : s === "consensus" || s === "support" ? "var(--ez-good)" : "var(--ez-accent-2)"; }
+    function drawEdges() {
+      var wr = wrap.getBoundingClientRect();
+      svg.setAttribute("viewBox", "0 0 " + wr.width + " " + wr.height);
+      var or = orch.getBoundingClientRect();
+      var ox = or.left - wr.left + or.width / 2, oy = or.top - wr.top + or.height / 2;
+      Object.keys(agentEls).forEach(function (id) {
+        var ar = agentEls[id].getBoundingClientRect();
+        var ax = ar.left - wr.left + ar.width / 2, ay = ar.top - wr.top + ar.height / 2;
+        var mx = (ax + ox) / 2;
+        paths[id].setAttribute("d", "M" + ax + "," + ay + " C" + mx + "," + ay + " " + mx + "," + oy + " " + ox + "," + oy);
+      });
+    }
+    var api = { el: wrap };
+    api.draw = drawEdges;
+    api.update = function (id, patch) {
+      var el = agentEls[id]; if (!el) return;
+      if (patch.stance) { el.setAttribute("data-stance", patch.stance); paths[id].setAttribute("data-stance", patch.stance); el.querySelector(".stance").style.color = stanceColor(patch.stance); if (patch.stanceKo) el.querySelector(".stance").textContent = patch.stanceKo; }
+      if (patch.msg) el.querySelector(".msg").textContent = patch.msg;
+    };
+    setTimeout(drawEdges, 30); setTimeout(drawEdges, 250);
+    window.addEventListener("resize", drawEdges);
+    return api;
+  };
+
+  /* ── source bar (패턴10) ── */
+  EZ.sourceBar = function (spec) {
+    spec = spec || {};
+    var jobsEl = EZ.el("span.ez-jobs", { hidden: !(spec.jobs > 0) }, [EZ.el("span.sd"), "백그라운드 작업 ", EZ.el("b", { text: spec.jobs || 0 }), "건"]);
+    var srcEls = {};
+    var bar = EZ.el("div.ez-srcbar", [
+      (spec.sources || []).map(function (s) {
+        var el = EZ.el("span.ez-src", { data: { st: s.status || "ok" } }, [EZ.el("span.sd"), s.name, s.count != null ? EZ.el("span.cnt", { text: " " + s.count }) : null]);
+        srcEls[s.id] = el; return el;
+      }), jobsEl
+    ]);
+    return {
+      el: bar,
+      setJobs: function (n) { jobsEl.hidden = !(n > 0); jobsEl.querySelector("b").textContent = n; },
+      setStatus: function (id, st) { if (srcEls[id]) srcEls[id].setAttribute("data-st", st); }
+    };
+  };
+
+  /* ── cross-context tabs (패턴7) ── */
+  EZ.crossContext = function (spec) {
+    spec = spec || {}; var tabs = spec.tabs || [], cache = {};
+    var body = EZ.el("div.ez-cc-body");
+    var btns = {};
+    function setTab(id) {
+      Object.keys(btns).forEach(function (k) { btns[k].classList.toggle("on", k === id); });
+      body.innerHTML = "";
+      if (!cache[id]) { var t = tabs.filter(function (x) { return x.id === id; })[0]; cache[id] = t ? t.render() : EZ.el("div"); }
+      body.appendChild(cache[id]);
+    }
+    var head = EZ.el("div.ez-cc-h", [
+      EZ.el("div.ez-cc-tabs", tabs.map(function (t) { var b = EZ.el("button", { text: t.label, on: { click: function () { setTab(t.id); } } }); btns[t.id] = b; return b; })),
+      spec.cycles ? EZ.el("div.ez-cc-cycle", [EZ.el("select", { on: { change: function () { if (spec.onCycle) spec.onCycle(this.value); } } }, spec.cycles.map(function (c) { return EZ.el("option", { value: c.v, text: c.t, selected: c.v === spec.cycle }); }))]) : null
+    ]);
+    var el = EZ.el("div", [head, body]);
+    setTab((tabs[0] || {}).id);
+    return { el: el, setTab: setTab };
+  };
+
+  /* ── diff view (패턴6) ── */
+  EZ.diffView = function (spec) {
+    spec = spec || {}; var segs = spec.segments || [];
+    var wrap = EZ.el("div.ez-diff");
+    var segEls = [];
+    segs.forEach(function (s, i) {
+      var seg = EZ.el("span.ez-diff-seg", { data: { state: "" } });
+      if (s.same) { seg.appendChild(document.createTextNode(s.same + " ")); }
+      else {
+        if (s.del) seg.appendChild(EZ.el("span.del", { text: s.del }));
+        if (s.ins) seg.appendChild(EZ.el("span.ins", { text: s.ins }));
+        var ops = EZ.el("span.ops", [
+          EZ.el("button.ok", { text: "반영", on: { click: function () { seg.setAttribute("data-state", "accepted"); if (spec.onAccept) spec.onAccept(i); } } }),
+          EZ.el("button.no", { text: "무시", on: { click: function () { seg.setAttribute("data-state", "rejected"); if (spec.onReject) spec.onReject(i); } } })
+        ]);
+        seg.appendChild(ops);
+      }
+      segEls.push(seg); wrap.appendChild(seg);
+    });
+    return {
+      el: wrap,
+      getResult: function () { return segs.map(function (s, i) { if (s.same) return s.same; var st = segEls[i].getAttribute("data-state"); return st === "rejected" ? (s.del || "") : (s.ins || s.del || ""); }).join(" "); }
+    };
+  };
+
+  /* ── tone editor (패턴6) ── */
+  EZ.toneEdit = function (spec) {
+    spec = spec || {}; var tones = spec.tones || [{ v: "plain", t: "담백" }, { v: "warm", t: "따뜻" }, { v: "direct", t: "직설" }];
+    var value = spec.value || tones[0].v;
+    var btns = {};
+    var el = EZ.el("div.ez-tone", tones.map(function (t) {
+      var b = EZ.el("button" + (t.v === value ? ".on" : ""), { text: t.t, on: { click: function () { value = t.v; Object.keys(btns).forEach(function (k) { btns[k].classList.toggle("on", k === t.v); }); if (spec.onChange) spec.onChange(t.v); } } });
+      btns[t.v] = b; return b;
+    }));
+    return { el: el, get value() { return value; } };
+  };
+
+  /* ── metric tiles ── */
+  EZ.metric = function (s) {
+    return EZ.el("div.ez-metric", { data: { tone: s.tone || "neutral" } }, [
+      EZ.el("div.lb", { text: s.label }),
+      EZ.el("div.vl", [String(s.value), s.unit ? EZ.el("span.un", { text: s.unit }) : null]),
+      s.delta ? EZ.el("div.dl." + s.delta.dir, { text: (s.delta.dir === "up" ? "▲ " : "▼ ") + s.delta.v }) : null,
+      s.sub ? EZ.el("div.sb", { text: s.sub }) : null
+    ]);
+  };
+  EZ.metricRow = function (specs) { return EZ.el("div.ez-metrics", (specs || []).map(EZ.metric)); };
+
+  /* ── progress ── */
+  EZ.progress = function (s) {
+    s = s || {};
+    var track = EZ.el("div.track" + (s.segments ? ".seg" : ""));
+    var fills = [];
+    if (s.segments) { s.segments.forEach(function (seg) { var i = EZ.el("i", { style: { width: seg.v + "%", background: seg.color || "var(--ez-accent)" } }); fills.push(i); track.appendChild(i); }); }
+    else { var f = EZ.el("i", { data: s.tone ? { tone: s.tone } : {}, style: { width: (Math.round((s.value || 0) * 100)) + "%" } }); fills.push(f); track.appendChild(f); }
+    var pct = s.showPct !== false && !s.segments ? EZ.el("span.pct", { text: Math.round((s.value || 0) * 100) + "%" }) : null;
+    var el = EZ.el("div.ez-prog", [s.label ? EZ.el("span.lb", { text: s.label }) : null, track, pct]);
+    return { el: el, set: function (v) { if (fills[0]) fills[0].style.width = Math.round(v * 100) + "%"; if (pct) pct.textContent = Math.round(v * 100) + "%"; } };
+  };
+
+})(window.EZ);
+/* ═══ elizax · 런타임 셸 — 3 노출형태 + S1~S8 프로토콜 + 신호 스케줄러 ═══ */
+(function (EZ) {
+  "use strict";
+  EZ.data = window.ezLake;
+  EZ.ctx = { screen: "home", persona: null, perspective: "evaluator", asOf: "now", thread: [] };
+  EZ.flows = {}; EZ.signals = []; EZ.jobs = new Set(); EZ.auditLog = []; EZ.snoozed = {}; EZ._seq = 0;
+  EZ.renderers = { canvas: {} };
+  var SCREEN_LABEL = { perf: "성과관리", appr: "평가관리", msf: "360 진단", work: "업무관리", home: "홈", pay: "급여관리", att: "근무관리", hrm: "인사관리", wf: "승인/결재" };
+
+  /* ── persona → roleTag / perspective ── */
+  EZ.roleTag = function () { var p = (window.tx && tx.persona) || null; if (!p) return "leader"; if ((p.perms || []).indexOf("hr") >= 0) return "hr"; if ((p.perms || []).indexOf("manager") >= 0) return "leader"; return "member"; };
+  EZ.perspective = function () { return EZ.roleTag() === "member" ? "evaluatee" : "evaluator"; };
+  EZ._viewName = function () { return { hr: "HR 관점", leader: "팀 관점", member: "내 관점" }[EZ.roleTag()]; };
+  EZ._personaColor = function () { return (window.tx && tx.persona && tx.persona.color) || "#1F7AF0"; };
+  EZ._scopeFor = function () {
+    var lake = EZ.data; var rt = EZ.roleTag();
+    if (rt === "hr") return { label: "권한 내 2개 본부·전사", count: null };
+    if (rt === "leader") return { label: "권한 내 미주팀 1개 조직", count: 5 };
+    return { label: "본인 데이터", count: 1 };
+  };
+
+  /* ── FAB ── */
+  EZ._buildFab = function () {
+    var mark = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    mark.setAttribute("class", "ez-fab-mark"); mark.setAttribute("viewBox", "0 0 24 24"); mark.setAttribute("fill", "currentColor");
+    var pth = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    pth.setAttribute("d", "M12 2l2.4 6.9L21 11l-6.6 2.1L12 20l-2.4-6.9L3 11l6.6-2.1L12 2z"); mark.appendChild(pth);
+    var badge = EZ.el("span.ez-fab-badge", { hidden: true, text: "0" });
+    var fab = EZ.el("button#ez-fab.ez-root", { attrs: { "aria-label": "elizax 열기", "aria-haspopup": "dialog" } }, [mark, EZ.el("span.ez-fab-lbl", { text: "elizax" }), badge]);
+    fab.addEventListener("click", function () { EZ.toggleDock(); });
+    document.body.appendChild(fab); EZ._fab = fab; EZ._fabBadge = badge;
+  };
+  EZ._setFabBadge = function (n) { if (!EZ._fabBadge) return; EZ._fabBadge.hidden = !(n > 0); EZ._fabBadge.textContent = n; };
+
+  /* ── DOCK ── */
+  EZ._buildDock = function () {
+    var srcBar = EZ.sourceBar({ sources: EZ.data.sources.connected.map(function (s) { return { id: s.id, name: s.name, status: s.status }; }), jobs: 0 });
+    EZ._srcBar = srcBar;
+    var thread = EZ.el("div.ez-thread#ez-thread");
+    var chips = EZ.el("div.ez-chips#ez-chips");
+    var input = EZ.el("textarea#ez-input", { rows: "1", attrs: { placeholder: "무엇을 도와드릴까요? (예: 이번 주 체크인 요약)" } });
+    var send = EZ.el("button#ez-send", { attrs: { "aria-label": "보내기" } }, ["↑"]);
+    var ava = EZ.el("span.ez-dk-ava", { text: "e" });
+    var sub = EZ.el("span.ez-dk-sub", { text: "" });
+    var dock = EZ.el("aside#ez-dock.ez-root", { attrs: { role: "dialog", "aria-label": "elizax", "aria-hidden": "true" } }, [
+      EZ.el("header.ez-dk-head", [
+        EZ.el("span.ez-dk-id", [ava, EZ.el("div", { style: { display: "flex", flexDirection: "column", lineHeight: "1.2" } }, [EZ.el("span.ez-dk-nm", { text: "elizax" }), sub])]),
+        EZ.el("span.ez-dk-tools", [
+          EZ.el("button", { attrs: { title: "전체화면 딥워크" }, on: { click: function () { EZ._fullscreenFromDock(); } } }, ["⤢"]),
+          EZ.el("button", { attrs: { title: "닫기" }, on: { click: function () { EZ.closeDock(); } } }, ["✕"])
+        ])
+      ]),
+      srcBar.el,
+      thread,
+      EZ.el("div.ez-composer", [chips, EZ.el("div.ez-input-row", [input, send])])
+    ]);
+    document.body.appendChild(dock);
+    EZ._dock = dock; EZ._thread = thread; EZ._chips = chips; EZ._dkAva = ava; EZ._dkSub = sub; EZ._input = input;
+    function submit() { var t = input.value.trim(); if (!t) return; input.value = ""; input.style.height = "auto"; EZ._submit(t); }
+    send.addEventListener("click", submit);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
+    input.addEventListener("input", function () { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 120) + "px"; });
+  };
+  EZ.dockOpen = false;
+  EZ.openDock = function () { EZ._dock.classList.add("is-open"); EZ._dock.setAttribute("aria-hidden", "false"); EZ.dockOpen = true; EZ._fab.classList.add("is-open"); EZ._popstack && EZ._popstack.classList.add("dock-open"); setTimeout(function () { EZ._input && EZ._input.focus(); }, 200); };
+  EZ.closeDock = function () { EZ._dock.classList.remove("is-open"); EZ._dock.setAttribute("aria-hidden", "true"); EZ.dockOpen = false; EZ._fab.classList.remove("is-open"); EZ._popstack && EZ._popstack.classList.remove("dock-open"); };
+  EZ.toggleDock = function () { EZ.dockOpen ? EZ.closeDock() : EZ.openDock(); };
+  EZ.dockSay = function (rec) {
+    EZ.ctx.thread.push(rec);
+    var node;
+    if (rec.kind === "user") node = EZ.el("div.ez-msg-user", { text: rec.text });
+    else if (rec.kind === "ctx") node = EZ.el("div.ez-msg-ctx", { text: rec.text });
+    else if (rec.kind === "agent") node = EZ.el("div.ez-msg-agent", [EZ.el("span.m", { text: "e" }), EZ.el("div.tx", { html: rec.text })]);
+    else if (rec.kind === "node") node = EZ.el("div.ez-card-wrap", [rec.el]);
+    else if (rec.kind === "receipt") node = EZ.el("div.ez-card-wrap", [rec.el]);
+    else node = EZ.el("div.ez-msg-agent", [EZ.el("span.m", { text: "e" }), EZ.el("div.tx", { text: rec.text || "" })]);
+    EZ._thread.appendChild(node);
+    EZ._thread.scrollTop = EZ._thread.scrollHeight;
+    return node;
+  };
+  EZ._submit = function (text) {
+    EZ.dockSay({ kind: "user", text: text });
+    var id = EZ._match(text);
+    if (id) { setTimeout(function () { EZ.start(id, { query: text }); }, 200); }
+    else EZ.dockSay({ kind: "agent", text: "관련 작업을 찾지 못했습니다. 아래 <b>빠른 작업</b> 칩을 사용해 보세요." });
+  };
+  EZ._match = function (text) {
+    var t = text.toLowerCase(), best = null;
+    Object.keys(EZ.flows).forEach(function (id) {
+      var f = EZ.flows[id]; (f.alias || []).forEach(function (a) { if (t.indexOf(a.toLowerCase()) >= 0) best = id; });
+      if (f.title && t.indexOf(f.title.toLowerCase()) >= 0) best = id;
+    });
+    return best;
+  };
+
+  /* ── quick chips ── */
+  EZ.quickChips = function () {
+    var rt = EZ.roleTag(), screen = EZ.ctx.screen, out = [];
+    Object.keys(EZ.flows).forEach(function (id) {
+      var f = EZ.flows[id]; if (!f.chip) return;
+      if (f.persona && f.persona.indexOf(rt) < 0) return;
+      var onScreen = !f.screen || f.screen.indexOf(screen) >= 0;
+      out.push({ id: id, label: f.chipLabel || f.title, pri: onScreen ? 0 : 1 });
+    });
+    out.sort(function (a, b) { return a.pri - b.pri; });
+    return out.slice(0, 5);
+  };
+  EZ._renderQuickChips = function () {
+    if (!EZ._chips) return; EZ._chips.innerHTML = "";
+    EZ.quickChips().forEach(function (c) {
+      EZ._chips.appendChild(EZ.el("button.ez-chip", { text: c.label, on: { click: function () { EZ.start(c.id, {}); } } }));
+    });
+  };
+
+  /* ── POPUP ── */
+  EZ._buildPopupLayer = function () { EZ._popstack = EZ.el("div#ez-popstack.ez-root"); document.body.appendChild(EZ._popstack); };
+  EZ._popCount = 0;
+  EZ.popup = function (sig) {
+    EZ._popCount++;
+    var card = EZ.el("div.ez-popup", { data: { sig: sig.id, sev: sig.severity || "info" } }, [
+      EZ.el("div.ez-pop-h", [
+        EZ.el("span.ez-pop-mark", ["✦"]),
+        sig.badge ? EZ.autonomyBadge(sig.badge) : null,
+        EZ.el("button.ez-pop-x", { attrs: { title: "닫기" }, on: { click: function () { EZ.dismissPopup(card); } } }, ["✕"])
+      ]),
+      EZ.el("div.ez-pop-ttl", { text: sig.title }),
+      EZ.el("div.ez-pop-sum", { text: sig.summary }),
+      EZ.el("div.ez-pop-act", [
+        EZ.el("button.ez-pop-open", { text: "열어서 확인", on: { click: function () { EZ.dismissPopup(card); EZ._promote(sig); } } }),
+        EZ.el("button.ez-pop-snooze", { text: "스누즈", on: { click: function () { EZ.snoozed[sig.id] = Date.now() + 4 * 3600e3; EZ.dismissPopup(card); EZ.audit("signal_snooze", { signal: sig.id }); } } })
+      ])
+    ]);
+    EZ._popstack.appendChild(card);
+    // keep max 3 visible
+    var cards = EZ._popstack.querySelectorAll(".ez-popup");
+    if (cards.length > 3) cards[0].remove();
+    return card;
+  };
+  EZ.dismissPopup = function (node) { if (node && node.remove) node.remove(); EZ._setFabBadge(EZ._popstack ? EZ._popstack.querySelectorAll(".ez-popup").length : 0); };
+  EZ._promote = function (sig) {
+    EZ.audit("signal_open", { signal: sig.id });
+    var f = EZ.flows[sig.flowId];
+    if (f && (f.form === "fullscreen")) EZ.openFullscreen(sig.flowId, sig.ctx || {});
+    else if (f && f.form === "panel") EZ.start(sig.flowId, sig.ctx || {});
+    else { EZ.openDock(); EZ.start(sig.flowId, sig.ctx || {}); }
+  };
+
+  /* ── FULLSCREEN ── */
+  EZ._buildFullscreen = function () {
+    var scrim = EZ.el("div#ez-fs-scrim", { on: { click: function () { EZ.closeFullscreen(); } } });
+    var ttl = EZ.el("span.ez-fs-ttl", { text: "" }); var cyc = EZ.el("span.ez-fs-cyc", { text: "" });
+    var canvas = EZ.el("section.ez-fs-canvas#ez-canvas"); var rail = EZ.el("aside.ez-fs-rail#ez-fsrail");
+    var fs = EZ.el("div#ez-fs.ez-root", { attrs: { "aria-hidden": "true" } }, [
+      EZ.el("header.ez-fs-head", [
+        EZ.el("span.ez-fs-mark", ["✦ elizax"]), ttl, cyc,
+        EZ.el("span.ez-fs-tools", [
+          EZ.el("button", { attrs: { title: "도킹으로" }, on: { click: function () { EZ._dockFromFullscreen(); } } }, ["⤡"]),
+          EZ.el("button", { attrs: { title: "닫기" }, on: { click: function () { EZ.closeFullscreen(); } } }, ["✕"])
+        ])
+      ]),
+      EZ.el("div.ez-fs-body", [canvas, rail])
+    ]);
+    document.body.appendChild(scrim); document.body.appendChild(fs);
+    EZ._fs = fs; EZ._fsScrim = scrim; EZ._fsCanvas = canvas; EZ._fsRail = rail; EZ._fsTtl = ttl; EZ._fsCyc = cyc;
+  };
+  EZ.openFullscreen = function (flowId, ctx) {
+    var f = EZ.flows[flowId]; if (!f) return;
+    ctx = EZ._ctx(ctx);
+    EZ._fsTtl.textContent = f.title; EZ._fsCyc.textContent = (ctx.cycLabel || EZ.data.cycleLabel(ctx.cycle || EZ.data.meta.activeEvalCycle)) + (ctx.orgLabel ? " · " + ctx.orgLabel : "");
+    EZ._fsCanvas.innerHTML = ""; EZ._fsRail.innerHTML = "";
+    EZ._fs.classList.add("is-open"); EZ._fs.setAttribute("aria-hidden", "false"); EZ._fsScrim.classList.add("is-open");
+    var run = EZ.runProtocol(f, ctx, { mount: EZ._fsRail, form: "fullscreen" });
+    if (f.canvas && EZ.renderers.canvas[f.canvas]) EZ.renderers.canvas[f.canvas](EZ._fsCanvas, run, ctx);
+    EZ._curFsRun = run; return run;
+  };
+  EZ.closeFullscreen = function () { EZ._fs.classList.remove("is-open"); EZ._fs.setAttribute("aria-hidden", "true"); EZ._fsScrim.classList.remove("is-open"); };
+  EZ._fullscreenFromDock = function () { EZ.closeDock(); if (EZ._curFsRun && EZ._curFsRun.flow) EZ.openFullscreen(EZ._curFsRun.flow.id, EZ._curFsRun.ctx); else EZ.toast("전체화면으로 열 작업을 먼저 선택하세요"); };
+  EZ._dockFromFullscreen = function () { EZ.closeFullscreen(); EZ.openDock(); EZ.dockSay({ kind: "ctx", text: "전체화면 작업을 도킹으로 이어받았습니다" }); };
+
+  /* ── PANEL (EX3) ── */
+  EZ._buildPanel = function () {
+    var body = EZ.el("div.ez-pn-body#ez-pn-body");
+    var head = EZ.el("header.ez-dk-head", [
+      EZ.el("span.ez-dk-id", [EZ.el("span.ez-dk-ava", { text: "e" }), EZ.el("div", { style: { display: "flex", flexDirection: "column", lineHeight: "1.2" } }, [EZ.el("span.ez-dk-nm", { text: "이의신청 검토" }), EZ.el("span.ez-dk-sub", { text: "elizax · 미확정 · 대상자 미노출" })])]),
+      EZ.el("span.ez-dk-tools", [EZ.el("button", { attrs: { title: "닫기" }, on: { click: function () { EZ.closePanel(); } } }, ["✕"])])
+    ]);
+    var panel = EZ.el("aside#ez-panel.ez-root", [head, body]);
+    document.body.appendChild(panel); EZ._panel = panel; EZ._pnBody = body;
+  };
+  EZ.openPanel = function () { EZ._pnBody.innerHTML = ""; EZ._panel.classList.add("is-open"); return EZ._pnBody; };
+  EZ.closePanel = function () { EZ._panel.classList.remove("is-open"); };
+
+  /* ── SCREEN watcher (라우터 미수정) ── */
+  EZ._watchScreen = function () {
+    var mo = new MutationObserver(function () {
+      var on = document.querySelector(".screen.on");
+      var s = on ? on.id.replace("s-", "") : "home";
+      if (s !== EZ.ctx.screen) EZ._onScreen(s);
+    });
+    document.querySelectorAll(".screen").forEach(function (sec) { mo.observe(sec, { attributes: true, attributeFilter: ["class"] }); });
+  };
+  EZ._onScreen = function (s) {
+    EZ.ctx.screen = s;
+    if (EZ.dockOpen && EZ.jobs.size > 0) EZ.dockSay({ kind: "ctx", text: SCREEN_LABEL[s] + " 화면으로 이동 · 맥락 유지됨" });
+    EZ._renderQuickChips();
+    EZ._scanSignals();
+    document.dispatchEvent(new CustomEvent("ez:screen", { detail: { screen: s } }));
+  };
+
+  /* ── persona reactivity ── */
+  EZ._applyPerspective = function () {
+    EZ.ctx.perspective = EZ.perspective();
+    var p = (window.tx && tx.persona) || {};
+    if (EZ._dkAva) { EZ._dkAva.textContent = "e"; EZ._dkAva.style.background = EZ._personaColor(); }
+    if (EZ._dkSub) EZ._dkSub.textContent = (p.name || "") + " · " + EZ._viewName();
+    if (EZ._fab) EZ._fab.style.boxShadow = "0 6px 20px " + hexA(EZ._personaColor(), .38) + ", 0 0 0 2px " + hexA(EZ._personaColor(), .25);
+  };
+  function hexA(hex, a) { if (!/^#[0-9a-f]{6}$/i.test(hex)) return "rgba(31,122,240," + a + ")"; var r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16); return "rgba(" + r + "," + g + "," + b + "," + a + ")"; }
+  EZ._onPersona = function (e) {
+    EZ.ctx.persona = (e && e.detail) || (window.tx && tx.persona);
+    EZ.jobs.forEach(function (r) { if (!r._committed) r.abort(); });
+    EZ._applyPerspective(); EZ._renderQuickChips(); EZ._clearPopups();
+    if (EZ.dockOpen) EZ.dockSay({ kind: "ctx", text: "관점 전환 · " + (EZ.ctx.persona ? EZ.ctx.persona.name + "(" + EZ.ctx.persona.role + ")" : "") + " 기준으로 봅니다" });
+    EZ._scanSignals();
+    document.dispatchEvent(new CustomEvent("ez:perspective", { detail: { roleTag: EZ.roleTag(), perspective: EZ.perspective() } }));
+  };
+  EZ._clearPopups = function () { if (EZ._popstack) EZ._popstack.innerHTML = ""; EZ._setFabBadge(0); EZ.signals.forEach(function (s) { s._fired = false; }); };
+
+  /* ── SIGNAL scheduler ── */
+  EZ.registerSignal = function (def) { EZ.signals.push(def); };
+  EZ._scanSignals = function () {
+    var now = Date.now(), rt = EZ.roleTag(), screen = EZ.ctx.screen;
+    var matches = EZ.signals.filter(function (s) {
+      return (s.screen ? s.screen.indexOf(screen) >= 0 : true)
+        && (s.persona ? s.persona.indexOf(rt) >= 0 : true)
+        && !(EZ.snoozed[s.id] > now)
+        && (!s._fired || !s.once)
+        && (typeof s.when === "function" ? s.when(EZ.ctx) : true);
+    });
+    var sevOrder = { deadline: 0, bias: 1, anomaly: 2, info: 3 };
+    matches.sort(function (a, b) { return (sevOrder[a.severity] || 3) - (sevOrder[b.severity] || 3); });
+    EZ._setFabBadge(matches.length);
+    matches.slice(0, 2).forEach(function (s) {
+      if (s._fired && s.once) return;
+      s._fired = true;
+      var built = s.build(EZ.ctx) || {};
+      EZ.popup(Object.assign({ id: s.id, severity: s.severity }, built));
+      EZ.audit("signal_fire", { signal: s.id });
+    });
+  };
+
+  /* ── ctx builder ── */
+  EZ._ctx = function (ctx) {
+    return Object.assign({}, { screen: EZ.ctx.screen, asOf: EZ.ctx.asOf, cycle: EZ.data.meta.activeEvalCycle }, { persona: (window.tx && tx.persona), roleTag: EZ.roleTag(), scope: EZ._scopeFor() }, ctx || {});
+  };
+
+  /* ── S1~S8 PROTOCOL ── */
+  EZ.start = function (flowId, ctx, opts) {
+    var f = EZ.flows[flowId]; if (!f) { EZ.toast("알 수 없는 작업: " + flowId); return; }
+    ctx = EZ._ctx(ctx);
+    var form = (opts && opts.form) || f.form || "dock";
+    if (form === "fullscreen") return EZ.openFullscreen(flowId, ctx);
+    if (form === "panel") { if (f.render) return f.render(ctx); }
+    EZ.openDock();
+    return EZ.runProtocol(f, ctx, { mount: EZ._thread, form: "dock" });
+  };
+
+  EZ.runProtocol = function (flow, ctx, host) {
+    var run = { id: "run-" + (++EZ._seq), flow: flow, ctx: ctx, phase: "S1", nodes: (flow.nodes || []).map(function (n) { return Object.assign({}, n); }), evidence: [], receipt: null, decision: null, _committed: false, _subs: {} };
+    var mount = EZ.mount(host.mount);
+    EZ.jobs.add(run); EZ._syncJobs();
+    run.on = function (ev, fn) { (run._subs[ev] = run._subs[ev] || []).push(fn); };
+    run._emit = function (ev, data) { (run._subs[ev] || []).forEach(function (fn) { try { fn(data); } catch (e) {} }); };
+    run.abort = function () { run._aborted = true; EZ.jobs.delete(run); EZ._syncJobs(); };
+    run.rehost = function () {/* forms share receipt; no-op in mock */ };
+
+    EZ.audit("S1", run);
+    run.phase = "S2"; ctx.scope = ctx.scope || EZ._scopeFor(); EZ.audit("S2", run);
+
+    // S3 plan nodes
+    run.phase = "S3";
+    var nf = EZ.nodeFlow({ title: flow.title, nodes: run.nodes });
+    run.nodeApi = nf;
+    var planWrap = (host.form === "fullscreen") ? EZ.el("div.ez-card", [nf.el]) : null;
+    if (host.form === "fullscreen") { mount.appendChild(planWrap); }
+    else { run._planNode = EZ.dockSay({ kind: "node", el: nf.el }); }
+    EZ.audit("S3", run);
+    run._emit("phase", "S3");
+
+    // S4 execute — deferred so external subscribers (fullscreen canvas) attach to run.on() first
+    setTimeout(function () {
+    if (run._aborted) return;
+    run.phase = "S4"; run._emit("phase", "S4");
+    _animate(run, nf).then(function () {
+      if (run._aborted) return;
+      // S5 ground
+      run.phase = "S5"; run.evidence = (flow.ground ? flow.ground(ctx) : []) || []; EZ.data.regEv(run.evidence); EZ.audit("S5", run); run._emit("phase", "S5");
+      // S6 objectify
+      run.phase = "S6";
+      var r = flow.object ? flow.object(ctx, run.evidence, run) : { title: flow.title, answer: "완료" };
+      r._run = run; r.autonomy = r.autonomy || flow.autonomy;
+      // wire default gate actions to protocol
+      (r.actions || []).forEach(function (a) {
+        if (!a.onClick) {
+          if (a.kind === "approve" || a.kind === "send") a.onClick = function () { run.approve(a); };
+          else if (a.kind === "hold") a.onClick = function () { run.hold(); };
+          else if (a.kind === "revise") a.onClick = function () { run.revise(); };
+        }
+      });
+      run.receipt = r;
+      var card = EZ.receipt(r);
+      run.card = card;
+      if (host.form === "fullscreen") mount.appendChild(card);
+      else run._receiptNode = EZ.dockSay({ kind: "receipt", el: card });
+      EZ.audit("S6", run); run._emit("phase", "S6");
+      // S7 gate
+      run.phase = "S7"; EZ.audit("S7", run); run._emit("phase", "S7");
+    });
+    }, 50);
+
+    // gate handlers
+    run.approve = function (action) { EZ._commit(run, (action && action.decision) || "approve", action); };
+    run.commitAs = function (decision, action) { EZ._commit(run, decision, action); };
+    run.reject = function () { EZ.audit("S7_reject", run); EZ.jobs.delete(run); EZ._syncJobs(); EZ.toast("작업을 종료했습니다"); };
+    run.revise = function () { EZ.audit("S7_revise", run); if (run.card) EZ.receipt.setState(run.card, "revising"); EZ.toast("수정 모드 — 내용을 편집한 뒤 다시 승인하세요"); run._emit("revise"); };
+    run.hold = function () { EZ.audit("S7_hold", run); if (run.card) EZ.receipt.setState(run.card, "held"); EZ.jobs.delete(run); EZ._syncJobs(); EZ.toast("보류함에 저장했습니다 — 다음 진입 시 이어받습니다"); run._emit("hold"); };
+    return run;
+  };
+
+  // node.par === true → 병렬(동시) 실행, 그 외 → 순차 체이닝. node.ms = 소요(mock).
+  function _animate(run, nf) {
+    return new Promise(function (res) {
+      var nodes = run.nodes, total = nodes.length, done = 0;
+      if (!total) { nf.update(null, { pct: 100 }); return res(); }
+      function finish(n) {
+        if (run._aborted) return;
+        nf.update(n.id, { status: "done" });
+        (n.parallel || []).forEach(function (sn) { nf.update(n.id, { sub: sn.id, subStatus: "done" }); });
+        done++; var pct = Math.round(done / total * 100);
+        nf.update(n.id, { pct: pct });
+        run._emit("node", { id: n.id, state: "done", pct: pct });
+        if (done === total) res();
+      }
+      function begin(n) {
+        if (run._aborted) return;
+        nf.update(n.id, { status: "run" });
+        (n.parallel || []).forEach(function (sn) { nf.update(n.id, { sub: sn.id, subStatus: "run" }); });
+        run._emit("node", { id: n.id, state: "run" });
+        setTimeout(function () { finish(n); }, n.ms || 800);
+      }
+      var concurrent = nodes.filter(function (n) { return n.par; });
+      var chained = nodes.filter(function (n) { return !n.par; });
+      concurrent.forEach(begin);
+      var t = 0;
+      chained.forEach(function (n) { t += 220; setTimeout(function () { begin(n); }, t); t += (n.ms || 800); });
+    });
+  }
+
+  EZ._commit = function (run, decision, action) {
+    if (run._committed && decision === "approve") return;
+    run.phase = "S8"; run.decision = decision;
+    if (run.flow.commit) try { run.flow.commit(run.ctx, decision, run); } catch (e) { console.error(e); }
+    run._committed = true;
+    EZ.audit("S8", run);
+    EZ.jobs.delete(run); EZ._syncJobs();
+    if (run.card && run.card._gate) run.card._gate.done((action && action.doneLabel) || "확정됨 · 감사 로그 기록됨 · " + (run.receipt && run.receipt.audit_ref ? run.receipt.audit_ref.ref : ""));
+    if (run.card) EZ.receipt.setState(run.card, "approved");
+    document.dispatchEvent(new CustomEvent("ez:commit", { detail: { run: run, decision: decision } }));
+    run._emit("commit", decision);
+  };
+
+  EZ._syncJobs = function () {
+    var n = EZ.jobs.size;
+    if (EZ._srcBar) EZ._srcBar.setJobs(n);
+  };
+
+  EZ.reAsOf = function (run, asOf) { var f = run.flow, ctx = Object.assign({}, run.ctx, { asOf: asOf.cycle || asOf, cycle: asOf.cycle, cycLabel: asOf.label }); run.abort(); return EZ.start(f.id, ctx); };
+
+  /* ── audit ── */
+  EZ.audit = function (phase, x) {
+    EZ.auditLog.push({ ts: Date.now(), actor: (window.tx && tx.persona && tx.persona.name) || "-", role: EZ.roleTag(), flow: x && x.flow ? x.flow.id : (x && x.signal) || null, run: (x && x.id) || null, phase: phase, decision: (x && x.decision) || null });
+  };
+
+  /* ── registries ── */
+  EZ.registerFlow = function (def) { EZ.flows[def.id] = def; };
+  EZ.registerCanvas = function (type, fn) { EZ.renderers.canvas[type] = fn; };
+
+  /* ── keyboard ── */
+  EZ._keys = function () {
+    document.addEventListener("keydown", function (e) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "j" || e.key === "J")) { e.preventDefault(); EZ.toggleDock(); }
+      else if (e.key === "Escape") {
+        if (EZ._fs && EZ._fs.classList.contains("is-open")) EZ.closeFullscreen();
+        else if (EZ._panel && EZ._panel.classList.contains("is-open")) EZ.closePanel();
+        else if (EZ._popstack && EZ._popstack.querySelector(".ez-popup")) EZ.dismissPopup(EZ._popstack.querySelector(".ez-popup"));
+      }
+    });
+  };
+
+})(window.EZ);
+/* ═══ elizax · 캔버스 렌더러 (전체화면 좌측 워크스페이스) ═══ */
+(function (EZ) {
+  "use strict";
+  var D = EZ.data;
+
+  function typeInto(el, text, ms, done) {
+    el.textContent = ""; var i = 0, step = Math.max(1, Math.round(text.length / (ms / 30)));
+    var t = setInterval(function () { i += step; el.textContent = text.slice(0, i); if (i >= text.length) { clearInterval(t); el.textContent = text; if (done) done(); } }, 30);
+  }
+
+  /* ── goal-fill (QW2) — 왼쪽에 목표가 실시간으로 채워짐 ── */
+  EZ.registerCanvas("goal-fill", function (mount, run, ctx) {
+    var q = D.okr.qw2Draft;
+    var wsum = EZ.el("b", { text: "0%" });
+    var banner = EZ.el("div.ez-flag.info", { style: { display: "none" } }, ["가중치 합 ", wsum, " · 목표 3안 구성 중"]);
+    var head = EZ.el("div.ez-canvas-h", [EZ.el("h3", { text: "박성현 · 2026 하반기 개인 목표" }), banner]);
+    var list = EZ.el("div");
+    mount.appendChild(head); mount.appendChild(list);
+    var cards = q.drafts.map(function (d, i) {
+      var titleEl = EZ.el("div.gc-t", { text: "" });
+      var alignEl = EZ.el("span.gc-align", { text: "" });
+      var card = EZ.el("div.ez-goalcard", { style: { opacity: "0" } }, [
+        EZ.el("div.gc-h", [EZ.el("span", { style: { fontWeight: "800", color: "var(--ink-3)" }, text: "목표 " + (i + 1) }), EZ.el("span.gc-w", { text: "" })]),
+        titleEl,
+        EZ.el("div.gc-meta", [alignEl, EZ.el("span", { text: d.difficulty || "" })])
+      ]);
+      list.appendChild(card);
+      return { card: card, titleEl: titleEl, alignEl: alignEl, d: d };
+    });
+    var filled = 0, sum = 0;
+    function fill(i) {
+      if (i >= cards.length) return;
+      var c = cards[i]; c.card.style.opacity = "1"; c.card.classList.add("is-filling");
+      typeInto(c.titleEl, c.d.text, 900, function () {
+        c.card.classList.remove("is-filling");
+        c.card.querySelector(".gc-w").textContent = c.d.w + "%";
+        sum += c.d.w; wsum.textContent = sum + "%"; banner.style.display = "inline-flex";
+        if (c.d.ok) { c.alignEl.textContent = c.d.align + " 연계 ✓"; c.alignEl.style.color = "var(--ez-good)"; }
+        else { c.alignEl.textContent = "상위목표 미연계 ⚠"; c.alignEl.style.color = "var(--ez-warn)"; c.card.classList.add("flag"); }
+        filled++;
+        if (filled === cards.length) { banner.className = "ez-flag warn"; banner.lastChild.textContent = " · 100% 대비 10%p 부족 · 목표3 미연계"; }
+        setTimeout(function () { fill(i + 1); }, 250);
+      });
+    }
+    var started = false;
+    function start() { if (started) return; started = true; fill(0); }
+    run.on("node", function (n) { if (n.id === "n3" && n.state === "run") start(); });
+    setTimeout(start, 3600); // fallback (guarded — never double-runs)
+  });
+
+  /* ── evidence-timeline (QW4) — 소스별 카드가 타임라인에 꽂힘 ── */
+  EZ.registerCanvas("evidence-timeline", function (mount, run, ctx) {
+    var items = (D.evidenceStore.m_parkms || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var s = D.evidenceSummary.m_parkms;
+    var counters = {};
+    var head = EZ.el("div.ez-canvas-h", [EZ.el("h3", { text: "성과 근거 타임라인 · 박민수 · 2026 H1" }), EZ.el("span.ez-flag.info", ["상시 수집 중"])]);
+    var sumRow = EZ.el("div.ez-metrics", { style: { marginBottom: "16px" } }, [
+      metricC("목표달성", "목표달성"), metricC("프로젝트", "프로젝트"), metricC("수시피드백", "수시피드백"), metricC("1:1 기록", "1:1기록")
+    ]);
+    function metricC(label, key) { var v = EZ.el("div.vl", { text: "0" }); counters[key] = v; return EZ.el("div.ez-metric", [EZ.el("div.lb", { text: label }), v]); }
+    var tl = EZ.el("div.ez-timeline");
+    mount.appendChild(head); mount.appendChild(sumRow); mount.appendChild(tl);
+    var typeMap = { "달성": "목표달성", "프로젝트": "프로젝트", "피드백": "수시피드백", "1:1": "1:1기록" };
+    var counts = { "목표달성": 0, "프로젝트": 0, "수시피드백": 0, "1:1기록": 0 };
+    function dropSource(src) {
+      items.filter(function (it) { return it.source === src || (src === "talenx" && it.type === "1:1"); }).forEach(function (it, k) {
+        setTimeout(function () {
+          var chip = EZ.evidenceChip({ id: it.recordId, source: it.source, label: it.title, snapshot: it.snap, ts: it.date, recordId: it.recordId, meta: it.metric });
+          var node = EZ.el("div.ez-tl-item", { data: { type: it.type } }, [
+            EZ.el("div.ez-tl-date", { text: it.date }),
+            EZ.el("div.ez-tl-card", [EZ.el("span.tag", { text: it.type }), EZ.el("span.tt", { text: it.title }), chip])
+          ]);
+          tl.appendChild(node);
+          var key = typeMap[it.type]; counts[key]++; counters[key].textContent = counts[key];
+        }, k * 160);
+      });
+    }
+    run.on("node", function (n) {
+      if (n.state !== "done") return;
+      if (n.id === "n1") dropSource("ERP"); else if (n.id === "n2") dropSource("Jira"); else if (n.id === "n3") dropSource("talenx"); else if (n.id === "n4") dropSource("Slack");
+    });
+  });
+
+  /* ── calibration-board (QW5) — 분포 조정 + 다자 심의 그래프 ── */
+  EZ.registerCanvas("calibration-board", function (mount, run, ctx) {
+    var c = D.calibration, before = c.distribution.before, after = c.distribution.after;
+    var head = EZ.el("div.ez-canvas-h", [EZ.el("h3", { text: "Calibration 보드 · " + c.scopeLabel }),
+      EZ.el("span.ez-flag.warn", ["A 32% · 강제배분 상한 25% 초과"]),
+      EZ.el("span.ez-flag.warn", { attrs: { id: "ez-outlier-flag" } }, ["이상치 3건"])]);
+    // distribution bars
+    var bars = {};
+    var distWrap = EZ.el("div.ez-distbars");
+    ["S", "A", "B", "C", "D"].forEach(function (g) {
+      var bBefore = EZ.el("i", { style: { width: (before[g] * 2) + "%" } });
+      var bAfter = EZ.el("i", { style: { width: (before[g] * 2) + "%" } });
+      var pct = EZ.el("span.pcts", { text: before[g] + "% → " + before[g] + "%" });
+      bars[g] = { after: bAfter, pct: pct, afterWrap: null };
+      var afterWrap = EZ.el("div.bwrap.after" + (g === "A" ? ".over" : ""), [bAfter]);
+      bars[g].afterWrap = afterWrap;
+      distWrap.appendChild(EZ.el("div.ez-distrow", [
+        EZ.el("span.g", { text: g }),
+        EZ.el("div.bars", [EZ.el("div.bwrap.before", [bBefore]), afterWrap]),
+        pct
+      ]));
+    });
+    var distCard = EZ.el("div.ez-card", [EZ.el("div.ez-sec-lbl", { text: "등급 분포 · 조정 전(회색) → 후(파랑)" }), distWrap]);
+    // outlier list
+    var outCard = EZ.el("div.ez-card", [EZ.el("div.ez-sec-lbl", { text: "이상치 (자기평가↔상사평가 gap ≥2단계)" }),
+      EZ.el("div", c.outliers.members.map(function (id) {
+        var r = D.evalRec(id);
+        return EZ.el("div", { style: { display: "flex", alignItems: "center", gap: "8px", padding: "6px 0", fontSize: "13px" } }, [
+          EZ.el("b", { text: D.name(id) }), EZ.el("span", { style: { color: "var(--ink-3)" }, text: "자기 " + r.self.grade + " ↔ 상사 " + r.manager.grade + " (gap " + r.gapLevel + ")" }),
+          EZ.el("span.ez-flag.warn", { style: { marginLeft: "auto" }, text: "제안 " + r.proposedGrade })
+        ]);
+      }))]);
+    // deliberation graph
+    var dg = EZ.deliberationGraph({ orchestrator: "조정\n오케스트레이터", agents: c.roundtable.agents.map(function (a) { return { id: a.agentId, name: a.name, stance: "propose", stanceKo: "대기", msg: "심의 대기 중…" }; }), verdict: null });
+    var dgCard = EZ.el("div.ez-card", [EZ.el("div.ez-sec-lbl", { text: "다자 에이전트 심의 (발의·보강·합의·충돌)" }), dg.el]);
+    mount.appendChild(head); mount.appendChild(distCard); mount.appendChild(dgCard); mount.appendChild(outCard);
+    setTimeout(dg.draw, 60);
+    // animate deliberation on node completion
+    run.on("node", function (n) {
+      if (n.state !== "run") return;
+      var idx = { n1: 0, n2: 1, n3: 2, n4: 3 }[n.id];
+      if (idx == null) return;
+      var a = c.roundtable.agents[idx];
+      dg.update(a.agentId, { stance: a.stance, stanceKo: a.stanceKo, msg: a.msg });
+    });
+    run.on("phase", function (p) {
+      if (p !== "S6") return;
+      // morph after-distribution + verdict + outliers cleared
+      ["S", "A", "B", "C", "D"].forEach(function (g) {
+        bars[g].after.style.width = (after[g] * 2) + "%";
+        bars[g].pct.textContent = before[g] + "% → " + after[g] + "%";
+        if (g === "A") bars[g].afterWrap.classList.remove("over");
+      });
+      var of = document.getElementById("ez-outlier-flag"); if (of) { of.className = "ez-flag ok"; of.textContent = "이상치 0건 (해소)"; }
+      dg.el.appendChild(EZ.el("div.ez-delib-verdict", [EZ.icon("check", 14), " " + c.roundtable.verdict]));
+    });
+  });
+
+  /* ── goalscan-table (QW7) — 8행이 0.9초에 채워지고 중복선/미연계 강조 ── */
+  EZ.registerCanvas("goalscan-table", function (mount, run, ctx) {
+    var goals = D.okr.individual, q = D.okr.qw7Scan;
+    var dupMap = {}; q.duplicatePairs.forEach(function (p, i) { dupMap[p.a] = { pair: String.fromCharCode(65 + i), sim: p.similarity }; dupMap[p.b] = { pair: String.fromCharCode(65 + i), sim: p.similarity }; });
+    var unaligned = {}; q.unaligned.forEach(function (u) { unaligned[u.goal] = true; });
+    var head = EZ.el("div.ez-canvas-h", [EZ.el("h3", { text: "팀 목표 정합성·중복 점검 · 미주팀" }),
+      EZ.el("span.ez-flag.info", { attrs: { id: "ez-scan-flag" } }, ["스캔 중…"])]);
+    var tbody = EZ.el("tbody");
+    var tbl = EZ.el("table.ez-tbl", [
+      EZ.el("thead", [EZ.el("tr", [EZ.el("th", { text: "담당자 · 개인 목표" }), EZ.el("th", { text: "상위 KR 연계" }), EZ.el("th", { text: "점검 결과" })])]),
+      tbody
+    ]);
+    mount.appendChild(head); mount.appendChild(EZ.el("div.ez-card", { style: { padding: "8px 12px" } }, [tbl]));
+    goals.forEach(function (g, i) {
+      setTimeout(function () {
+        var dup = dupMap[g.id], un = unaligned[g.id];
+        var res = EZ.el("td.res");
+        if (dup) res.appendChild(EZ.el("span.ez-flag.warn", ["중복 의심 " + Math.round(dup.sim * 100) + "% (쌍" + dup.pair + ")"]));
+        else if (un) res.appendChild(EZ.el("span.ez-flag.warn", ["상위목표 미연계 ⚠"]));
+        else res.appendChild(EZ.el("span.ez-flag.ok", ["이상 없음"]));
+        tbody.appendChild(EZ.el("tr", { data: { flag: dup ? "dup" : (un ? "unaligned" : "") } }, [
+          EZ.el("td", [EZ.el("b", { text: D.name(g.owner) }), EZ.el("div", { style: { color: "var(--ink-2)", marginTop: "2px" }, text: g.title })]),
+          EZ.el("td", { text: g.align === "미연결" ? "— 없음" : g.align, style: { color: g.align === "미연결" ? "var(--ez-bad)" : "var(--ink-2)" } }),
+          res
+        ]));
+      }, i * 100);
+    });
+    setTimeout(function () { var f = document.getElementById("ez-scan-flag"); if (f) { f.className = "ez-flag warn"; f.textContent = "중복 2쌍 · 미연계 1건"; } }, goals.length * 100 + 200);
+  });
+
+  /* ── alignment-map (EX1) — 4계층 OKR 그래프 ── */
+  EZ.registerCanvas("alignment-map", function (mount, run, ctx) {
+    var cols = [
+      { t: "전사", nodes: [{ id: "c1", label: "매출 3.8조", w: null }] },
+      { t: "본부", nodes: [{ id: "b1", label: "해외 42% 견인", w: null }] },
+      { t: "팀", nodes: [{ id: "t1", label: "미주 직판 2,600억", w: null }, { id: "t2", label: "신규 엔터 8개", w: null }] },
+      { id: "개인", t: "개인", nodes: [
+        { id: "g1", label: "박민수 신규계정", w: "40%" }, { id: "g4", label: "박성현 신규발굴", w: "40%" },
+        { id: "g6", label: "박성현 CRM 개선", w: "15%", cut: true } ] }
+    ];
+    var head = EZ.el("div.ez-canvas-h", [EZ.el("h3", { text: "목표 정렬 맵 · 글로벌사업본부" }),
+      EZ.el("span.ez-flag.warn", ["정렬 이상 3건"]), EZ.el("span.ez-flag.info", ["커버리지 88%"])]);
+    var grid = EZ.el("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px", position: "relative" } });
+    cols.forEach(function (col) {
+      grid.appendChild(EZ.el("div", [
+        EZ.el("div.ez-sec-lbl", { style: { textAlign: "center", marginBottom: "8px" }, text: col.t }),
+        col.nodes.map(function (n) {
+          return EZ.el("div.ez-am-node" + (n.cut ? ".is-cut" : ""), { data: { node: n.id }, style: { background: "var(--card)", border: "1px solid " + (n.cut ? "var(--ez-bad)" : "var(--line)"), borderStyle: n.cut ? "dashed" : "solid", borderRadius: "10px", padding: "11px 12px", marginBottom: "10px", fontSize: "12.5px", fontWeight: "700", color: "var(--ink)", opacity: "0", transition: "opacity .4s" } }, [
+            n.label, n.w ? EZ.el("div", { style: { fontSize: "11px", color: "var(--ink-3)", marginTop: "3px" }, text: "가중치 " + n.w } ) : null,
+            n.cut ? EZ.el("div", { style: { fontSize: "11px", color: "var(--ez-bad)", marginTop: "3px" }, text: "⚠ 상위 미연계" }) : null
+          ]);
+        })
+      ]));
+    });
+    mount.appendChild(head); mount.appendChild(EZ.el("div.ez-card", [grid]));
+    // reveal columns progressively
+    var allNodes = grid.querySelectorAll(".ez-am-node");
+    allNodes.forEach(function (n, i) { setTimeout(function () { n.style.opacity = "1"; }, 300 + i * 150); });
+  });
+
+  /* ── review-coedit (EX2) — 리뷰 양식에 병렬 에이전트가 문장 삽입 ── */
+  EZ.registerCanvas("review-coedit", function (mount, run, ctx) {
+    var head = EZ.el("div.ez-canvas-h", [EZ.el("h3", { text: "리뷰 초안 · 박민수 (2026 상반기)" }),
+      EZ.el("span.ez-flag.info", { attrs: { id: "ez-coedit-count" } }, ["AI 삽입 0문장"])]);
+    mount.appendChild(head);
+    var inserted = 0;
+    var sections = [
+      { id: "s1", label: "핵심 성과", agent: "실적요약", text: "상반기 신규 엔터프라이즈 계정 5건을 확보하여 목표(4건) 대비 125% 달성했습니다. 특히 A사 계약(68억)을 팀 최전선에서 클로징했습니다.", refs: ["ERP-QTR-26H1", "ERP-CNT-0221"] },
+      { id: "s2", label: "역량·협업", agent: "역량요약", text: "동료 수시 피드백 7건에서 '데이터 공유'와 '리스크 선제 관리'가 강점으로 반복 언급되었습니다.", refs: ["SLK-FB-1189", "TX-FB-3402"] },
+      { id: "s3", label: "성장 제언", agent: "성장경로", text: "코드 리뷰/제안서 리드 범위를 확대해 주니어 온보딩 기여도를 높일 것을 제언합니다.", refs: ["TX-121-0522"] }
+    ];
+    var secEls = sections.map(function (s) {
+      var body = EZ.el("div", { style: { fontSize: "13px", lineHeight: "1.7", minHeight: "24px", color: "var(--ink)" } });
+      var card = EZ.el("div.ez-card", [
+        EZ.el("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" } }, [
+          EZ.el("span.ez-sec-lbl", { text: s.label }),
+          EZ.el("span", { style: { marginLeft: "auto", fontSize: "10.5px", fontWeight: "800", color: "var(--ez-graph)" }, text: "◍ " + s.agent + " 작성 중" })
+        ]), body
+      ]);
+      mount.appendChild(card);
+      return { s: s, body: body, card: card };
+    });
+    // 9-box
+    var nine = EZ.el("div.ez-card", [EZ.el("div.ez-sec-lbl", { text: "인재 스냅샷 · 9-Box (X=역량, Y=성과)" }),
+      EZ.el("div", { style: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "5px", maxWidth: "280px", marginTop: "8px" } },
+        [8, 7, 6, 5, 4, 3, 2, 1, 0].map(function (idx) {
+          var isProp = idx === 7; // 성과 高·역량 中
+          return EZ.el("div", { style: { aspectRatio: "1.6", borderRadius: "7px", border: "1px solid var(--line)", background: isProp ? "var(--ez-accent-soft)" : "var(--soft)", display: "grid", placeItems: "center", fontSize: "10.5px", fontWeight: "800", color: isProp ? "var(--ez-accent-2)" : "var(--ink-4)", position: "relative", boxShadow: isProp ? "0 0 0 2px var(--ez-accent)" : "none" } }, [isProp ? "제안" : ""]);
+        }))]);
+    mount.appendChild(nine);
+    function insertSection(se) {
+      if (se.started) return; se.started = true;
+      typeInto(se.body, se.s.text, 1500, function () {
+        se.card.querySelector("span:last-child") && (se.card.querySelectorAll(".ez-sec-lbl")[0].parentNode.lastChild.textContent = "✓ " + se.s.agent);
+        var refRow = EZ.el("div", { style: { marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "5px" } });
+        se.s.refs.forEach(function (r) { refRow.appendChild(EZ.evidenceChip(r)); });
+        var ops = EZ.el("div", { style: { marginTop: "6px", display: "flex", gap: "6px" } }, [
+          EZ.el("button.ez-chip", { style: { fontSize: "11px" }, text: "반영", on: { click: function () { inserted++; upd(); EZ.toast("문장 반영 " + inserted); } } }),
+          EZ.el("button", { style: { fontSize: "11px", fontWeight: "700", color: "var(--ink-3)", border: "1px solid var(--line)", borderRadius: "16px", padding: "6px 12px", background: "var(--card)", cursor: "pointer", fontFamily: "inherit" }, text: "무시", on: { click: function () { se.body.style.textDecoration = "line-through"; se.body.style.opacity = ".5"; } } })
+        ]);
+        se.card.appendChild(refRow); se.card.appendChild(ops);
+      });
+    }
+    function upd() { var c = document.getElementById("ez-coedit-count"); if (c) c.textContent = "AI 삽입 " + inserted + "문장 · 반영 대기"; }
+    run.on("node", function (n) { if (n.state !== "run") return; var i = { n1: 0, n2: 1, n3: 2 }[n.id]; if (i != null && secEls[i]) insertSection(secEls[i]); });
+    setTimeout(function () { secEls.forEach(function (se, i) { setTimeout(function () { insertSection(se); }, i * 400); }); }, 3600);
+  });
+
+  /* ── appeal-panel (EX3) — as-of 재조회 + What-if 등급 재계산 ── */
+  EZ.registerCanvas("appeal-panel", function (mount, run, ctx) {
+    var a = D.appeal, tgt = D.name(a.target);
+    var asofSnaps = {
+      "결과 확정 시점": { date: "2026-06-20", ach: a.confirmedAchievement + "%", grade: a.confirmedGrade, note: "확정 시점 실적 (OPS-88 미반영)" },
+      "이의신청 시점": { date: "2026-07-10", ach: a.confirmedAchievement + "%", grade: a.confirmedGrade, note: "신청일 기준 · 확정 데이터 동일" },
+      "현재": { date: D.meta.today, ach: "118%(주장 반영 시)", grade: "A?", note: "재계산 · 규정 게이트 확인 필요" }
+    };
+    var achEl = EZ.el("b", { text: asofSnaps["결과 확정 시점"].ach });
+    var gradeEl = EZ.el("b", { text: asofSnaps["결과 확정 시점"].grade });
+    var noteEl = EZ.el("div", { style: { fontSize: "11.5px", color: "var(--ink-3)", marginTop: "4px" }, text: asofSnaps["결과 확정 시점"].note });
+    var toggle = EZ.el("div.ez-toggle3");
+    Object.keys(asofSnaps).forEach(function (k, i) {
+      toggle.appendChild(EZ.el("button" + (i === 0 ? ".on" : ""), { text: k, on: { click: function () { toggle.querySelectorAll("button").forEach(function (b) { b.classList.remove("on"); }); this.classList.add("on"); var s = asofSnaps[k]; achEl.textContent = s.ach; gradeEl.textContent = s.grade; noteEl.textContent = s.note; } } }));
+    });
+
+    var receipt = EZ.receipt({
+      id: "rcpt-ex3", title: "이의 신청 검토 · " + tgt, autonomy: "human_approve",
+      as_of: { date: a.confirmedAt.slice(0, 10), cycle: "C-2026H1", cycleLabel: "결과 확정 시점", editable: false },
+      scope: { label: "평가 2026 H1 · 미주팀 · 대상자 1" },
+      answer: "주장 근거 <b>일부 확인</b>(OPS-88 완료, Jira 기록). 재계산 시 <b>A 가능</b>하나 강제배분 A 상한 초과. <b>등급 B 유지</b>를 권고합니다.",
+      trace: [
+        { kind: "calculation", label: "확정 달성률 (가중 합산)", value: "105% → B" },
+        { kind: "calculation", label: "What-if: OPS-88 반영", expr: "105% + 13%p", value: "118% → A?", dir: "up", refs: ["JIRA-OPS-88"] },
+        { kind: "calculation", label: "강제배분 대조", expr: "A 26% > 상한 25%", value: "승격 불가", dir: "down", chips: ["RULE-GRADE-DIST"] }
+      ],
+      rules: ["RULE-GRADE-DIST", "RULE-GRADE-ADJ-RANGE"],
+      evidence: [{ id: "JIRA-OPS-88", source: "Jira", label: "OPS-88 완료", snapshot: D.ev("JIRA-OPS-88").snap, recordId: "JIRA-OPS-88", confidence: 0.79 }],
+      excluded: [{ label: "확정 이후 신규 실적", reason: "확정 시점 이후 변동 미반영 규정" }],
+      what_if: {
+        params: [{ id: "reflect", label: "주장(OPS-88) 반영", type: "select", value: "off", options: [{ v: "off", t: "미반영(확정)" }, { v: "on", t: "반영 시" }] }],
+        recompute: function (p) {
+          if (p.reflect === "on") return { answer: "재계산: 달성률 118% → <b>A 요건</b> 근접", deltas: [{ label: "달성률", from: "105%", to: "118%", dir: "up" }, { label: "등급", from: "B", to: "A?", dir: "up" }], blocked: "A 승격 시 강제배분 A 상한 25% 초과(현 26%) — 자동 승격 불가" };
+          return { answer: "확정 기준: 달성률 105% · 등급 B", deltas: [] };
+        }
+      },
+      audit_ref: { logged: true, ref: D.nextAuditRef("ex3", "C-2026H1"), ts: D.meta.today + "T11:40:00+09:00" }
+    });
+
+    var draftTa = EZ.el("textarea.ez-ta", { text: "" });
+    var publicChk = EZ.el("input", { type: "checkbox" });
+    var statusSel = EZ.el("select", { style: { border: "1px solid var(--line)", borderRadius: "7px", padding: "6px 9px", fontFamily: "inherit", fontSize: "12.5px", background: "var(--card)", color: "var(--ink)" } }, ["검토 이전", "검토 중", "검토 완료"].map(function (s) { return EZ.el("option", { text: s, selected: s === "검토 중" }); }));
+
+    var gate = EZ.approvalGate([
+      { kind: "approve", label: "검토 완료 저장", onClick: function () { if (statusSel.value === "검토 완료" && publicChk.checked) { if (window.tx && tx.confirm) tx.confirm("검토 의견을 대상자에게 공개합니다. 진행할까요?", function () { finish(); }, { ok: "공개 저장" }); else finish(); } else finish(); function finish() { EZ.toast("검토 완료 저장 · 진행경과: " + statusSel.value + (publicChk.checked ? " · 대상자 공개" : "")); gate.done("검토 완료 저장 · 감사 기록됨"); } } },
+      { kind: "custom", label: "검토 의견 초안 반영", onClick: function () { draftTa.value = a.reviewDraft; draftTa.style.background = "var(--ez-auto-soft)"; setTimeout(function () { draftTa.style.background = "var(--card)"; }, 600); } },
+      { kind: "hold", label: "보류" }
+    ], {});
+
+    mount.appendChild(EZ.el("div", [
+      EZ.el("div.ez-flag.info", { style: { marginBottom: "12px" } }, ["미확정 · 승인 전 대상자 미노출"]),
+      EZ.el("div.ez-sec-lbl", { text: "기준 시점 재조회 (bitemporal)" }), toggle,
+      EZ.el("div.ez-card", { style: { marginTop: "10px" } }, [
+        EZ.el("div", { style: { display: "flex", gap: "18px" } }, [
+          EZ.el("div", [EZ.el("div.lb", { style: { fontSize: "11.5px", color: "var(--ink-3)", fontWeight: "700" }, text: "달성률" }), achEl]),
+          EZ.el("div", [EZ.el("div.lb", { style: { fontSize: "11.5px", color: "var(--ink-3)", fontWeight: "700" }, text: "확정 등급" }), gradeEl])
+        ]), noteEl
+      ]),
+      EZ.el("div.ez-sec-lbl", { style: { marginTop: "6px" }, text: "이의 신청 내용 (읽기 전용)" }),
+      EZ.el("div.ez-readonly", [a.claimText, EZ.el("div", { style: { marginTop: "8px" } }, a.claimTags.map(function (t) { return EZ.el("span.ez-tag", { text: t }); }))]),
+      receipt,
+      EZ.el("div.ez-sec-lbl", { style: { marginTop: "6px" }, text: "검토 의견 초안" }), draftTa,
+      EZ.el("div", { style: { display: "flex", alignItems: "center", gap: "14px", marginTop: "10px", flexWrap: "wrap" } }, [
+        EZ.el("label.ez-check", [publicChk, "의견 공개(대상자에게 노출)"]),
+        EZ.el("span", { style: { fontSize: "12px", color: "var(--ink-3)" }, text: "상태" }), statusSel
+      ]),
+      gate
+    ]));
+  });
+
+})(window.EZ);
+/* ═══ elizax · 플로우 (QW1~7 + EX1~3) — 검증가능 답변 객체 ═══ */
+(function (EZ) {
+  "use strict";
+  var D = EZ.data;
+  function scope(ctx) { return ctx.scope || EZ._scopeFor(); }
+  function auditRef(flow) { return { logged: true, ref: D.nextAuditRef(flow, D.meta.activeEvalCycle), ts: D.meta.today + "T10:32:05+09:00" }; }
+  function asOf(cycle) { var c = D.evalData.cycles.filter(function (x) { return x.id === cycle; })[0]; return { date: D.meta.today, cycle: cycle, cycleLabel: c ? c.label : cycle, editable: true }; }
+
+  /* ── QW1 · 주간 중간점검 ── */
+  EZ.registerFlow({
+    id: "qw1-checkin", title: "주간 중간점검 · 진척 요약", autonomy: "auto", form: "dock",
+    screen: ["perf", "home"], persona: ["leader", "hr"], chip: true, chipLabel: "이번 주 체크인 요약",
+    alias: ["체크인", "중간점검", "주간 진척", "진척 요약"],
+    nodes: [
+      { id: "n1", label: "talenx 핵심성과 KR 로그 스캔", kind: "query", src: "talenx", par: true, ms: 900, parallel: [{ id: "s1", label: "7일+ 무변동" }] },
+      { id: "n2", label: "ERP 달성률 vs 잔여기간 대조", kind: "query", src: "ERP", par: true, ms: 1300, parallel: [{ id: "s2", label: "진척 지연 판정" }] },
+      { id: "n3", label: "1:1 미팅 최근 이력 조회", kind: "query", src: "talenx", par: true, ms: 1000, parallel: [{ id: "s3", label: "14일+ 미실시" }] },
+      { id: "n4", label: "체크인 대상 종합 · 초안 생성", kind: "output", ms: 700 }
+    ],
+    ground: function () {
+      return [
+        { id: "TX-KR-US2-04", source: "talenx", label: "박성현 KR 12일 무변동", snapshot: "KR-US-2 진척 로그 최종 갱신 2026-07-02 · 이후 12일간 변동 없음", ts: "2026-07-02", recordId: "TX-KR-US2-04" },
+        { id: "ERP-SAL-2605", source: "ERP", label: "김서연 달성률 42%", snapshot: "업셀 KR-US-3 달성률 42% · 잔여기간 20% (진척 지연 구간)", ts: "2026-07-13", recordId: "ERP-SAL-2605", confidence: 0.9 },
+        { id: "TX-121-0489", source: "talenx", label: "이준호 1:1 16일 미실시", snapshot: "최근 1:1 2026-04-29 · 이후 16일 경과", ts: "2026-04-29", recordId: "TX-121-0489" }
+      ];
+    },
+    object: function (ctx, ev) {
+      var s = D.checkin.summary;
+      return {
+        id: "rcpt-qw1", title: "주간 중간점검 · 진척 요약", autonomy: "auto",
+        as_of: asOf("C-2026H1"), scope: { label: scope(ctx).label, count: 5, note: "미주팀" },
+        answer: "이번 주 체크인 대상 <b>" + (s.체크인대상 + s.부진지연) + "명</b> (부진·지연 " + s.부진지연 + " · 무변동/미실시 " + s.체크인대상 + "), 정상 " + s.정상 + "명. 지원 톤의 <b>초안 메시지 3건</b>을 준비했습니다.",
+        trace: [
+          { kind: "calculation", label: "KR 로그 스캔 → 7일+ 무변동", value: "2명", chips: ["RULE-CHECKIN"], refs: ["TX-KR-US2-04"] },
+          { kind: "calculation", label: "ERP 달성률 vs 잔여기간 → 진척 지연", expr: "달성 42% < 50% & 잔여 20% < 30%", value: "1명", dir: "down", chips: ["RULE-PACE"], refs: ["ERP-SAL-2605"] },
+          { kind: "calculation", label: "1:1 최근 이력 → 14일+ 미실시", value: "2명", chips: ["RULE-ONE21"], refs: ["TX-121-0489"] }
+        ],
+        rules: ["RULE-CHECKIN", "RULE-PACE", "RULE-ONE21"],
+        evidence: ev,
+        excluded: [
+          { label: "박민수 (정상)", reason: "신호 3종 모두 임계 미도달" },
+          { label: "타 본부 구성원", reason: "조직장 권한 밖" }
+        ],
+        audit_ref: auditRef("qw1"),
+        actions: [
+          { kind: "send", label: "체크인 요청 3건 발송", decision: "send", doneLabel: "체크인 요청 3건 발송됨 · 감사 로그 기록됨" },
+          { kind: "custom", label: "개별 편집", onClick: function () { EZ.dockSay({ kind: "agent", text: "대상자별 초안을 편집 모드로 엽니다. 박성현 · 김서연 · 이준호 순으로 검토하세요." }); D.checkin.signals.filter(function (x) { return x.status !== "정상"; }).forEach(function (sg) { EZ.dockSay({ kind: "agent", text: "<b>" + D.name(sg.memberId) + "</b> — " + sg.draft }); }); } },
+          { kind: "hold", label: "스누즈 1일" }
+        ]
+      };
+    },
+    commit: function (ctx, decision) { EZ.toast("체크인 요청 3건 발송 · 감사 기록됨"); EZ.dockSay({ kind: "agent", text: "발송 완료. 48시간 무응답 시 재알림을 백그라운드에 예약했습니다." }); }
+  });
+
+  /* ── QW2 · 목표 초안 (fullscreen goal-fill: 왼쪽 실시간 채움) ── */
+  EZ.registerFlow({
+    id: "qw2-goaldraft", title: "개인 맥락 기반 목표 초안", autonomy: "suggest", form: "fullscreen", canvas: "goal-fill",
+    screen: ["perf", "home"], persona: ["member", "leader"], chip: true, chipLabel: "내 목표 초안 만들기",
+    alias: ["목표 초안", "목표 수립", "목표 만들", "goal"],
+    cycle: "C-2026H2",
+    nodes: [
+      { id: "n1", label: "상위 OKR 포착 (전사▸본부▸팀)", kind: "query", src: "talenx", par: false, ms: 800 },
+      { id: "n2", label: "직무 R&R · 전년 목표 이력 매핑", kind: "query", src: "HRIS", par: false, ms: 900 },
+      { id: "n3", label: "SMART 3안 생성", kind: "output", par: false, ms: 1500 },
+      { id: "n4", label: "가중치 합계 · 상위연계 규칙 검증", kind: "judge", src: "규정", par: false, ms: 700 }
+    ],
+    ground: function () {
+      return [
+        { id: "KR-US-2", source: "talenx", label: "상위 KR: 신규 엔터프라이즈 8개", snapshot: "미주팀 KR-US-2 · 진척 50% · 담당 김수현", recordId: "KR-US-2" },
+        { id: "jf_sales_glb", source: "HRIS", label: "직무 R&R: 해외영업", snapshot: "신규 시장·엔터프라이즈 계정 발굴 / 파트너 온보딩 / 매출 목표 달성", recordId: "JOB-SAL-GLB" },
+        { id: "G4@2025", source: "ERP", label: "전년 실적: 신규수주 108%", snapshot: "2025 H2 신규계정 목표 대비 108% 달성", recordId: "ERP-2025H2-0902", confidence: 0.86 },
+        { id: "ORG-2026", source: "talenx", label: "맥락: H1 조직개편", snapshot: "북미영업실 신설 · 미주팀 재편(2026-01)", recordId: "ORG-2026-0102" }
+      ];
+    },
+    object: function (ctx) {
+      var q = D.okr.qw2Draft, sum = q.drafts.reduce(function (a, d) { return a + d.w; }, 0);
+      return {
+        id: "rcpt-qw2", title: "목표 초안 3안 · 박성현", autonomy: "suggest",
+        as_of: asOf("C-2026H2"), scope: { label: "박성현(미주팀) 개인 · 상위 KR 대조" },
+        answer: "2026 하반기 목표 <b>3안</b>을 제안합니다. 가중치 합 <b>" + sum + "%</b> (10%p 부족), 목표3 전사목표 <b>미연계</b> — 확인이 필요합니다.",
+        trace: [
+          { kind: "graph_path", label: "상위 KR 포착", path: [{ node: "전사 매출 3.8조", type: "goal" }, { node: "해외 42% 견인", type: "goal" }, { node: "미주 직판 2,600억", type: "goal" }, { node: "신규 엔터 8개(KR-US-2)", type: "goal" }], chips: ["RULE-GOAL-ALIGN"] },
+          { kind: "calculation", label: "직무 R&R · 전년 이력 매핑", value: "해외영업", chips: ["RULE-SMART"] },
+          { kind: "calculation", label: "가중치 합계 검증", expr: "40 + 35 + 15", value: sum + "%", dir: "down", chips: ["RULE-GOAL-WEIGHT"] },
+          { kind: "calculation", label: "상위연계 검증 → 목표3 미연결", value: "미연계 1", dir: "down", chips: ["RULE-GOAL-ALIGN"] }
+        ],
+        rules: ["RULE-GOAL-ALIGN", "RULE-GOAL-WEIGHT", "RULE-SMART"],
+        evidence: [
+          { id: "KR-US-2", source: "talenx", label: "상위 KR: 신규 엔터 8개", snapshot: "KR-US-2 · 진척 50%", recordId: "KR-US-2" },
+          { id: "JOB-SAL-GLB", source: "HRIS", label: "직무 R&R: 해외영업", snapshot: "핵심 R&R 5항", recordId: "JOB-SAL-GLB" },
+          { id: "ERP-2025H2-0902", source: "ERP", label: "전년 실적 108%", snapshot: "2025 H2 신규계정 108%", recordId: "ERP-2025H2-0902", confidence: 0.86 }
+        ],
+        excluded: [{ label: "목표3(CRM 개선)", reason: "OKR 트리 연계 후보 유사도 < 0.5 — 미연계로 표기(삭제 아님)" }],
+        what_if: {
+          params: [{ id: "w3", label: "목표3 가중치(%)", type: "range", value: 15, min: 15, max: 30, step: 5 }],
+          recompute: function (p) {
+            var total = 40 + 35 + (+p.w3);
+            var ok = total === 100;
+            return { answer: "가중치 합 <b style='color:" + (ok ? "var(--ez-good)" : "var(--ez-bad)") + "'>" + total + "%</b>" + (ok ? " ✓ 규정 충족" : " · 100% 미달"), deltas: [{ label: "목표3 가중치", from: "15%", to: p.w3 + "%", dir: "up" }, { label: "합계", from: "90%", to: total + "%", dir: ok ? "up" : "down" }] };
+          }
+        },
+        audit_ref: auditRef("qw2"),
+        actions: [
+          { kind: "approve", label: "3안 승인·임시저장", decision: "approve", doneLabel: "목표 초안 3건 저장 · 검토요청 · 감사 기록됨" },
+          { kind: "custom", label: "목표3 상위목표 연결", onClick: function (el, a, gate) { EZ.toast("OKR 트리에서 KR-US-4에 연결했습니다 · 미연계 1→0"); var badge = document.querySelector('#ez-canvas .ez-goalcard.flag'); if (badge) { badge.classList.remove("flag"); var m = badge.querySelector(".gc-align"); if (m) { m.textContent = "KR-US-4 연계 ✓"; m.style.color = "var(--ez-good)"; } } } },
+          { kind: "hold", label: "보류" }
+        ]
+      };
+    },
+    commit: function () { EZ.toast("목표 초안 3건 저장 · 조직장(김수현) 승인 요청 전달"); }
+  });
+
+  /* ── QW3 · 평가 코멘트 근거 초안 (dock, 작업중→완료) ── */
+  EZ.registerFlow({
+    id: "qw3-evaldraft", title: "평가 코멘트·등급 근거 초안", autonomy: "human_approve", form: "dock",
+    screen: ["appr", "home"], persona: ["leader", "hr"], chip: true, chipLabel: "평가 코멘트 근거 초안",
+    alias: ["평가 코멘트", "등급 근거", "코멘트 초안", "평가 초안"],
+    nodes: [
+      { id: "n1", label: "ERP 매출 실적 확인", kind: "query", src: "ERP", par: true, ms: 1300 },
+      { id: "n2", label: "동일 직무군 분포 대조", kind: "query", src: "talenx", par: true, ms: 1600 },
+      { id: "n3", label: "평가 규정 §4.2 대조", kind: "judge", src: "규정", par: false, ms: 800 },
+      { id: "n4", label: "등급 초안 · 문장별 출처 매핑", kind: "output", par: false, ms: 900 }
+    ],
+    ground: function () {
+      var r = D.evalRec("m_parkms");
+      return [
+        { id: "ERP-CNT-H1", source: "ERP", label: "달성률 125%", snapshot: D.ev("ERP-CNT-H1").snap, recordId: "ERP-CNT-H1", confidence: 0.94 },
+        { id: "DIST-SAL-GLB-H1", source: "talenx", label: "직무군 상위 32%", snapshot: "해외영업 직무군 12인 중 순위 4위 · 상위 32%", recordId: "DIST-SAL-GLB-H1", confidence: 0.88 },
+        { id: "ERP-CNT-0417", source: "ERP", label: "업셀 320억", snapshot: D.ev("ERP-CNT-0417").snap, recordId: "ERP-CNT-0417" }
+      ];
+    },
+    object: function (ctx) {
+      var r = D.evalRec("m_parkms");
+      var ansNode = EZ.el("div");
+      r.commentDraft.forEach(function (c, i) {
+        ansNode.appendChild(EZ.el("div", { style: { marginBottom: "6px", lineHeight: "1.6" } }, [c.text, EZ.el("sup", { style: { color: "var(--ez-accent-2)", fontWeight: "800" }, text: " " + (i + 1) })]));
+      });
+      return {
+        id: "rcpt-qw3", title: "평가 코멘트·등급 근거 초안 · 박민수", autonomy: "human_approve", answer_kind: "grade", grade: r.proposedGrade,
+        as_of: asOf("C-2026H1"), scope: { label: "박민수 · 업적 영역 · 1차 상위자 평가" },
+        answer: "<b>" + r.proposedGrade + " 등급</b>을 제안합니다 (달성률 125% · 직무군 상위 32% · 규정상 초과달성). 각 문장 출처를 확인 후 승인하세요.",
+        trace: [
+          { kind: "calculation", label: "ERP 매출 실적 확인", expr: "신규 5건 / 목표 4건", value: "125%", dir: "up", refs: ["ERP-CNT-H1"] },
+          { kind: "calculation", label: "동일 직무군 분포 대조", value: "상위 32%", chips: ["RULE-OUTLIER"], refs: ["DIST-SAL-GLB-H1"] },
+          { kind: "calculation", label: "평가 규정 §4.2 대조", value: "상향 요건 충족", dir: "up", chips: ["RULE-GRADE-ADJ-RANGE"] },
+          { kind: "graph_path", label: "등급 양식 매핑", path: [{ node: "달성 125%", type: "goal" }, { node: "직무군 상위 32%", type: "goal" }, { node: "§4.2 초과달성", type: "rule" }, { node: "A 등급", type: "goal" }] }
+        ],
+        rules: ["RULE-GRADE-ADJ-RANGE", "RULE-OUTLIER", "RULE-DEV-ADJ"],
+        evidence: [
+          { id: "ERP-CNT-H1", source: "ERP", label: "달성률 125%", snapshot: D.ev("ERP-CNT-H1").snap, recordId: "ERP-CNT-H1", confidence: 0.94 },
+          { id: "DIST-SAL-GLB-H1", source: "talenx", label: "직무군 상위 32%", snapshot: "해외영업 12인 중 4위", recordId: "DIST-SAL-GLB-H1", confidence: 0.88 },
+          { id: "ERP-CNT-0417", source: "ERP", label: "업셀 320억", snapshot: D.ev("ERP-CNT-0417").snap, recordId: "ERP-CNT-0417" }
+        ],
+        excluded: [
+          { label: "역량 영역", reason: "별도 영역 · 본 초안(업적) 범위 밖" },
+          { label: "동료 피드백 정성평가", reason: "업적 등급 산정 비반영" }
+        ],
+        what_if: {
+          params: [{ id: "g", label: "등급 상향 시도", type: "select", value: "A", options: [{ v: "A", t: "A (제안)" }, { v: "S", t: "S (상향)" }] }],
+          recompute: function (p) {
+            if (p.g === "S") return { answer: "S 상향 검증 중…", deltas: [{ label: "달성률 125%", from: "A 요건", to: "S 요건(150%+) 미달", dir: "down" }], blocked: "S 등급은 달성률 150%+ 요건 미충족 (§4.2) — 상향 불가" };
+            return { answer: "<b>A 등급</b> 유지 — §4.2 초과달성 상향 요건 충족", deltas: [{ label: "제안 등급", from: "B(기본)", to: "A", dir: "up" }] };
+          }
+        },
+        audit_ref: auditRef("qw3"),
+        actions: [
+          { kind: "approve", label: "A로 승인·셀 반영", decision: "approve", doneLabel: "평가 초안 반영 · 셀 작성 완료 · 감사 기록됨" },
+          { kind: "custom", label: "근거 수집 딥워크", onClick: function () { EZ.closeDock(); EZ.openFullscreen("qw4-evidence", {}); } },
+          { kind: "hold", label: "보류" }
+        ]
+      };
+    },
+    commit: function () { EZ.toast("평가 코멘트·등급 A 반영 · 2차 등급 조정(캘리브레이션) 대상에 추가"); }
+  });
+
+  /* ── QW4 · 성과 근거 자동수집 (fullscreen evidence-timeline) ── */
+  EZ.registerFlow({
+    id: "qw4-evidence", title: "성과 근거 자동수집 · 타임라인", autonomy: "suggest", form: "fullscreen", canvas: "evidence-timeline",
+    screen: ["appr", "perf", "home"], persona: ["leader", "hr", "member"], chip: true, chipLabel: "근거 자동수집",
+    alias: ["근거 수집", "성과 근거", "근거 모으", "타임라인"],
+    nodes: [
+      { id: "n1", label: "ERP·실적리포트 (목표 달성)", kind: "query", src: "ERP", par: true, ms: 1400, parallel: [{ id: "s1", label: "8건" }] },
+      { id: "n2", label: "Jira 완료 이슈 (프로젝트)", kind: "query", src: "Jira", par: true, ms: 1800, parallel: [{ id: "s2", label: "6건" }] },
+      { id: "n3", label: "talenx 노트 (1:1)", kind: "query", src: "talenx", par: true, ms: 1200, parallel: [{ id: "s3", label: "3건" }] },
+      { id: "n4", label: "동료 수시 피드백", kind: "query", src: "Slack", par: true, ms: 1600, parallel: [{ id: "s4", label: "7건" }] }
+    ],
+    ground: function () { return (D.evidenceStore.m_parkms || []).slice(0, 4).map(function (e) { return { id: e.recordId, source: e.source, label: e.title, snapshot: e.snap, ts: e.date, recordId: e.recordId }; }); },
+    object: function (ctx) {
+      var s = D.evidenceSummary.m_parkms;
+      return {
+        id: "rcpt-qw4", title: "성과 근거 수집 요약 · 박민수", autonomy: "suggest",
+        as_of: asOf("C-2026H1"), scope: { label: "박민수 개인 · 권한 내 소스 5종" },
+        answer: "박민수 2026 상반기 성과 근거 <b>" + s.total + "건</b>을 수집했습니다 (목표달성 " + s.목표달성 + " · 프로젝트 " + s.프로젝트 + " · 수시피드백 " + s.수시피드백 + " · 1:1 " + s["1:1기록"] + "). 이 근거로 등급 초안을 만들 수 있습니다.",
+        trace: [
+          { kind: "graph_path", label: "목표 달성 근거", path: [{ node: "ERP 실적", type: "org" }, { node: "talenx 실적리포트", type: "org" }, { node: "8건", type: "goal" }], chips: ["RULE-SBI"] },
+          { kind: "calculation", label: "프로젝트 근거 (Jira 완료 이슈)", value: "6건" },
+          { kind: "calculation", label: "1:1 기록 · 수시 피드백", value: "3 · 7건" }
+        ],
+        rules: ["RULE-SBI"],
+        evidence: this.ground(),
+        excluded: [
+          { label: "비공개 피드백 2건", reason: "공개 범위 밖 · 개인정보보호 §15" },
+          { label: "2025 하반기 근거", reason: "평가 주기(2026 H1) 밖" }
+        ],
+        audit_ref: auditRef("qw4"),
+        actions: [
+          { kind: "approve", label: "이 근거로 등급 초안 만들기", decision: "approve", doneLabel: "근거 24건 확정 · 등급 초안 단계로 인계 · 감사 기록됨" },
+          { kind: "hold", label: "보류" }
+        ]
+      };
+    },
+    commit: function () { EZ.toast("근거 24건 확정 · 평가 코멘트 초안(QW3)으로 인계"); EZ.closeFullscreen(); EZ.openDock(); setTimeout(function () { EZ.start("qw3-evaldraft", {}); }, 300); }
+  });
+
+  /* ── QW5 · Calibration 편향·분포 (fullscreen calibration-board, 다자 심의) ── */
+  EZ.registerFlow({
+    id: "qw5-calibration", title: "평가 편향·등급 분포 조정", autonomy: "human_approve", form: "fullscreen", canvas: "calibration-board",
+    screen: ["appr"], persona: ["hr"], chip: true, chipLabel: "캘리브레이션 편향 점검",
+    alias: ["캘리브레이션", "등급 분포", "편향", "calibration", "강제배분"],
+    orgLabel: "글로벌사업본부",
+    nodes: [
+      { id: "n1", label: "증거검증 — 근거 부실 상향 탐지", kind: "judge", src: "talenx", par: true, ms: 1400 },
+      { id: "n2", label: "정치배제 — 관대화·후광 패턴", kind: "judge", src: "규정", par: true, ms: 1600 },
+      { id: "n3", label: "편향필터 — 최신효과·중심화", kind: "judge", src: "talenx", par: true, ms: 1800 },
+      { id: "n4", label: "전략기여 — 상위 KR 기여도", kind: "judge", src: "talenx", par: true, ms: 1500 },
+      { id: "n5", label: "조정 오케스트레이터 — 강제배분 상한 재배치", kind: "output", par: false, ms: 1000 }
+    ],
+    ground: function () {
+      return [
+        { id: "EVAL-G3-0117", source: "talenx", label: "근거 부실 상향 2건", snapshot: "업적 코멘트 출처 0건 · 달성률 미기재 → A 상향 후보", recordId: "EVAL-2026H1-G3-0117" },
+        { id: "EVAL-0155", source: "talenx", label: "관대화 패턴", snapshot: "평가자 평균 4.6/5 · 전사 3.4 대비 +1.2 (관대화 의심)", recordId: "EVAL-2026H1-0155", confidence: 0.82 },
+        { id: "ADJ-G3", source: "talenx", label: "평균 편차 조정점수", snapshot: "조정점수 = 전체평균 + (피평가자−평가자평균)×전체σ/평가자σ", recordId: "ADJ-2026H1-G3" }
+      ];
+    },
+    object: function (ctx) {
+      var c = D.calibration, b = c.distribution.before, a = c.distribution.after;
+      return {
+        id: "rcpt-qw5", title: "등급 분포 조정안 · " + c.scopeLabel, autonomy: "human_approve",
+        as_of: asOf("C-2026H1"), scope: { label: "글로벌사업본부 48명 · 권한 내 전사" },
+        answer: "강제배분 상한(A 25%)에 맞춰 조정합니다. S " + b.S + "→" + a.S + " · A " + b.A + "→" + a.A + " · B " + b.B + "→" + a.B + " · C " + b.C + "→" + a.C + " · D " + b.D + "→" + a.D + " (%). 이상치 <b>" + c.outliers.before + "건→" + c.outliers.after + "건</b> 해소. 최종 승인이 필요합니다.",
+        trace: [
+          { kind: "calculation", label: "[증거검증] 근거 부실 상향 → 하향 제안", value: "2건", dir: "down", refs: ["EVAL-G3-0117"] },
+          { kind: "calculation", label: "[정치배제] 관대화·후광 패턴", value: "1건", chips: ["RULE-BIAS"], refs: ["EVAL-0155"] },
+          { kind: "calculation", label: "[편향필터] 최신효과·중심화 스코어링", chips: ["RULE-BIAS"] },
+          { kind: "calculation", label: "[전략기여] 핵심 프로젝트 기여 방어", value: "B→A 2건" },
+          { kind: "calculation", label: "[오케스트레이터] 강제배분 상한 대조", expr: "A 32% > 상한 25%", value: "−7%p 재배치", dir: "down", chips: ["RULE-GRADE-DIST"] }
+        ],
+        rules: ["RULE-GRADE-DIST", "RULE-BIAS", "RULE-GRADE-ADJ-RANGE", "RULE-DEV-ADJ"],
+        evidence: this.ground(),
+        excluded: [
+          { label: "D등급 2명", reason: "하한 · 조정 범위 밖" },
+          { label: "타 본부", reason: "본 캘리 세션 미포함" }
+        ],
+        what_if: {
+          params: [{ id: "cap", label: "강제배분 A 상한", type: "select", value: "v3.1", options: [{ v: "v3.1", t: "현 규칙 v3.1 (A≤25%)" }, { v: "v3.0", t: "이전 규칙 v3.0 (A≤30%)" }] }],
+          recompute: function (p) {
+            if (p.cap === "v3.0") return { answer: "이전 규칙 v3.0 기준 재계산 — A 상한 30%", deltas: [{ label: "A 등급 상한", from: "25%", to: "30%", dir: "up" }, { label: "재배치 규모", from: "−7%p", to: "−2%p", dir: "up" }] };
+            return { answer: "현 규칙 v3.1 — A 상한 25% 적용", deltas: [{ label: "A 등급", from: "32%", to: "25%", dir: "down" }] };
+          }
+        },
+        audit_ref: auditRef("qw5"),
+        actions: [
+          { kind: "approve", label: "조정안 승인·일괄 반영", decision: "approve", doneLabel: "등급 조정 확정 · 48명 · 결과 확정 프로세스 이관 · 감사 기록됨" },
+          { kind: "custom", label: "대상자별 수정", onClick: function () { EZ.toast("대상자별 재조정 — 강제배분 상한이 재검증됩니다"); } },
+          { kind: "hold", label: "보류" }
+        ]
+      };
+    },
+    commit: function () { EZ.toast("등급 조정 확정 · 글로벌사업본부 48명 · 결과 확정 프로세스로 이관"); }
+  });
+
+  /* ── QW6 · 피드백 문장 정제 (dock, diff + SBI) ── */
+  EZ.registerFlow({
+    id: "qw6-feedback", title: "피드백 문장 정제 · SBI 구조화", autonomy: "suggest", form: "dock",
+    screen: ["perf", "appr", "home"], persona: ["leader", "hr"], chip: true, chipLabel: "피드백 문장 정제",
+    alias: ["피드백 정제", "피드백 다듬", "sbi", "문장 정제"],
+    nodes: [
+      { id: "n1", label: "모호 표현 탐지 (계속·여러 번·좀)", kind: "query", src: "talenx", par: false, ms: 700 },
+      { id: "n2", label: "근거 특정 — 스크럼보드 지연 로그", kind: "query", src: "talenx", par: true, ms: 1000 },
+      { id: "n3", label: "SBI 재구조화 (상황·행동·영향)", kind: "output", par: false, ms: 900 },
+      { id: "n4", label: "톤 적용 + 저성과 민감도 스캔", kind: "judge", src: "규정", par: false, ms: 600 }
+    ],
+    ground: function () {
+      return [
+        { id: "CMT-0612", source: "talenx", label: "지연 06-12", snapshot: "스크럼보드 확인 미체크 · 업무 CI정밀", recordId: "CMT-2026-0612" },
+        { id: "CMT-0703", source: "talenx", label: "지연 07-03", snapshot: "스크럼보드 확인 지연", recordId: "CMT-2026-0703" },
+        { id: "CMT-0709", source: "talenx", label: "지연 07-09", snapshot: "스크럼보드 확인 지연", recordId: "CMT-2026-0709" }
+      ];
+    },
+    object: function (ctx) {
+      var diff, tone;
+      var sbiCard = EZ.el("div.ez-card", { style: { margin: "4px 0 0" } }, [
+        EZ.el("div.ez-sec-lbl", { text: "SBI 정제안 (상황·행동·영향)" }),
+        EZ.el("div", { style: { fontSize: "13px", lineHeight: "1.7" } }, [
+          EZ.el("div", { html: "<b>상황</b> 2026 상반기 CI정밀 시스템 구축 중" }),
+          EZ.el("div", { html: "<b>행동</b> 스크럼보드 확인이 3회(6/12·7/3·7/9) 지연" }),
+          EZ.el("div", { html: "<b>영향</b> 후속 담당자 일정 재조정 발생" })
+        ])
+      ]);
+      diff = EZ.diffView({
+        segments: [
+          { del: "요즘 보드 확인을 계속 놓치고 여러 번 늦었어요.", ins: "최근 스크럼보드 확인이 3회(6/12·7/3·7/9) 지연되어 후속 담당자 일정 재조정이 있었어요." },
+          { same: "다음 주 1:1에서 막힌 지점을 같이 짚어봐요." }
+        ]
+      });
+      var body = EZ.el("div", [
+        EZ.el("div", { style: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" } }, [
+          EZ.el("span.ez-sec-lbl", { text: "톤" }),
+          (tone = EZ.toneEdit({ value: "warm", onChange: function (v) { EZ.toast("톤 '" + ({ plain: "담백", warm: "따뜻", direct: "직설" }[v]) + "' 적용 — 정제안을 다시 생성했습니다"); } })).el
+        ]),
+        diff.el, sbiCard
+      ]);
+      return {
+        id: "rcpt-qw6", title: "피드백 문장 정제 · 김수현 → 박민수", autonomy: "suggest",
+        as_of: asOf("C-2026H1"), scope: { label: "김수현 → 박민수 피드백 초안" },
+        answer: body,
+        trace: [
+          { kind: "calculation", label: "모호 표현 탐지", value: "3개", chips: ["RULE-SBI"] },
+          { kind: "calculation", label: "근거 특정 → 스크럼보드 지연", value: "3건", refs: ["CMT-0612", "CMT-0703", "CMT-0709"] },
+          { kind: "calculation", label: "SBI 재구조화 · 톤(따뜻) 적용" }
+        ],
+        rules: ["RULE-SBI"],
+        excluded: [
+          { label: '"좀" (모호어)', reason: "정량 근거 없음 · 삭제만" },
+          { label: "타인 언급 문장", reason: "대상자 외 피드백 금지" }
+        ],
+        gateNote: "저성과 민감 케이스 아님 — 일반 피드백. 부정 피드백이면 HR 1:1 가이드 확인이 필요합니다.",
+        audit_ref: auditRef("qw6"),
+        actions: [
+          { kind: "approve", label: "정제안 반영·전송 대기", decision: "approve", doneLabel: "정제 반영 · talenx 코멘트 로그 기록 · 감사 기록됨", onClick: null },
+          { kind: "custom", label: "문장별 반영", onClick: function () { EZ.toast("문장별 반영 모드 — 위 diff에서 개별 [반영]/[무시]를 선택하세요"); } },
+          { kind: "custom", label: "HR 1:1 가이드 확인", onClick: function () { EZ.toast("HR 1:1 가이드: 부정 피드백은 사실·행동 중심 + 지원 제안으로 전달"); } },
+          { kind: "hold", label: "보류" }
+        ],
+        _diff: diff
+      };
+    },
+    commit: function () { EZ.toast("피드백 정제안 반영 · CI정밀 목표에 연결 · 전송 대기"); }
+  });
+
+  /* ── QW7 · 팀 목표 정합성·중복 (fullscreen goalscan-table) ── */
+  EZ.registerFlow({
+    id: "qw7-goalscan", title: "팀 목표 정합성·중복 점검", autonomy: "suggest", form: "fullscreen", canvas: "goalscan-table",
+    screen: ["perf"], persona: ["leader", "hr"], chip: true, chipLabel: "팀 목표 정합성 점검",
+    alias: ["목표 정합성", "중복 점검", "목표 중복", "정합성"],
+    orgLabel: "미주팀",
+    nodes: [
+      { id: "n1", label: "팀 목표 8건 로드", kind: "query", src: "talenx", par: false, ms: 300 },
+      { id: "n2", label: "상위 KR 트리 대조 (전사▸본부▸팀)", kind: "query", src: "talenx", par: true, ms: 400 },
+      { id: "n3", label: "문장 임베딩 유사도 계산", kind: "judge", par: true, ms: 500 },
+      { id: "n4", label: "상위 연계 검증 → 미연계 탐지", kind: "judge", par: false, ms: 300 }
+    ],
+    ground: function () {
+      return [
+        { id: "GOAL-G1G4", source: "talenx", label: "쌍A 90%", snapshot: "G1(박민수)↔G4(박성현) 유사도 0.90 · 상위 KR-US-2 동일", recordId: "GOAL-2026H1-G1-G4" },
+        { id: "GOAL-G2G7", source: "talenx", label: "쌍B 76%", snapshot: "G2(박민수)↔G7(김서연) 유사도 0.76 · 상위 KR-US-3 동일", recordId: "GOAL-2026H1-G2-G7" },
+        { id: "GOAL-G6", source: "talenx", label: "미연계 G6", snapshot: "G6(박성현) 상위 KR 매칭 없음", recordId: "GOAL-2026H1-G6" }
+      ];
+    },
+    object: function (ctx) {
+      var q = D.okr.qw7Scan;
+      return {
+        id: "rcpt-qw7", title: "팀 목표 정합성·중복 점검 · 미주팀", autonomy: "suggest",
+        as_of: asOf("C-2026H1"), scope: { label: "미주팀 8건 · OKR 트리 대조", note: "0.9초" },
+        answer: "미주팀 목표 <b>8건</b> 점검: 중복 의심 <b>2쌍</b> (유사도 90% · 76%), 상위목표 <b>미연계 1건</b>. 병합·연결을 제안합니다.",
+        trace: [
+          { kind: "calculation", label: "팀 목표 로드", value: "8건" },
+          { kind: "graph_path", label: "상위 KR 트리 대조", path: [{ node: "전사", type: "org" }, { node: "글로벌본부", type: "org" }, { node: "미주팀 KR", type: "goal" }], chips: ["RULE-GOAL-ALIGN"] },
+          { kind: "calculation", label: "임베딩 유사도 → 쌍A/쌍B", expr: "임계 ≥0.75", value: "0.90 · 0.76", chips: ["RULE-DUP-SIM"] },
+          { kind: "calculation", label: "상위 연계 검증 → 미연계", value: "1건", dir: "down", chips: ["RULE-GOAL-ALIGN"] }
+        ],
+        rules: ["RULE-DUP-SIM", "RULE-GOAL-ALIGN"],
+        evidence: this.ground(),
+        excluded: [
+          { label: "유사도 0.62 쌍", reason: "임계 0.75 미만 · 독립 목표로 판정" },
+          { label: "조직 단위 목표", reason: "개인 목표 아님 · §3 대상 외" }
+        ],
+        audit_ref: auditRef("qw7"),
+        actions: [
+          { kind: "approve", label: "쌍A 병합·G6 연결 승인", decision: "merge", doneLabel: "정합성 조치 완료 · 병합 1건 · 연결 1건 · 감사 기록됨" },
+          { kind: "custom", label: "쌍B 담당 분리 유지", onClick: function () { EZ.toast("쌍B는 범위 문구 차별화로 유지 — 유사도 재계산 76%→하락"); } },
+          { kind: "hold", label: "보류" }
+        ]
+      };
+    },
+    commit: function (ctx, decision) {
+      EZ.toast("목표 병합 1건 · 상위연계 1건 · 목표 승인 요청 전달");
+      var tbl = document.querySelector("#ez-canvas .ez-tbl");
+      if (tbl) { var dup = tbl.querySelectorAll('tr[data-flag="dup"]'); if (dup[1]) dup[1].classList.add("is-merged"); var un = tbl.querySelector('tr[data-flag="unaligned"]'); if (un) { un.setAttribute("data-flag", ""); var c = un.querySelector(".res"); if (c) { c.innerHTML = ""; c.appendChild(EZ.el("span.ez-flag.ok", ["연계 완료 ✓"])); } } }
+    }
+  });
+
+  /* ── EX1 · 목표 Cascading 정렬 맵 (fullscreen alignment-map) ── */
+  EZ.registerFlow({
+    id: "ex1-cascade", title: "목표 정렬 맵 · 전사→개인", autonomy: "suggest", form: "fullscreen", canvas: "alignment-map",
+    screen: ["perf"], persona: ["hr", "leader"], chip: true, chipLabel: "목표 정렬 맵",
+    alias: ["정렬 맵", "cascading", "캐스케이드", "정렬 상태"],
+    orgLabel: "글로벌사업본부",
+    nodes: [
+      { id: "n1", label: "OKR 트리 로드 (4계층)", kind: "query", src: "talenx", par: false, ms: 500 },
+      { id: "n2", label: "구조검증 — 엣지 무결성", kind: "judge", par: true, ms: 900 },
+      { id: "n3", label: "가중치검증 — 합계 100", kind: "judge", par: true, ms: 800 },
+      { id: "n4", label: "커버리지 — 전사 KR 하위 연계율", kind: "judge", par: true, ms: 1000 },
+      { id: "n5", label: "병목·고아 탐지", kind: "output", par: false, ms: 700 }
+    ],
+    ground: function () {
+      return [
+        { id: "KR-US-2", source: "talenx", label: "KR-US-2", snapshot: "미주팀 신규 엔터 8개 · 하위 연계 목표 2건", recordId: "KR-US-2" },
+        { id: "GOAL-G6", source: "talenx", label: "미연계 G6", snapshot: "박성현 CRM 개선 · 상위 KR 매칭 없음", recordId: "GOAL-2026H1-G6", confidence: 0.88 }
+      ];
+    },
+    object: function (ctx) {
+      return {
+        id: "rcpt-ex1", title: "목표 정렬 진단 · 글로벌사업본부", autonomy: "suggest",
+        as_of: asOf("C-2026H1"), scope: { label: "권한 내 본부 1 · 팀 4 · 구성원 27" },
+        answer: "글로벌사업본부 목표 <b>정렬 이상 3건</b> — 상위 미연계 1, 가중치 합계 미달 1, 커버리지 공백 1(전략 사각지대).",
+        trace: [
+          { kind: "graph_path", label: "단절 경로 탐지", path: [{ node: "전사 3.8조", type: "goal" }, { node: "해외 42%", type: "goal" }, { node: "미주 KR", type: "goal" }, { node: "박성현 CRM 개선", type: "goal", cut: true }] },
+          { kind: "calculation", label: "커버리지 — 전사 KR 하위 연계율", value: "88%", chips: ["RULE-GOAL-ALIGN"] },
+          { kind: "calculation", label: "가중치 합계 미달", expr: "박성현 40+35+15", value: "90%", dir: "down", chips: ["RULE-GOAL-WEIGHT"] }
+        ],
+        rules: ["RULE-GOAL-ALIGN", "RULE-GOAL-WEIGHT"],
+        evidence: this.ground(),
+        excluded: [{ label: "완료/마감 목표", reason: "진행중 아님" }, { label: "타 본부 47건", reason: "권한 밖 조회 제외" }],
+        what_if: {
+          params: [{ id: "link", label: "G6를 KR-US-4에 연결", type: "toggle", value: "off", type2: "select", options: [{ v: "off", t: "미연결(현재)" }, { v: "on", t: "연결 시" }] }],
+          recompute: function (p) { return p.link === "on" ? { answer: "연결 시 커버리지 <b style='color:var(--ez-good)'>93%</b>", deltas: [{ label: "커버리지", from: "88%", to: "93%", dir: "up" }, { label: "미연계", from: "1건", to: "0건", dir: "up" }] } : { answer: "현재 커버리지 88% · 미연계 1건", deltas: [] }; }
+        },
+        audit_ref: auditRef("ex1"),
+        actions: [
+          { kind: "approve", label: "상위 KR에 연결 승인", decision: "approve", doneLabel: "연계 생성 · 달성도 자동 연동 활성 · 감사 기록됨" },
+          { kind: "custom", label: "가중치 재배분 제안", onClick: function () { EZ.toast("박성현 목표3 가중치 15→25% 재배분 제안 — 합계 100%"); } },
+          { kind: "hold", label: "보류" }
+        ]
+      };
+    },
+    commit: function () { EZ.toast("연계 생성 · 달성도 자동 연동 활성 · 상위 목표 담당자 알림 예약"); var cut = document.querySelector("#ez-canvas .ez-am-node.is-cut"); if (cut) { cut.classList.remove("is-cut"); cut.classList.add("is-linked"); } }
+  });
+
+  /* ── EX2 · 리뷰 초안 실시간 co-editing (fullscreen review-coedit) ── */
+  EZ.registerFlow({
+    id: "ex2-review-coedit", title: "리뷰 초안 실시간 co-editing", autonomy: "suggest", form: "fullscreen", canvas: "review-coedit",
+    screen: ["perf"], persona: ["leader", "hr"], chip: true, chipLabel: "리뷰 초안 작성",
+    alias: ["리뷰 초안", "리뷰 작성", "co-editing", "인재 스냅샷"],
+    orgLabel: "미주팀",
+    nodes: [
+      { id: "n1", label: "실적요약 (문항1)", kind: "output", src: "ERP", par: true, ms: 1600 },
+      { id: "n2", label: "역량·피드백요약 (문항2)", kind: "output", src: "Slack", par: true, ms: 1900 },
+      { id: "n3", label: "성장·경로 (문항3·4)", kind: "output", src: "talenx", par: true, ms: 1700 },
+      { id: "n4", label: "인재 스냅샷 산출 (9-Box·종합등급)", kind: "judge", par: true, ms: 2100 }
+    ],
+    ground: function () {
+      return [
+        { id: "ERP-QTR-26H1", source: "ERP", label: "달성률 125%", snapshot: D.ev("ERP-QTR-26H1").snap, recordId: "ERP-QTR-26H1" },
+        { id: "TX-121-0522", source: "talenx", label: "1:1 상반기 리뷰", snapshot: D.ev("TX-121-0522").snap, recordId: "TX-121-0522" }
+      ];
+    },
+    object: function (ctx) {
+      return {
+        id: "rcpt-ex2", title: "리뷰 초안 · 박민수 (2026 H1)", autonomy: "suggest",
+        as_of: asOf("C-2026H1"), scope: { label: "대상자 1(박민수) · 관리자 김수현 · 검토자 최인기" },
+        answer: "박민수 리뷰 초안 — 대화 5문항·스냅샷 9문항 채움, 제안 종합등급 <b>A</b>, 9-Box <b>성과 高 / 역량 中</b>.",
+        trace: [
+          { kind: "calculation", label: "문항1 ← 달성률 125% (ERP)", value: "125%", dir: "up", refs: ["ERP-QTR-26H1"] },
+          { kind: "calculation", label: "문항2 ← 동료 피드백 7건 SBI 요약" },
+          { kind: "calculation", label: "스냅샷 종합등급", expr: "달성률 × 가중치", value: "A" },
+          { kind: "graph_path", label: "9-Box 블록", path: [{ node: "성과 高", type: "goal" }, { node: "역량 中", type: "skill" }] }
+        ],
+        rules: ["RULE-GRADE-ADJ-RANGE", "RULE-DEV-ADJ"],
+        evidence: this.ground(),
+        excluded: [{ label: "평가 미확정 항목", reason: "확정 전 반영 불가" }, { label: "대상자 비공개 피드백 1건", reason: "공개 범위 밖" }],
+        audit_ref: auditRef("ex2"),
+        actions: [
+          { kind: "approve", label: "초안 저장 (진행경과 완료)", decision: "approve", doneLabel: "리뷰 저장 · 검토자 최인기에게 전달 · 감사 기록됨" },
+          { kind: "custom", label: "스냅샷 등급 확정", onClick: function () { EZ.toast("인재 스냅샷 종합등급 A · 9-Box 성과高/역량中 확정"); } },
+          { kind: "hold", label: "보류" }
+        ]
+      };
+    },
+    commit: function () { EZ.toast("리뷰 저장 · 진행경과: 완료 · 검토자 최인기에게 전달"); }
+  });
+
+  /* ── EX3 · 이의신청 처리 보조 (panel, as-of 재조회 + What-if) ── */
+  EZ.registerFlow({
+    id: "ex3-appeal", title: "이의 신청 검토 보조", autonomy: "human_approve", form: "panel",
+    screen: ["appr"], persona: ["hr"], chip: true, chipLabel: "이의신청 검토",
+    alias: ["이의신청", "이의 신청", "appeal", "재조회"],
+    render: function (ctx) { EZ.renderers.canvas["appeal-panel"](EZ.openPanel(), null, ctx); }
+  });
+
+})(window.EZ);
+/* ═══ elizax · 선제 신호 (S1) + 부팅 ═══ */
+(function (EZ) {
+  "use strict";
+
+  // 성과관리 · evaluator → 주간 체크인
+  EZ.registerSignal({
+    id: "sig-checkin", screen: ["perf", "home"], persona: ["leader", "hr"], severity: "info", once: true,
+    build: function () { return { title: "주간 중간점검 · 대상 3명", summary: "무변동/미실시 2건 · 진척 지연 1건. 지원 톤 초안 3건을 준비했습니다.", flowId: "qw1-checkin", badge: "auto" }; }
+  });
+  // 평가관리 · HR → 캘리브레이션 상한 초과 (anomaly, 전체화면)
+  EZ.registerSignal({
+    id: "sig-calibration", screen: ["appr"], persona: ["hr"], severity: "anomaly", once: true,
+    build: function () { return { title: "등급 분포 이상 · A 32%", summary: "강제배분 상한(A 25%) 초과 의심 · 이상치 3건. 캘리브레이션 심의를 준비했습니다.", flowId: "qw5-calibration", badge: "suggest" }; }
+  });
+  // 평가관리 · HR → 이의신청 접수 (deadline, 패널)
+  EZ.registerSignal({
+    id: "sig-appeal", screen: ["appr"], persona: ["hr"], severity: "deadline", once: true,
+    build: function () { return { title: "이의 신청 접수 · 박성현", summary: "2026 H1 평가 이의신청 (검토 이전). 확정 시점 재조회·재계산을 준비했습니다.", flowId: "ex3-appeal", badge: "human_approve" }; }
+  });
+  // 평가관리 · leader → 평가 코멘트 미작성
+  EZ.registerSignal({
+    id: "sig-evaldraft", screen: ["appr"], persona: ["leader"], severity: "deadline", once: true,
+    build: function () { return { title: "평가 코멘트 미작성 · 박민수", summary: "1차 상위자 평가 셀 미작성. ERP·직무군·규정 대조 근거 초안(62%)이 준비되었습니다.", flowId: "qw3-evaldraft", badge: "human_approve" }; }
+  });
+  // 성과관리 · member → 목표 초안 준비
+  EZ.registerSignal({
+    id: "sig-goaldraft", screen: ["perf", "home"], persona: ["member"], severity: "info", once: true,
+    build: function () { return { title: "2026 하반기 목표 초안 준비됨", summary: "상위 OKR·직무 R&R·전년 목표를 대조한 SMART 3안을 준비했습니다.", flowId: "qw2-goaldraft", badge: "suggest" }; }
+  });
+  // 평가관리 · member → 자기평가 마감 D-2
+  EZ.registerSignal({
+    id: "sig-selfeval", screen: ["appr"], persona: ["member"], severity: "deadline", once: true,
+    build: function () { return { title: "자기평가 마감 D-2", summary: "내 성과 근거 24건이 이미 수집되어 있습니다. 자기평가 초안 재료로 사용하세요.", flowId: "qw4-evidence", badge: "suggest" }; }
+  });
+
+  /* ── BOOT ── */
+  function boot() {
+    if (!window.tx) { return setTimeout(boot, 60); }
+    EZ._buildFab(); EZ._buildDock(); EZ._buildPopupLayer(); EZ._buildFullscreen(); EZ._buildPanel();
+    EZ._watchScreen(); EZ._keys();
+    EZ.ctx.persona = window.tx.persona;
+    EZ._applyPerspective();
+    EZ._renderQuickChips();
+    // greeting
+    EZ.dockSay({ kind: "agent", text: "안녕하세요, <b>elizax</b>입니다. 성과관리·평가 전 주기를 근거와 함께 도와드립니다.<br>모든 답변은 <b>기준 시점 · 계산 근거 · 감사 로그 · What-if 재계산</b>을 갖춘 검증 가능한 객체로 제시하고, 실행(발송·저장·확정)은 <b>승인 게이트</b> 뒤에서만 진행합니다." });
+    document.addEventListener("tx:persona", EZ._onPersona);
+    setTimeout(function () { EZ._scanSignals(); }, 700);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+
+})(window.EZ);
+</script>
