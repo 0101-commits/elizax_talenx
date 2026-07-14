@@ -6156,6 +6156,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none}
 </script>
 
 
+
 <!-- ═══════════════ elizax · 성과관리/평가 AI Agent (검증가능 답변 표준) ═══════════════ -->
 <style id="ez-style">
 /* ═══ elizax · scoped styles (.ez-*) — talenx 토큰 기반, 다크 지원 ═══ */
@@ -6533,6 +6534,57 @@ button{font-family:inherit;cursor:pointer;border:0;background:none}
 .ez-readonly{background:var(--soft);border-radius:var(--ez-rad-sm);padding:12px 14px;font-size:13px;color:var(--ink-2);line-height:1.55}
 .ez-ta{width:100%;border:1px solid var(--line);border-radius:var(--ez-rad-sm);padding:11px 13px;font-family:inherit;font-size:13px;color:var(--ink);line-height:1.6;background:var(--card);resize:vertical;min-height:96px}
 .ez-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);cursor:pointer}
+
+/* ═══ W1 참조: 에이전트 오케스트레이션 구조 + E2E 프로세스 맵 ═══ */
+.ez-orient{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ez-orient button{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ink-2);background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:5px 11px;cursor:pointer;font-family:inherit}
+.ez-orient button:hover{border-color:var(--ez-accent);color:var(--ez-accent-2)}
+/* architecture */
+.ez-arch{display:flex;flex-direction:column;gap:0}
+.ez-arch-layer{position:relative;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px 14px;margin-bottom:22px}
+.ez-arch-layer:last-child{margin-bottom:0}
+.ez-arch-layer::after{content:"";position:absolute;left:50%;bottom:-16px;width:2px;height:16px;background:var(--line)}
+.ez-arch-layer:last-child::after{display:none}
+.ez-arch-lh{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.ez-arch-no{font-family:var(--mono,monospace);font-size:11px;font-weight:800;color:#fff;background:var(--ink-3);border-radius:6px;padding:2px 8px}
+.ez-arch-layer[data-l="01"] .ez-arch-no{background:var(--ez-accent)}
+.ez-arch-layer[data-l="02"] .ez-arch-no{background:var(--ez-graph)}
+.ez-arch-layer[data-l="03"] .ez-arch-no{background:var(--ez-warn)}
+.ez-arch-layer[data-l="04"] .ez-arch-no{background:var(--ez-good)}
+.ez-arch-tt{font-size:14px;font-weight:800;color:var(--ink)}
+.ez-arch-desc{font-size:11.5px;color:var(--ink-3);margin-left:auto;text-align:right;max-width:50%}
+.ez-arch-nodes{display:flex;flex-wrap:wrap;gap:8px}
+.ez-arch-node{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink-2);background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:7px 11px;transition:all .2s}
+.ez-arch-node .d{width:7px;height:7px;border-radius:50%;background:var(--ink-4)}
+.ez-arch-node.on{background:var(--ez-accent-soft);border-color:var(--ez-accent);color:var(--ez-accent-2)}
+.ez-arch-node.on .d{background:var(--ez-accent);animation:ez-pulse 1s infinite}
+.ez-arch-node.infra{background:var(--dark);color:#fff;border-color:var(--dark)}
+.ez-arch-node.infra .d{background:#fff}
+.ez-arch-q{background:var(--ez-accent-soft);color:var(--ez-accent-2);border-radius:12px 12px 12px 4px;padding:9px 13px;font-size:13px;font-weight:600;display:inline-block}
+.ez-arch-persona{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:800}
+.ez-arch-persona .pc{width:26px;height:26px;border-radius:50%;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:800}
+/* e2e map */
+.ez-e2e{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.ez-e2e-stage{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden;transition:box-shadow .2s,border-color .2s}
+.ez-e2e-stage.on{border-color:var(--ez-accent);box-shadow:0 0 0 2px var(--ez-accent-soft)}
+.ez-e2e-sh{display:flex;align-items:center;gap:7px;padding:11px 13px;background:var(--soft);font-size:13.5px;font-weight:800;color:var(--ink);border-bottom:1px solid var(--line)}
+.ez-e2e-sh .n{font-family:var(--mono,monospace);font-size:11px;color:var(--ez-accent-2);font-weight:800}
+.ez-e2e-stage.on .ez-e2e-sh{background:var(--ez-accent-soft);color:var(--ez-accent-2)}
+.ez-e2e-body{padding:11px 13px;display:flex;flex-direction:column;gap:7px}
+.ez-e2e-act{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:var(--ink-2);line-height:1.45}
+.ez-e2e-act .lane{flex:none;width:16px;height:16px;border-radius:5px;display:grid;place-items:center;font-size:9px;font-weight:800;color:#fff;margin-top:1px}
+.ez-e2e-act .lane.m{background:var(--ez-accent)}
+.ez-e2e-act .lane.a{background:var(--ez-good)}
+.ez-e2e-act .ox{margin-left:auto;flex:none;font-size:10px;font-weight:800;color:var(--ez-warn);background:var(--ez-appr-soft);border-radius:5px;padding:1px 6px}
+.ez-e2e-pillar{margin-top:4px;padding:8px 10px;background:var(--soft);border-radius:8px;font-size:11px;color:var(--ink-3);line-height:1.5}
+.ez-e2e-pillar b{color:var(--ink-2);display:block;margin-bottom:3px}
+.ez-e2e-flows{display:flex;flex-wrap:wrap;gap:5px;padding:0 13px 12px}
+.ez-e2e-flows button{font-size:11px;font-weight:700;color:var(--ez-accent-2);background:var(--ez-accent-soft);border:0;border-radius:14px;padding:5px 10px;cursor:pointer;font-family:inherit}
+.ez-e2e-flows button:hover{background:var(--ez-accent);color:#fff}
+.ez-e2e-legend{display:flex;gap:16px;font-size:11.5px;color:var(--ink-3);font-weight:600;margin-bottom:14px;flex-wrap:wrap}
+.ez-e2e-legend span{display:inline-flex;align-items:center;gap:6px}
+.ez-e2e-legend .sw{width:14px;height:14px;border-radius:4px}
+@media(max-width:820px){.ez-e2e{grid-template-columns:1fr 1fr}}
 </style>
 <script id="ez-boot">
 /* ═══════════════════════════════════════════════════════════════════════
@@ -7465,6 +7517,10 @@ window.EZ = window.EZ || {};
         ])
       ]),
       srcBar.el,
+      EZ.el("div.ez-orient", [
+        EZ.el("button", { attrs: { title: "5계층 AI Agent 오케스트레이션 구조 (W1)" }, on: { click: function () { EZ.start("arch-orient", {}); } } }, ["⌗ 에이전트 구조"]),
+        EZ.el("button", { attrs: { title: "성과·평가 E2E 프로세스 맵 (W1)" }, on: { click: function () { EZ.start("e2e-orient", {}); } } }, ["◈ E2E 프로세스 맵"])
+      ]),
       thread,
       EZ.el("div.ez-composer", [chips, EZ.el("div.ez-input-row", [input, send])])
     ]);
@@ -8136,6 +8192,106 @@ window.EZ = window.EZ || {};
   });
 
 })(window.EZ);
+/* ═══ elizax · W1 참조 조망 뷰 — 5계층 오케스트레이션 구조 + E2E 프로세스 맵 ═══ */
+(function (EZ) {
+  "use strict";
+  var D = EZ.data;
+
+  // flow 단축 id → E2E 단계
+  var STAGE_OF = { qw2: "goal", qw7: "goal", ex1: "goal", qw1: "check", qw3: "eval", qw4: "eval", qw5: "eval", ex2: "eval", ex3: "eval", qw6: "fb" };
+  var MANAGER_OF = { goal: "목표수립", check: "중간점검", eval: "평가", fb: "피드백" };
+  function shortId(fid) { return (fid || "").split("-")[0]; }
+  function roleAgentOf() { return { hr: "HR 담당 비서", leader: "1차 평가자 비서", member: "피평가자 비서" }[EZ.roleTag()]; }
+
+  /* ── 5계층 에이전트 오케스트레이션 구조 (W1 s9) ── */
+  EZ.registerCanvas("agent-arch", function (mount, run, ctx) {
+    var rt = EZ.roleTag(), p = (window.tx && tx.persona) || {};
+    var hlFlow = ctx.highlightFlow ? shortId(ctx.highlightFlow) : null;
+    var hlStage = hlFlow ? STAGE_OF[hlFlow] : null;
+    var engagedSub = {}; D.agents.forEach(function (a) { if (hlFlow && a.flows.indexOf(hlFlow) >= 0) engagedSub[a.name] = true; });
+    var roleAgent = roleAgentOf();
+
+    var head = EZ.el("div.ez-canvas-h", [EZ.el("h3", { text: "AI Agent 오케스트레이션 구조" }),
+      EZ.el("span.ez-flag.info", [hlFlow ? "작업 관점 강조" : (p.name || "") + " 관점"])]);
+    mount.appendChild(head);
+    var wrap = EZ.el("div.ez-arch");
+
+    function layer(no, title, desc, nodes) {
+      var nd = EZ.el("div.ez-arch-nodes", nodes);
+      return EZ.el("div.ez-arch-layer", { data: { l: no } }, [
+        EZ.el("div.ez-arch-lh", [EZ.el("span.ez-arch-no", { text: no }), EZ.el("span.ez-arch-tt", { text: title }), EZ.el("span.ez-arch-desc", { text: desc })]),
+        nd
+      ]);
+    }
+    function node(label, on, cls) { return EZ.el("div.ez-arch-node" + (on ? ".on" : "") + (cls ? "." + cls : ""), [EZ.el("span.d"), label]); }
+
+    // 00 사용자
+    wrap.appendChild(EZ.el("div.ez-arch-layer", { data: { l: "00" } }, [
+      EZ.el("div.ez-arch-lh", [EZ.el("span.ez-arch-no", { text: "00" }), EZ.el("span.ez-arch-tt", { text: "사용자" }), EZ.el("span.ez-arch-desc", { text: "System Supervisor · HR 담당자 · (피)평가자" })]),
+      EZ.el("div", { style: { display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" } }, [
+        EZ.el("span.ez-arch-persona", [EZ.el("span.pc", { style: { background: p.color || "#1F7AF0" }, text: (p.name || "e").slice(0, 1) }), (p.name || "") + " · " + (p.role || "")]),
+        EZ.el("span.ez-arch-q", { text: "무엇을 도와드릴까요? — 근거·계산·승인 게이트를 갖춘 답변으로 응답" })
+      ])
+    ]));
+    // 01 AI Agent
+    wrap.appendChild(layer("01", "AI Agent (elizax)", "최상위 Orchestrator · E2E 상태관리 · 단계별 Manager 트리거 · 승인 게이트 관리",
+      [node("elizax 오케스트레이터", true)]));
+    // 02 AI Manager
+    wrap.appendChild(layer("02", "AI Manager", "프로세스별 통제·품질 관리 · 수직/수평 정렬 · 변화관리/운영 지원",
+      ["목표수립", "중간점검", "평가", "피드백", "정렬/연계", "변화관리"].map(function (m) { return node(m + " Manager", hlStage && MANAGER_OF[hlStage] === m); })));
+    // 03 AI Role Agent
+    wrap.appendChild(layer("03", "AI Role Agent", "인사 주체별 대행·비서 · 사용자별 페르소나 매핑",
+      ["피평가자 비서", "HR 담당 비서", "1차 평가자 비서", "2차 평가자 비서"].map(function (r) { return node(r, r === roleAgent); })));
+    // 04 Sub-agent & Infra
+    var subs = D.agents.map(function (a) { return node(a.name + " agent", !!engagedSub[a.name]); });
+    var infra = ["Database", "규칙 엔진", "Legacy System", "Historical Log"].map(function (i) { return node(i, false, "infra"); });
+    wrap.appendChild(EZ.el("div.ez-arch-layer", { data: { l: "04" } }, [
+      EZ.el("div.ez-arch-lh", [EZ.el("span.ez-arch-no", { text: "04" }), EZ.el("span.ez-arch-tt", { text: "AI Sub-agent & Infrastructure" }), EZ.el("span.ez-arch-desc", { text: "기능 특화 Assistant·도구 + 인사 원칙/맥락/가이드라인 마스터" })]),
+      EZ.el("div.ez-arch-nodes", subs),
+      EZ.el("div.ez-arch-nodes", { style: { marginTop: "8px" } }, infra)
+    ]));
+    mount.appendChild(wrap);
+  });
+
+  /* ── E2E 프로세스 맵 (W1 s8/10/12/14/16) ── */
+  EZ.registerCanvas("e2e-map", function (mount, run, ctx) {
+    var curStage = ctx.highlightFlow ? STAGE_OF[shortId(ctx.highlightFlow)] : (EZ.roleTag() === "member" ? "goal" : "eval");
+    var STAGES = [
+      { key: "goal", n: "01", t: "목표 수립", pillar: "상위 전략 Align · 과거 데이터 반영 · 타부서 협업 · 시장 변화 대응",
+        acts: [["M", "지침 규칙 검증·안내", 1], ["M", "개인 R&R 맞춤 온보딩", 0], ["A", "개인 맥락 목표 초안", 1], ["M", "목표 정렬(이상치·피드백)", 1], ["A", "규칙 검증(가중치·연계)", 0], ["M", "목표 확정", 1]],
+        flows: ["qw2-goaldraft", "qw7-goalscan", "ex1-cascade"] },
+      { key: "check", n: "02", t: "중간 점검", pillar: "구성원 인지 전 선제 피벗 · 성과 페이스 추세 · 보완 가이드 · 시황 현실화",
+        acts: [["M", "리뷰 일정·가이드 수립", 0], ["A", "개인 맞춤 브리핑", 0], ["A", "리뷰 준비(달성도·R&R 변동)", 1], ["M", "면담 조율(쟁점 정리)", 1], ["A", "결과 정리(요약·분류)", 1], ["A", "결과 취합·보고", 0]],
+        flows: ["qw1-checkin"] },
+      { key: "eval", n: "03", t: "평가", pillar: "증거 기반 검증 · 전략적 순기여 · 정치 배제 Calibration · 인간 중심 편향 필터",
+        acts: [["M", "평가 가이드 수립", 0], ["A", "근거 취합(실적 자동)", 0], ["A", "자기평가 초안", 1], ["A", "상사 평가(근거 기반)", 1], ["M", "Calibration(조정안)", 1], ["M", "결과 확정·보고", 1]],
+        flows: ["qw4-evidence", "qw3-evaldraft", "qw5-calibration", "ex2-review-coedit", "ex3-appeal"] },
+      { key: "fb", n: "04", t: "피드백", pillar: "리더 맞춤 코칭 스크립트 · 태도 vs 역량 원인 · 개인 미래 로드맵 · 시장 가치 연계",
+        acts: [["M", "피드백 실시 안내", 0], ["A", "면담 기록 초안(민감 포함)", 1], ["M", "대면 면담(실시간 코칭)", 1], ["A", "결과 정리", 0], ["A", "결과 취합·표준화", 0], ["A", "실시율·연계율 보고", 0]],
+        flows: ["qw6-feedback"] }
+    ];
+    mount.appendChild(EZ.el("div.ez-canvas-h", [EZ.el("h3", { text: "성과·평가 E2E 프로세스 맵" }), EZ.el("span.ez-flag.info", ["AI Agent 기반 오케스트레이션"])]));
+    mount.appendChild(EZ.el("div.ez-e2e-legend", [
+      EZ.el("span", [EZ.el("span.sw", { style: { background: "var(--ez-accent)" } }), "AI Manager · 인간 주도 + AI 실시간 보조"]),
+      EZ.el("span", [EZ.el("span.sw", { style: { background: "var(--ez-good)" } }), "AI Agent · AI 실행/통보(인간 승인)"]),
+      EZ.el("span", [EZ.el("span", { style: { fontWeight: "800", color: "var(--ez-warn)" }, text: "승인" }), "사용자 승인·검토·확인 게이트"])
+    ]));
+    var grid = EZ.el("div.ez-e2e");
+    STAGES.forEach(function (s) {
+      var acts = s.acts.map(function (a) {
+        return EZ.el("div.ez-e2e-act", [EZ.el("span.lane." + (a[0] === "M" ? "m" : "a"), { text: a[0] }), EZ.el("span", { text: a[1] }), a[2] ? EZ.el("span.ox", { text: "승인" }) : null]);
+      });
+      var flowBtns = s.flows.map(function (fid) { var f = EZ.flows[fid]; return f ? EZ.el("button", { text: f.chipLabel || f.title, on: { click: function () { EZ.openFullscreen(fid, {}); } } }) : null; });
+      grid.appendChild(EZ.el("div.ez-e2e-stage" + (s.key === curStage ? ".on" : ""), [
+        EZ.el("div.ez-e2e-sh", [EZ.el("span.n", { text: s.n }), s.t]),
+        EZ.el("div.ez-e2e-body", acts.concat([EZ.el("div.ez-e2e-pillar", [EZ.el("b", { text: "Pillar · 고려사항" }), s.pillar])])),
+        EZ.el("div.ez-e2e-flows", flowBtns)
+      ]));
+    });
+    mount.appendChild(grid);
+  });
+
+})(window.EZ);
 /* ═══ elizax · 플로우 (QW1~7 + EX1~3) — 검증가능 답변 객체 ═══ */
 (function (EZ) {
   "use strict";
@@ -8624,6 +8780,66 @@ window.EZ = window.EZ || {};
     screen: ["appr"], persona: ["hr"], chip: true, chipLabel: "이의신청 검토",
     alias: ["이의신청", "이의 신청", "appeal", "재조회"],
     render: function (ctx) { EZ.renderers.canvas["appeal-panel"](EZ.openPanel(), null, ctx); }
+  });
+
+})(window.EZ);
+/* ═══ elizax · W1 참조 조망 플로우 (구조·E2E 맵) ═══ */
+(function (EZ) {
+  "use strict";
+  var D = EZ.data;
+  function ref(f) { return { logged: true, ref: D.nextAuditRef(f, "C-2026H1"), ts: D.meta.today + "T10:00:00+09:00" }; }
+  function scope() { return EZ._scopeFor(); }
+
+  EZ.registerFlow({
+    id: "arch-orient", title: "AI Agent 오케스트레이션 구조", autonomy: "suggest", form: "fullscreen", canvas: "agent-arch",
+    screen: ["home", "perf", "appr", "msf"], persona: ["hr", "leader", "member"], chip: false,
+    alias: ["구조", "아키텍처", "오케스트레이션", "계층"],
+    nodes: [{ id: "n1", label: "관점·권한 로드", kind: "query", src: "talenx", par: false, ms: 500 },
+            { id: "n2", label: "계층별 참여 에이전트 매핑", kind: "judge", par: false, ms: 600 }],
+    ground: function () { return []; },
+    object: function (ctx) {
+      var rt = EZ.roleTag();
+      var roleA = { hr: "HR 담당 비서", leader: "1차 평가자 비서", member: "피평가자 비서" }[rt];
+      return {
+        id: "rcpt-arch", title: "오케스트레이션 구조 조망", autonomy: "suggest",
+        as_of: { date: D.meta.today, cycle: "C-2026H1", cycleLabel: "2026 상반기", editable: false },
+        scope: { label: scope().label },
+        answer: "elizax는 <b>5계층 오케스트레이션</b>으로 동작합니다. 현재 관점(" + ((tx.persona && tx.persona.name) || "") + ")은 <b>" + roleA + "</b>에 매핑되며, 최상위 AI Agent가 단계별 Manager와 Sub-agent를 트리거하고 <b>승인 게이트</b>를 관리합니다.",
+        trace: [
+          { kind: "graph_path", label: "계층 흐름", path: [{ node: "00 사용자", type: "org" }, { node: "01 AI Agent", type: "goal" }, { node: "02 AI Manager", type: "goal" }, { node: "03 Role Agent", type: "skill" }, { node: "04 Sub-agent·Infra", type: "org" }] },
+          { kind: "calculation", label: "인프라 계층", value: "DB·규칙엔진·Legacy·Historical Log" }
+        ],
+        rules: ["RULE-OUTLIER"],
+        audit_ref: ref("arch"),
+        actions: [{ kind: "custom", label: "E2E 프로세스 맵 보기", onClick: function () { EZ.openFullscreen("e2e-orient", {}); } }]
+      };
+    },
+    commit: function () {}
+  });
+
+  EZ.registerFlow({
+    id: "e2e-orient", title: "성과·평가 E2E 프로세스 맵", autonomy: "suggest", form: "fullscreen", canvas: "e2e-map",
+    screen: ["home", "perf", "appr", "msf"], persona: ["hr", "leader", "member"], chip: false,
+    alias: ["프로세스 맵", "e2e", "전주기", "프로세스맵"],
+    nodes: [{ id: "n1", label: "4단계 사이클 로드", kind: "query", src: "talenx", par: false, ms: 500 },
+            { id: "n2", label: "단계별 AI Manager/Agent·승인 게이트 매핑", kind: "judge", par: false, ms: 600 }],
+    ground: function () { return []; },
+    object: function (ctx) {
+      return {
+        id: "rcpt-e2e", title: "E2E 프로세스 맵 조망", autonomy: "suggest",
+        as_of: { date: D.meta.today, cycle: "C-2026H1", cycleLabel: "2026 상반기", editable: false },
+        scope: { label: scope().label },
+        answer: "성과관리는 <b>목표수립 → 중간점검 → 평가 → 피드백</b> 4단계로 순환합니다. 각 활동은 <b>AI Manager</b>(인간 주도+AI 보조) 또는 <b>AI Agent</b>(AI 실행, 인간 승인) 레인으로 구분되며, <b>승인</b> 표시는 사용자 게이트가 필요한 지점입니다.",
+        trace: [
+          { kind: "graph_path", label: "E2E 사이클", path: [{ node: "목표수립", type: "goal" }, { node: "중간점검", type: "goal" }, { node: "평가", type: "goal" }, { node: "피드백", type: "goal" }] },
+          { kind: "calculation", label: "각 단계 하단 카드에서 관련 elizax 작업으로 진입" }
+        ],
+        rules: ["RULE-GRADE-DIST"],
+        audit_ref: ref("e2e"),
+        actions: [{ kind: "custom", label: "에이전트 구조 보기", onClick: function () { EZ.openFullscreen("arch-orient", {}); } }]
+      };
+    },
+    commit: function () {}
   });
 
 })(window.EZ);
