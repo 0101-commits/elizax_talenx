@@ -6155,6 +6155,7 @@ button{font-family:inherit;cursor:pointer;border:0;background:none}
 })();
 </script>
 
+
 <!-- ═══════════════ elizax · 성과관리/평가 AI Agent (검증가능 답변 표준) ═══════════════ -->
 <style id="ez-style">
 /* ═══ elizax · scoped styles (.ez-*) — talenx 토큰 기반, 다크 지원 ═══ */
@@ -6817,14 +6818,14 @@ window.ezLake = (function () {
   var audit = { refFormat:"AUD-{flow}-{cycle}-{seq}", seq:471 };
 
   // EX3 이의신청 (박성현, C-2026H1)
-  var appeal = { target:"m_parksh", cycle:"C-2026H1", confirmedGrade:"B", confirmedAchievement:105,
-    confirmedAt:"2026-07-01T15:00", filedAt:"2026-07-10T11:20", status:"검토 이전",
+  var appeal = { target:"m_parksh", cycle:"C-2026H1", confirmedGrade:"B", confirmedAchievement:88,
+    confirmedAt:"2026-06-20T15:00", filedAt:"2026-07-10T11:20", status:"검토 이전",
     claimText:"상반기 완료한 'Salesforce-ERP 연동 안정화(OPS-88)' 프로젝트가 실적에 반영되지 않았습니다. 반영 시 달성률이 상향되어야 한다고 판단합니다.",
     claimTags:["#프로젝트 미반영","#가중치 이의"],
-    whatIf:{ base:{achievement:105, grade:"B"}, claimed:{achievement:118, grade:"A"},
-      delta:[{label:"OPS-88 프로젝트 성과 반영", from:"105%", to:"118%", dir:"up"}],
+    whatIf:{ base:{achievement:88, grade:"B"}, claimed:{achievement:105, grade:"A"},
+      delta:[{label:"OPS-88 프로젝트 성과 반영", from:"88%", to:"105%", dir:"up"}],
       blocked:{rule:"RULE-GRADE-DIST", detail:"A 승격 시 강제배분 A 상한 25% 초과(현 26%)"} },
-    reviewDraft:"이의 신청하신 OPS-88 프로젝트 완료 사실은 Jira 기록으로 확인됩니다(2026-03-28). 다만 확정 시점(2026-06-20) 이후 반영분이 아니며, 재계산 시 달성률 118%로 A 요건에 근접하나 강제배분 A 상한(25%) 초과로 등급 상향은 불가합니다. 현 B 등급 유지를 권고하며, 하반기 목표에 해당 성과를 반영하겠습니다." };
+    reviewDraft:"이의 신청하신 OPS-88 프로젝트 완료 사실은 Jira 기록으로 확인됩니다(2026-03-28). 다만 확정 시점(2026-06-20) 이후 반영분이 아니며, 재계산 시 달성률 105%로 A 요건에 근접하나 강제배분 A 상한(25%) 초과로 등급 상향은 불가합니다. 현 B 등급 유지를 권고하며, 하반기 목표에 해당 성과를 반영하겠습니다." };
 
   var lake = { meta:meta, personas:personas, orgChart:orgChart, members:members, jobs:jobs, okr:okr,
     checkin:checkin, oneOnOne:oneOnOne, evidenceStore:evidenceStore, evidenceSummary:evidenceSummary,
@@ -7186,7 +7187,7 @@ window.EZ = window.EZ || {};
     // as-of + scope (원칙1)
     if (r.as_of || r.scope) {
       var asRow = EZ.el("div.ez-rcpt-asof");
-      if (r.as_of) asRow.appendChild(EZ.asOfChip(r.as_of, { onChange: r.onAsOf }));
+      if (r.as_of) asRow.appendChild(EZ.asOfChip(r.as_of, { onChange: r.onAsOf || (r._run && EZ.reAsOf ? function (c) { EZ.reAsOf(r._run, c); } : null) }));
       if (r.scope) asRow.appendChild(EZ.el("span.ez-rcpt-scope", { text: (r.scope.label || "") + (r.scope.count != null ? " · " + r.scope.count + "명" : "") }));
       art.appendChild(asRow);
     }
@@ -7288,6 +7289,7 @@ window.EZ = window.EZ || {};
     if (spec.verdict) wrap.appendChild(EZ.el("div.ez-delib-verdict", [EZ.icon("check", 14), " " + spec.verdict]));
     function stanceColor(s) { return s === "conflict" ? "var(--ez-bad)" : s === "consensus" || s === "support" ? "var(--ez-good)" : "var(--ez-accent-2)"; }
     function drawEdges() {
+      if (!wrap.isConnected) { window.removeEventListener("resize", drawEdges); return; }
       var wr = wrap.getBoundingClientRect();
       svg.setAttribute("viewBox", "0 0 " + wr.width + " " + wr.height);
       var or = orch.getBoundingClientRect();
@@ -7578,6 +7580,9 @@ window.EZ = window.EZ || {};
   EZ.openFullscreen = function (flowId, ctx) {
     var f = EZ.flows[flowId]; if (!f) return;
     ctx = EZ._ctx(ctx);
+    if (f.cycle) ctx.cycle = f.cycle;
+    if (f.orgLabel && !ctx.orgLabel) ctx.orgLabel = f.orgLabel;
+    if (EZ._curFsRun && !EZ._curFsRun._committed) EZ._curFsRun.abort();
     EZ._fsTtl.textContent = f.title; EZ._fsCyc.textContent = (ctx.cycLabel || EZ.data.cycleLabel(ctx.cycle || EZ.data.meta.activeEvalCycle)) + (ctx.orgLabel ? " · " + ctx.orgLabel : "");
     EZ._fsCanvas.innerHTML = ""; EZ._fsRail.innerHTML = "";
     EZ._fs.classList.add("is-open"); EZ._fs.setAttribute("aria-hidden", "false"); EZ._fsScrim.classList.add("is-open");
@@ -7585,7 +7590,7 @@ window.EZ = window.EZ || {};
     if (f.canvas && EZ.renderers.canvas[f.canvas]) EZ.renderers.canvas[f.canvas](EZ._fsCanvas, run, ctx);
     EZ._curFsRun = run; return run;
   };
-  EZ.closeFullscreen = function () { EZ._fs.classList.remove("is-open"); EZ._fs.setAttribute("aria-hidden", "true"); EZ._fsScrim.classList.remove("is-open"); };
+  EZ.closeFullscreen = function () { if (EZ._curFsRun && !EZ._curFsRun._committed) { EZ._curFsRun.abort(); EZ._curFsRun = null; } EZ._fs.classList.remove("is-open"); EZ._fs.setAttribute("aria-hidden", "true"); EZ._fsScrim.classList.remove("is-open"); };
   EZ._fullscreenFromDock = function () { EZ.closeDock(); if (EZ._curFsRun && EZ._curFsRun.flow) EZ.openFullscreen(EZ._curFsRun.flow.id, EZ._curFsRun.ctx); else EZ.toast("전체화면으로 열 작업을 먼저 선택하세요"); };
   EZ._dockFromFullscreen = function () { EZ.closeFullscreen(); EZ.openDock(); EZ.dockSay({ kind: "ctx", text: "전체화면 작업을 도킹으로 이어받았습니다" }); };
 
@@ -7727,6 +7732,7 @@ window.EZ = window.EZ || {};
       EZ.audit("S6", run); run._emit("phase", "S6");
       // S7 gate
       run.phase = "S7"; EZ.audit("S7", run); run._emit("phase", "S7");
+      EZ.jobs.delete(run); EZ._syncJobs(); // 연산 완료 → 승인 대기(백그라운드 작업 아님)
     });
     }, 50);
 
@@ -7786,7 +7792,7 @@ window.EZ = window.EZ || {};
     if (EZ._srcBar) EZ._srcBar.setJobs(n);
   };
 
-  EZ.reAsOf = function (run, asOf) { var f = run.flow, ctx = Object.assign({}, run.ctx, { asOf: asOf.cycle || asOf, cycle: asOf.cycle, cycLabel: asOf.label }); run.abort(); return EZ.start(f.id, ctx); };
+  EZ.reAsOf = function (run, asOf) { if (!run || !run.flow) return; var f = run.flow, ctx = Object.assign({}, run.ctx, { asOf: asOf.cycle || asOf, cycle: asOf.cycle, cycLabel: asOf.label, _reAsOf: true }); EZ.toast((asOf.label || asOf.cycle || "선택 시점") + " 기준으로 재조회합니다"); run.abort(); return EZ.start(f.id, ctx); };
 
   /* ── audit ── */
   EZ.audit = function (phase, x) {
@@ -8065,7 +8071,7 @@ window.EZ = window.EZ || {};
     var asofSnaps = {
       "결과 확정 시점": { date: "2026-06-20", ach: a.confirmedAchievement + "%", grade: a.confirmedGrade, note: "확정 시점 실적 (OPS-88 미반영)" },
       "이의신청 시점": { date: "2026-07-10", ach: a.confirmedAchievement + "%", grade: a.confirmedGrade, note: "신청일 기준 · 확정 데이터 동일" },
-      "현재": { date: D.meta.today, ach: "118%(주장 반영 시)", grade: "A?", note: "재계산 · 규정 게이트 확인 필요" }
+      "현재": { date: D.meta.today, ach: "105%(주장 반영 시)", grade: "A?", note: "재계산 · 규정 게이트 확인 필요" }
     };
     var achEl = EZ.el("b", { text: asofSnaps["결과 확정 시점"].ach });
     var gradeEl = EZ.el("b", { text: asofSnaps["결과 확정 시점"].grade });
@@ -8081,8 +8087,8 @@ window.EZ = window.EZ || {};
       scope: { label: "평가 2026 H1 · 미주팀 · 대상자 1" },
       answer: "주장 근거 <b>일부 확인</b>(OPS-88 완료, Jira 기록). 재계산 시 <b>A 가능</b>하나 강제배분 A 상한 초과. <b>등급 B 유지</b>를 권고합니다.",
       trace: [
-        { kind: "calculation", label: "확정 달성률 (가중 합산)", value: "105% → B" },
-        { kind: "calculation", label: "What-if: OPS-88 반영", expr: "105% + 13%p", value: "118% → A?", dir: "up", refs: ["JIRA-OPS-88"] },
+        { kind: "calculation", label: "확정 달성률 (가중 합산)", value: "88% → B" },
+        { kind: "calculation", label: "What-if: OPS-88 반영", expr: "88% + 17%p", value: "105% → A?", dir: "up", refs: ["JIRA-OPS-88"] },
         { kind: "calculation", label: "강제배분 대조", expr: "A 26% > 상한 25%", value: "승격 불가", dir: "down", chips: ["RULE-GRADE-DIST"] }
       ],
       rules: ["RULE-GRADE-DIST", "RULE-GRADE-ADJ-RANGE"],
@@ -8091,8 +8097,8 @@ window.EZ = window.EZ || {};
       what_if: {
         params: [{ id: "reflect", label: "주장(OPS-88) 반영", type: "select", value: "off", options: [{ v: "off", t: "미반영(확정)" }, { v: "on", t: "반영 시" }] }],
         recompute: function (p) {
-          if (p.reflect === "on") return { answer: "재계산: 달성률 118% → <b>A 요건</b> 근접", deltas: [{ label: "달성률", from: "105%", to: "118%", dir: "up" }, { label: "등급", from: "B", to: "A?", dir: "up" }], blocked: "A 승격 시 강제배분 A 상한 25% 초과(현 26%) — 자동 승격 불가" };
-          return { answer: "확정 기준: 달성률 105% · 등급 B", deltas: [] };
+          if (p.reflect === "on") return { answer: "재계산: 달성률 105% → <b>A 요건</b> 근접", deltas: [{ label: "달성률", from: "88%", to: "105%", dir: "up" }, { label: "등급", from: "B", to: "A?", dir: "up" }], blocked: "A 승격 시 강제배분 A 상한 25% 초과(현 26%) — 자동 승격 불가" };
+          return { answer: "확정 기준: 달성률 88% · 등급 B", deltas: [] };
         }
       },
       audit_ref: { logged: true, ref: D.nextAuditRef("ex3", "C-2026H1"), ts: D.meta.today + "T11:40:00+09:00" }
@@ -8103,7 +8109,7 @@ window.EZ = window.EZ || {};
     var statusSel = EZ.el("select", { style: { border: "1px solid var(--line)", borderRadius: "7px", padding: "6px 9px", fontFamily: "inherit", fontSize: "12.5px", background: "var(--card)", color: "var(--ink)" } }, ["검토 이전", "검토 중", "검토 완료"].map(function (s) { return EZ.el("option", { text: s, selected: s === "검토 중" }); }));
 
     var gate = EZ.approvalGate([
-      { kind: "approve", label: "검토 완료 저장", onClick: function () { if (statusSel.value === "검토 완료" && publicChk.checked) { if (window.tx && tx.confirm) tx.confirm("검토 의견을 대상자에게 공개합니다. 진행할까요?", function () { finish(); }, { ok: "공개 저장" }); else finish(); } else finish(); function finish() { EZ.toast("검토 완료 저장 · 진행경과: " + statusSel.value + (publicChk.checked ? " · 대상자 공개" : "")); gate.done("검토 완료 저장 · 감사 기록됨"); } } },
+      { kind: "approve", label: "검토 완료 저장", onClick: function () { if (statusSel.value === "검토 완료" && publicChk.checked) { if (window.tx && tx.confirm) tx.confirm("검토 의견을 대상자에게 공개합니다. 진행할까요?", function () { finish(); }, { ok: "공개 저장" }); else finish(); } else finish(); function finish() { EZ.audit("S8", { flow: { id: "ex3-appeal" }, decision: "review_complete" + (publicChk.checked ? "+public" : "") }); EZ.toast("검토 완료 저장 · 진행경과: " + statusSel.value + (publicChk.checked ? " · 대상자 공개" : "")); gate.done("검토 완료 저장 · 감사 기록됨"); } } },
       { kind: "custom", label: "검토 의견 초안 반영", onClick: function () { draftTa.value = a.reviewDraft; draftTa.style.background = "var(--ez-auto-soft)"; setTimeout(function () { draftTa.style.background = "var(--card)"; }, 600); } },
       { kind: "hold", label: "보류" }
     ], {});
@@ -8163,7 +8169,7 @@ window.EZ = window.EZ || {};
         as_of: asOf("C-2026H1"), scope: { label: scope(ctx).label, count: 5, note: "미주팀" },
         answer: "이번 주 체크인 대상 <b>" + (s.체크인대상 + s.부진지연) + "명</b> (부진·지연 " + s.부진지연 + " · 무변동/미실시 " + s.체크인대상 + "), 정상 " + s.정상 + "명. 지원 톤의 <b>초안 메시지 3건</b>을 준비했습니다.",
         trace: [
-          { kind: "calculation", label: "KR 로그 스캔 → 7일+ 무변동", value: "2명", chips: ["RULE-CHECKIN"], refs: ["TX-KR-US2-04"] },
+          { kind: "calculation", label: "KR 로그 스캔 → 7일+ 무변동", value: "1명", chips: ["RULE-CHECKIN"], refs: ["TX-KR-US2-04"] },
           { kind: "calculation", label: "ERP 달성률 vs 잔여기간 → 진척 지연", expr: "달성 42% < 50% & 잔여 20% < 30%", value: "1명", dir: "down", chips: ["RULE-PACE"], refs: ["ERP-SAL-2605"] },
           { kind: "calculation", label: "1:1 최근 이력 → 14일+ 미실시", value: "2명", chips: ["RULE-ONE21"], refs: ["TX-121-0489"] }
         ],
@@ -8555,7 +8561,7 @@ window.EZ = window.EZ || {};
         evidence: this.ground(),
         excluded: [{ label: "완료/마감 목표", reason: "진행중 아님" }, { label: "타 본부 47건", reason: "권한 밖 조회 제외" }],
         what_if: {
-          params: [{ id: "link", label: "G6를 KR-US-4에 연결", type: "toggle", value: "off", type2: "select", options: [{ v: "off", t: "미연결(현재)" }, { v: "on", t: "연결 시" }] }],
+          params: [{ id: "link", label: "G6를 KR-US-4에 연결", type: "select", value: "off", options: [{ v: "off", t: "미연결(현재)" }, { v: "on", t: "연결 시" }] }],
           recompute: function (p) { return p.link === "on" ? { answer: "연결 시 커버리지 <b style='color:var(--ez-good)'>93%</b>", deltas: [{ label: "커버리지", from: "88%", to: "93%", dir: "up" }, { label: "미연계", from: "1건", to: "0건", dir: "up" }] } : { answer: "현재 커버리지 88% · 미연계 1건", deltas: [] }; }
         },
         audit_ref: auditRef("ex1"),
