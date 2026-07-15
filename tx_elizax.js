@@ -56,12 +56,30 @@
     { key: "executive", label: "경영진" }
   ];
   function needsSubject(p) { return p === "manager" || p === "executive"; }
+  /* elizax 관점은 현재 역할(TXRoles)을 따라간다: 조직원→본인 · 조직장→팀장 · HR→HR · 경영진→경영진 */
+  function rolePerspective() {
+    try {
+      var r = window.TXRoles && window.TXRoles.current && window.TXRoles.current();
+      if (r && r.persp) {
+        for (var i = 0; i < PERSPECTIVES.length; i++) { if (PERSPECTIVES[i].key === r.persp) return r.persp; }
+      }
+    } catch (e) { /* ignore */ }
+    return "subject";
+  }
+  /* 조직장/경영진 관점은 대상 직원이 필요 → 역할에 맞는 기본 대상 자동 선택(직속 부하 우선). */
+  function defaultSubject() {
+    if (!needsSubject(rolePerspective())) return null;
+    var reports = EMPLOYEES.filter(function (e) { return e.manager_id === CURRENT.emp_id; });
+    var pick = reports[0] ||
+      EMPLOYEES.filter(function (e) { return e.org_id === CURRENT.org_id && e.emp_id !== CURRENT.emp_id; })[0];
+    return pick ? { emp_id: pick.emp_id, name: pick.name, jobTitle: pick.jobTitle } : null;
+  }
 
   /* ---------------- State ---------------- */
   var state = {
     open: false,
-    perspective: "subject",
-    subject: null,        // {emp_id,name,jobTitle} chosen for manager/executive
+    perspective: rolePerspective(),
+    subject: defaultSubject(),   // {emp_id,name,jobTitle} chosen for manager/executive
     attachContext: true,
     streaming: false,
     messages: []          // {role:'user'|'ai'|'err', text, recos?, note?}
@@ -258,6 +276,9 @@
     el.root.classList.toggle("ezx-need-subject", need);
     if (need && !state.subject) {
       el.pickerInput.placeholder = "대상 직원 검색 (이름)";
+    }
+    if (need && state.subject && el.pickerInput && !el.pickerInput.value) {
+      el.pickerInput.value = state.subject.name;   // 자동 선택된 기본 대상 표시
     }
     updateScreenChip();
   }
