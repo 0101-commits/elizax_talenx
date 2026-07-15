@@ -128,6 +128,7 @@
 
   function receiptHTML() {
     var m = receiptModel();
+    var dec = getDecision();
     var role = m.role.key;
     var name = m.cu.name || "사용자";
     var grade = m.ev ? m.ev.grade : "B+";
@@ -222,12 +223,56 @@
           '<button class="txr-btn primary" data-wf data-wf-on="재계산 접기" data-wf-off="' + esc(wfTitle) + '">' + esc(wfTitle) + "</button>" +
         "</div>" +
         '<div class="txr-whatif" data-wfpanel><h5>' + esc(wfTitle) + "</h5>" + wfHtml + '<p class="txr-wf-note">' + esc(wfNote) + "</p></div>" +
-        '<div class="txr-gate"><span class="lab">결정 게이트 · 사람이 확정</span>' +
-          '<button class="txr-btn primary" data-gate="승인">승인</button>' +
-          '<button class="txr-btn" data-gate="수정">수정</button>' +
-          '<button class="txr-btn" data-gate="보류">보류</button>' +
+        '<div class="txr-gate"' + (dec ? ' data-decided="1"' : "") + '><span class="lab">결정 게이트 · 사람이 확정</span>' +
+          '<button class="txr-btn primary" data-gate="승인"' + (dec ? " disabled" : "") + (dec && dec.act === "승인" ? ' data-chosen="1"' : "") + ">승인</button>" +
+          '<button class="txr-btn" data-gate="수정"' + (dec ? " disabled" : "") + (dec && dec.act === "수정" ? ' data-chosen="1"' : "") + ">수정</button>" +
+          '<button class="txr-btn" data-gate="보류"' + (dec ? " disabled" : "") + (dec && dec.act === "보류" ? ' data-chosen="1"' : "") + ">보류</button>" +
+          (dec ? '<button class="txr-btn ghost" data-gate-reset>결정 취소</button>' : "") +
         "</div>" +
+        (dec ? decisionStampHTML(dec) : "") +
       "</div>";
+  }
+
+  /* ---------- gate decision state (역할별 · 세션 지속) ---------- */
+  function gateKey() { return "txr_gate_" + savedKey(); }
+  function getDecision() {
+    try { var v = sessionStorage.getItem(gateKey()); return v ? JSON.parse(v) : null; }
+    catch (e) { return null; }
+  }
+  function saveDecision(d) {
+    try {
+      if (d) sessionStorage.setItem(gateKey(), JSON.stringify(d));
+      else sessionStorage.removeItem(gateKey());
+    } catch (e) { /* ignore */ }
+  }
+  function auditId(act) {
+    var base = savedKey() + act;
+    var hsum = 0;
+    for (var i = 0; i < base.length; i++) hsum = (hsum * 31 + base.charCodeAt(i)) % 100000;
+    return "GA-2026-" + String(10000 + hsum).slice(0, 5);
+  }
+  function decisionStampHTML(d) {
+    var kindCls = d.act === "승인" ? "ok" : d.act === "보류" ? "hold" : "edit";
+    return '<div class="txr-decision ' + kindCls + '">' +
+      '<span class="ic">' + (d.act === "승인" ? "✓" : d.act === "보류" ? "⏸" : "✎") + "</span>" +
+      "<div><b>결정 · " + esc(d.act) + "</b>" +
+      (d.note ? '<p class="note">' + esc(d.note) + "</p>" : "") +
+      '<p class="meta">' + esc(d.at) + " · 감사 로그 " + esc(d.audit) + " 기록됨 · 결정자 " + esc(d.by) + "</p></div></div>";
+  }
+  function nowLabel() {
+    var t = new Date();
+    function z(n) { return (n < 10 ? "0" : "") + n; }
+    return t.getFullYear() + "-" + z(t.getMonth() + 1) + "-" + z(t.getDate()) + " " + z(t.getHours()) + ":" + z(t.getMinutes());
+  }
+  function applyDecision(act, note) {
+    var cu = (D().meta && D().meta.currentUser) || {};
+    saveDecision({ act: act, note: note || "", at: nowLabel(), audit: auditId(act), by: cu.name || "-" });
+    rerenderReceipt();
+    toast(act + " 처리 완료 — 감사 로그에 기록되었습니다.", act === "승인" ? "ok" : "");
+  }
+  function rerenderReceipt() {
+    var rc = document.querySelector("#s-perf .txr-receipt");
+    if (rc) { rc.innerHTML = receiptHTML(); }
   }
 
   function bindReceipt(node) {
@@ -250,8 +295,38 @@
         wf.textContent = on ? wf.getAttribute("data-wf-on") : wf.getAttribute("data-wf-off");
         return;
       }
+      var gr = t.closest("[data-gate-reset]");
+      if (gr) {
+        saveDecision(null);
+        rerenderReceipt();
+        toast("결정을 취소했습니다. 취소 이력도 감사 로그에 남습니다.");
+        return;
+      }
       var g = t.closest("[data-gate]");
-      if (g) { toast(g.getAttribute("data-gate") + " 처리했습니다.", g.getAttribute("data-gate") === "승인" ? "ok" : ""); return; }
+      if (g && !g.disabled) {
+        var act = g.getAttribute("data-gate");
+        if (act === "승인") { applyDecision("승인"); return; }
+        if (window.TX && TX.modal) {
+          var isEdit = act === "수정";
+          var mo = TX.modal({
+            title: isEdit ? "수정 의견 입력" : "보류 사유 입력",
+            body: '<p style="font-size:12.5px;color:#667085;margin:0 0 8px">' +
+              (isEdit ? "AI 초안에서 고칠 내용을 지시하세요. 변경 근거가 기록됩니다."
+                      : "보류 사유를 남기면 다음 사이클 심의에서 우선 재검토됩니다.") + "</p>" +
+              '<textarea data-gate-note style="width:100%;min-height:84px;border:1px solid #D0D5DD;border-radius:8px;padding:9px;font:inherit;font-size:13px" placeholder="' +
+              (isEdit ? "예) 상승폭 설명 근거에 3분기 리팩토링 기여를 반영해줘" : "예) ERP 4분기 마감 실적 반영 후 재심의") + '"></textarea>',
+            actions: [
+              { label: "취소", onClick: function () { mo.close(); } },
+              { label: isEdit ? "수정 반영" : "보류 확정", kind: "primary", onClick: function () {
+                  var ta2 = mo.box.querySelector("[data-gate-note]");
+                  applyDecision(act, ta2 ? ta2.value.trim() : "");
+                  mo.close();
+                } }
+            ]
+          });
+        } else { applyDecision(act); }
+        return;
+      }
     });
   }
 

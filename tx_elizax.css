@@ -73,6 +73,26 @@
 .ezx-persp button.on{ background:var(--card); color:var(--blue-2); box-shadow:0 1px 3px rgba(0,0,0,.10); }
 :root[data-theme="dark"] .ezx-persp button.on{ box-shadow:0 1px 3px rgba(0,0,0,.5); }
 
+/* 관점 자동 연동 칩 (수동 탭 대체) */
+.ezx-persp-auto{ align-items:center; gap:8px; padding:6px 9px; }
+.ezx-persp-chip{ display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:800; color:var(--blue-2); background:var(--card); border-radius:7px; padding:4px 9px; box-shadow:0 1px 3px rgba(0,0,0,.08); white-space:nowrap; }
+.ezx-persp-chip .dot{ width:7px; height:7px; border-radius:50%; background:var(--blue); animation:ezxPulse 2.4s infinite; }
+@keyframes ezxPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+.ezx-persp-note{ font-size:10.5px; color:var(--ink-3); line-height:1.35; }
+
+/* AI Agent 특화 UI 바로가기 (랜딩) */
+.ezx-agent-cta{ display:flex; flex-direction:column; gap:8px; margin-top:16px; }
+.ezx-agent-btn{
+  display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left;
+  border:1px solid var(--line); background:var(--card); color:var(--ink);
+  font-size:13px; padding:11px 14px; border-radius:12px; transition:all .13s; cursor:pointer;
+}
+.ezx-agent-btn small{ font-size:11px; color:var(--ink-3); font-weight:500; }
+.ezx-agent-btn:hover{ border-color:var(--blue); background:var(--blue-soft); }
+.ezx-agent-btn.primary{ border-color:var(--blue); background:var(--blue-soft); }
+.ezx-agent-btn.primary b{ color:var(--blue-2); }
+.ezx-agent-off{ margin-top:9px; font-size:10.5px; color:#B45309; background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.35); border-radius:8px; padding:6px 9px; }
+
 /* employee picker (manager/executive) */
 .ezx-picker{ position:relative; margin-top:9px; display:none; }
 .ezx-root.ezx-need-subject .ezx-picker{ display:block; }

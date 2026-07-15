@@ -12,6 +12,7 @@
    7  스크럼보드: render the 4 standard scrum questions w/ colored left bars
    8  rename 스크럼보드A → 주간업무보고, drop the "ㅁㄴㅇ" placeholder tab
    9  scrum author → 이름(소속팀) via nameTeam, realistic answers, recent 2026-06 date
+   10 board card body click → 보드 상세 drawer (진행 요약·업무 목록·멤버·스크럼보드 이동)
 */
 (function () {
   'use strict';
@@ -95,6 +96,122 @@
       + '    </div>'
       + '  </div>'
       + '</div>';
+  }
+
+  /* ---------- 10: board detail drawer (deterministic mock — no Math.random) ---------- */
+  function hashBid(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  }
+
+  var DESC_POOL = [
+    '팀 업무 진행 상황과 일정을 한곳에서 관리하는 보드입니다.',
+    '협업 과제와 담당자별 진행 현황을 추적하는 보드입니다.',
+    '주요 안건과 마감 일정을 공유하는 협업 보드입니다.',
+    '이슈 대응과 후속 조치를 기록·관리하는 보드입니다.'
+  ];
+  var TASK_POOL = [
+    '요구사항 정의서 검토', '주간 진행현황 정리', '고객 미팅 후속 조치', '리스크 항목 점검',
+    'UI 시안 피드백 반영', '테스트 시나리오 작성', '결과 보고서 초안 작성', '일정 재조정 협의',
+    '데이터 정합성 확인', '운영 이관 체크리스트 점검'
+  ];
+  var TASK_ST = [
+    { label: '할 일',   fg: 'var(--ink-2)', bg: 'rgba(16,24,40,.06)' },
+    { label: '진행 중', fg: 'var(--blue)',  bg: 'rgba(31,122,240,.10)' },
+    { label: '완료',    fg: 'var(--green)', bg: 'rgba(22,163,74,.10)' }
+  ];
+
+  function boardTasks(b) {
+    var h = hashBid(b.id);
+    var n = 5 + (h % 3); // 5~7건
+    var emps = (F.D && F.D.employees) || [];
+    var tasks = [];
+    for (var i = 0; i < n; i++) {
+      var owner = b.members.length ? F.emp(b.members[(h + i) % b.members.length]) : null;
+      if (!owner && emps.length) owner = emps[(h + i * 13) % emps.length];
+      tasks.push({
+        name: TASK_POOL[(h + i * 3) % TASK_POOL.length],
+        st: TASK_ST[(h + i * 5) % 3],
+        owner: owner,
+        due: '2026-07-' + ('0' + (10 + (((h >> 3) + i * 7) % 21))).slice(-2)
+      });
+    }
+    return tasks;
+  }
+
+  function taskRow(t) {
+    var who = t.owner
+      ? '<span style="display:inline-flex;align-items:center;gap:6px;flex:none">' + F.avatar(t.owner.name, 22)
+        + '<span style="font-size:12px;color:var(--ink-2)">' + esc(t.owner.name) + '</span></span>'
+      : '<span style="font-size:12px;color:var(--ink-4)">미지정</span>';
+    return ''
+      + '<div style="display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)">'
+      + '  <span style="flex:none;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:' + t.st.bg + ';color:' + t.st.fg + '">' + t.st.label + '</span>'
+      + '  <span style="flex:1;min-width:0;font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.name) + '</span>'
+      +    who
+      + '  <span style="flex:none;font-size:12px;color:var(--ink-3)">' + t.due + '</span>'
+      + '</div>';
+  }
+
+  function openBoardDetail(bid) {
+    var b = boardById(bid); if (!b) return;
+    if (!TX.drawer) { TX.toast('보드 상세를 불러왔습니다.'); return; }
+    var h = hashBid(bid);
+    var tasks = boardTasks(b);
+    var cnt = { '할 일': 0, '진행 중': 0, '완료': 0 };
+    tasks.forEach(function (t) { cnt[t.st.label]++; });
+
+    var stat = function (label, n, color) {
+      return '<div style="flex:1;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 0;text-align:center">'
+        + '<div style="font-size:20px;font-weight:800;color:' + color + '">' + n + '</div>'
+        + '<div style="font-size:12px;color:var(--ink-3);margin-top:2px">' + label + '</div></div>';
+    };
+
+    var memberAvas = b.members.map(function (id) {
+      var e = F.emp(id);
+      return e ? F.avatar(e.name, 30) : '';
+    }).join('');
+    var memberNames = b.members.map(function (id) {
+      var e = F.emp(id);
+      return e ? e.name : '';
+    }).filter(Boolean).join(', ');
+
+    var html = ''
+      + '<div style="padding:2px 2px 8px">'
+      + '  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+      +     (b.locked ? LOCK_SVG : '')
+      + '    <span style="font-size:16px;font-weight:800;color:var(--ink)">' + esc(b.name) + '</span>'
+      + '  </div>'
+      + '  <div style="font-size:13px;color:var(--ink-2);margin-bottom:16px">' + DESC_POOL[h % DESC_POOL.length] + '</div>'
+
+      + '  <div style="font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:8px">진행 상태 요약</div>'
+      + '  <div style="display:flex;gap:10px;margin-bottom:18px">'
+      +      stat('할 일', cnt['할 일'], 'var(--ink-2)')
+      +      stat('진행 중', cnt['진행 중'], 'var(--blue)')
+      +      stat('완료', cnt['완료'], 'var(--green)')
+      + '  </div>'
+
+      + '  <div style="font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:2px">업무 목록 · ' + tasks.length + '건</div>'
+      +    tasks.map(taskRow).join('')
+
+      + '  <div style="font-size:12px;font-weight:700;color:var(--ink-3);margin:16px 0 8px">멤버 · ' + b.members.length + '명</div>'
+      + '  <div class="txf-stack" style="display:flex;align-items:center">' + memberAvas
+      + '    <span style="font-size:12px;color:var(--ink-2);margin-left:10px">' + esc(memberNames) + '</span>'
+      + '  </div>'
+
+      + '  <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--line)">'
+      + '    <button class="txf-bd-scrum" style="width:100%;background:var(--blue);color:#fff;font-size:13px;font-weight:700;padding:10px 0;border-radius:8px;cursor:pointer;border:none">스크럼보드 열기</button>'
+      + '  </div>'
+      + '</div>';
+
+    var dr = TX.drawer({ title: esc(b.name), subtitle: '업무보드 상세', body: html, width: '560px' });
+    var btn = dr && dr.body && dr.body.querySelector('.txf-bd-scrum');
+    if (btn) btn.addEventListener('click', function () {
+      var link = document.querySelector('#s-work .subnav a[data-p="1"]');
+      if (link) { dr.close(); link.click(); TX.toast('스크럼보드로 이동했습니다.'); }
+      else TX.toast('스크럼보드 화면을 준비 중입니다.');
+    });
   }
 
   function paintBoards(sec) {
@@ -267,6 +384,14 @@
         headerMenu(keb); // header card ⋮ (업무보드)
         return;
       }
+
+      // 10: card body → board detail drawer (star/kebab/buttons already returned above)
+      var card = t.closest && t.closest('.txf-board');
+      if (card && !(t.closest('button'))) {
+        ev.preventDefault(); ev.stopPropagation();
+        openBoardDetail(card.getAttribute('data-bid'));
+        return;
+      }
     }, false);
 
     // re-apply after subnav (업무보드/스크럼보드) switches — DOM persists but this is idempotent
@@ -285,7 +410,7 @@
       + '#s-work .txf-stack .txf-ava{box-shadow:0 0 0 2px var(--card)}'
       + '#s-work .txf-stack .txf-ava + .txf-ava{margin-left:-10px}'
       + '#s-work .txf-stack .txf-more{display:inline-flex;align-items:center;margin-left:6px;font-size:12px;font-weight:700;color:var(--ink-3)}'
-      + '#s-work .txf-board{transition:box-shadow .15s ease}'
+      + '#s-work .txf-board{transition:box-shadow .15s ease;cursor:pointer}'
       + '#s-work .txf-board:hover{box-shadow:0 2px 10px rgba(16,24,40,.08)}'
       + '#s-work .txf-star:hover{color:var(--gold)!important}'
       + '#s-work .txf-cardkebab,#s-work .txf-sckebab,#s-work .txf-postkebab{cursor:pointer}';

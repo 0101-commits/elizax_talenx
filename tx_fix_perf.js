@@ -181,7 +181,42 @@
       '#s-perf .txf-md .nt{font-size:13.5px;color:var(--ink-2);line-height:1.6;background:var(--soft);border-radius:8px;padding:14px 16px}',
       '#s-perf .txf-md .ai{display:flex;gap:9px;align-items:center;padding:8px 0;font-size:13.5px;color:var(--ink-2)}',
       '#s-perf .txf-md .ai .bx{width:16px;height:16px;border:1.5px solid var(--line);border-radius:4px;flex:none}',
-      '#s-perf .mt-main.txf-open{align-items:flex-start;justify-content:flex-start;color:var(--ink);padding:26px 30px}'
+      '#s-perf .mt-main.txf-open{align-items:flex-start;justify-content:flex-start;color:var(--ink);padding:26px 30px}',
+      /* --- fix 13~16: clickable goal rows · 목표 상세 · 타임라인 · 카드 설정 --- */
+      '#s-perf .grow[data-oid]{cursor:pointer}',
+      '#s-perf .grow[data-oid]:hover{background:var(--soft)}',
+      '#s-perf .fb-card{cursor:pointer}',
+      '#s-perf .mgx{width:26px;flex:none;text-align:center;color:var(--ink-4);cursor:pointer;font-size:13px;user-select:none}',
+      '#s-perf .mgx:hover{color:var(--ink-2)}',
+      '#s-perf .txf-gd .gd-title{font-size:19px;font-weight:800;margin:0 0 12px;line-height:1.4}',
+      '#s-perf .txf-gd .gd-meta{display:flex;align-items:center;gap:14px;font-size:13px;color:var(--ink-2);flex-wrap:wrap}',
+      '#s-perf .txf-gd .gd-meta b{color:var(--ink)}',
+      '#s-perf .txf-gd .gd-prog{display:flex;align-items:center;gap:12px;margin-top:16px}',
+      '#s-perf .txf-gd .gd-prog .big{font-size:22px;font-weight:800;color:var(--blue-2)}',
+      '#s-perf .txf-gd h3{margin:0 0 12px;font-size:15px;font-weight:800}',
+      '#s-perf .txf-krt{width:100%;border-collapse:collapse;font-size:13px}',
+      '#s-perf .txf-krt th{text-align:left;color:var(--ink-3);font-weight:700;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}',
+      '#s-perf .txf-krt td{padding:10px;border-bottom:1px solid var(--line-2);color:var(--ink);vertical-align:middle}',
+      '#s-perf .txf-tl .ti{position:relative;margin-left:6px;padding:0 0 16px 16px;border-left:2px solid var(--line)}',
+      '#s-perf .txf-tl .ti:last-child{border-left-color:transparent;padding-bottom:2px}',
+      '#s-perf .txf-tl .ti:before{content:"";position:absolute;left:-6px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--blue);border:2px solid var(--card)}',
+      '#s-perf .txf-tl .dt{font-size:12px;color:var(--ink-3);font-weight:700}',
+      '#s-perf .txf-tl .dl{font-size:12px;font-weight:800;color:var(--green);margin-left:8px}',
+      '#s-perf .txf-tl .nt2{font-size:13px;color:var(--ink-2);margin-top:3px;line-height:1.55}',
+      '#s-perf .txf-cm{display:flex;gap:10px;padding:11px 0;border-top:1px solid var(--line-2);font-size:13px;color:var(--ink-2);align-items:flex-start}',
+      '#s-perf .txf-cm .w{font-weight:700;color:var(--ink)}',
+      '#s-perf .txf-cm .d{color:var(--ink-4);font-size:12px}',
+      '#s-perf .orgcard.txf-hide-stat .orgstat{display:none}',
+      '#s-perf .orgcard.txf-hide-ctrl .orgctrl{display:none}',
+      '#s-perf .orgcard.txf-nobar .txf-mem .membar,#s-perf .orgcard.txf-nobar .txf-mem .p{display:none}',
+      /* modal/drawer content lives outside #s-perf — unscoped */
+      '.txf-rr{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line-2);font-size:13.5px}',
+      '.txf-rr .no{width:20px;color:var(--ink-3);font-weight:700;flex:none}',
+      '.txf-rr .tt{flex:1;font-weight:600;min-width:0}',
+      '.txf-rr .mv{width:26px;height:26px;border:1px solid var(--line);border-radius:6px;background:var(--card);cursor:pointer;color:var(--ink-2)}',
+      '.txf-rr .mv:disabled{opacity:.35;cursor:default}',
+      '.txf-rx{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:14px;padding:4px 11px;font-size:12.5px;background:var(--card);cursor:pointer;color:var(--ink-2)}',
+      '.txf-rx:hover{background:var(--soft)}'
     ].join('\n');
     if (!document.getElementById('txf-perf-style')) sec.appendChild(css);
 
@@ -191,8 +226,14 @@
     var goalPage = sec.querySelector('.subpage[data-p="0"]');
     var activePill = 1;   // 0 요약 · 1 소속기준(default) · 2 역할기준 · 3 전체
 
+    var goalOrder = null;       // fix 16: user-defined ordering (⇅ 순서 변경)
     function myObjectives() {   // fix 6: only objectives the CU actually owns
-      return (objByOwner[CU.emp_id] || []).slice();
+      var list = (objByOwner[CU.emp_id] || []).slice();
+      if (goalOrder) list.sort(function (a, b) {
+        function ix(o) { var i = goalOrder.indexOf(o.objective_id); return i < 0 ? 999 : i; }
+        return ix(a) - ix(b);
+      });
+      return list;
     }
 
     function myGoalsCard(withDetail) {
@@ -221,14 +262,16 @@
             + (ks.length ? '' : '<div class="grow"><span class="gn" style="color:var(--ink-3)">등록된 핵심 성과가 없습니다.</span></div>')
             + '</div>';
         }
-        return '<div class="mg txf-exp">'
+        return '<div class="mg txf-exp" data-oid="' + o.objective_id + '">'
           + '<div class="nm"><div class="t1">' + esc(o.title)
           + (ck ? ' <span class="supn">체크인 ' + ck + '건</span>' : '') + '</div>'
           + '<div class="t2">' + typeBadge(o) + '</div></div>'
           + '<span class="w">' + weights[i] + '%</span>'
           + '<span class="s">' + statusChip(o) + '</span>'
           + '<span class="bw">' + bar(p) + '</span>'
-          + '<span class="p">' + pct(p) + '</span></div>' + det;
+          + '<span class="p">' + pct(p) + '</span>'
+          + (withDetail ? '<span class="mgx" title="핵심 성과 펼치기">⌄</span>' : '')
+          + '</div>' + det;
       }).join('');
       if (!mine.length) rows = '<div class="nogoal">등록된 목표가 없습니다.</div>';
       var guard = wsum === 100
@@ -237,7 +280,7 @@
       return '<div class="mycard">'
         + '<div class="mt"><h3>나의 목표</h3>'
         + '<div class="r"><span class="ck">✓ 전체 <b>' + mine.length + '</b></span><span>· 조직 <b>' + org + '</b></span><span>· 개인 <b>' + per + '</b></span></div></div>'
-        + '<div class="mysub"><button class="ghost-btn">⇅ 순서 변경</button>'
+        + '<div class="mysub"><button class="ghost-btn" data-txf="reorder">⇅ 순서 변경</button>'
         + '<div class="r">' + guard
         + '<span class="pb"><span>전체 진행률</span><span class="sumbar"><i style="width:' + Math.round(avg) + '%"></i></span></span>'
         + '<span class="pct">' + pct(avg) + '</span></div></div>'
@@ -274,7 +317,7 @@
             + '<div class="grow hd"><span class="gn">목표명</span><span class="gw">진행 상태</span><span class="gbwrap"></span><span class="gp">진행률</span></div>'
             + mine.map(function (x) {
                 var p = objProgress(x);
-                return '<div class="grow"><span class="gn">' + esc(x.title) + ' ' + typeBadge(x) + '</span>'
+                return '<div class="grow" data-oid="' + x.objective_id + '"><span class="gn">' + esc(x.title) + ' ' + typeBadge(x) + '</span>'
                   + '<span class="gw">' + esc(x.status || '진행중') + '</span>'
                   + '<span class="gbwrap">' + bar(p) + '</span><span class="gp">' + pct(p) + '</span></div>';
               }).join('') + '</div>';
@@ -286,7 +329,7 @@
           + '<div class="grow hd"><span class="gn">조직 목표</span><span class="gw">진행 상태</span><span class="gbwrap"></span><span class="gp">진행률</span></div>'
           + orgLevelObjs.map(function (x) {
               var p = objProgress(x);
-              return '<div class="grow"><span class="gn">' + esc(x.title) + '</span><span class="gw">' + esc(x.status || '진행중')
+              return '<div class="grow" data-oid="' + x.objective_id + '"><span class="gn">' + esc(x.title) + '</span><span class="gw">' + esc(x.status || '진행중')
                 + '</span><span class="gbwrap">' + bar(p) + '</span><span class="gp">' + pct(p) + '</span></div>';
             }).join('') + '</div>'
         : '<div class="nogoal" style="margin-top:12px">등록된 조직 목표가 없습니다.</div>';
@@ -297,7 +340,7 @@
         + '<span class="c1">진행중 <b>' + ing + '</b></span><span class="c2">완료 <b>' + done + '</b></span>'
         + '<span class="c3">지연중 <b>' + delay + '</b></span><span class="c4">도움요청 <b>' + help + '</b></span></div>'
         + '<div class="r"><span class="tot">✓ 전체 ' + total + '</span><span>· 수립 <b>' + setCnt + '</b></span><span>· 미수립 <b>' + (total - setCnt) + '</b></span></div></div>'
-        + '<div class="orgctrl"><span class="tog"></span><span class="toglbl">핵심 성과</span><button class="ghost-btn">전체 열기</button></div>'
+        + '<div class="orgctrl"><span class="tog"></span><span class="toglbl">핵심 성과</span><button class="ghost-btn" data-txf="expandall">전체 열기</button></div>'
         + '<div class="txf-org-mem">' + memRows + '</div>'
         + '<div class="txf-org-org" style="display:none">' + orgTab + '</div>'
         + '</div>';
@@ -308,7 +351,7 @@
       var role = cuEmp.jobTitle || '담당';
       var rows = mine.length ? mine.map(function (o) {
         var p = objProgress(o);
-        return '<div class="grow"><span class="gn">' + esc(o.title) + ' ' + typeBadge(o) + '</span>'
+        return '<div class="grow" data-oid="' + o.objective_id + '"><span class="gn">' + esc(o.title) + ' ' + typeBadge(o) + '</span>'
           + '<span class="gw">' + esc(o.status || '진행중') + '</span><span class="gbwrap">' + bar(p) + '</span><span class="gp">' + pct(p) + '</span></div>';
       }).join('') : '<div class="grow"><span class="gn" style="color:var(--ink-3)">등록된 목표가 없습니다.</span></div>';
       return '<div class="orgcard"><h3>' + esc(role) + ' 역할 기준 목표</h3>'
@@ -321,7 +364,7 @@
       var mine = myObjectives();
       var rows = mine.length ? mine.map(function (o) {
         var p = objProgress(o);
-        return '<div class="grow"><span class="gn">' + esc(o.title) + ' ' + typeBadge(o) + ' ' + statusChip(o) + '</span>'
+        return '<div class="grow" data-oid="' + o.objective_id + '"><span class="gn">' + esc(o.title) + ' ' + typeBadge(o) + ' ' + statusChip(o) + '</span>'
           + '<span class="gw"></span><span class="gbwrap">' + bar(p) + '</span><span class="gp">' + pct(p) + '</span></div>';
       }).join('') : '<div class="grow"><span class="gn" style="color:var(--ink-3)">등록된 목표가 없습니다.</span></div>';
       return '<div class="orgcard"><h3>나의 전체 목표 (' + mine.length + ')</h3>'
@@ -342,10 +385,11 @@
         html = allCard();
       } else {                           // 소속 기준 (default) — fix 6: cascade lives here
         html = myGoalsCard(true)
-          + '<div class="cardset"><button class="ghost-btn">조직 카드 설정</button></div>'
+          + '<div class="cardset"><button class="ghost-btn" data-txf="cardset">조직 카드 설정</button></div>'
           + ancestorOrgs(cuEmp.org_id).map(orgCard).join('');
       }
       host.innerHTML = html;
+      applyCardPrefs();
     }
 
     function buildGoalPage() {
@@ -401,6 +445,44 @@
       });
     })();
 
+    /* fix 14: 피드백 카드 클릭 → 상세 drawer */
+    function openFeedbackDetail(card) {
+      var ttlEl = card.querySelector('.fb-ttl');
+      var sndEl = card.querySelector('.fb-from b');
+      var bodyEl = card.querySelector('.fb-body');
+      var relEl = card.querySelector('.rel-goal');
+      var foot = card.querySelectorAll('.fb-foot span');
+      var sender = sndEl ? sndEl.textContent.trim() : '알 수 없음';
+      var dateTxt = foot.length ? foot[foot.length - 1].textContent.replace(/^[^0-9]*/, '').trim() : '';
+      var likes = 0;
+      if (foot.length) { var lm = foot[0].textContent.match(/\d+/); likes = lm ? parseInt(lm[0], 10) : 0; }
+      var relTxt = relEl ? relEl.textContent.replace(/^관련 목표/, '').trim() : '';
+      var el = document.createElement('div');
+      el.innerHTML =
+        '<div style="display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--line)">'
+        + (F.avatar ? F.avatar(sender, 40) : '')
+        + '<div><div style="font-weight:800;font-size:14.5px">보낸 사람 · ' + esc(sender) + '</div>'
+        + '<div style="font-size:12px;color:var(--ink-3);margin-top:2px">' + esc(dateTxt || '날짜 미상') + '</div></div></div>'
+        + '<div style="font-size:12.5px;font-weight:700;color:var(--ink-3);margin:16px 0 6px">전체 내용</div>'
+        + '<div style="font-size:13.5px;line-height:1.7;color:var(--ink);background:var(--soft);border-radius:8px;padding:14px 16px">'
+        + esc(ttlEl ? ttlEl.textContent.trim() : '') + '<br><br>' + esc(bodyEl ? bodyEl.textContent.trim() : '') + '</div>'
+        + (relTxt
+            ? '<div style="font-size:12.5px;font-weight:700;color:var(--ink-3);margin:16px 0 6px">관련 목표</div>'
+              + '<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:14px;padding:5px 12px;font-size:12.5px;color:var(--blue-2);font-weight:700">🎯 ' + esc(relTxt) + '</span>'
+            : '')
+        + '<div style="font-size:12.5px;font-weight:700;color:var(--ink-3);margin:16px 0 8px">리액션</div>'
+        + '<div style="display:flex;gap:8px">'
+        + '<button class="txf-rx">👍 <i style="font-style:normal">' + (likes + 3) + '</i></button>'
+        + '<button class="txf-rx">👏 <i style="font-style:normal">' + (likes + 1) + '</i></button>'
+        + '<button class="txf-rx">💙 <i style="font-style:normal">' + likes + '</i></button></div>';
+      el.addEventListener('click', function (e) {
+        var b = e.target.closest('.txf-rx');
+        if (b) { var n = b.querySelector('i'); if (n) n.textContent = parseInt(n.textContent, 10) + 1; }
+      });
+      if (TX.drawer) TX.drawer({ title: '피드백 상세', subtitle: sender + ' 님이 보낸 피드백', body: el, width: 420 });
+      else if (TX.modal) TX.modal({ title: '피드백 상세', body: el, actions: [{ label: '닫기', kind: 'ghost' }] });
+    }
+
     /* ============================================================= *
      *  1:1 미팅 (data-p=2) — rebuild list + click-to-load (fix 10)   *
      * ============================================================= */
@@ -445,10 +527,8 @@
         + '</div>';
     }
 
-    (function buildMeetingPage() {
-      var page = sec.querySelector('.subpage[data-p="2"]');
-      if (!page) return;
-      var listHTML = meetings.map(function (m, i) {
+    function mtListHTML(list) {
+      return list.map(function (m, i) {
         var e = m.emp;
         return '<div class="txf-mt-item' + (i === 0 ? ' on' : '') + '" data-mt="' + i + '">'
           + (F.avatar ? F.avatar(e.name, 34) : '')
@@ -456,38 +536,116 @@
           + '<div class="meta"><span>🏳 ' + m.flags + '</span><span>💬 ' + m.comments + '</span></div>'
           + '<div class="date">' + esc(m.date) + '</div></div></div>';
       }).join('');
+    }
+
+    /* fix 15: 1:1 미팅 segtabs — tab별 대체 리스트 */
+    var curMt = meetings;                 // list backing the visible tab
+    var mtTabs = [meetings, null, null];
+    function makeAltMeeting(e, date, seed) {
+      var eobj = (objByOwner[e.emp_id] || [])[0];
+      var c = (chkByEmp[e.emp_id] || [])[0] || {};
+      return {
+        emp: e, date: date, flags: seed % 3, comments: (seed + 1) % 2,
+        agenda: [
+          '2분기 목표 진행 상황 리뷰 — ' + (eobj ? eobj.title : '분기 핵심 과제'),
+          '핵심 성과 KR 체크인 및 리스크 점검',
+          '협업 프로세스 및 커뮤니케이션 개선 논의'
+        ],
+        notes: c.comment || '분기 목표 진행 상황을 공유하고 우선순위를 재정렬했습니다. 특이 리스크 없음.',
+        actions: ['논의 안건 후속 정리 — ' + e.name, '다음 1:1 전까지 KR 진행률 업데이트']
+      };
+    }
+    function tabMeetings(idx) {
+      if (mtTabs[idx]) return mtTabs[idx];
+      var pool = idx === 1
+        ? emps.filter(function (e) { return e.manager_id === CU.emp_id; }).slice(0, 3)
+        : (empByOrg[cuEmp.org_id] || []).filter(function (e) { return e.emp_id !== CU.emp_id; }).slice(0, 3);
+      if (!pool.length) pool = (empByOrg[cuEmp.org_id] || []).filter(function (e) { return e.emp_id !== CU.emp_id; }).slice(0, 2);
+      var dates = idx === 1
+        ? ['7월 2일 목요일 오전 11:00', '6월 24일 수요일 오후 3:30', '6월 11일 목요일 오전 9:30']
+        : ['6월 30일 화요일 오후 4:00', '6월 18일 목요일 오전 10:30', '6월 3일 수요일 오후 2:00'];
+      mtTabs[idx] = pool.map(function (e, i) { return makeAltMeeting(e, dates[i] || dates[0], idx * 10 + i); });
+      return mtTabs[idx];
+    }
+    function renderMeetingTab(idx) {
+      var page = sec.querySelector('.subpage[data-p="2"]');
+      if (!page) return;
+      curMt = tabMeetings(idx);
+      var side = page.querySelector('.mt-side');
+      if (side) {
+        side.querySelectorAll('.txf-mt-item').forEach(function (n) { n.remove(); });
+        side.insertAdjacentHTML('beforeend', mtListHTML(curMt));
+      }
+      var main = page.querySelector('.mt-main');
+      if (main) {
+        main.classList.add('txf-open');
+        main.innerHTML = curMt.length ? meetingDetailHTML(curMt[0])
+          : '<div style="color:var(--ink-3);font-size:13.5px;padding:20px 0">'
+            + (idx === 1 ? '내가 관리자인 1:1 미팅이 없습니다.' : '열람 가능한 1:1 미팅이 없습니다.') + '</div>';
+      }
+    }
+
+    (function buildMeetingPage() {
+      var page = sec.querySelector('.subpage[data-p="2"]');
+      if (!page) return;
       page.innerHTML = '<div class="mt-wrap">'
         + '<div class="mt-main txf-open">' + (meetings.length ? meetingDetailHTML(meetings[0]) : '선택한 1:1 미팅이 없습니다.') + '</div>'
         + '<div class="mt-side"><div class="sh"><h3>1:1 미팅</h3><span class="plus">+</span></div>'
         + '<div class="segtabs"><button class="on">나의 1:1 미팅</button><button>내가 관리자인 1:1 미팅</button><button>내가 열람할 수 있는 1:1 미팅</button></div>'
-        + listHTML + '</div></div>';
+        + mtListHTML(meetings) + '</div></div>';
     })();
 
     /* ============================================================= *
      *  리뷰 (data-p=3) — generate rows from data (fix 11)            *
      * ============================================================= */
+    var rvMgrs = [empById['EMP-0010'], empById['EMP-0001'], empById['EMP-0008']].filter(Boolean);
+    if (!rvMgrs.length) rvMgrs = emps.slice(0, 3);
+    function rvBadge(label) {
+      if (label === '완료') return '<span class="badge" style="background:#E4F5EC;color:var(--green)">완료</span>';
+      if (label === '작성 중') return '<span class="badge" style="background:#FFF4E5;color:#B45309">작성 중</span>';
+      return '<span class="badge" style="background:var(--blue-soft);color:var(--blue-2)">시작 이전</span>';
+    }
+    function rvRowHTML(tgt, mgr, badgeLabel, act) {
+      return '<div class="rv-row"><div class="rv-info">'
+        + '<div class="tt">기본 리뷰 양식</div>'
+        + '<div class="yr">2025 ' + rvBadge(badgeLabel) + '</div>'
+        + '<div class="rv-people">'
+        + '<div class="g"><span class="lb">대상자</span>' + (F.avatar ? F.avatar(tgt.name, 22) : '') + '<span class="nm">' + esc(F.nameTeam ? F.nameTeam(tgt) : tgt.name) + '</span></div>'
+        + '<div class="g"><span class="lb">관리자</span>' + (F.avatar ? F.avatar(mgr.name, 22) : '') + '<span class="nm">' + esc(F.nameTeam ? F.nameTeam(mgr) : mgr.name) + '</span></div>'
+        + '</div></div>'
+        + '<button class="rv-act' + (act === '확인' ? ' ghost' : '') + '" data-txf="rv-open">' + act + '</button></div>';
+    }
+    function rvRowsHTML(tab) {   // fix 15: 리뷰 segtabs — tab별 리스트
+      if (tab === 1) {           // 내가 관리자인 리뷰
+        var subs = emps.filter(function (e) { return e.manager_id === CU.emp_id; }).slice(0, 3);
+        if (!subs.length) subs = (empByOrg[cuEmp.org_id] || []).filter(function (e) { return e.emp_id !== CU.emp_id; }).slice(0, 3);
+        return subs.map(function (e, i) { return rvRowHTML(e, cuEmp, i === 0 ? '완료' : '시작 이전', i === 0 ? '확인' : '작성'); }).join('')
+          || '<div class="nogoal">내가 관리자인 리뷰가 없습니다.</div>';
+      }
+      if (tab === 2) {           // 내가 열람할 수 있는 리뷰
+        var peers = (empByOrg[cuEmp.org_id] || []).filter(function (e) { return e.emp_id !== CU.emp_id; }).slice(0, 2);
+        return peers.map(function (e, i) { return rvRowHTML(e, rvMgrs[i % rvMgrs.length], '완료', '확인'); }).join('')
+          || '<div class="nogoal">열람 가능한 리뷰가 없습니다.</div>';
+      }
+      var rows = '';             // 나의 리뷰 (기본)
+      for (var i = 0; i < 6; i++) {
+        var doneRow = i === 5;
+        rows += rvRowHTML(cuEmp, rvMgrs[i % rvMgrs.length], doneRow ? '완료' : '시작 이전', doneRow ? '확인' : '작성');
+      }
+      return rows;
+    }
+    function renderReviewTab(idx) {
+      var page = sec.querySelector('.subpage[data-p="3"]');
+      var cardEl = page && page.querySelector('.rv-card');
+      if (!cardEl) return;
+      cardEl.querySelectorAll('.rv-row, .nogoal').forEach(function (n) { n.remove(); });
+      cardEl.insertAdjacentHTML('beforeend', rvRowsHTML(idx));
+    }
+
     (function buildReviewPage() {
       var page = sec.querySelector('.subpage[data-p="3"]');
       if (!page) return;
-      var mgrs = [empById['EMP-0010'], empById['EMP-0001'], empById['EMP-0008']].filter(Boolean);
-      if (!mgrs.length) mgrs = emps.slice(0, 3);
-      var YEAR = 2025, ROWS = 6;
-      var rows = '';
-      for (var i = 0; i < ROWS; i++) {
-        var mgr = mgrs[i % mgrs.length];
-        var doneRow = i === ROWS - 1;
-        var badge = doneRow
-          ? '<span class="badge" style="background:#E4F5EC;color:var(--green)">완료</span>'
-          : '<span class="badge" style="background:var(--blue-soft);color:var(--blue-2)">시작 이전</span>';
-        rows += '<div class="rv-row"><div class="rv-info">'
-          + '<div class="tt">기본 리뷰 양식</div>'
-          + '<div class="yr">' + YEAR + ' ' + badge + '</div>'
-          + '<div class="rv-people">'
-          + '<div class="g"><span class="lb">대상자</span>' + (F.avatar ? F.avatar(cuEmp.name, 22) : '') + '<span class="nm">' + esc(F.nameTeam ? F.nameTeam(cuEmp) : cuEmp.name) + '</span></div>'
-          + '<div class="g"><span class="lb">관리자</span>' + (F.avatar ? F.avatar(mgr.name, 22) : '') + '<span class="nm">' + esc(F.nameTeam ? F.nameTeam(mgr) : mgr.name) + '</span></div>'
-          + '</div></div>'
-          + '<button class="rv-act' + (doneRow ? ' ghost' : '') + '" data-txf="rv-open">' + (doneRow ? '확인' : '작성') + '</button></div>';
-      }
+      var rows = rvRowsHTML(0);
       page.innerHTML = '<div class="ph"><h2>리뷰 현황</h2><div class="btns">'
         + '<button class="ghost-btn" data-txf="rv-explorer">리뷰 탐색기</button>'
         + '<button class="btn-blue" data-txf="rv-open">리뷰 생성</button>'
@@ -669,6 +827,228 @@
     }
 
     /* ============================================================= *
+     *  세부 목표 (goal detail) overlay — fix 13                       *
+     * ============================================================= */
+    var gdOv;
+    function goalTimeline(o) {   // real checkins first, deterministic synthesis otherwise
+      var real = (chkByObj[o.objective_id] || []).slice()
+        .sort(function (a, b) { return String(b.checkin_date || '').localeCompare(String(a.checkin_date || '')); })
+        .slice(0, 4)
+        .map(function (c) { return { date: c.checkin_date || '', note: c.comment || '체크인 업데이트', delta: c.progress_delta || 0 }; });
+      if (real.length >= 3) return real;
+      var p = Math.round(objProgress(o));
+      var seed = parseInt(String(o.objective_id).replace(/\D/g, ''), 10) || 1;
+      var dates = ['2026-04-10', '2026-05-08', '2026-06-05', '2026-07-03'];
+      var notes = [
+        '주요 산출물 초안 공유 완료, 이해관계자 리뷰 진행 중입니다.',
+        '일정 지연 리스크를 식별하여 우선순위를 재조정했습니다.',
+        '중간 점검 결과 목표 대비 순항 중입니다. 다음 단계에 착수합니다.',
+        '협업 부서 의존성 이슈를 해소하고 진행 속도를 회복했습니다.'
+      ];
+      var out = [];
+      for (var i = 0; i < 4; i++) {
+        out.push({
+          date: dates[i],
+          note: notes[(seed + i) % notes.length],
+          delta: Math.round(p * (i + 1) / 4) - Math.round(p * i / 4)
+        });
+      }
+      return out;
+    }
+    function goalDetailHTML(o) {
+      var owner = empById[o.owner_emp_id] || {};
+      var org = orgById[owner.org_id || o.org_id] || {};
+      var p = objProgress(o);
+      var ks = krByObj[o.objective_id] || [];
+      var krRows = ks.length ? ks.map(function (k) {
+        var kp = k.progress || 0;
+        return '<tr><td style="font-weight:600">' + esc(k.name) + '</td>'
+          + '<td>' + esc(k.target_value || '—') + '</td>'
+          + '<td>' + esc(k.current_value != null ? String(k.current_value) : '—') + '</td>'
+          + '<td>' + wnum(k) + '%</td>'
+          + '<td style="white-space:nowrap">' + bar(kp, 110) + ' <b>' + pct(kp) + '</b></td>'
+          + '<td>' + esc(k.difficulty || '—') + '</td></tr>';
+      }).join('') : '<tr><td colspan="6" style="color:var(--ink-3)">등록된 핵심 성과가 없습니다.</td></tr>';
+      var tl = goalTimeline(o).map(function (c) {
+        return '<div class="ti"><span class="dt">' + esc(c.date) + '</span>'
+          + '<span class="dl">+' + Math.round(c.delta) + '%</span>'
+          + '<div class="nt2">' + esc(c.note) + '</div></div>';
+      }).join('');
+      var mgr = empById[owner.manager_id] || {};
+      var peer = ((empByOrg[owner.org_id] || []).filter(function (e) { return e.emp_id !== owner.emp_id; })[0]) || {};
+      var cms = [
+        { w: mgr.name || '김수민', d: '6월 28일', t: '진행 상황 공유 감사합니다. 지연 리스크 항목은 다음 1:1에서 함께 논의하시죠.' },
+        { w: peer.name || '동료', d: '7월 3일', t: '관련 지표를 최신 대시보드 수치 기준으로 맞췄습니다. 확인 부탁드립니다.' }
+      ];
+      var cmHTML = cms.map(function (c) {
+        return '<div class="txf-cm">' + (F.avatar ? F.avatar(c.w, 28) : '')
+          + '<div><span class="w">' + esc(c.w) + '</span> <span class="d">' + esc(c.d) + '</span>'
+          + '<div style="margin-top:3px">' + esc(c.t) + '</div></div></div>';
+      }).join('');
+      return '<div class="txf-ovhead"><button class="bk" data-txf="gd-close">←</button><h2>목표 상세</h2>'
+        + '<div class="sp"><button class="ghost-btn" data-txf="gd-close">닫기</button></div></div>'
+        + '<div class="txf-ovbody"><div class="txf-gd">'
+        + '<div class="txf-fcard"><div class="gd-title">' + esc(o.title) + '</div>'
+        + '<div class="gd-meta">'
+        + '<span style="display:inline-flex;align-items:center;gap:7px">' + (F.avatar ? F.avatar(owner.name || '?', 26) : '')
+        + '<b>' + esc(owner.name || '미지정') + '</b>' + (org.name ? ' · ' + esc(org.name) : '') + '</span>'
+        + '<span>기간 <b>' + esc(o.period || 'FY2026') + '</b></span>'
+        + typeBadge(o) + statusChip(o) + '</div>'
+        + '<div class="gd-prog"><span class="big">' + pct(p) + '</span>' + bar(p, 260)
+        + '<span style="font-size:12px;color:var(--ink-3)">핵심 성과 ' + ks.length + '개 · 체크인 ' + (chkByObj[o.objective_id] || []).length + '건</span></div></div>'
+        + '<div class="txf-fcard"><h3>핵심 성과</h3><table class="txf-krt"><thead><tr>'
+        + '<th>KR명</th><th>목표값</th><th>현재값</th><th>가중치</th><th>진행률</th><th>난이도</th></tr></thead><tbody>' + krRows + '</tbody></table></div>'
+        + '<div class="txf-fcard"><h3>체크인 타임라인</h3><div class="txf-tl">' + tl + '</div></div>'
+        + '<div class="txf-fcard"><h3>코멘트 · 활동</h3>' + cmHTML + '</div>'
+        + '<div style="display:flex;justify-content:flex-end;margin:4px 0 20px"><button class="btn-blue" data-txf="gd-close">닫기</button></div>'
+        + '</div></div>';
+    }
+    function openGoalDetail(oid) {
+      var o = objById[oid]; if (!o) return;
+      if (!gdOv) {
+        gdOv = document.createElement('div');
+        gdOv.className = 'txf-ov'; gdOv.setAttribute('data-txf-ov', 'goal');
+        sec.appendChild(gdOv);
+      }
+      gdOv.innerHTML = goalDetailHTML(o);
+      gdOv.classList.add('open');
+      gdOv.scrollTop = 0;
+    }
+    function closeGoalDetail() { if (gdOv) gdOv.classList.remove('open'); }
+
+    /* ============================================================= *
+     *  fix 16: 순서 변경 · 전체 열기 · 조직 카드 설정 · 리뷰 작성       *
+     * ============================================================= */
+    function openReorderModal() {
+      var list = myObjectives().map(function (o) { return o.objective_id; });
+      var body = document.createElement('div');
+      function draw() {
+        body.innerHTML = list.length ? list.map(function (id, i) {
+          var o = objById[id];
+          return '<div class="txf-rr" data-i="' + i + '"><span class="no">' + (i + 1) + '</span>'
+            + '<span class="tt">' + esc(o ? o.title : id) + '</span>'
+            + '<button class="mv" data-mv="up"' + (i === 0 ? ' disabled' : '') + '>▲</button>'
+            + '<button class="mv" data-mv="dn"' + (i === list.length - 1 ? ' disabled' : '') + '>▼</button></div>';
+        }).join('') : '<div style="color:var(--ink-3);font-size:13px">순서를 변경할 목표가 없습니다.</div>';
+      }
+      draw();
+      body.addEventListener('click', function (e) {
+        var b = e.target.closest('.mv'); if (!b) return;
+        var i = parseInt(b.closest('.txf-rr').getAttribute('data-i'), 10);
+        var j = b.getAttribute('data-mv') === 'up' ? i - 1 : i + 1;
+        if (j < 0 || j >= list.length) return;
+        var tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+        draw();
+      });
+      TX.modal && TX.modal({
+        title: '목표 순서 변경', body: body,
+        actions: [
+          { label: '취소', kind: 'ghost' },
+          { label: '저장', kind: 'primary', onClick: function () {
+              goalOrder = list.slice();
+              renderGoalBody();
+              TX.toast && TX.toast('목표 순서를 변경했습니다.', 'ok');
+            } }
+        ]
+      });
+    }
+
+    var cardPrefs = { stat: true, ctrl: true, bar: true };
+    function applyCardPrefs() {
+      if (!goalPage || !cardPrefs) return;   // guarded: callable before init line runs
+      goalPage.querySelectorAll('.orgcard').forEach(function (c) {
+        c.classList.toggle('txf-hide-stat', !cardPrefs.stat);
+        c.classList.toggle('txf-hide-ctrl', !cardPrefs.ctrl);
+        c.classList.toggle('txf-nobar', !cardPrefs.bar);
+      });
+    }
+    function openCardSettings() {
+      var defs = [['stat', '진행 현황 요약 표시'], ['ctrl', '핵심 성과 컨트롤 바 표시'], ['bar', '구성원 진행률 바 표시']];
+      var body = document.createElement('div');
+      body.innerHTML = '<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:6px">조직 카드에 표시할 항목을 선택합니다.</div>'
+        + defs.map(function (d) {
+            return '<label style="display:flex;align-items:center;gap:8px;margin:9px 0;font-size:13.5px;cursor:pointer">'
+              + '<input type="checkbox" data-pref="' + d[0] + '" style="width:15px;height:15px;accent-color:var(--blue)"'
+              + (cardPrefs[d[0]] ? ' checked' : '') + '> ' + d[1] + '</label>';
+          }).join('');
+      TX.modal && TX.modal({
+        title: '조직 카드 설정 — 표시 항목', body: body,
+        actions: [
+          { label: '취소', kind: 'ghost' },
+          { label: '적용', kind: 'primary', onClick: function () {
+              body.querySelectorAll('[data-pref]').forEach(function (i) { cardPrefs[i.getAttribute('data-pref')] = i.checked; });
+              applyCardPrefs();
+              TX.toast && TX.toast('조직 카드 표시 항목을 적용했습니다.', 'ok');
+            } }
+        ]
+      });
+    }
+
+    function toggleAllMembers(btn) {   // 전체 열기 ↔ 전체 닫기
+      var oc = btn.closest('.orgcard'); if (!oc) return;
+      var openAll = btn.textContent.indexOf('열기') >= 0;
+      oc.querySelectorAll('.txf-mem').forEach(function (m) {
+        var pn = m.nextElementSibling;
+        if (pn && (pn.classList.contains('gbox') || pn.classList.contains('nogoal'))) {
+          pn.style.display = openAll ? '' : 'none';
+          var cv = m.querySelector('.cv'); if (cv) cv.textContent = openAll ? '⌃' : '⌄';
+        }
+      });
+      btn.textContent = openAll ? '전체 닫기' : '전체 열기';
+    }
+
+    function setRvBadge(row, label) {
+      var b = row.querySelector('.badge'); if (!b) return;
+      if (label === '완료') { b.style.background = '#E4F5EC'; b.style.color = 'var(--green)'; }
+      else if (label === '작성 중') { b.style.background = '#FFF4E5'; b.style.color = '#B45309'; }
+      else { b.style.background = 'var(--blue-soft)'; b.style.color = 'var(--blue-2)'; }
+      b.textContent = label;
+    }
+    function newReviewRow(badgeLabel, act) {
+      var page = sec.querySelector('.subpage[data-p="3"]');
+      var sort = page && page.querySelector('.rv-sort');
+      if (sort) sort.insertAdjacentHTML('afterend', rvRowHTML(cuEmp, rvMgrs[0] || cuEmp, badgeLabel, act));
+    }
+    function openReviewWrite(btn) {
+      var row = btn && btn.closest ? btn.closest('.rv-row') : null;
+      var isCreate = !row;
+      var done = !!(row && row.querySelector('.badge') && row.querySelector('.badge').textContent === '완료');
+      var tgtEl = row && row.querySelector('.rv-people .g .nm');
+      var tgt = tgtEl ? tgtEl.textContent.trim() : (F.nameTeam ? F.nameTeam(cuEmp) : cuEmp.name);
+      var o0 = myObjectives()[0];
+      var draft = '[2025 기본 리뷰 초안]\n\n1. 주요 성과\n- ' + (o0 ? o0.title : '핵심 목표') + ' 진행률 ' + pct(o0 ? objProgress(o0) : 0)
+        + ' 달성\n- 체크인 기반 리스크 조기 공유로 일정 지연 최소화\n\n2. 보완할 점\n- KR 측정 주기를 격주 단위로 단축하여 편차 조기 감지\n\n3. 다음 기간 목표\n- 하반기 핵심 과제 우선순위 재정렬 및 협업 프로세스 개선';
+      var body = document.createElement('div');
+      body.innerHTML =
+        '<div style="display:flex;gap:18px;font-size:13px;margin-bottom:12px;flex-wrap:wrap">'
+        + '<span>대상 <b>' + esc(tgt) + '</b></span><span>기간 <b>2025</b></span><span>양식 <b>기본 리뷰 양식</b></span></div>'
+        + '<textarea style="width:100%;min-height:190px;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:13.5px;font-family:inherit;resize:vertical;color:var(--ink);background:var(--card)"'
+        + (done ? ' readonly' : '') + '>' + esc(draft) + '</textarea>';
+      var acts;
+      if (done) {
+        acts = [{ label: '닫기', kind: 'ghost' }];
+      } else {
+        acts = [
+          { label: '임시저장', kind: 'ghost', onClick: function () {
+              if (row) setRvBadge(row, '작성 중'); else newReviewRow('작성 중', '작성');
+              TX.toast && TX.toast('리뷰를 임시저장했습니다.', 'ok');
+            } },
+          { label: '제출', kind: 'primary', onClick: function () {
+              var ta = body.querySelector('textarea');
+              if (ta && !ta.value.trim()) { TX.toast && TX.toast('리뷰 내용을 입력하세요.', 'warn'); return false; }
+              if (row) {
+                setRvBadge(row, '완료');
+                var act = row.querySelector('.rv-act');
+                if (act) { act.textContent = '확인'; act.classList.add('ghost'); }
+              } else newReviewRow('완료', '확인');
+              TX.toast && TX.toast('리뷰를 제출했습니다.', 'ok');
+            } }
+        ];
+      }
+      TX.modal && TX.modal({ title: done ? '리뷰 확인' : (isCreate ? '리뷰 생성' : '리뷰 작성'), wide: true, body: body, actions: acts });
+    }
+
+    /* ============================================================= *
      *  DELEGATION — one click + one change handler on the section    *
      * ============================================================= */
     sec.addEventListener('click', function (ev) {
@@ -688,6 +1068,10 @@
           TX.toast && TX.toast('목표를 생성했습니다.', 'ok'); closeNew(); return;
         }
         if (k === 'weight') { openWeightEditor(); return; }
+        if (k === 'gd-close') { ev.preventDefault(); closeGoalDetail(); return; }
+        if (k === 'reorder') { openReorderModal(); return; }
+        if (k === 'cardset') { openCardSettings(); return; }
+        if (k === 'expandall') { toggleAllMembers(tag); return; }
         if (k === 'add-kr') {
           var list = newOv && newOv.querySelector('[data-txf="kr-list"]');
           if (list) { list.insertAdjacentHTML('beforeend', krRowHTML({ weight: '' })); renumberKR(); }
@@ -714,13 +1098,32 @@
           }
           return;
         }
-        if (k === 'rv-open') { TX.toast && TX.toast('리뷰 작성 화면은 준비 중입니다.'); return; }
+        if (k === 'rv-open') { openReviewWrite(tag); return; }
         if (k === 'rv-explorer') {
           TX.modal && TX.modal({ title: '리뷰 탐색기', wide: true,
             body: '<div style="padding:8px 0;color:var(--ink-2);font-size:13.5px;line-height:1.7">리뷰 탐색기에서는 조직·기간·유형별로 리뷰를 검색하고 진행 현황을 한눈에 확인할 수 있습니다.<br>선택한 대상: <b>' + esc(cuEmp.name || '') + '</b> · 기간 <b>2025</b> · 유형 <b>기본 리뷰 양식</b></div>',
             actions: [{ label: '닫기', kind: 'ghost' }] });
           return;
         }
+      }
+      // segtabs (1:1 미팅 / 리뷰) — fix 15
+      var st = t.closest('.segtabs button');
+      if (st) {
+        var grp = st.closest('.segtabs');
+        var btns = grp.querySelectorAll('button');
+        var si = Array.prototype.indexOf.call(btns, st);
+        btns.forEach(function (b) { b.classList.toggle('on', b === st); });
+        var pg = st.closest('.subpage');
+        var pno = pg ? pg.getAttribute('data-p') : '';
+        if (pno === '2') renderMeetingTab(si);
+        else if (pno === '3') renderReviewTab(si);
+        return;
+      }
+      // 피드백 카드 → 상세 drawer — fix 14 (.fb-more / .fb-dots는 기존 핸들러 유지)
+      var fbc = t.closest('.fb-card');
+      if (fbc) {
+        if (!t.closest('.fb-more') && !t.closest('.fb-dots')) openFeedbackDetail(fbc);
+        return;
       }
       // pilltabs (fix 7)
       var pill = t.closest('[data-txf-pill]');
@@ -740,13 +1143,25 @@
         card.querySelector('.txf-org-org').style.display = isMem ? 'none' : '';
         return;
       }
-      // my-goal expandable rows
+      // my-goal rows — expander icon toggles inline detail, row body opens 목표 상세 (fix 13)
       var exp = t.closest('.mg.txf-exp');
       if (exp) {
-        var det = exp.nextElementSibling;
-        if (det && det.classList.contains('txf-detail')) det.style.display = det.style.display === 'none' ? '' : 'none';
+        var xp = t.closest('.mgx');
+        if (xp) {
+          var det = exp.nextElementSibling;
+          if (det && det.classList.contains('txf-detail')) {
+            var vis = det.style.display === 'none';
+            det.style.display = vis ? '' : 'none';
+            xp.textContent = vis ? '⌃' : '⌄';
+          }
+        } else if (exp.getAttribute('data-oid')) {
+          openGoalDetail(exp.getAttribute('data-oid'));
+        }
         return;
       }
+      // goal rows in org/role/all cards → 목표 상세 (fix 13)
+      var gr = t.closest('.grow[data-oid]');
+      if (gr) { openGoalDetail(gr.getAttribute('data-oid')); return; }
       // org member accordion
       var mem = t.closest('.txf-mem');
       if (mem) {
@@ -787,7 +1202,7 @@
         var page2 = sec.querySelector('.subpage[data-p="2"]');
         page2.querySelectorAll('[data-mt]').forEach(function (x) { x.classList.toggle('on', x === mi); });
         var main = page2.querySelector('.mt-main');
-        if (main && meetings[idx]) { main.classList.add('txf-open'); main.innerHTML = meetingDetailHTML(meetings[idx]); }
+        if (main && curMt[idx]) { main.classList.add('txf-open'); main.innerHTML = meetingDetailHTML(curMt[idx]); }
         return;
       }
     });
@@ -805,7 +1220,7 @@
     if (subnav) subnav.addEventListener('click', function (e) {
       var a = e.target.closest && e.target.closest('a[data-p]');
       if (!a) return;
-      closeMap(); closeNew();
+      closeMap(); closeNew(); closeGoalDetail();
       if (a.getAttribute('data-p') === '0' && goalPage && !goalPage.querySelector('.txf-goal-body')) {
         buildGoalPage();   // defensive: rebuild if content was lost
       }

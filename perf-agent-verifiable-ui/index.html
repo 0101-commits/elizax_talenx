@@ -292,6 +292,37 @@
   .gate .gate-lab { font-size: 11.5px; color: var(--ink-3); margin-right: auto; display:flex; align-items:center; gap:5px; }
   .gate .gate-lab i { color: var(--purple); }
 
+  /* ---------- decision gate : lock · stamp · inline panels ---------- */
+  .gate .btn:disabled { opacity: .45; cursor: default; }
+  .gate .btn.chosen, .gate .btn.chosen:disabled { opacity: 1; background: var(--navy); border-color: var(--navy); color: #fff; }
+  .gate .btn.hold.chosen, .gate .btn.hold.chosen:disabled { background: var(--warn); border-color: var(--warn); color: #fff; }
+  .gate .btn.chosen::before { content: "✓"; margin-right: 5px; font-weight: 700; }
+  .decision-line {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 9px;
+    padding: 7px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+    background: var(--ok-bg); color: var(--ok); border: 1px solid #BFE3D2; animation: rise .25s ease;
+  }
+  .decision-line.hold { background: var(--warn-bg); color: var(--warn); border-color: #F0DCAB; }
+  .decision-line .rid { color: inherit; }
+  .gate-panel { margin-top: 10px; border: 1px solid var(--line); background: var(--surface-sub); border-radius: 10px; padding: 12px 14px; animation: rise .25s ease; }
+  .gate-panel h5 { font-size: 12.5px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .gate-panel h5 i { color: var(--navy); }
+  .gate-panel textarea, .gate-panel input[type=text], .gate-panel select {
+    width: 100%; font-family: inherit; font-size: 13px; line-height: 1.6; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 11px;
+  }
+  .gate-panel textarea { min-height: 84px; resize: vertical; }
+  .gate-panel textarea:focus, .gate-panel input:focus, .gate-panel select:focus { outline: 2px solid var(--navy); outline-offset: 1px; }
+  .gate-panel .gp-actions { display: flex; gap: 7px; margin-top: 9px; }
+  .gate-panel .lk-row { font-size: 13px; margin-bottom: 4px; }
+  .gate-panel .lk-path { font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
+  .edited-chip, .linked-chip {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--ok);
+    margin-left: 6px; vertical-align: 1px;
+  }
+  .f-top .f-flag.green { color: var(--ok); }
+
   .whatif { display: none; margin-top: 12px; border: 1px solid #D8E2F5; background: #F6F9FE; border-radius: 9px; padding: 13px 14px; }
   .whatif.show { display: block; animation: rise .25s ease; }
   @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -624,11 +655,11 @@
                   <p class="wf-note">동일 룰 엔진에서 입력값만 바꿔 즉시 재산출. 실행 로그: <span class="rid">rule-exec.a3f1</span></p>
                 </div>
 
-                <div class="gate">
+                <div class="gate" id="gateD1">
                   <span class="gate-lab"><i class="ti ti-git-fork"></i>결정 게이트</span>
-                  <button class="btn primary">승인</button>
-                  <button class="btn">수정</button>
-                  <button class="btn hold">보류</button>
+                  <button class="btn primary" data-act="approve">승인</button>
+                  <button class="btn" data-act="edit">수정</button>
+                  <button class="btn hold" data-act="hold">보류</button>
                 </div>
               </div>
             </div>
@@ -846,10 +877,10 @@
               <div class="f-body">
                 박성현님의 <b>3번째 목표</b>가 '26년도 ○○컴퍼니 전사 목표 <b>'매출 3조 8,000억원 달성'</b>과 연결되지 않습니다. 추천 연결 목표를 제시할 수 있습니다.
                 <div style="margin-top:8px"><span class="anno" style="margin-right:2px">2</span><span class="sb rule">원칙</span> 전사 정렬 필수 · <span class="sb bench">벤치마크</span> 동일 직무 정렬 사례 <span class="rid">align.corp.kr</span></div>
-                <div class="gate" style="margin-top:10px;border-top:none;padding-top:0">
-                  <button class="btn primary">추천 연결 보기</button>
-                  <button class="btn">직접 연결</button>
-                  <button class="btn hold">보류</button>
+                <div class="gate" id="gateF2" style="margin-top:10px;border-top:none;padding-top:0">
+                  <button class="btn primary" data-act="reclink">추천 연결 보기</button>
+                  <button class="btn" data-act="directlink">직접 연결</button>
+                  <button class="btn hold" data-act="hold">보류</button>
                 </div>
               </div>
             </div>
@@ -975,6 +1006,154 @@
       if (v >= 45) { clearInterval(t2); if (note) note.textContent = 'KR 3건 초안 생성 · 상위 목표 정렬 완료'; }
     }, 200);
   }
+
+  // ---- 결정 게이트 : 승인 / 수정 / 보류 + 전사 목표 연결 ----
+  // 모든 결정은 게이트 행을 잠그고(선택 버튼 체크 표시·나머지 비활성),
+  // 카드에 감사 로그 참조가 붙은 결정 스탬프를 남긴다. 로그 ID는 결정적(해시) 생성.
+  var CORP_GOAL = '매출 3조 8,000억원 달성';
+  var CORP_KRS = [
+    'KR1 · 신규 매출 1조 2,000억원',
+    'KR2 · 기존고객 매출 유지율 95%',
+    'KR3 · 신제품 매출 비중 18%'
+  ];
+
+  function gaId(seed) {
+    var h = 7;
+    for (var i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+    return 'GA-2026-' + ('000' + (h % 10000)).slice(-4);
+  }
+  function lockGate(gate, chosen) {
+    gate.setAttribute('data-locked', '1');
+    var btns = gate.querySelectorAll('.btn');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].disabled = true;
+      if (btns[i] === chosen) btns[i].classList.add('chosen');
+    }
+  }
+  function stampDecision(gate, label, hold, seed) {
+    var line = document.createElement('div');
+    line.className = 'decision-line' + (hold ? ' hold' : '');
+    line.innerHTML = '<i class="ti ' + (hold ? 'ti-player-pause' : 'ti-circle-check') + '"></i>'
+      + '결정: ' + label + ' · 방금 · 감사 로그 <span class="rid">#' + gaId(seed) + '</span> 기록됨';
+    gate.insertAdjacentElement('afterend', line);
+  }
+  // 게이트당 인라인 패널 1개 — 같은 버튼 재클릭은 토글(닫기)
+  function gatePanel(gate, act, html) {
+    var scope = gate.parentNode;
+    var cur = scope.querySelector('.gate-panel');
+    var same = cur && cur.getAttribute('data-for') === act;
+    if (cur) cur.parentNode.removeChild(cur);
+    if (same) return null;
+    var p = document.createElement('div');
+    p.className = 'gate-panel';
+    p.setAttribute('data-for', act);
+    p.innerHTML = html;
+    gate.insertAdjacentElement('afterend', p);
+    return p;
+  }
+  function removePanel(p) { if (p && p.parentNode) p.parentNode.removeChild(p); }
+
+  function openGateEdit(gate) {
+    var body = gate.closest('.receipt-body') || gate.closest('.f-body');
+    var verdict = body ? body.querySelector('.verdict') : null;
+    var p = gatePanel(gate, 'edit',
+        '<h5><i class="ti ti-pencil"></i>제안 내용 수정</h5>'
+      + '<textarea aria-label="제안 내용 수정"></textarea>'
+      + '<div class="gp-actions"><button class="btn primary gp-apply">반영</button><button class="btn gp-cancel">취소</button></div>');
+    if (!p) return;
+    p.querySelector('textarea').value = verdict ? verdict.textContent.replace(/\s+/g, ' ').trim() : '';
+    p.querySelector('.gp-cancel').onclick = function () { removePanel(p); };
+    p.querySelector('.gp-apply').onclick = function () {
+      var txt = p.querySelector('textarea').value.trim();
+      if (verdict && txt) {
+        verdict.textContent = txt + ' ';
+        var chip = document.createElement('span');
+        chip.className = 'edited-chip';
+        chip.innerHTML = '<i class="ti ti-check"></i>수정 반영됨';
+        verdict.appendChild(chip);
+      }
+      removePanel(p);
+      lockGate(gate, gate.querySelector('[data-act="edit"]'));
+      stampDecision(gate, '수정 반영', false, gate.id + ':edit');
+    };
+  }
+
+  function openGateHold(gate) {
+    var p = gatePanel(gate, 'hold',
+        '<h5><i class="ti ti-player-pause"></i>보류 사유</h5>'
+      + '<input type="text" placeholder="예: 실적 원천 재확인 후 결정" aria-label="보류 사유">'
+      + '<div class="gp-actions"><button class="btn primary gp-apply">보류 확정</button><button class="btn gp-cancel">취소</button></div>');
+    if (!p) return;
+    p.querySelector('.gp-cancel').onclick = function () { removePanel(p); };
+    p.querySelector('.gp-apply').onclick = function () {
+      var reason = p.querySelector('input').value.trim() || '사유 미기재';
+      removePanel(p);
+      lockGate(gate, gate.querySelector('[data-act="hold"]'));
+      stampDecision(gate, '보류 · 사유: ' + reason, true, gate.id + ':hold');
+    };
+  }
+
+  // 연결 확정 시 finding 행을 '연결됨' 상태로 전환
+  function markLinked(gate) {
+    var f = gate.closest('.finding');
+    if (!f) return;
+    var flag = f.querySelector('.f-flag');
+    if (flag) flag.className = 'ti ti-circle-check f-flag green';
+    var top = f.querySelector('.f-top');
+    if (top && !top.querySelector('.linked-chip')) {
+      var chip = document.createElement('span');
+      chip.className = 'linked-chip';
+      chip.innerHTML = '<i class="ti ti-check"></i>연결됨';
+      top.insertBefore(chip, top.querySelector('.chev'));
+    }
+  }
+
+  function openRecLink(gate) {
+    var p = gatePanel(gate, 'reclink',
+        '<h5><i class="ti ti-link"></i>추천 연결 목표</h5>'
+      + '<div class="lk-row"><span class="sb rule">전사</span> ’26 전사 목표 <b>' + CORP_GOAL + '</b></div>'
+      + '<div class="lk-path">3번째 목표 → 전사 KR2 ‘기존고객 매출 유지율 95%’ 경유 정렬 · 유사도 0.87 <span class="rid">align.rec.kr2</span></div>'
+      + '<div class="gp-actions"><button class="btn primary gp-apply">연결 승인</button><button class="btn gp-cancel">닫기</button></div>');
+    if (!p) return;
+    p.querySelector('.gp-cancel').onclick = function () { removePanel(p); };
+    p.querySelector('.gp-apply').onclick = function () {
+      removePanel(p);
+      markLinked(gate);
+      lockGate(gate, gate.querySelector('[data-act="reclink"]'));
+      stampDecision(gate, '추천 연결 승인 · ' + CORP_GOAL, false, gate.id + ':reclink');
+    };
+  }
+
+  function openDirectLink(gate) {
+    var opts = '';
+    for (var i = 0; i < CORP_KRS.length; i++) opts += '<option>' + CORP_KRS[i] + '</option>';
+    var p = gatePanel(gate, 'directlink',
+        '<h5><i class="ti ti-link"></i>직접 연결 — 전사 KR 선택</h5>'
+      + '<select aria-label="전사 KR 선택">' + opts + '</select>'
+      + '<div class="gp-actions"><button class="btn primary gp-apply">확인</button><button class="btn gp-cancel">취소</button></div>');
+    if (!p) return;
+    p.querySelector('.gp-cancel').onclick = function () { removePanel(p); };
+    p.querySelector('.gp-apply').onclick = function () {
+      var sel = p.querySelector('select').value;
+      removePanel(p);
+      markLinked(gate);
+      lockGate(gate, gate.querySelector('[data-act="directlink"]'));
+      stampDecision(gate, '직접 연결 · ' + sel, false, gate.id + ':directlink');
+    };
+  }
+
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest ? ev.target.closest('.gate .btn[data-act]') : null;
+    if (!btn) return;
+    var gate = btn.closest('.gate');
+    if (!gate || gate.hasAttribute('data-locked')) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'approve') { lockGate(gate, btn); stampDecision(gate, '승인', false, gate.id + ':approve'); }
+    else if (act === 'edit') { openGateEdit(gate); }
+    else if (act === 'hold') { openGateHold(gate); }
+    else if (act === 'reclink') { openRecLink(gate); }
+    else if (act === 'directlink') { openDirectLink(gate); }
+  });
 </script>
 </body>
 </html>

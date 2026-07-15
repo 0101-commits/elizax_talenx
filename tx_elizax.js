@@ -56,6 +56,10 @@
     { key: "executive", label: "경영진" }
   ];
   function needsSubject(p) { return p === "manager" || p === "executive"; }
+  function perspectiveLabel(key) {
+    for (var i = 0; i < PERSPECTIVES.length; i++) { if (PERSPECTIVES[i].key === key) return PERSPECTIVES[i].label; }
+    return "본인";
+  }
   /* elizax 관점은 현재 역할(TXRoles)을 따라간다: 조직원→본인 · 조직장→팀장 · HR→HR · 경영진→경영진 */
   function rolePerspective() {
     try {
@@ -176,13 +180,12 @@
     top.appendChild(mark); top.appendChild(titles); top.appendChild(xbtn);
     head.appendChild(top);
 
-    /* perspective selector */
-    var persp = h("div", "ezx-persp", { role: "tablist", "aria-label": "관점 선택" });
-    PERSPECTIVES.forEach(function (p) {
-      var b = h("button", p.key === state.perspective ? "on" : "", { text: p.label, "data-p": p.key, role: "tab" });
-      b.addEventListener("click", function () { setPerspective(p.key); });
-      persp.appendChild(b);
-    });
+    /* perspective: 수동 탭 제거 — 역할 주체(TXRoles)에 따라 자동 전환 */
+    var persp = h("div", "ezx-persp ezx-persp-auto", { "aria-label": "관점 (역할 자동 연동)" });
+    persp.innerHTML =
+      '<span class="ezx-persp-chip"><span class="dot"></span><b data-ezx-plabel>' +
+      esc(perspectiveLabel(state.perspective)) + "</b> 관점</span>" +
+      '<span class="ezx-persp-note">역할 주체에 따라 자동 전환 · 상단 관점 스위처 연동</span>';
     head.appendChild(persp);
     el.persp = persp;
 
@@ -264,11 +267,21 @@
   }
 
   /* ---------------- Perspective / subject ---------------- */
+  /* 관점은 역할 주체(TXRoles)에서만 결정된다 — 수동 전환 없음 */
   function setPerspective(p) {
     state.perspective = p;
-    Array.prototype.forEach.call(el.persp.children, function (b) {
-      b.classList.toggle("on", b.getAttribute("data-p") === p);
-    });
+    var lab = el.persp && el.persp.querySelector("[data-ezx-plabel]");
+    if (lab) lab.textContent = perspectiveLabel(p);
+    syncSubjectUI();
+  }
+  function syncPerspectiveFromRole() {
+    var p = rolePerspective();
+    if (p !== state.perspective) {
+      state.perspective = p;
+      if (!state.subject) state.subject = defaultSubject();
+    }
+    var lab = el.persp && el.persp.querySelector("[data-ezx-plabel]");
+    if (lab) lab.textContent = perspectiveLabel(p);
     syncSubjectUI();
   }
   function syncSubjectUI() {
@@ -340,6 +353,24 @@
     var sub = h("div", "es");
     sub.textContent = "성과관리 · OKR · 평가에 대해 물어보세요.";
     wrap.appendChild(sub);
+
+    /* AI Agent 특화 UI 바로가기 */
+    var agentRow = h("div", "ezx-agent-cta");
+    var hubBtn = h("button", "ezx-agent-btn primary", { type: "button" });
+    hubBtn.innerHTML = "⚡ <b>AI Agent 특화 화면</b><small>선제 감지 · 노드 워크플로우 · 승인 게이트</small>";
+    hubBtn.addEventListener("click", function () {
+      if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub(); }
+      else window.open("perf-agent-verifiable-ui/", "_blank");
+    });
+    var vfBtn = h("button", "ezx-agent-btn", { type: "button" });
+    vfBtn.innerHTML = "🧾 <b>검증 가능한 답변 데모</b><small>as-of · 트레이스 · 감사 · What-if</small>";
+    vfBtn.addEventListener("click", function () { window.open("perf-agent-verifiable-ui/", "_blank"); });
+    agentRow.appendChild(hubBtn); agentRow.appendChild(vfBtn);
+    wrap.appendChild(agentRow);
+    if (OFFLINE) {
+      wrap.appendChild(h("div", "ezx-agent-off", { text: "백엔드 미연결 — 오프라인 목업 응답 모드 (실시간 AI는 localhost:8080 서버 필요)" }));
+    }
+
     var starters = h("div", "ezx-starters");
     ["이번 분기 OKR 추천해줘", "내 목표 진행상황 점검", "동료 피드백 요약", "평가 근거 설명해줘"].forEach(function (s) {
       var b = h("button", "ezx-starter", { text: s, type: "button" });
@@ -667,6 +698,7 @@
   function openPanel() {
     state.open = true;
     el.root.classList.add("ezx-open");
+    syncPerspectiveFromRole();
     updateScreenChip();
     setTimeout(function () { try { el.textarea.focus(); } catch (e) {} }, 220);
   }
