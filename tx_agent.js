@@ -997,7 +997,12 @@
     if (!state.open) return; /* 허브 미오픈 시 clearTimers로 도킹 카드를 건드리지 않음 */
     state.open = false;
     clearTimers();
-    if (el.root) el.root.classList.remove("on");
+    if (el.root) {
+      /* FAB로 되돌아가는 morph-out */
+      el.root.classList.remove("on");
+      el.root.classList.add("closing");
+      (function (r) { setTimeout(function () { r.classList.remove("closing"); }, 420); })(el.root);
+    }
     document.body.style.overflow = "";
   }
 
