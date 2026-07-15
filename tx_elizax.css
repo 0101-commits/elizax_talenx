@@ -228,3 +228,10 @@
 .ezx-work-ln.st2 { color: #344054; }
 .ezx-work-ln.st2 .ck { color: #15803D; }
 @keyframes ezxPulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* ---------- 인라인 시나리오 카드 + 제안 칩 ---------- */
+.ezx-msg.scn { align-self: stretch; max-width: 100%; }
+.ezx-scnhost { min-width: 0; }
+.ezx-scn-lab { font-size: 11px; font-weight: 800; color: #47536B; margin: 14px 0 6px; letter-spacing: .03em; }
+.ezx-starter.scn { border-color: rgba(35,64,142,.35); color: #23408E; font-weight: 700; }
+.ezx-starter.scn:hover { background: rgba(35,64,142,.06); }

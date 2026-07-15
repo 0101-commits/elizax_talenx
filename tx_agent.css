@@ -79,17 +79,6 @@ button.agh-gitem:hover { background: rgba(255,255,255,.2); }
 .agh-asof2 { font-size: 11.5px; color: var(--agh-navy); background: var(--agh-soft); border: 1px solid var(--agh-line-2); border-radius: 20px; padding: 4px 11px; white-space: nowrap; cursor: pointer; }
 .agh-auditchip { font-size: 10.5px; color: var(--agh-ok); background: rgba(21,128,61,.08); border: 1px solid rgba(21,128,61,.3); border-radius: 20px; padding: 2px 8px; margin-left: 6px; }
 
-/* ---------- S1~S8 프로토콜 스트립 ---------- */
-.agh-proto { display: flex; gap: 2px; margin: 4px 0 16px; overflow-x: auto; }
-.agh-ps { flex: 1; min-width: 74px; text-align: center; padding: 6px 2px; border-top: 3px solid var(--agh-line); font-size: 10px; color: var(--agh-ink-3); }
-.agh-ps b { display: block; font-size: 11px; color: var(--agh-ink-2); }
-.agh-ps small { display: block; font-size: 9.5px; }
-.agh-ps .dot { display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--agh-line-2); margin: 0 auto 3px; }
-.agh-ps.done { border-top-color: var(--agh-navy); }
-.agh-ps.done .dot { background: var(--agh-navy); }
-.agh-ps.cur { border-top-color: var(--agh-orange); }
-.agh-ps.cur .dot { background: var(--agh-orange); animation: aghPulse 1.2s infinite; }
-.agh-ps.cur b { color: var(--agh-orange); }
 @keyframes aghPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
 /* ---------- 자율성 배지 ---------- */
@@ -388,3 +377,38 @@ button.agh-gitem:hover { background: rgba(255,255,255,.2); }
 
 /* elizax 브랜딩 (허브=elizax 전체화면 모드) */
 .agh-brand-sub { font-size: 11px; font-weight: 600; color: rgba(255,255,255,.55); margin-left: 2px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,.2); }
+
+/* ---------- 시나리오 스텁 카드 (채팅 임베드 · heavy 시나리오 요약) ---------- */
+.agh-scnstub {
+  background: var(--agh-card); border: 1px solid var(--agh-line); border-radius: 12px;
+  padding: 12px; font-size: 12.5px; line-height: 1.6; color: var(--agh-ink);
+}
+.agh-scnstub .hd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
+.agh-scnstub .tt { font-size: 13px; }
+.agh-scnstub p { margin: 3px 0 8px; color: var(--agh-ink-2); }
+.agh-scnstub .num { font-weight: 800; color: var(--agh-navy); background: var(--agh-soft); border-radius: 8px; padding: 7px 10px; margin-bottom: 9px; font-size: 12px; }
+.agh-scnstub .acts { display: flex; gap: 7px; }
+
+/* ---------- 도킹 호스트(~300px) 안 agh-* 컴포넌트 적응 ---------- */
+.ezx-scnhost { font-size: 12.5px; color: var(--agh-ink); }
+.ezx-scnhost .agh-workpanel, .ezx-scnhost .agh-done { margin: 0 0 8px; }
+.ezx-scnhost .agh-gate { padding: 9px 10px; margin-top: 10px; gap: 6px; }
+.ezx-scnhost .agh-gate .lab { flex-basis: 100%; margin-right: 0; }
+.ezx-scnhost .agh-gate .agh-btn { padding: 6px 10px; font-size: 12px; }
+.ezx-scnhost .agh-shead { flex-direction: column; align-items: stretch; gap: 6px; margin-bottom: 9px; }
+.ezx-scnhost .agh-shead h2 { font-size: 14.5px; }
+.ezx-scnhost .agh-asof2 { align-self: flex-start; }
+.ezx-scnhost .agh-qwgrid { grid-template-columns: 1fr; }
+.ezx-scnhost .agh-nodes { grid-template-columns: 1fr 1fr; }
+.ezx-scnhost .agh-biasgrid { grid-template-columns: 1fr; }
+.ezx-scnhost .agh-diff { grid-template-columns: 1fr; }
+.ezx-scnhost .agh-callayout { grid-template-columns: 1fr; }
+.ezx-scnhost .agh-revlayout { grid-template-columns: 1fr; }
+.ezx-scnhost .agh-sumgrid { flex-wrap: wrap; }
+.ezx-scnhost .agh-brief { padding: 10px 12px; font-size: 12px; }
+.ezx-scnhost .agh-flow { gap: 3px; }
+.ezx-scnhost .agh-fstep { font-size: 10.5px; padding: 4px 8px; }
+.ezx-scnhost .agh-sidecard { position: static; width: auto; margin-top: 10px; box-shadow: none; }
+.ezx-scnhost table.agh-table { display: block; overflow-x: auto; white-space: nowrap; }
+.ezx-scnhost .agh-scanrow { flex-wrap: wrap; }
+.ezx-scnhost .agh-scanrow .out { margin-left: 0; flex-basis: 100%; }

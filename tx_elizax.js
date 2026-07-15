@@ -358,25 +358,30 @@
     sub.textContent = "성과관리 · OKR · 평가에 대해 물어보세요.";
     wrap.appendChild(sub);
 
-    /* AI Agent 특화 UI 바로가기 */
-    var agentRow = h("div", "ezx-agent-cta");
-    var hubBtn = h("button", "ezx-agent-btn primary", { type: "button" });
-    hubBtn.innerHTML = "⚡ <b>AI Agent 특화 화면</b><small>선제 감지 · 노드 워크플로우 · 승인 게이트</small>";
-    hubBtn.addEventListener("click", function () {
-      if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub(); }
-      else window.open("perf-agent-verifiable-ui/", "_blank");
-    });
-    var vfBtn = h("button", "ezx-agent-btn", { type: "button" });
-    vfBtn.innerHTML = "🧾 <b>검증 가능한 답변 데모</b><small>as-of · 트레이스 · 감사 · What-if</small>";
-    vfBtn.addEventListener("click", function () { window.open("perf-agent-verifiable-ui/", "_blank"); });
-    agentRow.appendChild(hubBtn); agentRow.appendChild(vfBtn);
-    wrap.appendChild(agentRow);
     if (OFFLINE) {
       wrap.appendChild(h("div", "ezx-agent-off", { text: "백엔드 미연결 — 오프라인 목업 응답 모드 (실시간 AI는 localhost:8080 서버 필요)" }));
     }
 
+    /* 역할 기반 에이전트 제안 칩 — 클릭하면 대화 안에서 바로 실행 */
+    var scns = (window.TXAgent && window.TXAgent.SCENARIOS) || [];
+    var rk = "member";
+    try { rk = (window.TXRoles && TXRoles.current && TXRoles.current().key) || "member"; } catch (e) { /* ignore */ }
+    var mine = scns.filter(function (s) { return (s.roles || []).indexOf(rk) >= 0; }).slice(0, 5);
+    if (mine.length) {
+      var slab = h("div", "ezx-scn-lab", { text: "지금 도와드릴 수 있는 일" });
+      wrap.appendChild(slab);
+      var srow = h("div", "ezx-starters");
+      mine.forEach(function (s) {
+        var b = h("button", "ezx-starter scn", { type: "button" });
+        b.innerHTML = "✦ " + esc(s.chip);
+        b.addEventListener("click", function () { runScenarioInChat(s.key, s.chip); });
+        srow.appendChild(b);
+      });
+      wrap.appendChild(srow);
+    }
+
     var starters = h("div", "ezx-starters");
-    ["이번 분기 OKR 추천해줘", "내 목표 진행상황 점검", "동료 피드백 요약", "평가 근거 설명해줘"].forEach(function (s) {
+    ["내 목표 진행상황 점검", "평가 근거 설명해줘", "동료 피드백 요약"].forEach(function (s) {
       var b = h("button", "ezx-starter", { text: s, type: "button" });
       b.addEventListener("click", function () { sendMessage(s); });
       starters.appendChild(b);
@@ -434,6 +439,19 @@
       m._node = wnode;
       return wnode;
     }
+    if (m.role === "scn") {
+      /* 에이전트 시나리오 카드 — 재렌더 시 DOM 재사용 (애니메이션 재시작 방지) */
+      if (m._node) return m._node;
+      var snode = h("div", "ezx-msg scn ezx-scnhost");
+      m._node = snode;
+      if (window.TXAgent && window.TXAgent.runScenario) {
+        try { window.TXAgent.runScenario(m.key, snode); }
+        catch (e) { snode.textContent = "카드를 불러오지 못했습니다."; }
+      } else {
+        snode.textContent = "에이전트 모듈이 아직 로드되지 않았습니다.";
+      }
+      return snode;
+    }
     var node = h("div", "ezx-msg " + (m.role === "user" ? "user" : m.role === "err" ? "err" : "ai"));
     var bubble = h("div", "ezx-bubble");
     if (m.role === "user") bubble.textContent = m.text;
@@ -489,8 +507,22 @@
     return line + "\n" + userText;
   }
 
+  /* 시나리오 실행을 대화 안에 자연스럽게: 사용자 발화 → 인라인 작업 카드 */
+  function runScenarioInChat(key, label) {
+    pushMessage({ role: "user", text: label });
+    pushMessage({ role: "scn", key: key });
+    renderMessages();
+    scrollToBottom();
+  }
+
   function sendMessage(userText) {
     if (state.streaming) return;
+    /* 의도가 에이전트 시나리오와 일치하면 LLM 대신 인라인 작업 카드 실행 */
+    if (window.TXAgent && window.TXAgent.intentFor) {
+      var scnKey = null;
+      try { scnKey = window.TXAgent.intentFor(userText); } catch (e) { /* ignore */ }
+      if (scnKey) { runScenarioInChat(scnKey, userText); return; }
+    }
     // guard: manager/executive needs a subject
     if (needsSubject(state.perspective) && !state.subject) {
       pushMessage({ role: "err", text: "이 관점에서는 대상 직원을 먼저 선택해 주세요." });
