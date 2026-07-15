@@ -1,0 +1,116 @@
+{
+  "$schema": "elizax/verifiable-answer-ui@1",
+  "description": "3대 UX 형태(도킹·팝업·전체화면)가 공유하는 answer receipt 데이터셋. 모든 카드는 동일 스키마를 따르며 화면은 표현만 바꾼다.",
+  "schema": {
+    "fields": ["answer", "as_of", "scope", "trace[]", "rules[]", "evidence[]", "excluded[]", "actions[]", "audit_ref", "confidence"],
+    "trace_types": ["calculation", "rule_check", "graph_path"],
+    "gate": ["approve", "edit", "hold"]
+  },
+  "receipts": [
+    {
+      "id": "rcpt-dock-grade-01",
+      "form": "docking",
+      "trace_type": "calculation",
+      "subject": { "name": "박영환", "org": "Consulting BU", "cycle": "2026 상반기", "phase": "중간점검" },
+      "answer": "박영환님 상반기 등급으로 A를 제안합니다.",
+      "verdict": { "grade": "A", "auto_committed": false },
+      "as_of": {
+        "current": "2026 상반기 · 6/30 마감 실적",
+        "options": ["2026 상반기 · 6/30 마감 실적", "2026 상반기 · 5/31 시점", "2025 하반기 · 확정 스냅샷"]
+      },
+      "scope": "권한 내 1개 팀",
+      "trace": [
+        { "step": 1, "title": "실적 조회", "detail": "매출 KR 달성률 118% 집계", "source": "ERP", "record_id": "perf.2026H1.kr2", "value": 118 },
+        { "step": 2, "title": "과정 근거", "detail": "중간 1:1 기록 3건 — 자기주도 근거 확보", "source": "talenx", "record_id": "one_on_one.2026H1", "value": 3 },
+        { "step": 3, "title": "협업 톤 대조", "detail": "협업 피드백 톤 확인 중", "source": "Slack", "record_id": "collab.tone", "status": "loading" }
+      ],
+      "rules": [{ "id": "eval-rule", "version": "v3.1", "verified": true, "ref": "평가규정 §12" }],
+      "evidence": ["ERP:perf.2026H1.kr2", "talenx:one_on_one.2026H1", "Slack:collab.tone"],
+      "excluded": [],
+      "what_if": {
+        "label": "달성률 하락 가정 재계산",
+        "input": { "kr_rate": { "from": 118, "to": 92 } },
+        "output": { "grade": { "from": "A", "to": "B+" }, "percentile": { "from": "상위 20%", "to": "상위 41%" } },
+        "exec_log": "rule-exec.a3f1"
+      },
+      "actions": ["approve", "edit", "hold"],
+      "audit_ref": "audit.dock.grade.20260710",
+      "confidence": 0.88
+    },
+    {
+      "id": "rcpt-popup-signals-01",
+      "form": "popup",
+      "trace_type": "rule_check",
+      "trigger": "proactive_detection",
+      "answer": "이번 주 챙길 신호 3건을 발견했어요",
+      "batch_policy": "하루 1회 배치 · 스누즈/무시 상시 노출",
+      "as_of": { "current": "최근 3주 · 실시간 감지" },
+      "scope": "담당 조직 전체",
+      "signals": [
+        { "level": "중요", "type": "deadline", "text": "중간점검 미실시 2명 — 김서준·이하늘", "meta": "마감 D-3" },
+        { "level": "주의", "type": "trend_drop", "text": "달성률 3주 연속 하락 1명 — 박도윤", "meta": "112% → 86%" },
+        { "level": "주간", "type": "bias", "text": "등급 분포 관대화 조짐 — 영업2팀 A 이상 편중", "meta": "분포 이상" }
+      ],
+      "evidence": ["talenx:schedule", "ERP:perf.3w"],
+      "actions": ["open_now", "snooze_evening", "dismiss"],
+      "audit_ref": "audit.popup.signals.20260710",
+      "confidence": 0.82
+    },
+    {
+      "id": "rcpt-fs-goal-checks-01",
+      "form": "fullscreen",
+      "trace_type": "rule_check",
+      "subject": { "name": "박성현", "org": "영업본부", "cycle": "2026 상반기", "phase": "목표 설정 / 피드백" },
+      "answer": "목표 초안에서 Human-in-the-loop 확인이 필요한 이상치 3건을 감지했습니다.",
+      "auto_fix": false,
+      "as_of": { "current": "2026 상반기 · 지침 확정 기준" },
+      "scope": "본인 목표 5건",
+      "process": {
+        "stepper": ["지침 수립", "자기 목표", "검토 회의", "피드백", "목표 확정"],
+        "current": "피드백",
+        "nodes": [
+          { "name": "지침 / R&R 검증", "status": "완료", "kind": "teal" },
+          { "name": "목표 초안 생성", "status": "완료", "kind": "teal" },
+          { "name": "상위 목표 정렬", "status": "완료", "kind": "teal" },
+          { "name": "난이도 벤치마크", "status": "진행 중", "progress": 62, "kind": "blue" },
+          { "name": "규칙 / 이상치 검증", "status": "이상치 3건", "count": 3, "kind": "red" },
+          { "name": "목표안 통합", "status": "구성 중", "progress": "2/3", "kind": "purple" }
+        ]
+      },
+      "findings": [
+        {
+          "id": "f-weight-sum",
+          "flag": "critical",
+          "title": "가중치 합계 105%",
+          "detail": "전체 목표 가중치 합계가 100%보다 5%p 높습니다.",
+          "rules": [{ "id": "rule.weight.sum", "text": "가중치 상한 100%" }],
+          "evidence": ["talenx:goal.2026H1.*"],
+          "what_if": {
+            "label": "100% 정규화 재계산",
+            "input": { "sum": { "from": 105, "to": 100 } },
+            "output": [
+              { "goal": "신규계약", "from": 35, "to": 33 },
+              { "goal": "유지율", "from": 40, "to": 38 },
+              { "goal": "온보딩 리드", "from": 30, "to": 29 }
+            ],
+            "exec_log": "rule-exec.w05"
+          }
+        },
+        {
+          "id": "f-corp-align",
+          "flag": "warning",
+          "title": "전사 목표 미연결",
+          "detail": "3번째 목표가 전사 목표 '매출 3조 8,000억원 달성'과 연결되지 않습니다.",
+          "rules": [{ "id": "align.corp.kr", "text": "전사 정렬 필수" }],
+          "evidence": ["benchmark:align.corp.kr"],
+          "actions": ["recommend_link", "manual_link", "hold"]
+        }
+      ],
+      "connected_sources": ["talenx", "Slack", "MS 365", "ERP"],
+      "background_tasks": 2,
+      "actions": ["approve", "edit", "hold"],
+      "audit_ref": "audit.fs.goal.20260710",
+      "confidence": 0.86
+    }
+  ]
+}

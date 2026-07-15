@@ -1,0 +1,60 @@
+{
+  "$schema": "elizax/org-jobs-mock@1",
+  "description": "전체화면 목표 설정 화면의 가상 컨텍스트 데이터 — 조직도 + 직무 + 전사 목표. 근거 인용/정합성 점검이 참조하는 하네스(Harness) 소스.",
+  "corp_goals": [
+    { "id": "corp.rev", "text": "2026 매출 3조 8,000억원 달성", "owner": "○○컴퍼니" },
+    { "id": "corp.retention", "text": "핵심 고객 유지율 95%", "owner": "○○컴퍼니" }
+  ],
+  "org": {
+    "id": "sales-hq",
+    "name": "영업본부",
+    "headcount": 42,
+    "teams": [
+      { "id": "sales-1", "name": "영업1팀", "headcount": 14 },
+      { "id": "sales-2", "name": "영업2팀", "headcount": 15, "flags": ["등급 분포 관대화 조짐"] },
+      { "id": "cx", "name": "CX팀", "headcount": 13 }
+    ]
+  },
+  "employees": [
+    {
+      "id": "EMP-2211", "name": "박성현", "team": "sales-2", "role": "영업 책임",
+      "job_profile": { "family": "Sales", "level": "L4", "skills": ["신규계약", "고객관리", "온보딩 리드"] },
+      "goals": [
+        { "id": "goal.2026H1.g1", "text": "신규 계약 매출", "weight": 35, "corp_link": "corp.rev", "kr_rate": 118 },
+        { "id": "goal.2026H1.g2", "text": "기존 고객 유지율", "weight": 40, "corp_link": "corp.retention", "kr_rate": 96 },
+        { "id": "goal.2026H1.g3", "text": "후배 온보딩 리드", "weight": 30, "corp_link": null, "kr_rate": null, "flags": ["전사 목표 미연결"] }
+      ],
+      "weight_sum": 105,
+      "anomalies": [
+        { "id": "f-weight-sum", "type": "weight_over", "value": 105, "limit": 100 },
+        { "id": "f-corp-align", "type": "missing_corp_link", "goal": "goal.2026H1.g3" }
+      ]
+    },
+    {
+      "id": "EMP-2288", "name": "박도윤", "team": "sales-2", "role": "영업 선임",
+      "job_profile": { "family": "Sales", "level": "L3", "skills": ["신규계약", "고객관리"] },
+      "signals": [{ "type": "trend_drop", "series": [112, 98, 86], "unit": "달성률%" }]
+    },
+    {
+      "id": "EMP-2301", "name": "김서준", "team": "sales-1", "role": "영업 선임",
+      "job_profile": { "family": "Sales", "level": "L3", "skills": ["신규계약"] },
+      "signals": [{ "type": "midcheck_missing", "deadline": "D-3" }]
+    },
+    {
+      "id": "EMP-2305", "name": "이하늘", "team": "cx", "role": "CX 매니저",
+      "job_profile": { "family": "CX", "level": "L4", "skills": ["고객관리", "VOC"] },
+      "signals": [{ "type": "midcheck_missing", "deadline": "D-3" }]
+    }
+  ],
+  "rules": [
+    { "id": "rule.weight.sum", "text": "전체 목표 가중치 합 ≤ 100%", "version": "v3.1" },
+    { "id": "align.corp.kr", "text": "개인 목표는 전사 목표에 최소 1개 정렬", "version": "v3.1" },
+    { "id": "calib.band", "text": "강제배분 가이드 상위(S~A) ≤ 30%", "version": "v3.1" }
+  ],
+  "connectors": [
+    { "id": "talenx", "kind": "HRIS", "status": "connected" },
+    { "id": "ERP", "kind": "실적", "status": "connected" },
+    { "id": "Slack", "kind": "협업", "status": "connected" },
+    { "id": "MS 365", "kind": "문서", "status": "connected" }
+  ]
+}

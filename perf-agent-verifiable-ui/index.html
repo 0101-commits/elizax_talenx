@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성과관리 AI Agent — Verifiable Answer UI 목업</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/tabler-icons.min.css">
+<style>
+  :root {
+    --bg: #F2F3F6;
+    --surface: #FFFFFF;
+    --surface-sub: #F7F8FA;
+    --ink: #1A1D27;
+    --ink-2: #565B6B;
+    --ink-3: #8B90A0;
+    --line: #E3E5EB;
+    --line-2: #CDD1DB;
+
+    /* 신뢰 = 네이비(검증 표준) · 활성 = 블루(talenx) · 주석 = 주황 */
+    --navy: #23408E;
+    --navy-bg: #EBF0FB;
+    --navy-dk: #1B3373;
+    --blue: #1F7AF0;
+    --blue-bg: #E7F1FE;
+    --anno: #C2410C;
+    --anno-bg: #FDEDE3;
+
+    /* 시맨틱(상태) */
+    --ok: #0E7C4A;      --ok-bg: #E3F3EC;
+    --warn: #B45309;    --warn-bg: #FEF3C7;
+    --danger: #C0392B;  --danger-bg: #FDECEA;
+    --purple: #7C3AED;  --purple-bg: #F1EBFB;
+    --teal: #0E9384;    --teal-bg: #DEF4F1;
+
+    --mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(26,29,39,.04), 0 8px 24px rgba(26,29,39,.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1120px; margin: 0 auto; padding: 48px 24px 96px; }
+  ::selection { background: var(--navy-bg); }
+
+  /* ---------- header ---------- */
+  .doc-head { margin-bottom: 36px; }
+  .doc-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    color: var(--navy); text-transform: uppercase; margin-bottom: 12px;
+  }
+  .doc-eyebrow::before { content: ""; width: 22px; height: 2px; background: var(--navy); }
+  .doc-head h1 { font-size: 31px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.28; text-wrap: balance; }
+  .doc-head p.sub { color: var(--ink-2); margin-top: 10px; max-width: 700px; }
+
+  /* ---------- annotation legend ---------- */
+  .legend {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px; margin: 26px 0 20px;
+  }
+  .legend div {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px 14px; font-size: 13px; color: var(--ink-2);
+  }
+  .legend b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; font-size: 13.5px; }
+  .anno {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--anno-bg); color: var(--anno);
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+    border: 1px solid #F0C9AE; vertical-align: -4px; margin-right: 6px;
+  }
+  .anno.abs { position: absolute; z-index: 5; }
+
+  /* ---------- contract strip (3 forms share one contract) ---------- */
+  .contract {
+    background: linear-gradient(180deg, #FBFCFE, var(--surface-sub));
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 20px; margin-bottom: 56px;
+  }
+  .contract h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .contract p { font-size: 13.5px; color: var(--ink-2); max-width: 780px; }
+  .forms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .form-card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px; position: relative;
+  }
+  .form-card.active { border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-bg); }
+  .form-card .step-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    color: var(--navy); background: var(--navy-bg); padding: 3px 9px; border-radius: 999px; margin-bottom: 8px;
+  }
+  .form-card h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .form-card p { font-size: 12.5px; color: var(--ink-2); line-height: 1.55; }
+  .form-card .arrow { position: absolute; right: -13px; top: 50%; transform: translateY(-50%); z-index: 2; color: var(--ink-3); font-size: 18px; background: var(--bg); }
+  .form-card:last-child .arrow { display: none; }
+  .shared-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+  .shared-chips .lab { font-size: 12px; color: var(--ink-3); font-weight: 600; }
+  .shared-chip { font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-2); color: var(--ink-2); }
+  .shared-chip i { font-size: 13px; vertical-align: -2px; margin-right: 3px; color: var(--navy); }
+
+  /* ---------- section ---------- */
+  .scenario { margin-bottom: 76px; }
+  .scenario-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
+  .scenario-head .num { font-family: var(--mono); font-size: 13px; color: var(--navy); font-weight: 600; }
+  .scenario-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .scenario-head .tag {
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 3px 10px; border-radius: 999px;
+    background: var(--navy-bg); color: var(--navy);
+  }
+  .scenario-head .tag.warn { background: var(--warn-bg); color: var(--warn); }
+  .scenario-head .tag.deep { background: var(--purple-bg); color: var(--purple); }
+  .scenario > p.lead-p { color: var(--ink-2); font-size: 14px; max-width: 760px; margin-bottom: 20px; }
+
+  /* ---------- product frame ---------- */
+  .frame {
+    background: var(--surface); border: 1px solid var(--line-2);
+    border-radius: 16px; overflow: hidden; box-shadow: var(--shadow);
+  }
+  .frame-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 16px; border-bottom: 1px solid var(--line);
+    background: #232838;
+  }
+  .frame-bar .dots { display: flex; gap: 6px; }
+  .frame-bar .dots span { width: 11px; height: 11px; border-radius: 50%; background: #4A5064; }
+  .frame-bar .dots span.r { background: #ED6A5E; }
+  .frame-bar .app { font-size: 12.5px; font-weight: 700; color: #E7E9F0; margin-left: 8px; letter-spacing: -.01em; }
+  .frame-bar .app em { font-style: normal; color: #8FB4F5; }
+  .frame-bar .url {
+    margin-left: auto; font-family: var(--mono); font-size: 11px; color: #9AA0B4;
+    background: #1A1E2C; padding: 3px 12px; border-radius: 6px;
+  }
+
+  /* ============ Scenario 1 · 도킹 대화창 (host talenx + docked panel) ============ */
+  .dock-layout { display: grid; grid-template-columns: 1fr 340px; min-height: 480px; }
+  .host {
+    background: var(--surface-sub); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .host-nav {
+    display: flex; align-items: center; gap: 18px; padding: 12px 18px;
+    border-bottom: 1px solid var(--line); background: var(--surface);
+  }
+  .host-nav .logo { font-size: 15px; font-weight: 800; color: var(--blue); letter-spacing: -.02em; }
+  .host-nav .tabs { display: flex; gap: 16px; font-size: 13px; color: var(--ink-3); flex-wrap: wrap; }
+  .host-nav .tabs span.on { color: var(--ink); font-weight: 700; position: relative; }
+  .host-nav .tabs span.on::after { content:""; position:absolute; left:0; right:0; bottom:-13px; height:2px; background: var(--blue); }
+  .host-nav .right { margin-left: auto; display: flex; gap: 12px; color: var(--ink-3); font-size: 16px; align-items:center; }
+  .host-nav .av { width: 26px; height: 26px; border-radius: 50%; background: var(--navy); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+  .host-body { padding: 20px; overflow: hidden; }
+  .host-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 10px; flex-wrap: wrap;}
+  .host-title h3 { font-size: 17px; font-weight: 700; }
+  .host-title .who { font-size: 12.5px; color: var(--ink-2); }
+  .host-title .who b { color: var(--navy); }
+  .subtabs { display: flex; gap: 14px; font-size: 12.5px; color: var(--ink-3); border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .subtabs .on { color: var(--ink); font-weight: 700; }
+
+  .goal-row { margin-bottom: 14px; }
+  .goal-row .gl-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; gap: 10px; }
+  .goal-row .gl-top .t { color: var(--ink); min-width: 0; }
+  .goal-row .gl-top .t b { font-weight: 600; }
+  .goal-row .gl-top .pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bar { height: 7px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; }
+  .bar > i.g { background: var(--ok); }
+  .bar > i.a { background: var(--warn); }
+  .bar > i.b { background: var(--blue); }
+  .bar > i.z { background: var(--line-2); }
+  .fill-note { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+  .just-filled { animation: flash 1.4s ease; }
+  @keyframes flash { 0%{ background: var(--navy-bg);} 100%{ background: transparent;} }
+
+  /* docked agent panel */
+  .dock {
+    background: var(--surface); display: flex; flex-direction: column;
+    min-width: 0;
+  }
+  .dock-head {
+    padding: 13px 16px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .dock-head .ex {
+    width: 30px; height: 30px; border-radius: 9px; background: var(--navy); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; letter-spacing: -.02em; flex-shrink: 0;
+  }
+  .dock-head .nm { flex: 1; min-width: 0; }
+  .dock-head .nm b { font-size: 13.5px; font-weight: 700; display: block; }
+  .dock-head .nm span { font-size: 11.5px; color: var(--ink-3); }
+  .dock-head .badge-mini { font-size: 10.5px; }
+  .dock-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
+  .status-line { font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 7px; margin-bottom: 14px; }
+  .status-line .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); animation: pulse 1.3s infinite; }
+  @keyframes pulse { 0%,100%{ opacity: 1;} 50%{ opacity: .3;} }
+
+  .dock-composer {
+    border-top: 1px solid var(--line); padding: 10px 12px; display: flex; gap: 8px; align-items: center;
+  }
+  .dock-composer input {
+    flex: 1; border: 1px solid var(--line-2); border-radius: 9px; padding: 8px 12px; font-size: 13px; font-family: inherit; color: var(--ink); background: var(--surface-sub);
+  }
+  .dock-composer input:focus { outline: 2px solid var(--navy); outline-offset: 0; }
+  .dock-composer .send { width: 34px; height: 34px; border-radius: 9px; background: var(--navy); color: #fff; border: none; cursor: pointer; font-size: 16px; display:flex; align-items:center; justify-content:center; }
+
+  /* ---------- receipt card (shared component) ---------- */
+  .receipt { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; position: relative; }
+  .receipt + .receipt { margin-top: 12px; }
+  .receipt-meta {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 13px; border-bottom: 1px solid var(--line); flex-wrap: wrap;
+  }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+  .chip i { font-size: 13px; }
+  .chip.asof { background: var(--navy-bg); color: var(--navy); cursor: pointer; user-select: none; }
+  .chip.asof:hover { background: #DEE7FA; }
+  .chip.audit { background: transparent; color: var(--ink-2); font-weight: 500; }
+  .receipt-body { padding: 14px; }
+  .receipt-body > .verdict { font-size: 14px; margin-bottom: 13px; line-height: 1.6; }
+  .verdict strong { font-weight: 700; }
+  .verdict .grade { color: var(--navy); font-weight: 800; }
+  .verdict mark { background: #FBF0D0; color: inherit; padding: 0 3px; border-radius: 3px; font-weight: 600; }
+  .warn-inline { color: var(--anno); font-weight: 600; }
+
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-bottom: 13px; }
+  .metric { background: var(--surface-sub); border-radius: 9px; padding: 9px 11px; }
+  .metric label { display: block; font-size: 11px; color: var(--ink-3); margin-bottom: 1px; }
+  .metric b { font-size: 16px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .metric b.down { color: var(--danger); }
+
+  /* source-check stream / trace */
+  .trace { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .trace + .trace { margin-top: 10px; }
+  .trace-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--surface-sub); cursor: pointer; user-select: none; }
+  .trace-head i.lead { font-size: 15px; color: var(--ink-2); }
+  .trace-head b { font-size: 12.5px; font-weight: 600; }
+  .trace-head span.cnt { font-size: 11px; color: var(--ink-3); }
+  .trace-head .tgl { margin-left: auto; font-size: 15px; color: var(--ink-3); transition: transform .18s ease; }
+  .trace.open .tgl { transform: rotate(180deg); }
+  .trace-steps { display: none; }
+  .trace.open .trace-steps { display: block; }
+  .step { display: flex; gap: 10px; padding: 11px 12px; border-top: 1px solid var(--line); }
+  .step.hl { background: #FBF7F0; }
+  .step-n { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; background: var(--navy-bg); color: var(--navy); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  .step .cont { min-width: 0; }
+  .step b { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 1px; }
+  .step p { font-size: 12px; color: var(--ink-2); }
+  .step .calc { font-family: var(--mono); font-size: 11.5px; color: var(--ink); background: var(--surface-sub); padding: 5px 9px; border-radius: 6px; display: inline-block; margin-top: 4px; }
+
+  /* source-check inline rows (원천 확인 내역) */
+  .srcs { display: flex; flex-direction: column; gap: 7px; margin-bottom: 13px; }
+  .src { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+  .src i.ck { color: var(--ok); font-size: 14px; flex-shrink:0; vertical-align: -2px; }
+  .src i.load { color: var(--blue); font-size: 8px; animation: pulse 1.3s infinite; flex-shrink:0; }
+  .src .txt { min-width: 0; }
+  .src .txt b { font-weight: 600; color: var(--ink); }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; margin-top: 5px; margin-right: 5px; }
+  .badge i { font-size: 12px; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.ref { background: var(--surface-sub); color: var(--ink-2); font-weight: 500; }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .rid { font-family: var(--mono); font-size: 10.5px; background: var(--surface-sub); padding: 1px 6px; border-radius: 5px; color: var(--ink-2); }
+
+  /* source badges (talenx/ERP/…) */
+  .sb { font-family: var(--mono); font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 5px; letter-spacing: .01em; }
+  .sb.talenx { background: var(--blue-bg); color: var(--blue); }
+  .sb.erp { background: var(--ok-bg); color: var(--ok); }
+  .sb.slack { background: var(--warn-bg); color: var(--warn); }
+  .sb.rule { background: var(--purple-bg); color: var(--purple); }
+  .sb.bench { background: #FBEFDD; color: #92610E; }
+  .sb.oto { background: var(--teal-bg); color: var(--teal); }
+
+  /* what-if */
+  .actions { display: flex; gap: 7px; margin-top: 13px; flex-wrap: wrap; align-items: center; }
+  .btn { font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 13px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); transition: background .15s, border-color .15s; }
+  .btn:hover { background: var(--surface-sub); border-color: var(--ink-3); }
+  .btn:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+  .btn.primary { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .btn.primary:hover { background: var(--navy-dk); }
+  .btn.hold { color: var(--ink-2); }
+
+  .gate { display: flex; gap: 7px; margin-top: 13px; padding-top: 12px; border-top: 1px dashed var(--line-2); flex-wrap: wrap; align-items: center; }
+  .gate .gate-lab { font-size: 11.5px; color: var(--ink-3); margin-right: auto; display:flex; align-items:center; gap:5px; }
+  .gate .gate-lab i { color: var(--purple); }
+
+  .whatif { display: none; margin-top: 12px; border: 1px solid #D8E2F5; background: #F6F9FE; border-radius: 9px; padding: 13px 14px; }
+  .whatif.show { display: block; animation: rise .25s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .whatif h5 { font-size: 12.5px; font-weight: 700; color: var(--navy); margin-bottom: 9px; display: flex; align-items: center; gap: 6px; }
+  .wf-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 5px 0; }
+  .wf-row + .wf-row { border-top: 1px dashed #D8E2F5; }
+  .wf-row span { color: var(--ink-2); }
+  .wf-row b { font-family: var(--mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .wf-row b.neg { color: var(--danger); }
+  .wf-row b.pos { color: var(--ok); }
+  .wf-note { font-size: 11.5px; color: var(--ink-3); margin-top: 7px; }
+
+  /* ============ Scenario 2 · 선제 팝업 ============ */
+  .popup-stage { position: relative; min-height: 420px; background:
+      linear-gradient(180deg, #FBFCFE, #EEF1F6);
+    padding: 18px; overflow: hidden; }
+  .dim-dash { filter: saturate(.5) brightness(.99); opacity: .5; pointer-events: none; user-select: none; }
+  .dim-dash .kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
+  .dim-dash .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .dim-dash .kpi label { font-size: 12px; color: var(--ink-3); }
+  .dim-dash .kpi b { font-size: 22px; font-weight: 800; display: block; }
+  .dim-dash .block { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; height: 150px; }
+  .dim-label { position: absolute; top: 14px; left: 20px; font-size: 11.5px; color: var(--ink-3); background: var(--surface); border: 1px solid var(--line); padding: 3px 10px; border-radius: 999px; z-index: 3; }
+
+  .popup {
+    position: absolute; right: 22px; bottom: 22px; width: 372px; z-index: 6;
+    background: var(--surface); border: 1px solid var(--warn); border-top: 3px solid var(--warn);
+    border-radius: 13px; box-shadow: 0 12px 40px rgba(26,29,39,.22); overflow: hidden;
+  }
+  .popup-head { padding: 12px 15px; display: flex; align-items: center; gap: 9px; background: var(--warn-bg); }
+  .popup-head .ic { color: var(--warn); font-size: 18px; }
+  .popup-head b { font-size: 13.5px; font-weight: 700; flex: 1; }
+  .popup-head .bd { font-size: 10.5px; font-weight: 700; color: var(--warn); background: #fff; border: 1px solid #F0D89A; padding: 2px 8px; border-radius: 999px; }
+  .popup-body { padding: 13px 15px; }
+  .popup-body > .intro { font-size: 13px; font-weight: 600; margin-bottom: 11px; }
+  .sig { display: flex; gap: 9px; padding: 9px 0; border-top: 1px solid var(--line); align-items: flex-start; }
+  .sig:first-of-type { border-top: none; }
+  .sig .lv { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px; flex-shrink: 0; margin-top: 1px; }
+  .sig .lv.imp { background: var(--surface-sub); color: var(--ink-2); }
+  .sig .lv.att { background: var(--navy-bg); color: var(--navy); }
+  .sig .st { font-size: 12.5px; color: var(--ink); min-width: 0; }
+  .sig .st b { font-weight: 600; }
+  .sig.att { background: var(--danger-bg); margin: 0 -15px; padding: 9px 15px; }
+  .popup-src { font-size: 11px; color: var(--ink-3); margin: 10px 0 12px; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+
+  /* ============ Scenario 3 · 전체화면 (W2 목표설정) ============ */
+  .fs { display: grid; grid-template-columns: 216px 1fr 348px; min-height: 640px; }
+  .fs-global { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--line); background: var(--surface); }
+  .fs-global .burger { font-size: 20px; color: var(--ink-2); cursor: pointer; }
+  .fs-global .brand { font-size: 15px; font-weight: 800; letter-spacing: -.02em; display:flex; align-items:center; gap: 8px; }
+  .fs-global .brand .h { width: 26px; height: 26px; border-radius: 7px; background: var(--navy); color:#fff; display:flex;align-items:center;justify-content:center; font-weight: 800; font-size: 13px; }
+  .fs-global .ctx-chip { font-size: 12px; font-weight: 600; color: var(--navy); background: var(--navy-bg); padding: 4px 12px; border-radius: 999px; }
+  .fs-global .g-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .g-pill { font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; background: var(--surface-sub); border: 1px solid var(--line); color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; }
+  .g-pill i { font-size: 14px; }
+  .g-pill.alert { background: var(--warn-bg); border-color: #F0D89A; color: var(--warn); }
+  .g-pill.alert .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
+  .g-pill.user { background: var(--surface-sub); }
+  .g-pill.user .av { width: 20px; height: 20px; border-radius: 50%; background: var(--navy); color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+  /* left nav */
+  .fs-nav { border-right: 1px solid var(--line); background: var(--surface-sub); padding: 12px 10px; font-size: 13px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 11px; border-radius: 8px; color: var(--ink-2); cursor: pointer; }
+  .nav-item i { font-size: 17px; color: var(--ink-3); }
+  .nav-item:hover { background: #EDEFF4; }
+  .nav-item.on { background: var(--navy-bg); color: var(--navy); font-weight: 700; }
+  .nav-item.on i { color: var(--navy); }
+  .nav-item .chev { margin-left: auto; font-size: 14px; }
+  .nav-child { padding: 5px 11px 5px 32px; font-size: 12.5px; color: var(--ink-2); border-radius: 7px; cursor: pointer; display:flex; align-items:center; gap:6px; }
+  .nav-child:hover { background: #EDEFF4; }
+  .nav-child.on { background: #E3E9F6; color: var(--navy); font-weight: 700; }
+  .nav-child.dot::before { content:""; width:5px;height:5px;border-radius:50%; background: var(--ink-3); flex-shrink:0; }
+  .nav-sep { height: 1px; background: var(--line); margin: 10px 4px; }
+  .nav-recent-t { font-size: 11px; color: var(--ink-3); padding: 4px 11px; }
+
+  /* center canvas */
+  .fs-canvas { background:
+      radial-gradient(circle, #DDE1EA 1px, transparent 1px) 0 0 / 20px 20px,
+      linear-gradient(180deg, #FBFCFE, #F5F7FB);
+    display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .stepper { display: flex; align-items: center; gap: 4px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.7); flex-wrap: wrap; }
+  .stepper .st { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px; color: var(--ink-3); }
+  .stepper .st.done { color: var(--ok); }
+  .stepper .st.done i { color: var(--ok); }
+  .stepper .st.cur { background: var(--blue); color: #fff; box-shadow: 0 2px 8px rgba(31,122,240,.35); }
+  .stepper .st i { font-size: 15px; }
+  .stepper .sep { color: var(--line-2); font-size: 13px; }
+
+  .canvas-scroll { padding: 22px; flex: 1; overflow: auto; }
+  .parallel-head { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 700; color: var(--navy); margin-bottom: 16px; }
+  .parallel-head .spin { width: 15px; height: 15px; border: 2px solid var(--navy-bg); border-top-color: var(--navy); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .flow { display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 16px; align-items: center; }
+  .flow-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .flow-col.mid { background: var(--blue-bg); border: 1px solid #C9DEFB; border-radius: 12px; padding: 12px; gap: 10px; }
+  .flow-col.mid .mid-lab { font-size: 10.5px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .04em; text-align:center; }
+  .node {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+    padding: 11px 12px; box-shadow: 0 1px 3px rgba(26,29,39,.05); position: relative;
+  }
+  .node .n-top { display: flex; align-items: center; gap: 9px; }
+  .node .n-ic { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .node .n-ic.teal { background: var(--teal-bg); color: var(--teal); }
+  .node .n-ic.blue { background: var(--blue-bg); color: var(--blue); }
+  .node .n-ic.red { background: var(--danger-bg); color: var(--danger); }
+  .node .n-ic.purple { background: var(--purple-bg); color: var(--purple); }
+  .node .n-nm { font-size: 13px; font-weight: 700; min-width: 0; }
+  .node .n-st { font-size: 11.5px; margin-top: 6px; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+  .node .n-st .d { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .n-st.teal, .n-st.teal .d { color: var(--teal); } .n-st.teal .d { background: var(--teal); }
+  .n-st.blue, .n-st.blue .d { color: var(--blue); } .n-st.blue .d { background: var(--blue); }
+  .n-st.red, .n-st.red .d { color: var(--danger); } .n-st.red .d { background: var(--danger); }
+  .n-st.purple, .n-st.purple .d { color: var(--purple); } .n-st.purple .d { background: var(--purple); }
+  .node.warn { border-color: #F1C6C0; background: #FEF6F5; cursor: pointer; }
+  .node .n-badge { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(192,57,43,.4); }
+  .node .n-prog { height: 4px; border-radius: 999px; background: var(--line); margin-top: 8px; overflow: hidden; }
+  .node .n-prog > i { display: block; height: 100%; background: var(--blue); border-radius: 999px; transition: width .5s ease; }
+  .flow-arrow { text-align: center; color: var(--line-2); font-size: 18px; }
+
+  .canvas-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px; border-top: 1px solid var(--line); background: rgba(255,255,255,.7); }
+  .canvas-foot .run-btn { font-size: 12.5px; font-weight: 700; color: #fff; background: var(--navy); border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .canvas-foot .run-btn:hover { background: var(--navy-dk); }
+  .canvas-foot .run-btn:disabled { background: var(--line-2); cursor: default; }
+  .zoom { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+  .zoom span.b { cursor: pointer; font-size: 15px; }
+
+  /* right context panel */
+  .fs-ctx { border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-width: 0; }
+  .ctx-tools { display: flex; align-items: center; gap: 4px; padding: 9px 12px; border-bottom: 1px solid var(--line); justify-content: flex-end; color: var(--ink-3); }
+  .ctx-tools .tool { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 7px; cursor: pointer; font-size: 15px; }
+  .ctx-tools .tool:hover { background: var(--surface-sub); color: var(--ink); }
+  .ctx-tools .tool.copy { width: auto; padding: 0 9px; font-size: 12px; font-weight: 600; gap: 3px; }
+  .ctx-body { padding: 14px; overflow-y: auto; flex: 1; }
+
+  .fs-composer { border-top: 1px solid var(--line); padding: 11px 14px; }
+  .fs-composer .box { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line-2); border-radius: 11px; padding: 6px 6px 6px 14px; background: var(--surface-sub); }
+  .fs-composer input { flex: 1; border: none; background: none; font-size: 13px; font-family: inherit; color: var(--ink); }
+  .fs-composer input:focus { outline: none; }
+  .fs-composer .add { color: var(--ink-3); font-size: 17px; cursor: pointer; }
+  .fs-composer .send { width: 32px; height: 32px; border-radius: 8px; background: var(--navy); color: #fff; border: none; cursor: pointer; font-size: 15px; display:flex; align-items:center; justify-content:center; }
+
+  .fs-status { grid-column: 1 / -1; display: flex; align-items: center; padding: 8px 18px; border-top: 1px solid var(--line); background: var(--surface-sub); font-size: 11.5px; color: var(--ink-2); gap: 16px; flex-wrap: wrap; }
+  .fs-status .conn { display: flex; align-items: center; gap: 12px; }
+  .fs-status .conn .lab { color: var(--ink-3); font-weight: 600; }
+  .fs-status .src-dot { display: inline-flex; align-items: center; gap: 5px; }
+  .fs-status .src-dot .d { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .fs-status .bg { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .fs-status .bg i { color: var(--ink-3); font-size: 14px; }
+
+  .ctx-alert-h { font-size: 13.5px; font-weight: 700; color: var(--danger); display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+  .ctx-sub { font-size: 12px; color: var(--ink-3); margin-bottom: 14px; }
+  .finding { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 11px; }
+  .finding.crit { border-color: #F1C6C0; background: #FEF9F8; }
+  .finding .f-top { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .finding .f-top .chev { margin-left: auto; color: var(--ink-3); font-size: 15px; }
+  .finding .f-flag { font-size: 15px; }
+  .finding .f-flag.red { color: var(--danger); }
+  .finding .f-flag.amber { color: var(--warn); }
+  .finding .f-body { font-size: 12.5px; color: var(--ink-2); margin-top: 8px; line-height: 1.6; }
+  .finding .f-body .q { color: var(--ink); font-weight: 600; }
+
+  footer.note { color: var(--ink-3); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 22px; margin-top: 8px; line-height: 1.7; }
+  footer.note code { font-family: var(--mono); font-size: 11px; background: var(--surface); border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; color: var(--ink-2); }
+  footer.note b { color: var(--ink-2); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 900px) {
+    .dock-layout { grid-template-columns: 1fr; }
+    .host { border-right: none; border-bottom: 1px solid var(--line); }
+    .fs { grid-template-columns: 1fr; }
+    .fs-nav { display: none; }
+    .fs-ctx { border-left: none; border-top: 1px solid var(--line); }
+    .forms { grid-template-columns: 1fr; }
+    .form-card .arrow { display: none; }
+    .flow { grid-template-columns: 1fr; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+  @media (max-width: 560px) {
+    .anno.abs { display: none; }
+    .popup { position: static; width: auto; margin-top: 14px; }
+    .popup-stage { padding: 12px; }
+    .metrics { grid-template-columns: repeat(2,1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .whatif.show, .just-filled { animation: none; }
+    .status-line .dot, .src i.load, .g-pill.alert .dot { animation: none; }
+    .parallel-head .spin { animation: none; }
+    .trace-head .tgl { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="doc-head">
+    <div class="doc-eyebrow">elizax · 성과관리 AI Agent · R&amp;D 워킹그룹</div>
+    <h1>Verifiable Answer UI — 성과관리 AI Agent 재설계</h1>
+    <p class="sub">성과관리/평가 E2E 에이전트의 모든 답을 <strong>검증 가능한 객체(answer receipt)</strong>로 렌더링한다. 하나의 에이전트가 상황에 따라 <strong>도킹 대화창 · 선제 팝업 · 전체화면</strong> 세 형태로만 화면을 바꾸며, 어느 형태에서 열려도 4개 시그널 레이어를 동일하게 노출한다. 주황색 번호가 4개 레이어의 위치다.</p>
+  </header>
+
+  <div class="legend">
+    <div><b><span class="anno">1</span>기준 시점 칩</b>bitemporal as-of 셀렉터. 과거 시점(평가 시즌·마감 스냅샷) 기준 재조회 진입점.</div>
+    <div><b><span class="anno">2</span>계산·근거 트레이스</b>규칙 버전 배지, 규정 칩, 원천 레코드 식별자(<code style="font-family:var(--mono);font-size:10.5px">goal.2026H1.kr3</code>)를 펼침.</div>
+    <div><b><span class="anno">3</span>감사 가능 배지</b>감사 로그 기록 여부, 권한 내 탐색 범위 명시.</div>
+    <div><b><span class="anno">4</span>What-if 재계산</b>계산 엔진 실증 — 아래 버튼은 실제로 동작합니다.</div>
+  </div>
+
+  <!-- ===== contract strip : one agent, three forms ===== -->
+  <div class="contract">
+    <h3>하나의 에이전트, 상황에 맞춰 화면만 바꾸는 3가지 노출 형태</h3>
+    <p>세 화면은 서로 다른 앱이 아니다. 기본값은 화면 흐름을 끊지 않는 <strong>① 도킹 대화창</strong>, 필요할 때 <strong>②·③</strong>으로 승격한다. 어떤 모드에서 열려도 <strong>같은 확인 내역 · 같은 근거 인용 · 같은 승인/수정/보류 게이트</strong>를 공유한다.</p>
+    <div class="forms">
+      <div class="form-card active">
+        <span class="step-tag"><i class="ti ti-layout-sidebar-right"></i> 기본 · 상주</span>
+        <h4>① 도킹 대화창</h4>
+        <p>화면 우측 340px에 접혀 상주. 평상시 질문·확인·간단 제안을 맥락 안에서 즉시. 화면 전환 없이 대화.</p>
+        <i class="ti ti-chevron-right arrow"></i>
+      </div>
+      <div class="form-card">
+        <span class="step-tag" style="color:var(--warn);background:var(--warn-bg)"><i class="ti ti-bell-ringing"></i> 보조 · 선제</span>
+        <h4>② 선제 팝업</h4>
+        <p>기한·편향·이상치 감지 시 먼저 말 건다. "캘리 3일 전, 미제출 4명" 같은 작은 카드로 행동 유도.</p>
+        <i class="ti ti-chevron-right arrow"></i>
+      </div>
+      <div class="form-card">
+        <span class="step-tag" style="color:var(--purple);background:var(--purple-bg)"><i class="ti ti-maximize"></i> 심층 · 전환</span>
+        <h4>③ 전체화면 딥워크</h4>
+        <p>전체 화면을 내줘 병렬 심의·다중 소스·대형 객체를 한 자리에. 여러 사람 데이터를 펼쳐 집중 작업.</p>
+      </div>
+    </div>
+    <div class="shared-chips">
+      <span class="lab">3모드 공통 계약</span>
+      <span class="shared-chip"><i class="ti ti-list-check"></i>확인 내역</span>
+      <span class="shared-chip"><i class="ti ti-quote"></i>근거 인용</span>
+      <span class="shared-chip"><i class="ti ti-git-fork"></i>승인 / 수정 / 보류 게이트</span>
+    </div>
+  </div>
+
+  <!-- ================= Scenario 1 : 도킹 대화창 ================= -->
+  <section class="scenario">
+    <div class="scenario-head">
+      <span class="num">형태 ①</span>
+      <h2>도킹 대화창 — 보던 화면 위에 답변 영수증을 얹는다</h2>
+      <span class="tag">기본 · 상주</span>
+    </div>
+    <p class="lead-p">talenx 성과관리 화면(왼쪽)은 그대로 두고, 우측 340px에 상주한 에이전트가 <strong>등급 초안</strong>을 answer receipt로 제안한다. 결정은 패널 안 승인/수정/보류 게이트로 사람이 그 자리에서 마무리한다.</p>
+
+    <div class="frame">
+      <div class="frame-bar">
+        <div class="dots"><span class="r"></span><span></span><span></span></div>
+        <div class="app"><em>talenx</em> · 성과관리 &nbsp;→&nbsp; 도킹된 <em>elizax</em></div>
+        <div class="url">app.talenx.com/performance</div>
+      </div>
+
+      <div class="dock-layout">
+        <!-- host : talenx work surface -->
+        <div class="host">
+          <div class="host-nav">
+            <span class="logo">talenx</span>
+            <div class="tabs"><span>인사관리</span><span>근무관리</span><span class="on">성과관리</span><span>평가관리</span><span>360 진단</span></div>
+            <div class="right"><i class="ti ti-search"></i><i class="ti ti-bell"></i><span class="av">박</span></div>
+          </div>
+          <div class="host-body">
+            <div class="host-title">
+              <h3>목표 현황</h3>
+              <span class="who"><b>박영환</b> · Consulting BU · 달성 <b>59%</b></span>
+            </div>
+            <div class="subtabs"><span class="on">소속 기준</span><span>역할 기준</span><span>나의 전체 목표</span></div>
+
+            <div class="goal-row">
+              <div class="gl-top"><span class="t"><b>[전략과제 3]</b> 평가 모듈 Re-Packaging</span><span class="pct" style="color:var(--ok)">100%</span></div>
+              <div class="bar"><i class="g" style="width:100%"></i></div>
+              <div class="fill-note">완료 · ERP 실적 근거 확보 → 등급 근거로 재사용 가능</div>
+            </div>
+            <div class="goal-row">
+              <div class="gl-top"><span class="t"><b>[전략과제 4]</b> 근태 모듈 Re-Packaging</span><span class="pct" style="color:var(--warn)">69%</span></div>
+              <div class="bar"><i class="a" style="width:69%"></i></div>
+            </div>
+            <div class="goal-row" id="hostFillRow">
+              <div class="gl-top"><span class="t"><b>[전략과제 6]</b> PM 역량강화 <span id="hostFillTag" style="color:var(--ink-3);font-size:11px"></span></span><span class="pct" id="hostFillPct" style="color:var(--ink-3)">0%</span></div>
+              <div class="bar"><i class="z" id="hostFillBar" style="width:2%"></i></div>
+              <div class="fill-note" id="hostFillNote">착수 지연 · 남은 분기 리스크 집중</div>
+            </div>
+            <div class="goal-row">
+              <div class="gl-top"><span class="t"><b>[전략과제 7]</b> DB 종속성 제거</span><span class="pct" style="color:var(--ink-3)">0%</span></div>
+              <div class="bar"><i class="z" style="width:2%"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- docked agent panel -->
+        <div class="dock">
+          <div class="dock-head">
+            <div class="ex">ex</div>
+            <div class="nm"><b>elizax · 성과 도우미</b><span>박영환 · 2026 상반기 · 중간점검</span></div>
+            <span class="chip audit badge-mini"><i class="ti ti-shield-check"></i>감사 기록됨</span>
+          </div>
+          <div class="dock-body">
+            <div class="status-line"><span class="dot"></span>등급 초안을 만들고 있습니다 · 3/4 단계</div>
+
+            <div class="receipt">
+              <div class="receipt-meta">
+                <span class="chip asof" onclick="toggleAsof(this)"><span class="anno" style="margin-right:1px">1</span><i class="ti ti-calendar"></i><span class="asof-t">2026 상반기 · 6/30 마감 실적</span> <i class="ti ti-chevron-down"></i></span>
+                <span class="chip audit"><span class="anno" style="margin-right:1px">3</span>권한 내 1개 팀</span>
+              </div>
+              <div class="receipt-body">
+                <p class="verdict">달성률과 1:1 기록이 목표 대비 안정적이라, 박영환님 상반기 등급으로 <span class="grade">A</span>를 제안합니다. <span class="warn-inline">자동 확정 아님 — 승인 전에는 확정되지 않습니다.</span></p>
+
+                <div class="trace open" id="traceD1">
+                  <div class="trace-head" onclick="toggleTrace('traceD1')" role="button" tabindex="0" onkeydown="if(event.key==='Enter')toggleTrace('traceD1')">
+                    <span class="anno">2</span><i class="ti ti-list-search lead"></i><b>원천 확인 내역</b><span class="cnt">3원천</span><i class="ti ti-chevron-down tgl"></i>
+                  </div>
+                  <div class="trace-steps">
+                    <div class="step"><div class="step-n">1</div><div class="cont"><b>실적 조회</b><p><span class="sb erp">ERP</span> 매출 KR 달성률 <b>118%</b> 집계 <span class="rid">perf.2026H1.kr2</span></p></div></div>
+                    <div class="step"><div class="step-n">2</div><div class="cont"><b>과정 근거</b><p><span class="sb talenx">talenx</span> 중간 1:1 기록 <b>3건</b> — 자기주도 근거 확보</p><span class="badge ok"><i class="ti ti-check"></i>평가규정 v3.1 · 검증됨</span><span class="badge ref">평가규정 §12</span></div></div>
+                    <div class="step hl"><div class="step-n">3</div><div class="cont"><b>협업 톤 대조</b><p><span class="sb slack">Slack</span> 협업 피드백 톤을 확인하고 있습니다… <span class="rid">collab.tone</span></p></div></div>
+                  </div>
+                </div>
+
+                <div class="actions">
+                  <span class="anno" style="align-self:center">4</span>
+                  <button class="btn primary" id="wfBtnD1" onclick="toggleWhatif('whatifD1','wfBtnD1','달성률 하락(-6%p) 가정 시 재계산','재계산 접기')">달성률 하락 가정 재계산</button>
+                </div>
+                <div class="whatif" id="whatifD1" aria-live="polite">
+                  <h5><i class="ti ti-arrows-diff"></i>KR 달성률 118% → 92% 가정 시 재산정</h5>
+                  <div class="wf-row"><span>현재(118%) 등급 판정</span><b>A</b></div>
+                  <div class="wf-row"><span>가정(92%) 적용 시 판정</span><b class="neg">B+</b></div>
+                  <div class="wf-row"><span>직무군 백분위 이동</span><b class="neg">상위 20% → 41%</b></div>
+                  <p class="wf-note">동일 룰 엔진에서 입력값만 바꿔 즉시 재산출. 실행 로그: <span class="rid">rule-exec.a3f1</span></p>
+                </div>
+
+                <div class="gate">
+                  <span class="gate-lab"><i class="ti ti-git-fork"></i>결정 게이트</span>
+                  <button class="btn primary">승인</button>
+                  <button class="btn">수정</button>
+                  <button class="btn hold">보류</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="dock-composer">
+            <input type="text" placeholder="메시지 입력…" aria-label="에이전트에게 메시지">
+            <button class="send" aria-label="전송"><i class="ti ti-arrow-up"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Scenario 2 : 선제 팝업 ================= -->
+  <section class="scenario">
+    <div class="scenario-head">
+      <span class="num">형태 ②</span>
+      <h2>선제 팝업 — 부르지 않아도 먼저 감지해 뜬다</h2>
+      <span class="tag warn">보조 · 선제</span>
+    </div>
+    <p class="lead-p">사용자가 묻기 전에 에이전트가 기한·편향·이상치 신호를 감지한다. 여러 신호를 <strong>배치로 묶어 하루 한 번만</strong> 방해하고, 스누즈와 무시를 항상 열어둔다. 팝업 카드도 동일하게 <strong>원천 확인 내역 + 게이트</strong>를 얹는다.</p>
+
+    <div class="frame">
+      <div class="frame-bar">
+        <div class="dots"><span class="r"></span><span></span><span></span></div>
+        <div class="app"><em>talenx</em> · 성과관리 대시보드 &nbsp;→&nbsp; 우하단 선제 팝업</div>
+        <div class="url">app.talenx.com/dashboard</div>
+      </div>
+      <div class="popup-stage">
+        <span class="dim-label">성과관리 탭 전체 화면 · 우하단에 선제 팝업</span>
+        <div class="dim-dash" aria-hidden="true">
+          <div class="kpi-row">
+            <div class="kpi"><label>진행 중 평가</label><b>3</b></div>
+            <div class="kpi"><label>대기 초안</label><b>15</b></div>
+            <div class="kpi"><label>이상 신호</label><b style="color:var(--danger)">2</b></div>
+            <div class="kpi"><label>마감 임박</label><b style="color:var(--warn)">1</b></div>
+          </div>
+          <div class="block"></div>
+        </div>
+
+        <div class="popup">
+          <div class="popup-head">
+            <i class="ti ti-bell-ringing ic"></i>
+            <b>평가 Agent가 먼저 알려드립니다</b>
+            <span class="bd">선제 감지</span>
+          </div>
+          <div class="popup-body">
+            <p class="intro">이번 주 챙길 신호 3건을 발견했어요</p>
+            <div class="sig"><span class="lv imp">중요</span><span class="st">중간점검 미실시 <b>2명</b> — 김서준·이하늘 <span style="color:var(--ink-3)">(마감 D-3)</span></span></div>
+            <div class="sig att"><span class="lv att">주의</span><span class="st">달성률 3주 연속 하락 <b>1명</b> — 박도윤 <span style="color:var(--danger)">(112% → 86%)</span></span></div>
+            <div class="sig"><span class="lv imp">주간</span><span class="st">등급 분포 관대화 조짐 — 영업2팀 <b>A 이상 편중</b></span></div>
+            <p class="popup-src"><span class="anno" style="margin-right:0">2</span> <span class="sb talenx">talenx</span> 일정 · <span class="sb erp">ERP</span> 실적 3주치 확인함 · <span class="chip audit" style="padding:1px 7px"><i class="ti ti-shield-check"></i>감사 기록됨</span></p>
+            <div class="actions" style="margin-top:4px">
+              <button class="btn primary">지금 열기</button>
+              <button class="btn">오늘 저녁 다시</button>
+              <button class="btn hold">무시</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Scenario 3 : 전체화면 딥워크 (W2 목표 설정) ================= -->
+  <section class="scenario">
+    <div class="scenario-head">
+      <span class="num">형태 ③</span>
+      <h2>전체화면 딥워크 — 성과관리/평가 E2E App · 목표 설정</h2>
+      <span class="tag deep">심층 · 전환</span>
+    </div>
+    <p class="lead-p">몰입이 필요한 딥워크는 전체화면으로 승격한다. <strong>왼쪽 캔버스</strong>는 여러 에이전트가 병렬로 목표를 채워 넣는 작업 표면, <strong>오른쪽 패널</strong>은 근거·이상치를 스트림하는 answer receipt. 아래 <b>▶ 목표 초안 실행</b> 버튼은 실제로 동작합니다 — 왼쪽 노드가 채워지는 것을 보세요.</p>
+
+    <div class="frame">
+      <div class="frame-bar">
+        <div class="dots"><span class="r"></span><span></span><span></span></div>
+        <div class="app"><em>Performance AI Agent</em> · 전체화면 딥워크</div>
+        <div class="url">performance-agent.hcg.app/goals</div>
+      </div>
+
+      <div class="fs">
+        <!-- global bar -->
+        <div class="fs-global">
+          <i class="ti ti-menu-2 burger"></i>
+          <span class="brand"><span class="h">H</span> 성과관리 AI Agent</span>
+          <span class="ctx-chip">2026 상반기 · 영업본부</span>
+          <div class="g-right">
+            <span class="g-pill"><i class="ti ti-search"></i>검색</span>
+            <span class="g-pill alert"><span class="dot"></span>알림 3건</span>
+            <span class="g-pill user"><span class="av">박</span>박성현</span>
+          </div>
+        </div>
+
+        <!-- left nav -->
+        <nav class="fs-nav">
+          <div class="nav-item"><i class="ti ti-home"></i>홈</div>
+          <div class="nav-item"><i class="ti ti-circle-plus"></i>새 채팅</div>
+          <div class="nav-item on"><i class="ti ti-folder"></i>프로젝트<i class="ti ti-chevron-down chev"></i></div>
+          <div class="nav-child on dot">목표관리</div>
+          <div class="nav-child dot">성과관리</div>
+          <div class="nav-child dot">평가관리</div>
+          <div class="nav-item"><i class="ti ti-stack-2"></i>산출물</div>
+          <div class="nav-item"><i class="ti ti-hand-finger"></i>사용자 지정</div>
+          <div class="nav-sep"></div>
+          <div class="nav-item"><i class="ti ti-message-2"></i>최근 항목<i class="ti ti-chevron-down chev"></i></div>
+          <div class="nav-child">평가 질문 형식</div>
+          <div class="nav-child">목표설정 초안</div>
+          <div class="nav-child">타산업 벤치마킹</div>
+          <div class="nav-child" style="color:var(--ink-3)">⋯</div>
+        </nav>
+
+        <!-- center canvas : the live work surface -->
+        <div class="fs-canvas">
+          <div class="stepper">
+            <span class="st done"><i class="ti ti-circle-check"></i>지침 수립</span><span class="sep">›</span>
+            <span class="st done"><i class="ti ti-circle-check"></i>자기 목표</span><span class="sep">›</span>
+            <span class="st done"><i class="ti ti-circle-check"></i>검토 회의</span><span class="sep">›</span>
+            <span class="st cur"><i class="ti ti-target"></i>피드백</span><span class="sep">›</span>
+            <span class="st"><i class="ti ti-sparkles"></i>목표 확정</span>
+          </div>
+
+          <div class="canvas-scroll">
+            <div class="parallel-head"><span class="spin" id="canvasSpin"></span><span id="canvasHeadTxt">3종 Agent 병렬 실행</span></div>
+            <div class="flow">
+              <!-- left : completed -->
+              <div class="flow-col">
+                <div class="node">
+                  <div class="n-top"><span class="n-ic teal"><i class="ti ti-clipboard-check"></i></span><span class="n-nm">지침 / R&amp;R 검증</span></div>
+                  <div class="n-st teal"><span class="d"></span>완료</div>
+                </div>
+                <div class="node">
+                  <div class="n-top"><span class="n-ic teal"><i class="ti ti-file-pencil"></i></span><span class="n-nm">목표 초안 생성</span></div>
+                  <div class="n-st teal"><span class="d"></span>완료</div>
+                </div>
+              </div>
+              <div class="flow-arrow" style="display:none"></div>
+
+              <!-- mid : 3 parallel agents -->
+              <div class="flow-col mid">
+                <div class="mid-lab">병렬 실행</div>
+                <div class="node">
+                  <div class="n-top"><span class="n-ic teal"><i class="ti ti-sitemap"></i></span><span class="n-nm">상위 목표 정렬</span></div>
+                  <div class="n-st teal"><span class="d"></span>완료</div>
+                </div>
+                <div class="node">
+                  <div class="n-top"><span class="n-ic blue"><i class="ti ti-gauge"></i></span><span class="n-nm">난이도 벤치마크</span></div>
+                  <div class="n-st blue"><span class="d"></span><span id="benchTxt">진행 중</span> <b id="benchPct">62%</b></div>
+                  <div class="n-prog"><i id="benchBar" style="width:62%"></i></div>
+                </div>
+                <div class="node warn" id="anomalyNode" onclick="openFindings()">
+                  <div class="n-badge">3</div>
+                  <div class="n-top"><span class="n-ic red"><i class="ti ti-alert-triangle"></i></span><span class="n-nm">규칙 / 이상치 검증</span></div>
+                  <div class="n-st red"><span class="d"></span>이상치 3건 · 확인 필요</div>
+                </div>
+              </div>
+              <div class="flow-arrow" style="display:none"></div>
+
+              <!-- right : converge -->
+              <div class="flow-col">
+                <div class="node">
+                  <div class="n-top"><span class="n-ic purple"><i class="ti ti-git-merge"></i></span><span class="n-nm">목표안 통합</span></div>
+                  <div class="n-st purple"><span class="d"></span><span id="mergeTxt">구성 중</span> <b id="mergeCnt">2/3</b></div>
+                  <div class="n-prog"><i id="mergeBar" style="width:66%;background:var(--purple)"></i></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="canvas-foot">
+            <button class="run-btn" id="runBtn" onclick="runGoalFill()"><i class="ti ti-player-play"></i>목표 초안 실행</button>
+            <span class="zoom"><span class="b">−</span>100%<span class="b">+</span></span>
+          </div>
+        </div>
+
+        <!-- right context panel : answer receipt -->
+        <aside class="fs-ctx">
+          <div class="ctx-tools">
+            <span class="tool copy"><i class="ti ti-copy"></i>복사 <i class="ti ti-chevron-down" style="font-size:12px"></i></span>
+            <span class="tool"><i class="ti ti-refresh"></i></span>
+            <span class="tool"><i class="ti ti-arrows-diagonal"></i></span>
+            <span class="tool"><i class="ti ti-x"></i></span>
+          </div>
+          <div class="ctx-body">
+            <div class="receipt" style="border:none">
+              <div class="receipt-meta" style="padding-left:0;padding-right:0">
+                <span class="chip asof" onclick="toggleAsof(this)"><span class="anno" style="margin-right:1px">1</span><i class="ti ti-calendar"></i><span class="asof-t">2026 상반기 · 지침 확정 기준</span> <i class="ti ti-chevron-down"></i></span>
+                <span class="chip audit"><span class="anno" style="margin-right:1px">3</span><i class="ti ti-shield-check"></i>감사 기록됨</span>
+              </div>
+            </div>
+
+            <div class="ctx-alert-h" style="margin-top:14px"><i class="ti ti-alert-triangle"></i>규칙 · 이상치 검증 필요</div>
+            <p class="ctx-sub">Human-in-the-loop 확인이 필요한 항목입니다. <span class="warn-inline">자동 수정 아님.</span></p>
+
+            <div class="finding crit">
+              <div class="f-top" onclick="toggleFinding(this)"><i class="ti ti-alert-triangle f-flag red"></i>가중치 합계 105%<i class="ti ti-chevron-down chev"></i></div>
+              <div class="f-body">
+                박성현님 전체 목표 가중치 합계가 <b>100%보다 5%p 높습니다</b>. 통상 전체 목표 가중치 합은 100%를 넘지 않습니다.
+                <div style="margin-top:8px"><span class="anno" style="margin-right:2px">2</span><span class="sb rule">규칙</span> 가중치 상한 100% <span class="rid">rule.weight.sum</span> · <span class="sb talenx">talenx</span> 목표 5건 합산 <span class="rid">goal.2026H1.*</span></div>
+                <div class="actions" style="margin-top:10px">
+                  <span class="anno" style="align-self:center">4</span>
+                  <button class="btn primary" id="wfBtnF1" onclick="toggleWhatif('whatifF1','wfBtnF1','가중치 100% 정규화 재계산','재계산 접기')">100% 정규화 재계산</button>
+                </div>
+                <div class="whatif" id="whatifF1" aria-live="polite">
+                  <h5><i class="ti ti-arrows-diff"></i>가중치 105% → 100% 비례 정규화</h5>
+                  <div class="wf-row"><span>목표1 신규계약</span><b>35% → <span class="pos">33%</span></b></div>
+                  <div class="wf-row"><span>목표2 유지율</span><b>40% → <span class="pos">38%</span></b></div>
+                  <div class="wf-row"><span>목표3 온보딩 리드</span><b>30% → <span class="pos">29%</span></b></div>
+                  <div class="wf-row"><span>합계</span><b class="pos">100%</b></div>
+                  <p class="wf-note">비례 축소안. 승인 시 목표안 통합 노드에 반영됩니다. <span class="rid">rule-exec.w05</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="finding crit">
+              <div class="f-top" onclick="toggleFinding(this)"><i class="ti ti-unlink f-flag amber"></i>전사 목표 미연결<i class="ti ti-chevron-down chev"></i></div>
+              <div class="f-body">
+                박성현님의 <b>3번째 목표</b>가 '26년도 ○○컴퍼니 전사 목표 <b>'매출 3조 8,000억원 달성'</b>과 연결되지 않습니다. 추천 연결 목표를 제시할 수 있습니다.
+                <div style="margin-top:8px"><span class="anno" style="margin-right:2px">2</span><span class="sb rule">원칙</span> 전사 정렬 필수 · <span class="sb bench">벤치마크</span> 동일 직무 정렬 사례 <span class="rid">align.corp.kr</span></div>
+                <div class="gate" style="margin-top:10px;border-top:none;padding-top:0">
+                  <button class="btn primary">추천 연결 보기</button>
+                  <button class="btn">직접 연결</button>
+                  <button class="btn hold">보류</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fs-composer">
+            <div class="box">
+              <input type="text" placeholder="오늘은 어떤 도움을 드릴까요?" aria-label="명령어 입력">
+              <i class="ti ti-plus add"></i>
+              <button class="send" aria-label="전송"><i class="ti ti-arrow-up"></i></button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- status bar -->
+        <div class="fs-status">
+          <div class="conn">
+            <span class="lab">연결상태</span>
+            <span class="src-dot"><span class="d"></span>talenx</span>
+            <span class="src-dot"><span class="d"></span>Slack</span>
+            <span class="src-dot"><span class="d"></span>MS 365</span>
+            <span class="src-dot"><span class="d"></span>ERP</span>
+          </div>
+          <div class="bg"><i class="ti ti-cloud"></i><span id="bgTasks">백그라운드 작업 2건</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="note">
+    세 형태의 모든 카드는 동일한 응답 스키마 <code>{ answer, as_of, scope, trace[], rules[], evidence[], excluded[], actions[], audit_ref }</code>를 공유합니다.
+    등급형은 <code>trace.type = calculation</code>, 이상치·정합성형은 <code>trace.type = rule_check</code>로 렌더링됩니다.
+    <br><b>노출 규칙:</b> 기본 = ① 도킹 인라인 · 선제 감지 → ② 팝업 · 다인·다소스 딥워크 → ③ 전체화면. 표현은 바뀌어도 <b>확인 내역 · 근거 인용 · 승인/수정/보류 게이트</b>는 3모드 불변.
+    상세 규격은 「Verifiable Answer UI 표준」 문서를 참조하십시오. · elizax R&amp;D 워킹그룹 · HCG.
+  </footer>
+
+</div>
+
+<script>
+  function toggleTrace(id) {
+    document.getElementById(id).classList.toggle('open');
+  }
+  function toggleFinding(el) {
+    var f = el.closest('.finding');
+    f.classList.toggle('collapsed');
+    var body = f.querySelector('.f-body');
+    var chev = el.querySelector('.chev');
+    if (f.classList.contains('collapsed')) { body.style.display = 'none'; chev.style.transform = 'rotate(-90deg)'; }
+    else { body.style.display = ''; chev.style.transform = ''; }
+  }
+  function toggleWhatif(panelId, btnId, offText, onText) {
+    var w = document.getElementById(panelId);
+    var b = document.getElementById(btnId);
+    var on = w.classList.toggle('show');
+    b.textContent = on ? onText : offText;
+  }
+  function toggleAsof(chip) {
+    // bitemporal as-of demo : cycle through snapshots
+    var snaps = ['2026 상반기 · 6/30 마감 실적','2026 상반기 · 5/31 시점','2025 하반기 · 확정 스냅샷'];
+    var t = chip.querySelector('.asof-t');
+    var i = snaps.indexOf(t.textContent);
+    // keep first chip's own default if not in list
+    if (i === -1) { t.textContent = snaps[0]; return; }
+    t.textContent = snaps[(i + 1) % snaps.length];
+    chip.style.background = '#DEE7FA';
+    setTimeout(function(){ chip.style.background=''; }, 220);
+  }
+  function openFindings() {
+    var ctx = document.querySelector('.fs-ctx');
+    ctx.animate([{background:'#FEF6F5'},{background:'#fff'}], {duration:900});
+  }
+
+  // ---- fullscreen : live goal-fill simulation ----
+  var running = false;
+  function runGoalFill() {
+    if (running) return; running = true;
+    var btn = document.getElementById('runBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>실행 중…';
+    document.getElementById('canvasHeadTxt').textContent = '3종 Agent 병렬 실행 · 통합 중';
+
+    var bench = 62, merge = 66;
+    var benchBar = document.getElementById('benchBar'), benchPct = document.getElementById('benchPct');
+    var mergeBar = document.getElementById('mergeBar'), mergeCnt = document.getElementById('mergeCnt');
+
+    var t = setInterval(function() {
+      bench = Math.min(100, bench + 6);
+      benchBar.style.width = bench + '%'; benchPct.textContent = bench + '%';
+      if (bench >= 100) {
+        clearInterval(t);
+        // bench agent done
+        var bs = benchPct.closest('.node').querySelector('.n-st');
+        bs.className = 'n-st teal'; document.getElementById('benchTxt').textContent = '완료';
+        benchPct.textContent = '100%';
+        benchPct.closest('.node').querySelector('.n-prog').style.display = 'none';
+        // merge completes
+        mergeBar.style.width = '100%'; mergeBar.style.background = 'var(--teal)';
+        document.getElementById('mergeTxt').textContent = '완료'; mergeCnt.textContent = '3/3';
+        var ms = mergeCnt.closest('.node').querySelector('.n-st'); ms.className = 'n-st teal';
+        mergeCnt.closest('.node').querySelector('.n-prog').style.display = 'none';
+        document.getElementById('canvasSpin').style.display = 'none';
+        document.getElementById('canvasHeadTxt').textContent = '목표 초안 통합 완료 · 승인 대기';
+        document.getElementById('bgTasks').textContent = '백그라운드 작업 0건';
+        // fill the goal on the host row analog (전략과제 6) — also reflect on this canvas
+        fillHostGoal();
+        btn.innerHTML = '<i class="ti ti-circle-check"></i>초안 완료 · 우측 검토';
+      }
+    }, 260);
+  }
+  function fillHostGoal() {
+    // animate the "PM 역량강화" goal being filled in (mandate: watch goal fill on the left)
+    var bar = document.getElementById('hostFillBar');
+    var pct = document.getElementById('hostFillPct');
+    var tag = document.getElementById('hostFillTag');
+    var note = document.getElementById('hostFillNote');
+    if (!bar) return;
+    var row = document.getElementById('hostFillRow'); if (row) row.classList.add('just-filled');
+    tag.textContent = '· AI 초안 반영됨';
+    var v = 0;
+    var t2 = setInterval(function() {
+      v = Math.min(45, v + 3);
+      bar.className = 'b'; bar.style.width = v + '%';
+      pct.style.color = 'var(--blue)'; pct.textContent = v + '%';
+      if (v >= 45) { clearInterval(t2); if (note) note.textContent = 'KR 3건 초안 생성 · 상위 목표 정렬 완료'; }
+    }, 200);
+  }
+</script>
+</body>
+</html>
