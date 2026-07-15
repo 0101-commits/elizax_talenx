@@ -139,6 +139,34 @@
       '#s-home .txf-att-c b{display:block;font-size:22px;font-weight:800;color:var(--ink-4)}',
       '#s-home .txf-att-c span{display:block;font-size:11.5px;color:var(--ink-4);margin-top:7px}',
       '#s-home .txf-att-c.hl b{color:var(--ink)}',
+      /* ---- modal form fields ---- */
+      '.txf-fld3{display:block;margin-bottom:6px}',
+      '.txf-fld3>span{display:block;font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:7px}',
+      '.txf-fld3 select,.txf-fld3 input,.txf-fld3 textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--ink);background:var(--card);font-family:inherit;box-sizing:border-box;resize:vertical}',
+      /* ---- release notes / manual / workspace modal ---- */
+      '.txf-rel{padding:12px 0;border-bottom:1px solid var(--line-2)}',
+      '.txf-rel:last-child{border-bottom:0}',
+      '.txf-rel .rt{font-size:13.5px;font-weight:800;color:var(--ink)}',
+      '.txf-rel .rd{font-size:12px;color:var(--ink-4);margin:3px 0 6px}',
+      '.txf-rel .rb{font-size:13px;color:var(--ink-2);line-height:1.6}',
+      '.txf-wsrow{display:flex;align-items:center;gap:11px;padding:12px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:9px;cursor:pointer}',
+      '.txf-wsrow:hover{background:var(--soft)}',
+      '.txf-wsrow .wn{font-size:13.5px;font-weight:800;color:var(--ink)}',
+      '.txf-wsrow .wm{font-size:12px;color:var(--ink-3);margin-top:2px}',
+      '.txf-wsrow .cur{margin-left:auto;background:#EAF2FE;color:var(--blue);font-size:11px;font-weight:800;border-radius:10px;padding:3px 9px}',
+      /* ---- 성과 preset grid ---- */
+      '#s-home .txh-perf-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}',
+      '@media(max-width:940px){#s-home .txh-perf-grid{grid-template-columns:1fr}}',
+      '#s-home .txh-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-2)}',
+      '#s-home .txh-row:last-child{border-bottom:0}',
+      '#s-home .txh-row .tt{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--ink)}',
+      '#s-home .txh-row .tt small{display:block;font-size:11.5px;color:var(--ink-4);font-weight:500;margin-top:2px}',
+      '#s-home .txh-row .dt{font-size:12px;color:var(--ink-3);white-space:nowrap}',
+      '#s-home .txh-bar{width:90px;height:7px;border-radius:5px;background:var(--soft);overflow:hidden;flex:none}',
+      '#s-home .txh-bar i{display:block;height:100%;background:var(--blue);border-radius:5px}',
+      '#s-home .txh-row b{width:38px;text-align:right;font-size:12.5px;color:var(--ink)}',
+      '#s-home .txh-big{font-size:30px;font-weight:800;color:var(--ink);padding:4px 0 2px}',
+      '#s-home .txh-sub{font-size:12px;color:var(--ink-4);margin-bottom:8px}',
       /* clickable affordance */
       '#s-home .card .frow{cursor:pointer}',
       '#s-home .card .goal{cursor:pointer}'
@@ -215,14 +243,16 @@
     function render() {
       hd.querySelectorAll('.txf-np-tab').forEach(function (t) { t.classList.toggle('on', t.getAttribute('data-tab') === state.tab); });
       chips.querySelectorAll('.txf-chip').forEach(function (c) { c.classList.toggle('on', c.getAttribute('data-chip') === state.chip); });
-      var rows = data.filter(function (n) {
-        if (state.tab === 'appr' && !n.appr) return false;
-        if (state.chip !== 'all' && n.cat !== state.chip) return false;
-        return true;
+      var rows = [];
+      data.forEach(function (n, i) {
+        if (state.tab === 'appr' && !n.appr) return;
+        if (state.chip !== 'all' && n.cat !== state.chip) return;
+        rows.push({ n: n, i: i });
       });
       if (!rows.length) { list.innerHTML = '<div class="txf-np-empty">알림이 없습니다.</div>'; return; }
-      list.innerHTML = rows.map(function (n) {
-        return '<div class="txf-nrow">' + F.avatar(n.who, 34) +
+      list.innerHTML = rows.map(function (r) {
+        var n = r.n;
+        return '<div class="txf-nrow" data-i="' + r.i + '">' + F.avatar(n.who, 34) +
           '<div class="nb"><div class="nt"><b>' + esc(n.who) + '</b>' + esc(n.t) + '</div>' +
           (n.sub ? '<div class="nsub">' + esc(n.sub) + '</div>' : '') +
           '<div class="ndt">' + esc(n.dt) + '</div></div></div>';
@@ -237,11 +267,70 @@
       if (c) { state.chip = c.getAttribute('data-chip'); render(); }
     });
     list.addEventListener('click', function (e) {
-      if (e.target.closest('.txf-nrow')) { toast('알림 상세로 이동합니다.'); }
+      var r = e.target.closest('.txf-nrow');
+      if (!r) return;
+      var n = data[parseInt(r.getAttribute('data-i'), 10)];
+      if (n) { closePanels(); openNotifDetail(n); }
     });
     p.appendChild(hd); p.appendChild(chips); p.appendChild(list);
     render();
     openPanel(p);
+  }
+
+  /* ---- notification detail drawer ---- */
+  function openNotifDetail(n) {
+    if (!TX || !TX.drawer) { toast('알림 상세'); return; }
+    var target = n.cat === '성과관리' ? 'perf' : 'att';
+    if (/신청 승인|근무계획|출장비|경조금|도서비/.test(n.t || '')) target = 'wf';
+    var targetLabel = target === 'perf' ? '성과관리' : (target === 'wf' ? '신청/승인' : '근무관리');
+    var body =
+      '<div style="font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.55"><b>' + esc(n.who) + '</b>' + esc(n.t) + '</div>' +
+      '<div style="font-size:12.5px;color:var(--ink-4);margin-top:8px">' + esc(n.dt) + '</div>' +
+      (n.sub ? '<div style="margin-top:14px;background:var(--soft);border-radius:8px;padding:11px 13px;font-size:13px;color:var(--ink-2)">' + esc(n.sub) + '</div>' : '') +
+      '<div style="margin-top:16px;font-size:13px;color:var(--ink-2);line-height:1.65">' +
+      (n.appr ? '승인이 필요한 요청입니다. 요청 내용을 확인한 뒤 해당 화면에서 승인 또는 반려를 진행하세요.'
+              : '참고용 알림입니다. 상세 내용은 관련 화면에서 확인할 수 있습니다.') + '</div>' +
+      '<button class="txf-ndgo" style="margin-top:22px;width:100%;height:42px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-size:13.5px;font-weight:800;cursor:pointer;font-family:inherit">' + targetLabel + ' 화면으로 이동</button>';
+    var dr = TX.drawer({ title: '알림 상세', subtitle: esc(n.cat) + (n.appr ? ' · 승인 필요' : ''), body: body });
+    var go = dr.body.querySelector('.txf-ndgo');
+    if (go) go.addEventListener('click', function () { dr.close(); nav(target); });
+  }
+
+  /* ---- employee detail drawer (search results) ---- */
+  function openEmpDetail(emp) {
+    if (!TX || !TX.drawer) { toast('구성원 상세'); return; }
+    var objs = (D.objectives || []).filter(function (o) {
+      return o.owner_emp_id === emp.emp_id || (o.org_id === emp.org_id && o.level !== 'company');
+    });
+    var num = parseInt(String(emp.emp_id || '').replace(/\D/g, ''), 10) || 0;
+    var phone = '010-' + (3000 + (num * 37) % 7000) + '-' + (1000 + (num * 91) % 9000);
+    var mail = String(emp.emp_id || 'emp').toLowerCase().replace(/[^a-z0-9]/g, '') + '@hcg.co.kr';
+    function row(k, v) {
+      return '<div style="display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--line-2)">' +
+        '<span style="font-size:12.5px;color:var(--ink-3);flex:none">' + k + '</span>' +
+        '<span style="font-size:13px;font-weight:700;color:var(--ink);text-align:right">' + v + '</span></div>';
+    }
+    var objHtml = objs.slice(0, 3).map(function (o) {
+      return row(esc(o.title), (o.progress != null ? o.progress : 0) + '%');
+    }).join('');
+    var body =
+      '<div style="display:flex;align-items:center;gap:12px;padding-bottom:14px">' + F.avatar(emp.name, 48) +
+      '<div><div style="font-size:15px;font-weight:800;color:var(--ink)">' + esc(emp.name) + '</div>' +
+      '<div style="font-size:12.5px;color:var(--ink-3);margin-top:2px">' + esc(emp.orgName || '') + (emp.jobTitle ? ' · ' + esc(emp.jobTitle) : '') + '</div></div></div>' +
+      row('사번', esc(emp.emp_id || '-')) +
+      row('조직', esc(emp.orgName || '-')) +
+      row('직급', esc(emp.level_kr || '-') + (emp.level ? ' / ' + esc(emp.level) : '')) +
+      row('직책', emp.is_leader ? '조직장' : '팀원') +
+      row('입사일', esc(emp.join_date || '-')) +
+      row('연락처', phone) +
+      row('이메일', mail) +
+      row('보유 목표', objs.length + '개') +
+      (objHtml ? '<div style="font-size:12.5px;font-weight:800;color:var(--ink-2);margin:16px 0 4px">주요 목표</div>' + objHtml : '');
+    TX.drawer({
+      title: esc(emp.name),
+      subtitle: esc(emp.orgName || '') + (emp.jobTitle ? ' · ' + esc(emp.jobTitle) : ''),
+      body: body
+    });
   }
 
   /* ================================================================
@@ -268,15 +357,97 @@
       '<div class="txf-am-item" data-act="admin">관리자 메뉴</div>';
     p.querySelector('.txf-am-x').addEventListener('click', closePanels);
     p.querySelector('.txf-am-out').addEventListener('click', function () { closePanels(); toast('로그아웃되었습니다.'); });
-    var ACT = {
-      ws: '워크스페이스 전환은 준비 중입니다.', mypage: '마이페이지로 이동합니다.', account: '계정 설정으로 이동합니다.',
-      'new': '새로운 기능 안내를 확인합니다.', manual: '사용자 매뉴얼을 엽니다.', feedback: '의견 보내기 창을 엽니다.',
-      admin: '관리자 메뉴로 이동합니다.'
-    };
     p.querySelectorAll('.txf-am-ws,.txf-am-item').forEach(function (n) {
-      n.addEventListener('click', function () { var a = n.getAttribute('data-act'); if (a !== 'ws') closePanels(); toast(ACT[a] || '준비 중입니다.'); });
+      n.addEventListener('click', function () { doMenuAct(n.getAttribute('data-act')); });
     });
     openPanel(p);
+  }
+
+  /* ---- avatar menu actions ---- */
+  function doMenuAct(a) {
+    if (a === 'admin') { toast('관리자 권한이 필요합니다.', 'warn'); return; }
+    closePanels();
+    if (a === 'mypage') { nav('hrm', 0); return; }
+    if (a === 'account') { openAccountModal(); return; }
+    if (a === 'new') { openReleaseNotes(); return; }
+    if (a === 'manual') { openManual(); return; }
+    if (a === 'feedback') { openFeedbackModal(); return; }
+    if (a === 'ws') { openWorkspaceModal(); return; }
+  }
+  function openAccountModal() {
+    if (!TX || !TX.modal) { toast('계정 설정'); return; }
+    function tog(label, on) {
+      return '<label style="display:flex;align-items:center;justify-content:space-between;padding:10px 2px;font-size:13.5px;color:var(--ink);cursor:pointer">' +
+        label + '<input type="checkbox"' + (on ? ' checked' : '') + ' style="width:16px;height:16px"></label>';
+    }
+    var body =
+      '<label class="txf-fld3"><span>언어</span><select><option selected>한국어</option><option>English</option><option>日本語</option></select></label>' +
+      '<div style="font-size:12.5px;font-weight:800;color:var(--ink-2);margin:14px 0 4px">알림 설정</div>' +
+      tog('이메일 알림', true) + tog('푸시 알림', true) + tog('주간 요약 리포트', false);
+    TX.modal({
+      title: '계정 설정', body: body,
+      actions: [{ label: '취소', kind: 'ghost' }, { label: '저장', kind: 'primary', onClick: function () { toast('계정 설정이 저장되었습니다.', 'ok'); } }]
+    });
+  }
+  function openReleaseNotes() {
+    if (!TX || !TX.modal) { toast('새로운 기능'); return; }
+    var notes = [
+      ['v0.191.0', '2026.07.10', '홈 대시보드 위젯 순서가 개편되고 근태 통계 위젯이 추가되었습니다. 기본/성과 프리셋 전환을 지원합니다.'],
+      ['v0.190.0', '2026.06.26', '평가관리에 2차 등급 조정 입력과 결과 확인(영수증형) 뷰가 추가되었습니다.'],
+      ['v0.189.2', '2026.06.12', '알림 센터가 승인 필요/읽지 않음 탭으로 개편되고 구성원 검색 성능이 개선되었습니다.']
+    ];
+    var body = notes.map(function (r) {
+      return '<div class="txf-rel"><div class="rt">' + r[0] + '</div><div class="rd">' + r[1] + '</div><div class="rb">' + r[2] + '</div></div>';
+    }).join('');
+    TX.modal({ title: '새로운 기능', body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
+  }
+  function openManual() {
+    if (!TX || !TX.modal) { toast('사용자 매뉴얼'); return; }
+    var toc = [
+      '1. 시작하기 — 로그인과 워크스페이스',
+      '2. 홈 — 대시보드 위젯 구성과 프리셋',
+      '3. 인사관리 — 내 정보·구성원 정보·인재검색',
+      '4. 근무관리 — 출퇴근 기록과 휴가 신청',
+      '5. 성과관리 — 목표(OKR) 수립과 체크인',
+      '6. 평가관리 — 평가 작성·등급 조정·결과 확인',
+      '7. 신청/승인 — 전자결재 문서 처리'
+    ];
+    var body = '<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:8px">talenx 사용자 매뉴얼 목차</div>' +
+      toc.map(function (x) {
+        return '<div style="padding:10px 2px;border-bottom:1px solid var(--line-2);font-size:13.5px;color:var(--ink);font-weight:600">' + x + '</div>';
+      }).join('');
+    TX.modal({ title: '사용자 매뉴얼', body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
+  }
+  function openFeedbackModal() {
+    if (!TX || !TX.modal) { toast('의견 보내기'); return; }
+    var body =
+      '<div style="font-size:13px;color:var(--ink-3);margin-bottom:10px">서비스 개선을 위한 의견을 들려주세요.</div>' +
+      '<label class="txf-fld3"><textarea rows="5" class="txf-fbtext" placeholder="불편했던 점, 개선 아이디어를 자유롭게 적어주세요."></textarea></label>';
+    TX.modal({
+      title: '의견 보내기', body: body,
+      actions: [
+        { label: '취소', kind: 'ghost' },
+        { label: '제출', kind: 'primary', onClick: function (box) {
+          var v = String(box.querySelector('.txf-fbtext').value || '').trim();
+          if (!v) { toast('의견 내용을 입력해주세요.', 'warn'); return false; }
+          toast('의견이 전송되었습니다. 감사합니다.', 'ok');
+        } }
+      ]
+    });
+  }
+  function openWorkspaceModal() {
+    if (!TX || !TX.modal) { toast('워크스페이스 전환'); return; }
+    var body =
+      '<div class="txf-wsrow" data-ws="HCG 프로덕션"><div><div class="wn">HCG 프로덕션</div><div class="wm">people.talenx.com · 구성원 221명</div></div><span class="cur">현재</span></div>' +
+      '<div class="txf-wsrow" data-ws="HCG 테스트"><div><div class="wn">HCG 테스트</div><div class="wm">test.talenx.com · 샌드박스</div></div></div>';
+    var m = TX.modal({ title: '워크스페이스 전환', body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
+    m.body.addEventListener('click', function (e) {
+      var r = e.target.closest('.txf-wsrow');
+      if (!r) return;
+      var w = r.getAttribute('data-ws');
+      m.close();
+      toast(w === 'HCG 프로덕션' ? '이미 HCG 프로덕션 워크스페이스입니다.' : '워크스페이스를 전환했습니다: ' + w, 'ok');
+    });
   }
 
   /* ================================================================
@@ -310,13 +481,21 @@
       list = list.slice(0, 30);
       if (!list.length) { res.innerHTML = '<div class="txf-sd-empty">검색 결과가 없습니다.</div>'; return; }
       res.innerHTML = list.map(function (e) {
-        return '<div class="txf-sd-row">' + F.avatar(e.name, 34) +
+        return '<div class="txf-sd-row" data-emp="' + esc(e.emp_id) + '">' + F.avatar(e.name, 34) +
           '<div><div class="nm">' + esc(e.name) + '</div><div class="mo">' +
           esc((e.orgName || '') + (e.jobTitle ? ' · ' + e.jobTitle : '')) + '</div></div></div>';
       }).join('');
     }
     input.addEventListener('input', function () { draw(input.value.trim()); });
-    res.addEventListener('click', function (e) { if (e.target.closest('.txf-sd-row')) { closePanels(); toast('구성원 상세로 이동합니다.'); } });
+    res.addEventListener('click', function (e) {
+      var row = e.target.closest('.txf-sd-row');
+      if (!row) return;
+      var id = row.getAttribute('data-emp');
+      var emp = null;
+      (D.employees || []).forEach(function (x) { if (!emp && x.emp_id === id) emp = x; });
+      closePanels();
+      if (emp) openEmpDetail(emp);
+    });
     draw('');
     requestAnimationFrame(function () { sc.classList.add('on'); p.classList.add('on'); input.focus(); });
     var escFn = function (ev) { if (ev.key === 'Escape') { closePanels(); document.removeEventListener('keydown', escFn); } };
@@ -443,21 +622,89 @@
     });
   }
 
+  /* ---- 성과 preset: performance-centric card grid ---- */
+  function buildPerfGrid() {
+    var wrap = el('div', 'txh-perf-grid');
+    var allObjs = D.objectives || [];
+    var teamObjs = allObjs.filter(function (o) { return o.org_id === CU.org_id; });
+    if (!teamObjs.length) teamObjs = allObjs.slice(0, 5);
+    var mineObjs = allObjs.filter(function (o) { return o.owner_emp_id === CU.emp_id; });
+    if (!mineObjs.length) mineObjs = teamObjs.slice(0, 4);
+    var avg = 0;
+    if (teamObjs.length) {
+      teamObjs.forEach(function (o) { avg += (o.progress || 0); });
+      avg = Math.round(avg / teamObjs.length * 10) / 10;
+    }
+    function bar(pct) {
+      return '<span class="txh-bar"><i style="width:' + Math.min(100, Math.round(pct || 0)) + '%"></i></span>';
+    }
+    var goalRows = mineObjs.slice(0, 4).map(function (o) {
+      return '<div class="txh-row"><div class="tt">' + esc(o.title) + '<small>' + esc(o.period || '') + ' · ' + esc(o.status || '') + '</small></div>' +
+        bar(o.progress) + '<b>' + (o.progress != null ? o.progress : 0) + '%</b></div>';
+    }).join('');
+    var teamRows = teamObjs.slice(0, 3).map(function (o) {
+      return '<div class="txh-row"><div class="tt">' + esc(o.title) + '</div>' + bar(o.progress) + '<b>' + (o.progress != null ? o.progress : 0) + '%</b></div>';
+    }).join('');
+    var checks = [
+      ['중간점검 1:1 — ' + (CU.managerName || '홍예준'), '2026.07.21 (화) 14:00'],
+      ['분기 목표 리뷰 (' + (CU.orgName || 'Package BG') + ')', '2026.07.28 (화) 10:00'],
+      ['상반기 평가 대상자 확정', '2026.08.04 (화) 09:00']
+    ];
+    var checkRows = checks.map(function (c) {
+      return '<div class="txh-row"><div class="tt">' + esc(c[0]) + '</div><span class="dt">' + esc(c[1]) + '</span></div>';
+    }).join('');
+    var fbs = [
+      [teamPick(0), '꼼꼼한 일정 관리 덕분에 릴리스가 순조로웠어요. 감사합니다!', '7월 8일'],
+      [teamPick(3), '기획서 검토 코멘트가 큰 도움이 되었습니다.', '6월 30일'],
+      [teamPick(1), '협업 배지와 함께 피드백을 보냈습니다.', '6월 24일']
+    ];
+    var fbRows = fbs.map(function (f) {
+      return '<div class="txh-row"><div class="tt">' + esc(f[1]) + '<small>보낸 사람 ' + esc(f[0]) + '</small></div><span class="dt">' + esc(f[2]) + '</span></div>';
+    }).join('');
+    function card(title, inner, key, subP) {
+      var c = el('div', 'card');
+      c.innerHTML = '<div class="ct"><h3>' + title + ' <span class="chev">›</span></h3></div><div class="body">' + inner + '</div>';
+      cap(c.querySelector('.ct'), function () { nav(key, subP); });
+      return c;
+    }
+    wrap.appendChild(card('내 목표 진행률', goalRows || '<div class="empty">목표가 없습니다.</div>', 'perf', 0));
+    wrap.appendChild(card('팀 평균 달성률',
+      '<div class="txh-big">' + avg + '%</div><div class="txh-sub">' + esc(CU.orgName || '') + ' · 목표 ' + teamObjs.length + '건 평균</div>' + teamRows, 'perf', 0));
+    wrap.appendChild(card('다가오는 중간점검', checkRows, 'perf', 1));
+    wrap.appendChild(card('최근 피드백', fbRows, 'perf', 1));
+    return wrap;
+  }
+
   function patchHome() {
     var home = document.getElementById('s-home');
     if (!home || home.dataset.txfHome === '1') return;
     home.dataset.txfHome = '1';
 
-    /* ---- preset: 기본/성과 two-pill toggle (replaces 기본 + version) ---- */
+    /* ---- preset: 기본/성과 two-pill toggle (really swaps dashboard content) ---- */
     var preset = home.querySelector('.home-top .preset');
     if (preset) {
       preset.classList.add('txf-preset');
       preset.classList.remove('preset'); /* drop tx_revive .preset menu binding target */
       preset.innerHTML = '<button class="txf-pp on" data-p="basic">기본</button><button class="txf-pp" data-p="perf">성과</button>';
+      var setPreset = function (key) {
+        var grid = home.querySelector('.home');
+        if (!grid) return;
+        var pg = home.querySelector('.txh-perf-grid');
+        if (key === 'perf') {
+          if (!pg) { pg = buildPerfGrid(); grid.parentNode.insertBefore(pg, grid.nextSibling); }
+          grid.style.display = 'none';
+          pg.style.display = '';
+          toast('성과 대시보드로 전환했습니다.');
+        } else {
+          if (pg) pg.style.display = 'none';
+          grid.style.display = '';
+          toast('기본 대시보드로 전환했습니다.');
+        }
+      };
       preset.querySelectorAll('.txf-pp').forEach(function (pill) {
         cap(pill, function () {
           preset.querySelectorAll('.txf-pp').forEach(function (x) { x.classList.toggle('on', x === pill); });
-          toast(pill.getAttribute('data-p') === 'perf' ? '성과 대시보드로 전환했습니다.' : '기본 대시보드입니다.');
+          setPreset(pill.getAttribute('data-p'));
         });
       });
     }
@@ -515,6 +762,7 @@
       return c;
     }
     wireCard('나의 목표', 'perf', 0);
+    wireCard('예정 휴가', 'att', null); /* chevron+rows → 근무관리 (was dead tx_revive fallback) */
     var wfCard = wireCard('처리할 문서', 'wf', null);
     var fbC = wireCard('피드백|360', 'perf', 1);
     wireCard('360 피드백', 'msf', null);

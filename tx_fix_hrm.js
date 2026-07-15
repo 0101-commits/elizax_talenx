@@ -87,7 +87,11 @@
       '#s-hrm .txf-onode .tw{cursor:pointer}',
       '#s-hrm .txf-trend-x{display:flex;justify-content:space-around;margin-top:8px;padding:0 30px}',
       '#s-hrm .txf-trend-x span{font-size:11.5px;color:var(--ink-2);font-weight:600}',
-      '#s-hrm .txf-trend svg{width:100%;height:250px;display:block}'
+      '#s-hrm .txf-trend svg{width:100%;height:250px;display:block}',
+      '.txfh-fld{display:block;margin-bottom:15px}',
+      '.txfh-fld>span{display:block;font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:7px}',
+      '.txfh-fld select,.txfh-fld input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--ink);background:var(--card);font-family:inherit;box-sizing:border-box}',
+      '.txfh-note{font-size:12.5px;color:var(--ink-3);line-height:1.55;background:var(--soft);border-radius:8px;padding:10px 12px;margin-top:2px}'
     ].join('\n');
     root.appendChild(st);
 
@@ -296,7 +300,7 @@
       var reqs = [['재직증명서 발급', '2026.06.22', '완료'], ['개인정보 변경 신청', '2026.02.10', '승인']];
       var rows = reqs.map(function (r) { return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td></tr>'; }).join('');
       return '<div class="htab-content"><div class="hcard">' +
-        '<h3 class="hcard-t">인사신청 내역 <span class="r"><button class="txf-issue" data-msg="인사신청 화면으로 이동합니다.">＋ 신청하기</button></span></h3>' +
+        '<h3 class="hcard-t">인사신청 내역 <span class="r"><button class="txf-issue">＋ 신청하기</button></span></h3>' +
         '<table class="txf-tbl"><thead><tr><th>신청 유형</th><th>신청일</th><th>상태</th></tr></thead><tbody>' + rows + '</tbody></table>' +
       '</div></div>';
     }
@@ -582,6 +586,75 @@
     });
 
     /* ================================================================
+       제증명 신청 / 정보 수정 modals
+    ================================================================ */
+    function fld(label, inner) { return '<label class="txfh-fld"><span>' + label + '</span>' + inner + '</label>'; }
+    function cardTitleOf(node) {
+      var card = node.closest('.hcard');
+      var h = card && card.querySelector('.hcard-t');
+      return (h && h.firstChild) ? String(h.firstChild.textContent || '').trim() : '';
+    }
+    function openIssueModal(trigger) {
+      if (!TX || !TX.modal) { toast('신청이 접수되었습니다. 승인 후 알림으로 안내됩니다.', 'ok'); return; }
+      var card = trigger.closest('.hcard');
+      var title = cardTitleOf(trigger);
+      var isReprint = trigger.classList.contains('txf-reprint');
+      var pre = /경력/.test(title) ? '경력증명서' : (/급여/.test(title) ? '급여명세서' : '재직증명서');
+      var useDefault = '';
+      if (isReprint) {
+        var row = trigger.closest('tr');
+        var td0 = row && row.querySelector('td');
+        useDefault = td0 ? String(td0.textContent || '').trim() : '';
+      }
+      var opts = ['재직증명서', '경력증명서', '급여명세서'].map(function (t) {
+        return '<option' + (t === pre ? ' selected' : '') + '>' + t + '</option>';
+      }).join('');
+      var body =
+        fld('증명서 유형', '<select class="txfh-type">' + opts + '</select>') +
+        fld('용도', '<input class="txfh-use" type="text" value="' + esc(useDefault) + '" placeholder="예: 은행 제출용">') +
+        fld('수량', '<input class="txfh-qty" type="number" value="1" min="1" max="10">') +
+        '<div class="txfh-note">승인 완료 후 PDF로 발급되며, 처리 결과는 알림으로 안내됩니다.</div>';
+      TX.modal({
+        title: isReprint ? '제증명 재발급 신청' : '제증명 신청', body: body, actions: [
+          { label: '취소', kind: 'ghost' },
+          { label: '제출', kind: 'primary', onClick: function (box) {
+            var type = box.querySelector('.txfh-type').value;
+            var use = String(box.querySelector('.txfh-use').value || '').trim() || '개인 보관용';
+            toast('신청이 접수되었습니다. 승인 후 알림으로 안내됩니다.', 'ok');
+            var tb = card && card.querySelector('table.txf-tbl tbody');
+            if (tb) {
+              var ths = card.querySelectorAll('table.txf-tbl thead th');
+              var tr = document.createElement('tr');
+              if (ths.length === 3) {
+                tr.innerHTML = '<td>' + esc(type) + ' 발급</td><td>2026.07.15</td><td>접수</td>';
+              } else {
+                tr.innerHTML = '<td style="width:50%">' + esc(use) + '</td>' +
+                  '<td>2026-07-15 <span class="cc" style="color:var(--ink-4);font-size:12px">접수 · 승인 대기</span></td>';
+              }
+              tb.insertBefore(tr, tb.firstChild);
+            }
+          } }
+        ]
+      });
+    }
+    function openEditModal(trigger) {
+      if (!TX || !TX.modal) { toast('수정 사항이 저장되었습니다. 관리자 승인 후 반영됩니다.', 'ok'); return; }
+      var title = cardTitleOf(trigger) || '정보';
+      var body =
+        fld('연락처', '<input type="text" value="010-4827-3391">') +
+        fld('이메일', '<input type="text" value="jn.choi@e-hcg.com">') +
+        fld('주소', '<input type="text" value="서울특별시 강남구 테헤란로 12, 101동 802호">') +
+        fld('비상연락망', '<input type="text" value="010-2210-8845 (배우자)">') +
+        '<div class="txfh-note">인사 기본정보 항목의 변경은 관리자 승인 후 시스템에 반영됩니다.</div>';
+      TX.modal({
+        title: title + ' 수정', body: body, actions: [
+          { label: '취소', kind: 'ghost' },
+          { label: '저장', kind: 'primary', onClick: function () { toast('수정 사항이 저장되었습니다. 관리자 승인 후 반영됩니다.', 'ok'); } }
+        ]
+      });
+    }
+
+    /* ================================================================
        DELEGATED interactions
     ================================================================ */
     root.addEventListener('click', function (ev) {
@@ -604,9 +677,9 @@
       if (t.closest && t.closest('.btn-dl')) { var d = t.closest('.btn-dl'); toast(d.getAttribute('data-msg') || '다운로드를 시작합니다.'); return; }
 
       var iss = t.closest && (t.closest('.txf-issue') || t.closest('.txf-reprint'));
-      if (iss) { toast(iss.getAttribute('data-msg') || '요청을 처리했습니다.'); return; }
+      if (iss) { openIssueModal(iss); return; }
       var edit = t.closest && t.closest('.txf-edit');
-      if (edit) { toast('수정 화면으로 이동합니다.'); return; }
+      if (edit) { openEditModal(edit); return; }
 
       /* re-apply tab content after the section's own htab handler runs */
       if (t.closest && t.closest('.htab')) { setTimeout(renderActiveTab, 50); return; }

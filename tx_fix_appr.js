@@ -55,7 +55,33 @@
       '.txf-adj{width:100%;border-collapse:collapse}' +
       '.txf-adj th,.txf-adj td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line-2);font-size:12.5px}' +
       '.txf-adj th{color:var(--ink-3);font-weight:700}' +
-      '.txf-adj select{border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:12.5px;font-family:inherit}';
+      '.txf-adj select{border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:12.5px;font-family:inherit}' +
+      /* 평가 작성 modal */
+      '.txfw-tabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:14px}' +
+      '.txfw-tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:9px 14px;font-size:13.5px;font-weight:700;color:var(--ink-3);cursor:pointer;font-family:inherit}' +
+      '.txfw-tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}' +
+      '.txfw-emp{display:flex;align-items:center;gap:11px;margin-bottom:14px}' +
+      '.txfw-emp .nm{font-size:14px;font-weight:800;color:var(--ink)}' +
+      '.txfw-emp .tm{font-size:12.5px;color:var(--ink-3);margin-top:2px}' +
+      '.txfw-rad{display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:12.5px;font-weight:700;color:var(--ink-2);cursor:pointer}' +
+      '.txfw-op{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-size:13px;color:var(--ink);font-family:inherit;resize:vertical;box-sizing:border-box}' +
+      '#s-appr .txfw-done{display:inline-flex;align-items:center;background:var(--blue-soft,#EAF2FE);color:var(--blue);font-size:11.5px;font-weight:800;border-radius:6px;padding:3px 9px;margin-top:6px;width:max-content}' +
+      /* 평가 대시보드 modal */
+      '.txfd-sec{font-size:12.5px;font-weight:800;color:var(--ink-2);margin:18px 0 10px}' +
+      '.txfd-sec.first{margin-top:0}' +
+      '.txfd-big{font-size:16px;font-weight:800;color:var(--ink)}' +
+      '.txfd-prog{height:10px;background:var(--soft);border-radius:6px;overflow:hidden;margin-top:10px}' +
+      '.txfd-prog i{display:block;height:100%;background:var(--blue);border-radius:6px}' +
+      '.txfd-bar{display:flex;align-items:center;gap:10px;margin-bottom:8px}' +
+      '.txfd-bar .g{width:26px;font-size:12.5px;font-weight:800;color:var(--ink-2)}' +
+      '.txfd-bar .tr{flex:1;height:18px;background:var(--soft);border-radius:5px;overflow:hidden}' +
+      '.txfd-bar .fl{height:100%;border-radius:5px}' +
+      '.txfd-bar .n{width:70px;font-size:12px;color:var(--ink-3)}' +
+      '.txfd-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-2)}' +
+      '.txfd-row:last-child{border-bottom:0}' +
+      '.txfd-row .nm{font-size:13px;font-weight:700;color:var(--ink)}' +
+      '.txfd-row .tm{font-size:12px;color:var(--ink-3)}' +
+      '.txfd-pill{margin-left:auto;background:#FDECEC;color:var(--red,#E23B3B);font-size:11.5px;font-weight:800;border-radius:12px;padding:3px 10px}';
     document.head.appendChild(s);
   }
 
@@ -201,6 +227,105 @@
     TX.modal({ title: '결과 확인', body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
   }
 
+  /* ---------- 평가 작성 (write) modal ---------- */
+  function objsFor(empId) {
+    var e = F.emp(empId) || {};
+    var all = D.objectives || [];
+    var objs = all.filter(function (o) { return o.owner_emp_id === empId; });
+    if (!objs.length) objs = all.filter(function (o) { return o.org_id === e.org_id; });
+    if (!objs.length && all.length) {
+      var h = 0, s = String(empId || ''), i;
+      for (i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 997;
+      objs = [all[h % all.length], all[(h + 1) % all.length], all[(h + 2) % all.length]];
+    }
+    return objs.slice(0, 3);
+  }
+  function radioRow(name) {
+    return ['A', 'B', 'C', 'D'].map(function (g) {
+      return '<label class="txfw-rad"><input type="radio" name="' + name + '" value="' + g + '"' + (g === 'B' ? ' checked' : '') + '>' + g + '</label>';
+    }).join('');
+  }
+  function openWrite(btn) {
+    if (!TX.modal) return;
+    var tr = btn.closest('tr');
+    var empId = tr ? tr.getAttribute('data-emp') : null;
+    var e = F.emp(empId) || {};
+    var objs = objsFor(empId);
+    var goalRows = objs.map(function (o, i) {
+      o = o || {};
+      return '<tr><td>' + esc(o.title || '-') + '</td>' +
+        '<td style="white-space:nowrap;color:var(--ink-2);font-weight:700">' + (o.progress != null ? o.progress + '%' : '-') + '</td>' +
+        '<td style="white-space:nowrap">' + radioRow('txfw-g' + i) + '</td></tr>';
+    }).join('');
+    var compRows = ['커뮤니케이션', '문제해결', '협업', '직무 전문성'].map(function (c, i) {
+      return '<tr><td>' + c + '</td><td style="color:var(--ink-3)">공통 역량</td>' +
+        '<td style="white-space:nowrap">' + radioRow('txfw-c' + i) + '</td></tr>';
+    }).join('');
+    var body =
+      '<div class="txfw-tabs"><button class="on" data-wtab="0">성과평가</button><button data-wtab="1">역량평가</button></div>' +
+      '<div class="txfw-emp">' + F.avatar(e.name || '대상자', 36) +
+      '<div><div class="nm">' + esc(e.name || empId || '대상자') + '</div>' +
+      '<div class="tm">' + esc(F.teamName(e)) + (e.level_kr ? ' · ' + esc(e.level_kr) : '') + '</div></div></div>' +
+      '<div data-wpane="0"><table class="txf-adj"><thead><tr><th>목표명</th><th>달성도</th><th>등급</th></tr></thead><tbody>' + goalRows + '</tbody></table></div>' +
+      '<div data-wpane="1" style="display:none"><table class="txf-adj"><thead><tr><th>역량 항목</th><th>구분</th><th>등급</th></tr></thead><tbody>' + compRows + '</tbody></table></div>' +
+      '<div class="txf-fld" style="margin-top:16px"><span>종합의견</span><textarea class="txfw-op" rows="4" placeholder="평가 근거와 종합 의견을 입력하세요."></textarea></div>';
+    var m = TX.modal({
+      title: '평가 작성', wide: true, body: body, actions: [
+        { label: '임시저장', kind: 'ghost', onClick: function () { TX.toast && TX.toast('임시 저장되었습니다.', 'ok'); return false; } },
+        { label: '제출', kind: 'primary', onClick: function () {
+          TX.toast && TX.toast('평가를 제출했습니다.', 'ok');
+          if (tr && tr.children[1]) {
+            var td = tr.children[1];
+            var dot = td.querySelector('.sdot');
+            if (dot) { dot.className = 'sdot s-done'; dot.textContent = '✓'; }
+            else { var nm = td.querySelector('.ap-nm'); if (nm) nm.insertAdjacentHTML('beforeend', ' <span class="sdot s-done">✓</span>'); }
+            var wb = td.querySelector('[data-txf="write"]');
+            if (wb) { var sp = document.createElement('span'); sp.className = 'txfw-done'; sp.textContent = '완료'; wb.parentNode.replaceChild(sp, wb); }
+          }
+        } }
+      ]
+    });
+    m.body.addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-wtab]'); if (!b) return;
+      var ti = b.getAttribute('data-wtab');
+      [].forEach.call(m.body.querySelectorAll('[data-wtab]'), function (x) { x.classList.toggle('on', x === b); });
+      [].forEach.call(m.body.querySelectorAll('[data-wpane]'), function (p) { p.style.display = (p.getAttribute('data-wpane') === ti) ? '' : 'none'; });
+    });
+  }
+
+  /* ---------- 평가 대시보드 modal ---------- */
+  function openDash() {
+    if (!TX.modal) return;
+    var emps = D.employees || [], evs = D.evaluations || [];
+    var total = emps.length || 221;
+    var delayed = emps.filter(function (x, i) { return i % 13 === 4; });
+    var done = Math.max(0, total - delayed.length);
+    var pct = total ? Math.round(done / total * 100) : 0;
+    var dist = { S: 0, A: 0, B: 0, C: 0 };
+    if (evs.length) { evs.forEach(function (v) { if (dist[v.grade] != null) dist[v.grade]++; }); }
+    else { dist = { S: 11, A: 44, B: 133, C: 33 }; }
+    var maxN = 1;
+    ['S', 'A', 'B', 'C'].forEach(function (g) { if (dist[g] > maxN) maxN = dist[g]; });
+    var bars = ['S', 'A', 'B', 'C'].map(function (g) {
+      var n = dist[g], w = Math.max(2, Math.round(n / maxN * 100));
+      return '<div class="txfd-bar"><span class="g">' + g + '</span>' +
+        '<span class="tr"><span class="fl" style="width:' + w + '%;background:' + (GC[g] || 'var(--ink-3)') + '"></span></span>' +
+        '<span class="n">' + n + '명 (' + (total ? Math.round(n / total * 100) : 0) + '%)</span></div>';
+    }).join('');
+    var lateRows = delayed.slice(0, 6).map(function (x) {
+      return '<div class="txfd-row">' + F.avatar(x.name, 30) +
+        '<div><div class="nm">' + esc(x.name) + '</div><div class="tm">' + esc(F.teamName(x)) + '</div></div>' +
+        '<span class="txfd-pill">본인 평가 지연</span></div>';
+    }).join('');
+    var body =
+      '<div class="txfd-sec first">진행률 요약 — 2026 상반기 평가</div>' +
+      '<div class="txfd-big">작성 완료 ' + done + ' <span style="color:var(--ink-3);font-weight:600">/ 전체 ' + total + ' (' + pct + '%)</span></div>' +
+      '<div class="txfd-prog"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="txfd-sec">등급 분포</div>' + bars +
+      '<div class="txfd-sec">지연자 (' + delayed.length + '명)</div>' + lateRows;
+    TX.modal({ title: '평가 대시보드', wide: true, body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
+  }
+
   function openAdjust(btn) {
     if (!TX.modal) return;
     var wrap = btn.closest('.ap-tbl-wrap');
@@ -261,13 +386,26 @@
     root.addEventListener('click', function (ev) {
       var el = ev.target.closest('[data-txf]'); if (!el || !root.contains(el)) return;
       var act = el.getAttribute('data-txf');
+      /* these classes (.ap-btn/.ap-btn-o/.ts-join/.ap-filter) are also caught by the
+         tx_revive document-level delegate — stop the event so only one UI opens */
+      if (act === 'write' || act === 'result' || act === 'join' || act === 'filter') ev.stopPropagation();
       if (act === 'result') { openResult(el.getAttribute('data-emp')); }
-      else if (act === 'write') { TX.toast && TX.toast('평가 작성 화면으로 이동합니다.'); }
+      else if (act === 'write') { openWrite(el); }
       else if (act === 'adjust') { ev.preventDefault(); openAdjust(el); }
       else if (act === 'members') { ev.preventDefault(); openMembers(el); }
       else if (act === 'filter') { openFilter(); }
-      else if (act === 'dash') { TX.toast && TX.toast('평가 대시보드로 이동합니다.'); }
-      else if (act === 'join') { TX.toast && TX.toast('탈렌트 세션에 참여합니다.'); }
+      else if (act === 'dash') { openDash(); }
+      else if (act === 'join') {
+        if (el.classList.contains('joined')) { TX.toast && TX.toast('이미 참여 중인 세션입니다.'); }
+        else if (TX.confirm) {
+          TX.confirm('탈렌트 세션 참여', '이 탈렌트 세션에 참여하시겠습니까?<br>참여 후 심사 대상자 정보와 평가 자료가 공개됩니다.', function () {
+            el.classList.add('joined');
+            el.textContent = '참여 중';
+            TX.toast && TX.toast('탈렌트 세션에 참여했습니다.', 'ok');
+          }, '참여');
+        }
+        else { el.classList.add('joined'); el.textContent = '참여 중'; TX.toast && TX.toast('탈렌트 세션에 참여했습니다.', 'ok'); }
+      }
       else if (act === 'more') {
         var pane = root.querySelector('[data-pane="0"]');
         var moreWrap = el.parentNode;
