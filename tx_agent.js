@@ -866,12 +866,14 @@
 
   /* GNB 진입점 주입: elizax 랜딩 버튼 외에 상단에서도 바로 진입 */
   function injectGnbEntry() {
-    var right = document.querySelector(".gnb .gnb-right");
-    if (!right || right.querySelector(".agh-entry")) return;
-    var b = h("button", "agh-entry", "⚡ AI Agent");
+    if (document.querySelector(".agh-entry")) return;
+    var b = h("button", "agh-entry", "⚡ AI Agent Hub");
     b.title = "성과관리/평가 E2E AI Agent Hub";
     b.addEventListener("click", function () { openHub(); });
-    right.insertBefore(b, right.firstChild);
+    var bar = document.querySelector(".txr-bar");
+    if (bar) { b.classList.add("inbar"); bar.appendChild(b); return; }
+    var right = document.querySelector(".gnb .gnb-right");
+    if (right) right.insertBefore(b, right.firstChild);
   }
 
   function init() {

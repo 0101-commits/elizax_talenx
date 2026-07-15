@@ -28,6 +28,7 @@
   box-shadow: 0 2px 8px rgba(35, 64, 142, .35);
 }
 .agh-entry:hover { background: var(--agh-navy-2); }
+.agh-entry.inbar { margin: 0 0 0 auto; order: 99; }
 
 /* ---------- 루트 오버레이 ---------- */
 .agh-root {
