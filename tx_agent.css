@@ -376,3 +376,12 @@ button.agh-gitem:hover { background: rgba(255,255,255,.2); }
 .agh-popup p { margin: 4px 0 9px; color: var(--agh-ink-2); line-height: 1.55; }
 .agh-popup .acts { display: flex; gap: 7px; }
 .agh-popup small { display: block; margin-top: 7px; font-size: 10px; color: var(--agh-ink-3); }
+
+/* ---------- HOLD 카드 (근거 부족 정지) ---------- */
+.agh-holdcard { margin-top: 13px; background: rgba(180,35,24,.03); border: 1.5px solid rgba(180,35,24,.45); border-radius: 12px; padding: 14px 16px; font-size: 13px; line-height: 1.65; animation: aghIns .4s; }
+.agh-holdcard .hd { font-weight: 800; color: var(--agh-bad); font-size: 13.5px; margin-bottom: 7px; }
+.agh-holdcard .hd .tag { font-size: 10px; font-weight: 800; background: var(--agh-bad); color: #fff; border-radius: 4px; padding: 2px 7px; margin-left: 6px; vertical-align: 1px; }
+.agh-holdcard .q { font-weight: 700; color: var(--agh-ink); margin-top: 9px; }
+.agh-holdcard .opts { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
+.agh-worklines .wl.hold .ck { color: var(--agh-bad); }
+.agh-worklines .wl.hold span, .agh-worklines .wl.hold b { color: var(--agh-bad); }

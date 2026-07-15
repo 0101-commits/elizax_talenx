@@ -855,16 +855,68 @@
       }
       return out;
     }
+    /* ---------- fix 18: 체크인 승인 플로우 (실앱 패턴) + AI 진척 감지 ---------- */
+    function ckKey(oid) { return 'txf_ckreq_' + oid; }
+    function ckPending(oid) {
+      try { var v = sessionStorage.getItem(ckKey(oid)); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+    }
+    function ckSave(oid, d) {
+      try {
+        if (d) sessionStorage.setItem(ckKey(oid), JSON.stringify(d));
+        else sessionStorage.removeItem(ckKey(oid));
+      } catch (e) { /* ignore */ }
+    }
+    function openCheckinModal(o, aiDraft) {
+      var ks = krByObj[o.objective_id] || [];
+      var rows = ks.map(function (k, i) {
+        var cur = k.current_value != null ? k.current_value : Math.round((k.progress || 0));
+        var sug = aiDraft ? (parseFloat(cur) || 0) + 4 + (i % 3) : cur;
+        return '<div style="display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line-2)">'
+          + '<span style="flex:1;font-size:13px;font-weight:600">' + esc(k.name) + '</span>'
+          + '<input type="number" data-ck-kr="' + esc(k.kr_id) + '" value="' + sug + '" style="width:92px;text-align:right;border:1px solid #D0D5DD;border-radius:7px;padding:6px 8px;font:inherit;font-size:13px">'
+          + '<span style="font-size:12px;color:var(--ink-3)">/ ' + esc(k.target_value || '100') + '</span></div>';
+      }).join('');
+      var draftNote = aiDraft
+        ? '주간 업무보드 완료 3건과 6/30 1:1 합의사항 이행을 반영해 진척값을 업데이트합니다. (elizax 자동 감지 초안)'
+        : '';
+      TX.modal({
+        title: '체크인 — ' + o.title,
+        wide: true,
+        body: (aiDraft ? '<div style="font-size:12px;color:#356CB5;background:rgba(31,122,240,.07);border:1px solid rgba(31,122,240,.25);border-radius:8px;padding:8px 11px;margin-bottom:10px">✦ <b>suggest</b> · elizax가 1:1 노트·업무보드에서 감지한 진척 신호로 초안을 채웠습니다. 값은 언제든 고칠 수 있고, 반영은 관리자 승인 후입니다.</div>' : '')
+          + rows
+          + '<div style="margin-top:11px"><div style="font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:5px">코멘트 <span style="color:var(--ink-4);font-weight:500">— 요청 사유를 남기면 관리자가 빠르게 판단할 수 있습니다</span></div>'
+          + '<textarea data-ck-cm style="width:100%;min-height:76px;border:1px solid #D0D5DD;border-radius:8px;padding:9px;font:inherit;font-size:13px" placeholder="이번 체크인에서 반영한 변경 사항을 적어주세요.">' + esc(draftNote) + '</textarea></div>',
+        actions: [
+          { label: '취소', kind: 'ghost' },
+          { label: '체크인 · 승인 요청', kind: 'primary', onClick: function (box) {
+              var vals = {};
+              box.querySelectorAll('[data-ck-kr]').forEach(function (inp) { vals[inp.getAttribute('data-ck-kr')] = inp.value; });
+              var cm = box.querySelector('[data-ck-cm]');
+              ckSave(o.objective_id, { vals: vals, comment: cm ? cm.value : '', at: '2026-07-15', ai: !!aiDraft });
+              openGoalDetail(o.objective_id);
+              TX.toast && TX.toast('체크인 승인을 요청했습니다. 관리자 승인 후 진행률에 반영됩니다.', 'ok');
+            } }
+        ]
+      });
+    }
+
     function goalDetailHTML(o) {
       var owner = empById[o.owner_emp_id] || {};
       var org = orgById[owner.org_id || o.org_id] || {};
       var p = objProgress(o);
       var ks = krByObj[o.objective_id] || [];
+      var pend = ckPending(o.objective_id);
       var krRows = ks.length ? ks.map(function (k) {
         var kp = k.progress || 0;
+        var cur = k.current_value != null ? String(k.current_value) : '—';
+        var deltaChip = '';
+        if (pend && pend.vals && pend.vals[k.kr_id] != null) {
+          var dv = (parseFloat(pend.vals[k.kr_id]) || 0) - (parseFloat(k.current_value) || 0);
+          if (dv !== 0) deltaChip = ' <span style="font-size:11px;font-weight:800;color:#1F7AF0;background:rgba(31,122,240,.09);border-radius:5px;padding:1px 6px">' + (dv > 0 ? '+' : '') + Math.round(dv * 10) / 10 + '</span>';
+        }
         return '<tr><td style="font-weight:600">' + esc(k.name) + '</td>'
           + '<td>' + esc(k.target_value || '—') + '</td>'
-          + '<td>' + esc(k.current_value != null ? String(k.current_value) : '—') + '</td>'
+          + '<td>' + esc(cur) + deltaChip + '</td>'
           + '<td>' + wnum(k) + '%</td>'
           + '<td style="white-space:nowrap">' + bar(kp, 110) + ' <b>' + pct(kp) + '</b></td>'
           + '<td>' + esc(k.difficulty || '—') + '</td></tr>';
@@ -885,10 +937,26 @@
           + '<div><span class="w">' + esc(c.w) + '</span> <span class="d">' + esc(c.d) + '</span>'
           + '<div style="margin-top:3px">' + esc(c.t) + '</div></div></div>';
       }).join('');
+      var isOwner = o.owner_emp_id === CU.emp_id;
+      var pendPill = pend
+        ? '<span style="display:inline-block;font-size:11px;font-weight:800;color:#5A6472;background:#EDF1F7;border:1px solid #D9E0EB;border-radius:999px;padding:3px 10px;margin-bottom:7px">⏳ 체크인 승인 요청 중' + (pend.ai ? ' · ✦ AI 초안' : '') + '</span><br>'
+        : '';
+      var ckBtns = pend
+        ? '<button class="ghost-btn" data-txf="gd-ckcancel" style="color:#B42318;border-color:rgba(180,35,24,.35)">요청 취소</button>'
+        : (isOwner ? '<button class="btn-blue" data-txf="gd-checkin">체크인</button>' : '');
+      var aiCard = (!pend && isOwner)
+        ? '<div class="txf-fcard" style="border:1px solid rgba(31,122,240,.3);background:rgba(31,122,240,.03)">'
+          + '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'
+          + '<span style="font-size:10.5px;font-weight:800;color:#356CB5;background:rgba(31,122,240,.1);border-radius:4px;padding:2px 7px;font-family:ui-monospace,monospace">● suggest</span>'
+          + '<b style="font-size:13.5px">✦ elizax가 진척 신호를 감지했습니다</b></div>'
+          + '<p style="font-size:12.5px;color:var(--ink-2);line-height:1.6;margin:7px 0 9px">주간 업무보드 완료 3건 · 6/30 1:1 합의사항 이행 확인 — 마지막 체크인 이후 12일이 지났습니다. 감지한 신호로 체크인 초안을 만들어 드릴까요? <span style="color:var(--ink-4)">근거: 업무보드 <b>tsk.wb-0715</b> · 1:1 노트 <b>memo.0630</b> · 감사 기록됨</span></p>'
+          + '<div style="display:flex;gap:7px"><button class="btn-blue" data-txf="gd-aick">체크인 초안 열기</button>'
+          + '<button class="ghost-btn" data-txf="gd-aidismiss">무시</button></div></div>'
+        : '';
       return '<div class="txf-ovhead"><button class="bk" data-txf="gd-close">←</button><h2>목표 상세</h2>'
-        + '<div class="sp"><button class="ghost-btn" data-txf="gd-close">닫기</button></div></div>'
+        + '<div class="sp">' + ckBtns + '<button class="ghost-btn" data-txf="gd-close">닫기</button></div></div>'
         + '<div class="txf-ovbody"><div class="txf-gd">'
-        + '<div class="txf-fcard"><div class="gd-title">' + esc(o.title) + '</div>'
+        + '<div class="txf-fcard">' + pendPill + '<div class="gd-title">' + esc(o.title) + '</div>'
         + '<div class="gd-meta">'
         + '<span style="display:inline-flex;align-items:center;gap:7px">' + (F.avatar ? F.avatar(owner.name || '?', 26) : '')
         + '<b>' + esc(owner.name || '미지정') + '</b>' + (org.name ? ' · ' + esc(org.name) : '') + '</span>'
@@ -896,6 +964,7 @@
         + typeBadge(o) + statusChip(o) + '</div>'
         + '<div class="gd-prog"><span class="big">' + pct(p) + '</span>' + bar(p, 260)
         + '<span style="font-size:12px;color:var(--ink-3)">핵심 성과 ' + ks.length + '개 · 체크인 ' + (chkByObj[o.objective_id] || []).length + '건</span></div></div>'
+        + aiCard
         + '<div class="txf-fcard"><h3>핵심 성과</h3><table class="txf-krt"><thead><tr>'
         + '<th>KR명</th><th>목표값</th><th>현재값</th><th>가중치</th><th>진행률</th><th>난이도</th></tr></thead><tbody>' + krRows + '</tbody></table></div>'
         + '<div class="txf-fcard"><h3>체크인 타임라인</h3><div class="txf-tl">' + tl + '</div></div>'
@@ -911,6 +980,7 @@
         sec.appendChild(gdOv);
       }
       gdOv.innerHTML = goalDetailHTML(o);
+      gdOv.setAttribute('data-oid', oid);
       gdOv.classList.add('open');
       gdOv.scrollTop = 0;
     }
@@ -1069,6 +1139,23 @@
         }
         if (k === 'weight') { openWeightEditor(); return; }
         if (k === 'gd-close') { ev.preventDefault(); closeGoalDetail(); return; }
+        if (k === 'gd-checkin' || k === 'gd-aick' || k === 'gd-ckcancel' || k === 'gd-aidismiss') {
+          ev.preventDefault();
+          var gdo = gdOv && objById[gdOv.getAttribute('data-oid')];
+          if (!gdo) return;
+          if (k === 'gd-checkin') { openCheckinModal(gdo, false); return; }
+          if (k === 'gd-aick') { openCheckinModal(gdo, true); return; }
+          if (k === 'gd-ckcancel') {
+            ckSave(gdo.objective_id, null);
+            openGoalDetail(gdo.objective_id);
+            TX.toast && TX.toast('체크인 요청을 취소했습니다. 취소 이력도 감사 로그에 남습니다.');
+            return;
+          }
+          var aic = tag.closest('.txf-fcard');
+          if (aic) aic.style.display = 'none';
+          TX.toast && TX.toast('이번 신호는 무시했습니다. 다음 감지 시 다시 제안합니다.');
+          return;
+        }
         if (k === 'reorder') { openReorderModal(); return; }
         if (k === 'cardset') { openCardSettings(); return; }
         if (k === 'expandall') { toggleAllMembers(tag); return; }

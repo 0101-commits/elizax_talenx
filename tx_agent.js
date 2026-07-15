@@ -143,13 +143,14 @@
     qw4:     { title: "상시 근거 수집 타임라인",     nav: "④ 상시 근거 수집",        mode: "suggest",       group: "성과관리" },
     qw6:     { title: "피드백 문장 정제 (SBI)",     nav: "⑤ 피드백 정제",           mode: "suggest",       group: "성과관리" },
     qw3:     { title: "평가 코멘트 근거초안",       nav: "⑥ 평가 코멘트 초안",       mode: "human_approve", group: "평가관리" },
+    hold:    { title: "HOLD · 근거 부족 시 정지",   nav: "⑧ HOLD 데모",             mode: "suggest",       group: "평가관리" },
     qw5:     { title: "평가 편향 점검",            nav: "⑦ 편향 점검",             mode: "suggest",       group: "평가관리" },
     calib:   { title: "등급 Calibration 라운드테이블", nav: "Calibration 심의",     mode: "human_approve", group: "평가관리" },
     review:  { title: "리뷰 초안 co-writing",      nav: "리뷰 초안 작성",           mode: "human_approve", group: "평가관리" },
     assets:  { title: "산출물 · 프로세스 자산",     nav: "산출물",                   mode: null,            group: "자산" },
     audit:   { title: "감사 로그",                nav: "감사 로그",                mode: null,            group: "자산" }
   };
-  var NAV_ORDER = ["home", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "qw5", "calib", "review", "assets", "audit"];
+  var NAV_ORDER = ["home", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "assets", "audit"];
 
   /* 역할별 기본 화면 (역할 주체 자동 연동) */
   function defaultScreen() {
@@ -584,6 +585,74 @@
       }, 700 + i * 800);
     });
     later(function () { protoTo(proto, 6); el.canvas.querySelector("[data-agh-done]").style.display = ""; ctxAppend('<div class="agh-live ok">S6 객체화 — 문장 단위 출처가 붙은 편집 가능 초안 생성. 승인·수정·보류로 확정.</div>'); }, 3400);
+  };
+
+  /* ---------- HOLD · 근거 부족 시 정지+질문 (W3 p9 — 확신 없으면 진행하지 않는다) ---------- */
+  RENDER.hold = function () {
+    el.canvas.innerHTML = screenHead("hold", "노출 · ①도킹 · 정지 상태") +
+      '<div class="agh-workpanel"><div class="lab">⏳ 작업 중 <span class="who">박지훈 · 등급 초안</span></div>' +
+      '<div class="agh-worklines" data-agh-wl>' +
+      [["KR1 체크인 기록 확인 중…", ""], ["KR2 실적 근거 탐색 중…", ""], ["KR3 실적 근거 탐색 중…", ""]].map(function (l, i) {
+        return '<div class="wl" data-wl="' + i + '"><span class="ck">○</span><span>' + esc(l[0]) + ' <b data-wlb></b></span></div>';
+      }).join("") + "</div></div>" +
+      '<div class="agh-holdcard" data-agh-hold style="display:none">' +
+      '<div class="hd">⛔ 근거가 부족해 판단을 멈췄습니다 <span class="tag">HOLD</span></div>' +
+      "<p>KR 3개 중 <b>1개만 기록</b>이 있습니다. KR2·KR3은 체크인·실적 근거가 없어 <b>판단 불가</b> — 임의로 추정하지 않습니다.</p>" +
+      '<p class="q">나머지 2개 KR 실적을 어디서 볼까요?</p>' +
+      '<div class="opts">' +
+      '<button class="agh-btn" data-hold-opt="talenx">talenx 체크인 기록 연결</button>' +
+      '<button class="agh-btn" data-hold-opt="erp">ERP 실적 재조회</button>' +
+      '<button class="agh-btn" data-hold-opt="manual">직접 입력</button></div></div>' +
+      '<div class="agh-done" data-agh-done style="display:none"><div class="lab">✅ 재개 · 완료</div>' +
+      "<p data-agh-holdsum></p>" +
+      '<div class="agh-gradecard"><span class="g">B0</span><div><b>등급 초안 · B0 제안</b><small>KR1 112% · KR2 96% · KR3 88% (보강된 근거 기준)</small></div></div></div>' +
+      gateHTML("hold");
+    ctxPanel([
+      { tag: "HOLD 원칙", title: "확신이 없으면 진행하지 않는다", kind: "warn", body: "근거 부족 시 스피너 대신 <b>정지 + 질문</b>. 추정으로 채워 넣은 판단은 감사도 재현도 불가능하므로, 부족분은 사용자에게 되묻습니다. 정지·재개도 감사 로그에 남습니다. " + srcChip("rule", "invariant.no-guess") }
+    ], "");
+    var proto = el.canvas.querySelector("[data-proto]");
+    protoTo(proto, 1);
+    var wl = el.canvas.querySelectorAll("[data-wl]");
+    later(function () {
+      wl[0].querySelector(".ck").textContent = "✓"; wl[0].classList.add("done");
+      wl[0].querySelector("[data-wlb]").textContent = "체크인 2건 · 달성률 112%";
+      protoTo(proto, 3);
+    }, 700);
+    [1, 2].forEach(function (i) {
+      later(function () {
+        wl[i].querySelector(".ck").textContent = "✗"; wl[i].classList.add("hold");
+        wl[i].querySelector("[data-wlb]").textContent = "기록 없음 · 판단 불가";
+      }, 1400 + (i - 1) * 600);
+    });
+    later(function () {
+      el.canvas.querySelector("[data-agh-hold]").style.display = "";
+      logAudit("HOLD 정지", "박지훈 등급 초안 — KR2·KR3 근거 부족", "hold.no-evidence");
+      ctxAppend('<div class="agh-live warn">S4 수행 중 정지 — 근거 2건 부족. 사용자 응답 대기.</div>');
+    }, 2700);
+    el.canvas.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-hold-opt]");
+      if (!b) return;
+      var opt = b.getAttribute("data-hold-opt");
+      var label = opt === "talenx" ? "talenx 체크인 기록 연결" : opt === "erp" ? "ERP 실적 재조회" : "직접 입력";
+      el.canvas.querySelector("[data-agh-hold]").style.display = "none";
+      logAudit("HOLD 재개", "근거 보강 경로 · " + label, "hold.resume");
+      [1, 2].forEach(function (i, j) {
+        later(function () {
+          wl[i].classList.remove("hold"); wl[i].classList.add("done");
+          wl[i].querySelector(".ck").textContent = "✓";
+          wl[i].querySelector("[data-wlb]").textContent = (i === 1 ? "달성률 96%" : "달성률 88%") + " · " + label;
+          protoTo(proto, 4 + j);
+        }, 500 + j * 700);
+      });
+      later(function () {
+        protoTo(proto, 6);
+        el.canvas.querySelector("[data-agh-holdsum]").innerHTML =
+          "<b>" + esc(label) + "</b> 경로로 KR2·KR3 근거를 보강해 판단을 재개했습니다. 정지→질문→재개 전 과정이 감사 로그에 남았습니다. " +
+          srcChip("talenx", "체크인") + srcChip("erp", "ERP 실적");
+        el.canvas.querySelector("[data-agh-done]").style.display = "";
+        ctxAppend('<div class="agh-live ok">S6 객체화 — 보강 근거 기준 등급 초안 생성. 게이트에서 확정하세요.</div>');
+      }, 2100);
+    });
   };
 
   /* ---------- QW5 · 평가 편향 점검 (W3 p18 #5) ---------- */

@@ -380,7 +380,56 @@
     wrap.appendChild(starters);
     return wrap;
   }
+  /* ---------------- 작업중 카드 (계획 STEP + 원천 확인 내역 — W3 p6) ---------------- */
+  var WORK_STEPS = {
+    subject: [["talenx", "내 목표·KR 현황 조회"], ["ERP", "실적·체크인 기록 대조"], ["규정", "평가규정 해당 조항 확인"], ["맥락", "지난 대화·1:1 노트 로드"]],
+    manager: [["talenx", "팀 목표·등급 초안 조회"], ["ERP", "팀 실적 대조"], ["규정", "강제배분 상한 확인"], ["맥락", "1:1·피어리뷰 로드"]],
+    hr: [["talenx", "전사 등급 분포 스캔"], ["규정", "비율·가중치 규칙 검증"], ["ERP", "실적 대비 상승폭 대조"], ["맥락", "운영 이력 로드"]],
+    executive: [["talenx", "전사 목표 정합성 조회"], ["통계", "등급 분포 리스크 산출"], ["ERP", "사업 실적 대조"], ["맥락", "이전 브리핑 로드"]]
+  };
+  function makeWorkMsg(p) {
+    var steps = (WORK_STEPS[p] || WORK_STEPS.subject).map(function (s) {
+      return { src: s[0], label: s[1], st: 0 }; // 0 대기 · 1 진행 · 2 완료
+    });
+    return { role: "work", steps: steps, done: false, _timers: [] };
+  }
+  function workHTML(m) {
+    var html = '<div class="ezx-work-hd">확인 내역 · ' + m.steps.length + " 원천" +
+      (m.done ? ' · <span class="ok">감사 기록됨</span>' : ' · <span class="run">작업 중</span>') + "</div>";
+    m.steps.forEach(function (s) {
+      html += '<div class="ezx-work-ln st' + s.st + '"><span class="ck">' + (s.st === 2 ? "✓" : s.st === 1 ? "◉" : "○") +
+        '</span><span class="src">' + esc(s.src) + "</span><span>" + esc(s.label) + "</span></div>";
+    });
+    return html;
+  }
+  function refreshWork(m) {
+    if (m._node) { m._node.innerHTML = workHTML(m); scrollToBottom(); }
+  }
+  function animateWork(m) {
+    m.steps.forEach(function (s, i) {
+      m._timers.push(setTimeout(function () {
+        if (m.done) return;
+        s.st = 1;
+        if (i > 0) m.steps[i - 1].st = 2;
+        refreshWork(m);
+      }, 350 + i * 800));
+    });
+  }
+  function completeWork(aiMsg) {
+    var m = aiMsg && aiMsg._work;
+    if (!m || m.done) return;
+    m.done = true;
+    m._timers.forEach(function (t) { clearTimeout(t); });
+    m.steps.forEach(function (s) { s.st = 2; });
+    refreshWork(m);
+  }
   function buildMsgNode(m) {
+    if (m.role === "work") {
+      var wnode = h("div", "ezx-msg work ezx-work");
+      wnode.innerHTML = workHTML(m);
+      m._node = wnode;
+      return wnode;
+    }
     var node = h("div", "ezx-msg " + (m.role === "user" ? "user" : m.role === "err" ? "err" : "ai"));
     var bubble = h("div", "ezx-bubble");
     if (m.role === "user") bubble.textContent = m.text;
@@ -446,9 +495,11 @@
       return;
     }
     pushMessage({ role: "user", text: userText });
-    var aiMsg = { role: "ai", text: "", streaming: true };
+    var workMsg = OFFLINE ? null : pushMessage(makeWorkMsg(state.perspective));
+    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg };
     pushMessage(aiMsg);
     renderMessages();
+    if (workMsg) animateWork(workMsg);
 
     state.streaming = true;
     el.send.disabled = true;
@@ -484,6 +535,7 @@
       if (ct.indexOf("text/event-stream") === -1) {
         // non-streaming JSON fallback
         return res.json().then(function (j) {
+          completeWork(aiMsg);
           aiMsg.streaming = false;
           aiMsg.text = j.response || j.message || "(빈 응답)";
           if (j.recommendations && j.recommendations.length) aiMsg.recos = j.recommendations;
@@ -494,6 +546,7 @@
       }
       return readSSE(res, aiMsg);
     }).catch(function (err) {
+      completeWork(aiMsg);
       aiMsg.role = "err";
       aiMsg.streaming = false;
       aiMsg.text = "연결에 실패했습니다 (" + (err && err.message ? err.message : "network") +
@@ -650,14 +703,17 @@
       return;
     }
     if (msg.type === "chunk") {
+      completeWork(aiMsg);
       aiMsg.text += (msg.content || "");
       refreshBubble(aiMsg);
     } else if (msg.type === "done") {
+      completeWork(aiMsg);
       aiMsg.streaming = false;
       if (msg.recommendations && msg.recommendations.length) aiMsg.recos = msg.recommendations;
       if (msg.truncated) { aiMsg.note = "일부 생략됨"; }
       renderMessages();
     } else if (msg.type === "fallback") {
+      completeWork(aiMsg);
       aiMsg.streaming = false;
       aiMsg.text = msg.response || aiMsg.text || "";
       aiMsg.note = "AI 키 미설정 — 기본 응답";

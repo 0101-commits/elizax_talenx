@@ -214,3 +214,17 @@
 .ezx-reset{ font-size:11px; color:var(--ink-3); font-weight:600; }
 .ezx-reset:hover{ color:var(--ink-2); text-decoration:underline; }
 .ezx-hint{ margin-left:auto; font-size:10.5px; color:var(--ink-4); }
+
+/* ---------- 작업중 카드 (확인 내역) ---------- */
+.ezx-msg.ezx-work { align-self: flex-start; max-width: 88%; }
+.ezx-work { background: #F8FAFD; border: 1px solid #E3EAF4; border-radius: 11px; padding: 10px 13px; font-size: 12px; }
+.ezx-work-hd { font-weight: 800; color: #47536B; font-size: 11px; margin-bottom: 6px; }
+.ezx-work-hd .ok { color: #15803D; }
+.ezx-work-hd .run { color: #1F7AF0; animation: ezxPulse 1.2s ease-in-out infinite; }
+.ezx-work-ln { display: flex; align-items: center; gap: 7px; padding: 3px 0; color: #98A2B3; }
+.ezx-work-ln .ck { width: 14px; text-align: center; flex: none; }
+.ezx-work-ln .src { font-family: ui-monospace, Consolas, monospace; font-size: 10px; font-weight: 700; background: #EDF1F7; border-radius: 4px; padding: 1px 6px; color: #5A6472; }
+.ezx-work-ln.st1 { color: #1F7AF0; font-weight: 600; }
+.ezx-work-ln.st2 { color: #344054; }
+.ezx-work-ln.st2 .ck { color: #15803D; }
+@keyframes ezxPulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
