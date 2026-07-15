@@ -266,7 +266,7 @@
         '<div class="bsec"><b>목표 진척</b>' + objHtml + "</div>" +
         '<div class="bsec"><b>최근 피드백 시그널</b>동료 피드백 2건 수신(협업 긍정) · 체크인 코멘트 감소 추세 <span class="src">talenx</span></div>' +
         '<div class="bsec"><b>지난 1:1 액션아이템</b><div class="pt"><span class="n">✓</span><span>API 문서화 — 완료</span></div><div class="pt"><span class="n">…</span><span>온보딩 가이드 — 진행 중(70%)</span></div></div>' +
-        '<div class="bsec"><b>추천 논의 포인트</b>' +
+        '<div class="bsec" data-ezup-pts><b>추천 논의 포인트</b>' +
         '<div class="pt"><span class="n">1</span><span>진척 지연 목표의 장애물 — 리소스인지 우선순위인지 확인</span></div>' +
         '<div class="pt"><span class="n">2</span><span>최근 피드백의 협업 강점을 다음 분기 목표와 연결</span></div>' +
         '<div class="pt"><span class="n">3</span><span>미완료 액션아이템 마감 재합의</span></div></div>' +
@@ -277,6 +277,26 @@
       var c = document.querySelector("[data-ezup-chat]"), t = document.querySelector("[data-ezup-tl]");
       if (c) c.addEventListener("click", function () { elizaxSend("이번 1:1 미팅 아젠다 초안을 만들어줘"); });
       if (t) t.addEventListener("click", function () { if (window.TXAgent && TXAgent.openHub) TXAgent.openHub("qw4"); });
+      /* Claude 연결 시: 목표·체크인 실데이터 기반 논의 포인트 실시간 생성 */
+      var pts = document.querySelector("[data-ezup-pts]");
+      var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
+      if (pts && live) {
+        pts.insertAdjacentHTML("beforeend", '<small style="display:block;margin-top:6px;color:#98A2B3">elizax가 목표·체크인 실데이터로 재구성 중…</small>');
+        window.EZAI.agent({
+          maxTurns: 4, maxTokens: 600,
+          messages: [{ role: "user", content:
+            d.me.name + "(" + d.me.emp_id + ")의 목표와 최근 체크인을 도구로 조회한 뒤, 1:1 미팅에서 다룰 논의 포인트 3개를 추천해줘. " +
+            "반드시 형식: 각 줄 하나의 포인트(번호·머리말 없이), 정확히 3줄. 각 포인트에 조회한 실데이터 근거(수치·블로커)를 포함해." }],
+          onDone: function (text) {
+            var lines = String(text || "").split(/\r?\n/).map(function (s) { return s.replace(/^\s*[-•\d.)]+\s*/, "").trim(); }).filter(Boolean).slice(0, 3);
+            if (lines.length !== 3 || !document.body.contains(pts)) return;
+            pts.innerHTML = "<b>추천 논의 포인트</b>" + lines.map(function (ln, i) {
+              return '<div class="pt"><span class="n">' + (i + 1) + "</span><span>" + esc(ln) + "</span></div>";
+            }).join("") + '<small style="display:block;margin-top:6px;color:#98A2B3">Claude 실시간 생성 · talenx·ERP 근거</small>';
+          },
+          onError: function () { var s = pts.querySelector("small"); if (s) s.remove(); }
+        });
+      }
     }, 60);
   }
   function injectBrief() {

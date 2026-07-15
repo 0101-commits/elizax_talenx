@@ -1174,14 +1174,39 @@
         if (k === 'ai') {
           var list2 = newOv && newOv.querySelector('[data-txf="kr-list"]');
           if (list2) {
-            var sugg = [
+            var canned = [
               { name: '신규 기능 기획서 사용자 검증 통과율 90% 달성', mode: 0, weight: 40 },
               { name: '기획 산출물 평균 리드타임 5일 이내 단축', mode: 1, weight: 30 },
               { name: '분기별 사용자 인터뷰 12회 실시', mode: 3, weight: 30 }
             ];
-            sugg.forEach(function (s) { list2.insertAdjacentHTML('beforeend', krRowHTML(s)); });
-            renumberKR();
-            TX.toast && TX.toast('AI가 핵심 성과 3건을 추천했습니다.', 'ok');
+            var insertKRs = function (items, live) {
+              items.forEach(function (s) { list2.insertAdjacentHTML('beforeend', krRowHTML(s)); });
+              renumberKR();
+              TX.toast && TX.toast(live ? 'elizax가 직무·목표 실데이터 기반으로 KR 3건을 추천했습니다.'
+                                        : 'AI가 핵심 성과 3건을 추천했습니다.', 'ok');
+            };
+            /* Claude 연결 시: 직무·기존 목표 실데이터 기반 실제 추천 */
+            var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
+            if (live) {
+              TX.toast && TX.toast('elizax가 실데이터를 조회해 추천 중…');
+              window.EZAI.agent({
+                maxTurns: 3, maxTokens: 512,
+                messages: [{ role: 'user', content:
+                  '현재 사용자의 직무·기존 목표를 도구로 조회한 뒤, 새 목표에 넣을 핵심성과(KR) 3건을 추천해줘. ' +
+                  '반드시 아래 형식으로만 답해 — 각 줄 "KR명 | 가중치%" 형태 3줄, 그 외 텍스트 금지. 가중치 합 100.' }],
+                onDone: function (text) {
+                  var items = [];
+                  String(text || '').split(/\r?\n/).forEach(function (ln) {
+                    var m2 = ln.match(/^\s*(?:\d+[.)]\s*)?(.+?)\s*\|\s*(\d{1,3})\s*%?\s*$/);
+                    if (m2 && items.length < 3) items.push({ name: m2[1].trim(), mode: 0, weight: Number(m2[2]) });
+                  });
+                  insertKRs(items.length === 3 ? items : canned, items.length === 3);
+                },
+                onError: function () { insertKRs(canned, false); }
+              });
+            } else {
+              insertKRs(canned, false);
+            }
           }
           return;
         }

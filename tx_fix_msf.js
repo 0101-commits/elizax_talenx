@@ -344,6 +344,26 @@
       if (tg) tg.addEventListener('change', function () {
         pg.querySelectorAll('.txf-ratio').forEach(function (r) { r.hidden = !tg.checked; });
       });
+      /* Claude 연결 시: 실제 응답 텍스트를 넘겨 감정분석 문단을 실시간 생성 */
+      (function liveSentiment() {
+        var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready());
+        var p = pg.querySelector('.txf-sent .txf-sent-txt');
+        if (!live || !p || !c.answers.length) return;
+        var stat = '긍정 ' + pos + ' · 중립 ' + neu + ' · 부정 ' + neg + ' (총 ' + tot + '건, 종합 ' + score + '점)';
+        p.insertAdjacentHTML('beforeend', ' <em style="color:var(--ink-4);font-style:normal">· elizax가 원문 재분석 중…</em>');
+        window.EZAI.agent({
+          maxTurns: 2, maxTokens: 400,
+          system: '당신은 elizax — HR 360 피드백 감정분석가입니다. 주어진 실제 응답 원문만 근거로 3~4문장 분석을 씁니다. 반복 키워드는 따옴표로 인용, 마지막에 리스크 신호 유무 한 줄. 다른 텍스트·머리말 금지. 도구 호출 불필요.',
+          messages: [{ role: 'user', content:
+            '집계: ' + stat + '\n응답 원문:\n' +
+            c.answers.map(function (a, i) { return (i + 1) + '. [' + a.s + '] ' + a.t; }).join('\n') }],
+          onDone: function (text) {
+            if (text && text.trim()) p.innerHTML = esc(text.trim()).replace(/\n+/g, '<br>') +
+              ' <em style="color:var(--ink-4);font-style:normal">· Claude 실시간 분석</em>';
+          },
+          onError: function () { var em = p.querySelector('em'); if (em) em.remove(); }
+        });
+      })();
       pg.querySelectorAll('[data-noop]').forEach(function (b) { b.addEventListener('click', function () { toast('평가자를 수정합니다.'); }); });
     }
 

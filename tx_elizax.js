@@ -186,14 +186,16 @@
     mark.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 2z" fill="currentColor"/></svg>';
     var titles = h("div", "ezx-titles");
     titles.appendChild(h("div", "ezx-title", { text: "elizax" }));
-    titles.appendChild(h("div", "ezx-sub", { text: "AI 성과관리 코치" }));
+    var sub = h("div", "ezx-sub", { text: "AI 성과관리 코치" });
+    titles.appendChild(sub);
+    el.sub = sub;
     var exbtn = h("button", "ezx-x ezx-expand", { "aria-label": "전체화면으로 전환", title: "전체화면 딥워크로 전환", text: "⛶" });
     exbtn.addEventListener("click", function () {
       if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub(); }
     });
     var gear = h("button", "ezx-x", { "aria-label": "AI 연결 설정", title: "AI 연결 설정 (API 키)", text: "⚙" });
     gear.addEventListener("click", function () {
-      if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { renderMessages(); });
+      if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateAiBadge(); renderMessages(); });
     });
     var xbtn = h("button", "ezx-x", { "aria-label": "닫기", text: "✕" });
     xbtn.addEventListener("click", closePanel);
@@ -286,6 +288,13 @@
     syncSubjectUI();
     loadHistory();          /* 지난 대화 복원 (localStorage, 계정별) */
     renderMessages();
+    /* 백엔드 probe는 비동기 — 완료 후 연결 상태 표기를 실제 모드로 갱신 */
+    if (window.EZAI && window.EZAI.probe) {
+      window.EZAI.probe(function () {
+        updateAiBadge();
+        if (!state.messages.length) renderMessages();
+      });
+    }
   }
 
   function autoGrow() {
@@ -389,7 +398,7 @@
       var connect = h("button", "ezx-starter", { type: "button", text: "⚙ Claude API 연결" });
       connect.style.marginLeft = "6px";
       connect.addEventListener("click", function () {
-        if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { renderMessages(); });
+        if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateAiBadge(); renderMessages(); });
       });
       off.appendChild(connect);
       wrap.appendChild(off);
@@ -443,13 +452,44 @@
     return { role: "work", steps: steps, done: false, _timers: [] };
   }
   function workHTML(m) {
-    var html = '<div class="ezx-work-hd">확인 내역 · ' + m.steps.length + " 원천" +
+    var head = m.live
+      ? (m.steps.length ? "확인 내역 · 도구 " + m.steps.length + "회 실행" : "확인 내역")
+      : "확인 내역 · " + m.steps.length + " 원천";
+    var html = '<div class="ezx-work-hd">' + head +
       (m.done ? ' · <span class="ok">감사 기록됨</span>' : ' · <span class="run">작업 중</span>') + "</div>";
+    if (m.live && !m.steps.length && !m.done) {
+      html += '<div class="ezx-work-ln st1"><span class="ck">◉</span><span class="src">elizax</span><span>실데이터 조회 계획 수립 중…</span></div>';
+    }
     m.steps.forEach(function (s) {
       html += '<div class="ezx-work-ln st' + s.st + '"><span class="ck">' + (s.st === 2 ? "✓" : s.st === 1 ? "◉" : "○") +
         '</span><span class="src">' + esc(s.src) + "</span><span>" + esc(s.label) + "</span></div>";
     });
     return html;
+  }
+  /* ---- 라이브 작업중 카드: Claude tool-use 이벤트로 실제 실행 내역 표시 ---- */
+  function makeLiveWorkMsg() {
+    return { role: "work", live: true, steps: [], done: false, _timers: [] };
+  }
+  function addWorkStep(m, name, input) {
+    if (!m) return;
+    var hint = input && (input.name || input.query || input.emp_id || input.section || "");
+    m.steps.push({
+      src: (window.EZTools && EZTools.srcOf(name)) || "talenx",
+      label: ((window.EZTools && EZTools.labelOf(name)) || name) + (hint ? " (" + hint + ")" : ""),
+      st: 1
+    });
+    refreshWork(m);
+  }
+  function finishWorkStep(m, summary) {
+    if (!m) return;
+    for (var i = m.steps.length - 1; i >= 0; i--) {
+      if (m.steps[i].st === 1) {
+        m.steps[i].st = 2;
+        if (summary) m.steps[i].label += " → " + summary;
+        break;
+      }
+    }
+    refreshWork(m);
   }
   function refreshWork(m) {
     if (m._node) { m._node.innerHTML = workHTML(m); scrollToBottom(); }
@@ -597,11 +637,15 @@
       return;
     }
     pushMessage({ role: "user", text: userText });
-    var workMsg = (aiMode() !== "offline") ? pushMessage(makeWorkMsg(state.perspective)) : null;
+    /* 실 에이전트 가능(연결+키+도구) → 라이브 카드(실 도구 호출 표시),
+       그 외 라이브 → 기존 연출 카드, 오프라인 → 카드 없음 */
+    var agentReady = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
+    var workMsg = agentReady ? pushMessage(makeLiveWorkMsg())
+      : (aiMode() !== "offline") ? pushMessage(makeWorkMsg(state.perspective)) : null;
     var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg };
     pushMessage(aiMsg);
     renderMessages();
-    if (workMsg) animateWork(workMsg);
+    if (workMsg && !workMsg.live) animateWork(workMsg);
 
     state.streaming = true;
     el.send.disabled = true;
@@ -615,7 +659,8 @@
     };
     if (ids.actor_emp_id) body.actor_emp_id = ids.actor_emp_id;
 
-    streamChat(body, aiMsg);
+    if (agentReady) agentRespond(body, aiMsg);
+    else streamChat(body, aiMsg);
   }
 
   function finishStreaming() {
@@ -625,9 +670,9 @@
     saveHistory();
   }
 
-  /* ---------------- direct 모드: 브라우저 → Anthropic API ---------------- */
-  function directRespond(body, aiMsg) {
-    /* 대화 히스토리 구성 (user/ai 텍스트만, 마지막 user는 컨텍스트 포함 payload) */
+  /* ---------------- 대화 히스토리 → Anthropic messages 규격 ---------------- */
+  function buildHistoryMsgs(body, aiMsg) {
+    /* user/ai 텍스트만, 마지막 user는 컨텍스트 포함 payload */
     var msgs = [];
     state.messages.forEach(function (m) {
       if (m === aiMsg || !m.text) return;
@@ -645,7 +690,56 @@
       else norm.push({ role: m.role, content: m.content });
     });
     if (!norm.length) norm = [{ role: "user", content: body.message }];
+    return norm;
+  }
 
+  /* ---------------- 라이브 에이전트: tool-use 루프 (proxy·direct 공용) ----------
+     Claude가 talenx 실데이터 도구를 호출하며 답한다.
+     도구 이벤트가 작업중 카드에 실제 실행 내역으로 찍힌다. */
+  function agentRespond(body, aiMsg) {
+    var work = aiMsg._work;
+    window.EZAI.agent({
+      messages: buildHistoryMsgs(body, aiMsg),
+      onText: function (t) {
+        aiMsg.text += t;
+        refreshBubble(aiMsg);
+      },
+      onTool: function (name, input) { addWorkStep(work, name, input); },
+      onToolResult: function (name, r, summary) {
+        finishWorkStep(work, summary);
+        if (name === "navigate" && r && r.ok) aiMsg.note = "화면 전환 · " + (r.moved_to || "");
+      },
+      onDone: function () {
+        if (work) { work.done = true; work.steps.forEach(function (s) { s.st = 2; }); refreshWork(work); }
+        aiMsg.streaming = false;
+        /* 모델이 마커를 낸 경우의 폴백 (navigate 도구가 기본) */
+        if (window.EZNav && window.EZNav.extractMarker) {
+          try {
+            var ext = window.EZNav.extractMarker(aiMsg.text);
+            if (ext.nav) {
+              aiMsg.text = ext.clean;
+              aiMsg.note = "화면 전환 · " + ext.nav.label;
+              setTimeout(function () { try { window.EZNav.go(ext.nav.s, ext.nav.p); } catch (e) { /* ignore */ } }, 380);
+            }
+          } catch (e) { /* ignore */ }
+        }
+        finishStreaming();
+        renderMessages();
+      },
+      onError: function (m) {
+        if (work) { work.done = true; refreshWork(work); }
+        aiMsg.role = "err";
+        aiMsg.streaming = false;
+        aiMsg.text = m || "오류가 발생했습니다.";
+        finishStreaming();
+        renderMessages();
+      }
+    });
+  }
+
+  /* ---------------- direct 모드: 브라우저 → Anthropic API ---------------- */
+  function directRespond(body, aiMsg) {
+    var norm = buildHistoryMsgs(body, aiMsg);
     window.EZAI.direct({
       messages: norm,
       onChunk: function (t) { applyEvent({ type: "chunk", content: t }, aiMsg); },
@@ -930,11 +1024,23 @@
   }
 
   /* ---------------- Open / close ---------------- */
+  /* 헤더 서브타이틀에 AI 연결 상태 상시 표시 */
+  function updateAiBadge() {
+    if (!el.sub) return;
+    var rdy = window.EZAI && EZAI.ready && EZAI.ready();
+    var m = aiMode();
+    var dot = rdy ? '<span style="color:#15803D">● Claude</span>'
+      : m === "offline" ? '<span style="color:#98A2B3">○ 오프라인</span>'
+      : '<span style="color:#B45309">◐ 키 미설정</span>';
+    el.sub.innerHTML = "AI 성과관리 코치 · " + dot;
+  }
+
   function openPanel() {
     state.open = true;
     el.root.classList.add("ezx-open");
     syncPerspectiveFromRole();
     updateScreenChip();
+    updateAiBadge();
     setTimeout(function () { try { el.textarea.focus(); } catch (e) {} }, 220);
   }
   function closePanel() {

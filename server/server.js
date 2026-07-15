@@ -229,6 +229,88 @@ async function handleChat(req, res) {
   res.end();
 }
 
+/* ---------------- /api/messages — generic Messages API passthrough ----------
+   tool-use 에이전트 루프(tx_ai.js EZAI.agent)용. 클라이언트가 만든 Messages
+   요청 본문(model/system/messages/tools/stream)을 그대로 업스트림에 전달한다.
+   - Anthropic 백엔드: 스트리밍 SSE를 원문 그대로 파이프
+   - Bedrock  백엔드: 비스트리밍 InvokeModel → 완성 message JSON 반환
+     (tool_use 블록 포함 — 클라이언트 루프가 JSON 응답도 처리) */
+async function handleMessages(req, res) {
+  let body;
+  try { body = await readBody(req, res); } catch (e) { return json(res, 400, { error: "bad json" }); }
+  if (!Array.isArray(body.messages) || !body.messages.length) {
+    return json(res, 400, { error: "messages required" });
+  }
+  if (BACKEND === "none") {
+    return json(res, 503, { error: "no credentials", message: "ANTHROPIC_API_KEY 또는 AWS 키를 설정하세요." });
+  }
+
+  if (BACKEND === "bedrock") {
+    try {
+      const host = `bedrock-runtime.${AWS_REGION}.amazonaws.com`;
+      const rawPath = `/model/${encodeURIComponent(BEDROCK_MODEL)}/invoke`;
+      const up = JSON.stringify({
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: Number(body.max_tokens) || MAX_TOKENS,
+        system: body.system,
+        messages: body.messages,
+        tools: body.tools || undefined,
+        tool_choice: body.tool_choice || undefined
+      });
+      const headers = sigv4("POST", host, rawPath, "", AWS_REGION, "bedrock", up);
+      const r = await fetch(`https://${host}${rawPath}`, { method: "POST", headers, body: up });
+      const text = await r.text();
+      if (!r.ok) return json(res, r.status, { error: "bedrock", message: text.slice(0, 500) });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+      return res.end(text);
+    } catch (e) {
+      return json(res, 502, { error: "bedrock", message: e && e.message ? e.message : "unknown" });
+    }
+  }
+
+  /* Anthropic: 요청 본문 정리 후 그대로 전달, 응답 스트림 원문 파이프 */
+  const payload = {
+    model: body.model || MODEL,
+    max_tokens: Number(body.max_tokens) || MAX_TOKENS,
+    system: body.system,
+    messages: body.messages,
+    tools: body.tools || undefined,
+    tool_choice: body.tool_choice || undefined,
+    stream: body.stream !== false
+  };
+  try {
+    const up = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!up.ok || !up.body) {
+      const errTxt = await up.text().catch(() => "");
+      return json(res, up.status || 502, { error: "upstream", message: errTxt.slice(0, 500) });
+    }
+    res.writeHead(200, {
+      "Content-Type": payload.stream ? "text/event-stream; charset=utf-8" : "application/json; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*"
+    });
+    const reader = up.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(Buffer.from(value));
+    }
+    res.end();
+  } catch (e) {
+    try { json(res, 502, { error: "proxy", message: e && e.message ? e.message : "unknown" }); }
+    catch (err) { try { res.end(); } catch (e2) { /* stream already open */ } }
+  }
+}
+
 /* ---------------- static files ---------------- */
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -259,6 +341,7 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
   if (req.method === "POST" && req.url === "/api/chat") return handleChat(req, res);
+  if (req.method === "POST" && req.url === "/api/messages") return handleMessages(req, res);
   if (req.method === "POST" && req.url === "/api/chat/reset") {
     return readBody(req, res).then((b) => { sessions.delete(String(b.emp_id || "anon")); json(res, 200, { ok: true }); })
       .catch(() => json(res, 400, { error: "bad json" }));

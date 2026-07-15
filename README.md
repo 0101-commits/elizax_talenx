@@ -24,7 +24,7 @@ $env:ANTHROPIC_API_KEY="sk-ant-..." ; .\server\run.ps1
 ANTHROPIC_API_KEY=sk-ant-... ./server/run.sh
 ```
 
-- `server/server.js` — zero-dependency Node(≥18) 프록시. 정적 서빙 + `POST /api/chat`(Anthropic Messages API 스트리밍 → SSE `{type:"chunk"}` 변환) + `POST /api/chat/reset` + `GET /api/health`.
+- `server/server.js` — zero-dependency Node(≥18) 프록시. 정적 서빙 + `POST /api/chat`(Anthropic Messages API 스트리밍 → SSE `{type:"chunk"}` 변환) + `POST /api/messages`(tool-use용 범용 Messages 패스스루 · SSE 원문 파이프) + `POST /api/chat/reset` + `GET /api/health`.
 - 모델은 `ELIZAX_MODEL` 환경변수로 변경 가능 (기본 `claude-sonnet-5`).
 
 ## talenx 목업 구성
@@ -67,6 +67,16 @@ ANTHROPIC_API_KEY=sk-ant-... ./server/run.sh
 - 클라이언트 intent 라우터 `window.EZNav` — 이동 동사 + 화면 키워드 매칭 → 실제 GNB/서브내비 클릭으로 전환. GNB 8메뉴 + 서브탭 24개 전부 커버.
 - 라이브 AI 모드에서는 LLM이 응답 끝에 `@@NAV{"s":"perf","p":0}@@` 마커를 붙여 화면 전환을 직접 지시할 수도 있음 (클라이언트가 마커 제거 후 실행).
 - 대화창에는 "화면 전환 · 성과관리 › 목표 현황" 확인 카드가 남음.
+
+### 실데이터 tool-use 에이전트 (tx_ai_tools.js + EZAI.agent)
+
+라이브 연결 시 elizax는 단순 챗이 아니라 **Claude tool-use 루프**로 동작합니다.
+
+- 도구 8종: `search_employee` · `get_employee_profile` · `get_objectives` · `get_checkins` · `get_team_status` · `get_org_overview` · `get_screen_context` · `navigate` — 전부 `TALENX_DATA`(직원 221·목표 40·체크인 360·평가 221) 실조회, 읽기 전용.
+- Claude가 tool_use로 멈추면 브라우저가 로컬 실행 → tool_result 반환 → 최대 6턴 반복. 프록시 모드는 `POST /api/messages`(범용 Messages 패스스루), direct 모드는 브라우저→Anthropic 직행 — 동일 루프.
+- 대화창 "확인 내역" 카드에 **실제 도구 호출이 실시간으로** 찍힘 (오프라인에서만 연출 애니메이션). 화면 전환도 `navigate` 도구로 직접 수행(@@NAV 마커는 폴백).
+- 연결 상태 상시 표기: 패널 서브타이틀 · Hub 글로벌바 (● Claude 연결됨 / ◐ 키 미설정 / ○ 오프라인).
+- API 연동 위젯: 목표 "✦ AI 추천"(직무·목표 조회 후 KR 3건), 360 "AI 감정분석"(응답 원문 재분석), "✦ AI 미팅 브리핑"(목표·체크인 기반 논의 포인트) — 연결 시 실생성, 미연결 시 목업 폴백.
 
 ### 대화 기록 · 화면 맥락
 
@@ -126,7 +136,8 @@ ANTHROPIC_API_KEY=sk-ant-... ./server/run.sh
 | `tx_fix_*.js` | 메뉴별 실동작 레이어 (홈/성과/평가/근무/인사/급여/결재/업무/360) |
 | `tx_elizax.js/css` | elizax 도킹 대화창 + FAB (`window.Elizax`) |
 | `tx_agent.js` / `tx_agent.css` | 전체화면 딥워크 Hub + 시나리오 + 선제 팝업 (`window.TXAgent`) |
-| `tx_ai.js` | 통합 AI 클라이언트 — proxy/direct/offline 자동 전환 + 키 설정 UI (`window.EZAI`) |
+| `tx_ai.js` | 통합 AI 클라이언트 — proxy/direct/offline 자동 전환 + tool-use 에이전트 루프 `EZAI.agent` + 키 설정 UI (`window.EZAI`) |
+| `tx_ai_tools.js` | 에이전트 도구 8종 — TALENX_DATA 실조회 + 화면 전환 (`window.EZTools`) |
 | `tx_nav.js` | 자연어 내비게이션 intent 라우터 (`window.EZNav`) |
 | `tx_upgrade.js` | 2025-26 고도화 5종 (글로우 오브·컨텍스트 칩·린트·AI 고지·1:1 브리핑, `window.EZUpgrade`) |
 | `server/server.js` | Claude API 프록시 + 정적 서버 (zero-dep Node) |

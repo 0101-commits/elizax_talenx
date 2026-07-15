@@ -145,6 +145,164 @@
     });
   }
 
+  /* ---------------- agent 시스템 프롬프트 (tool-use) ---------------- */
+  function agentSystemPrompt() {
+    return "당신은 elizax — 한국 HR SaaS \"talenx\"에 상주하는 성과관리·평가 AI 에이전트입니다.\n\n" +
+      "역할 원칙:\n" +
+      "- 목표수립 → 중간점검 → 평가 → 피드백 전 주기를 지원합니다.\n" +
+      "- 숫자·이름·등급·진척을 언급하기 전에 반드시 도구로 실데이터를 조회합니다. 조회 없이 추정하지 않습니다(HOLD 원칙 — 근거가 없으면 그렇게 말하고 멈춥니다).\n" +
+      "- 답변의 모든 사실은 도구 결과에서만 가져오고, 출처(talenx·ERP·통계)와 기준 시점을 자연스럽게 언급합니다.\n" +
+      "- 도구는 전부 읽기 전용입니다. 발송·저장·확정 같은 쓰기 행위는 절대 스스로 수행하지 않고 \"승인 후 반영\" 제안으로만 답합니다.\n" +
+      "- 한국어로, 간결하고 단정하게. 마크다운 사용 가능.\n" +
+      "- 사용자 메시지 앞에 [현재 화면: …] 컨텍스트가 붙어 올 수 있습니다. 필요하면 get_screen_context로 직접 확인해도 됩니다.\n" +
+      "- 사용자가 화면 이동을 원하면 navigate 도구를 호출하세요(마커 대신). 이동 후 한 줄로 어디로 이동했는지 알려주세요.\n" +
+      "- 불필요한 도구 호출은 피하되, 근거가 필요한 질문에는 반드시 1회 이상 조회하세요.";
+  }
+
+  /* ---------------- Messages API 1턴 호출 (transport 공용) ----------------
+     mode()에 따라 직접(브라우저→Anthropic) 또는 프록시(/api/messages)로 보낸다.
+     스트리밍 SSE와 완성 JSON(비스트리밍 · Bedrock) 응답을 모두 처리.
+     handlers: { onText(t), onMessage({content,stop_reason}), onError(msg) } */
+  function callMessages(payload, handlers) {
+    var m = mode();
+    var url, headers;
+    if (m === "direct") {
+      url = "https://api.anthropic.com/v1/messages";
+      headers = {
+        "x-api-key": getKey(),
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "anthropic-dangerous-direct-browser-access": "true"
+      };
+      payload.model = payload.model || getModel();
+    } else {
+      url = apiBase() + "/api/messages";
+      headers = { "content-type": "application/json" };
+    }
+    fetch(url, { method: "POST", headers: headers, body: JSON.stringify(payload) }).then(function (res) {
+      var ct = (res.headers.get("Content-Type") || "").toLowerCase();
+      if (!res.ok) {
+        return res.text().then(function (t) {
+          var msg = "API 오류 (HTTP " + res.status + ")";
+          try { var j = JSON.parse(t); msg += " — " + ((j.error && j.error.message) || j.message || ""); } catch (e) { /* ignore */ }
+          if (res.status === 401) msg += " · 키를 확인하세요 (⚙ 설정)";
+          throw new Error(msg);
+        });
+      }
+      /* 비스트리밍 JSON (Bedrock 등) */
+      if (ct.indexOf("event-stream") === -1) {
+        return res.json().then(function (msg) {
+          (msg.content || []).forEach(function (b) {
+            if (b.type === "text" && b.text && handlers.onText) handlers.onText(b.text);
+          });
+          if (handlers.onMessage) handlers.onMessage({ content: msg.content || [], stop_reason: msg.stop_reason });
+        });
+      }
+      /* 스트리밍 SSE — content_block 조립 */
+      var reader = res.body.getReader();
+      var dec = new TextDecoder();
+      var buf = "", blocks = [], stopReason = null;
+      function onEvent(j) {
+        if (j.type === "content_block_start") {
+          blocks[j.index] = { type: j.content_block.type, id: j.content_block.id, name: j.content_block.name, text: "", partial: "" };
+        } else if (j.type === "content_block_delta") {
+          var b = blocks[j.index];
+          if (!b) return;
+          if (j.delta.type === "text_delta") { b.text += j.delta.text; if (handlers.onText) handlers.onText(j.delta.text); }
+          else if (j.delta.type === "input_json_delta") { b.partial += j.delta.partial_json || ""; }
+        } else if (j.type === "message_delta") {
+          if (j.delta && j.delta.stop_reason) stopReason = j.delta.stop_reason;
+        } else if (j.type === "error" && j.error) {
+          throw new Error(j.error.message || "stream error");
+        }
+      }
+      function assemble() {
+        var content = [];
+        blocks.forEach(function (b) {
+          if (!b) return;
+          if (b.type === "text") content.push({ type: "text", text: b.text });
+          else if (b.type === "tool_use") {
+            var input = {};
+            try { input = b.partial ? JSON.parse(b.partial) : {}; } catch (e) { /* malformed partial */ }
+            content.push({ type: "tool_use", id: b.id, name: b.name, input: input });
+          }
+        });
+        return content;
+      }
+      function pump() {
+        return reader.read().then(function (x) {
+          if (x.done) {
+            if (handlers.onMessage) handlers.onMessage({ content: assemble(), stop_reason: stopReason });
+            return;
+          }
+          buf += dec.decode(x.value, { stream: true });
+          var events = buf.split("\n\n");
+          buf = events.pop();
+          events.forEach(function (ev) {
+            var m2 = ev.match(/^data:\s*(\{[\s\S]*\})\s*$/m);
+            if (!m2) return;
+            var j;
+            try { j = JSON.parse(m2[1]); } catch (e) { return; }
+            onEvent(j);
+          });
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(function (e) {
+      if (handlers.onError) handlers.onError(e && e.message ? e.message : "네트워크 오류");
+    });
+  }
+
+  /* ---------------- tool-use 에이전트 루프 ----------------
+     opts: {
+       messages: [{role,content}],           초기 대화 (마지막이 user)
+       system?: string,                      기본 agentSystemPrompt()
+       maxTurns?: number,                    기본 6
+       onText(t), onTool(name, input), onToolResult(name, result, summary),
+       onDone(fullText), onError(msg)
+     }
+     모델이 tool_use로 멈추면 EZTools.run으로 로컬 실행 → tool_result 반환 → 반복. */
+  function agent(opts) {
+    var tools = (window.EZTools && window.EZTools.schemas) || [];
+    var msgs = (opts.messages || []).slice();
+    var turnsLeft = opts.maxTurns || 6;
+    var allText = "";
+
+    function turn() {
+      turnsLeft--;
+      callMessages({
+        max_tokens: opts.maxTokens || 2048,
+        system: opts.system || agentSystemPrompt(),
+        messages: msgs,
+        tools: tools.length ? tools : undefined,
+        stream: true
+      }, {
+        onText: function (t) { allText += t; if (opts.onText) opts.onText(t); },
+        onError: function (m) { if (opts.onError) opts.onError(m); },
+        onMessage: function (msg) {
+          var uses = (msg.content || []).filter(function (b) { return b.type === "tool_use"; });
+          if (msg.stop_reason === "tool_use" && uses.length && turnsLeft > 0) {
+            msgs.push({ role: "assistant", content: msg.content });
+            var results = uses.map(function (b) {
+              if (opts.onTool) opts.onTool(b.name, b.input || {});
+              var r = window.EZTools ? window.EZTools.run(b.name, b.input || {}) : { error: "tools unavailable" };
+              var summary = window.EZTools ? window.EZTools.summarize(b.name, r) : "";
+              if (opts.onToolResult) opts.onToolResult(b.name, r, summary);
+              return { type: "tool_result", tool_use_id: b.id, content: JSON.stringify(r) };
+            });
+            msgs.push({ role: "user", content: results });
+            if (allText && allText.slice(-1) !== "\n") allText += "\n";
+            turn();
+          } else {
+            if (opts.onDone) opts.onDone(allText);
+          }
+        }
+      });
+    }
+    turn();
+  }
+
   /* ---------------- 설정 모달 (⚙) ---------------- */
   function openSettings(onChange) {
     var cur = getKey();
@@ -190,7 +348,9 @@
     getModel: getModel,
     setModel: setModel,
     systemPrompt: systemPrompt,
+    agentSystemPrompt: agentSystemPrompt,
     direct: direct,
+    agent: agent,
     openSettings: openSettings,
     apiBase: apiBase
   };

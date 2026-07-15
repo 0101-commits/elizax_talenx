@@ -251,7 +251,7 @@
       '<div class="agh-gr">' +
       '<button class="agh-gitem" data-agh-alerts>🔔 알림 <b data-agh-alertcnt>3</b></button>' +
       '<button class="agh-gitem" data-agh-ctxtoggle title="판단 근거·Human-in-the-loop 패널 열기/닫기">☰ 근거</button>' +
-      '<span class="agh-gitem">⚙ 백그라운드 작업 <b>2건</b></span>' +
+      '<span class="agh-gitem" data-agh-ai title="Claude API 연결 상태">◐ AI 상태 확인 중</span>' +
       '<button class="agh-gitem" data-agh-dock title="도킹 대화창으로 전환">◱ 도킹으로</button>' +
       '<button class="agh-gitem" data-agh-close>닫기 ✕</button></div>';
 
@@ -923,60 +923,43 @@
       logAudit("지시", q, "cmd");
       return;
     }
-    /* 라이브 응답 — EZAI 모드(proxy/direct/offline)에 따라 라우팅 */
+    /* 라이브 응답 — Claude tool-use 에이전트 (proxy·direct 공용) */
     ctxAppend('<div class="agh-live">지시 수신 · "' + esc(q) + '"</div>');
     logAudit("지시", q, "cmd");
-    var aiMode = (window.EZAI && window.EZAI.mode) ? window.EZAI.mode() : "offline";
     var ctxHost = el.ctx.querySelector("[data-agh-ctxchat]");
-    if (aiMode === "direct") {
-      var dnode = h("div", "agh-live ai", "…");
-      if (ctxHost) ctxHost.appendChild(dnode);
-      var acc2 = "";
-      window.EZAI.direct({
-        messages: [{ role: "user", content: "[현재 화면: elizax 전체화면 딥워크 / 관점: " + (role().persp || "subject") + "]\n" + q }],
-        onChunk: function (t) { acc2 += t; dnode.textContent = acc2.slice(0, 700); if (ctxHost) ctxHost.scrollTop = ctxHost.scrollHeight; },
-        onDone: function () {
-          if (window.EZNav && window.EZNav.extractMarker) {
-            var ex = window.EZNav.extractMarker(acc2);
-            if (ex.nav) { dnode.textContent = ex.clean.slice(0, 700); closeHub(); setTimeout(function () { window.EZNav.go(ex.nav.s, ex.nav.p); }, 420); }
-          }
-        },
-        onError: function (m) { dnode.textContent = "오류 — " + m; }
-      });
-      return;
-    }
-    if (aiMode === "offline") {
+    var agentReady = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
+    if (!agentReady) {
       ctxAppend('<div class="agh-live ai">AI 미연결 — 과제 키워드(체크인·목표 초안·편향·정합성·캘리·리뷰…)로 지시하거나, 도킹 대화창 ⚙에서 Claude API 키를 연결하세요.</div>');
       return;
     }
-    var base = (window.location.port === "8080") ? "" : "http://localhost:8080";
-    fetch(base + "/api/chat", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ emp_id: CU().emp_id, message: q, perspective: (role().persp || "subject") })
-    }).then(function (r) {
-      if (!r.ok) throw 0;
-      var ct = (r.headers.get("Content-Type") || "");
-      if (ct.indexOf("event-stream") >= 0) {
-        var reader = r.body.getReader(), dec = new TextDecoder(), buf = "", acc = "";
-        var node = h("div", "agh-live ai", "…");
-        var host = el.ctx.querySelector("[data-agh-ctxchat]");
-        if (host) host.appendChild(node);
-        (function pump() {
-          reader.read().then(function (x) {
-            if (x.done) return;
-            buf += dec.decode(x.value, { stream: true });
-            var parts = buf.split("\n\n"); buf = parts.pop();
-            parts.forEach(function (p) {
-              var m = p.match(/data:\s*(\{.*\})/);
-              if (m) { try { var j = JSON.parse(m[1]); if (j.type === "chunk") { acc += j.content || ""; node.textContent = acc.slice(0, 700); } } catch (e) {} }
-            });
-            if (host) host.scrollTop = host.scrollHeight;
-            pump();
-          });
-        })();
-      } else { r.json().then(function (j) { ctxAppend('<div class="agh-live ai">' + esc((j.response || "").slice(0, 700)) + "</div>"); }); }
-    }).catch(function () {
-      ctxAppend('<div class="agh-live ai">오프라인 — 과제 키워드(체크인·목표 초안·편향·정합성·캘리·리뷰…)로 지시하면 해당 화면을 실행합니다.</div>');
+    var dnode = h("div", "agh-live ai", "…");
+    if (ctxHost) ctxHost.appendChild(dnode);
+    var acc = "", navigated = false;
+    function scrollCtx() { if (ctxHost) ctxHost.scrollTop = ctxHost.scrollHeight; }
+    window.EZAI.agent({
+      messages: [{ role: "user", content: "[현재 화면: elizax 전체화면 딥워크 / 관점: " + (role().persp || "subject") + "]\n" + q }],
+      onTool: function (name) {
+        var lbl = (window.EZTools && EZTools.labelOf(name)) || name;
+        var src = (window.EZTools && EZTools.srcOf(name)) || "talenx";
+        ctxAppend('<div class="agh-live">◉ ' + esc(src) + " · " + esc(lbl) + " 실행 중…</div>");
+      },
+      onToolResult: function (name, r, summary) {
+        var lbl = (window.EZTools && EZTools.labelOf(name)) || name;
+        ctxAppend('<div class="agh-live ok">✓ ' + esc(lbl) + (summary ? " → " + esc(summary) : "") + "</div>");
+        logAudit("도구 실행", lbl + (summary ? " → " + summary : ""), name);
+        if (name === "navigate" && r && r.ok) navigated = true;
+      },
+      onText: function (t) { acc += t; dnode.textContent = acc; scrollCtx(); },
+      onDone: function () {
+        /* 마커 폴백 (navigate 도구가 기본) */
+        if (window.EZNav && window.EZNav.extractMarker) {
+          var ex = window.EZNav.extractMarker(acc);
+          if (ex.nav) { dnode.textContent = ex.clean; navigated = true; setTimeout(function () { window.EZNav.go(ex.nav.s, ex.nav.p); }, 420); }
+        }
+        if (navigated) setTimeout(closeHub, 600); /* 이동한 화면이 보이도록 허브 닫기 */
+        scrollCtx();
+      },
+      onError: function (m) { dnode.textContent = "오류 — " + m; scrollCtx(); }
     });
   }
 
@@ -1030,6 +1013,16 @@
     el.root.classList.add("on");
     var rc = el.root.querySelector("[data-agh-role]");
     if (rc) rc.textContent = role().label + " 관점 · " + CU().name;
+    /* AI 연결 상태 칩 — 실제 EZAI 모드 반영 */
+    var ac = el.root.querySelector("[data-agh-alertcnt]");
+    if (ac) ac.textContent = ALERTS.length;
+    var ai = el.root.querySelector("[data-agh-ai]");
+    if (ai && window.EZAI) {
+      var rdy = EZAI.ready && EZAI.ready();
+      var md = EZAI.mode ? EZAI.mode() : "offline";
+      ai.textContent = rdy ? "● Claude 연결됨" : md === "offline" ? "○ 오프라인 목업" : "◐ 프록시 · 키 미설정";
+      ai.style.color = rdy ? "#15803D" : md === "offline" ? "" : "#B45309";
+    }
     document.body.style.overflow = "hidden";
     showScreen(screen || defaultScreen());
   }
