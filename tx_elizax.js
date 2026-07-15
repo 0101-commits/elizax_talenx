@@ -439,6 +439,15 @@
       m._node = wnode;
       return wnode;
     }
+    if (m.role === "nav") {
+      /* 내비게이션 확인 카드 */
+      var nnode = h("div", "ezx-msg ai");
+      var ncard = h("div", "ezx-navcard");
+      ncard.innerHTML = '<span class="arr">➜</span><span>화면 전환 · <b>' + esc(m.target.label) + "</b>(으)로 이동합니다.</span>";
+      nnode.appendChild(ncard);
+      m._node = nnode;
+      return nnode;
+    }
     if (m.role === "scn") {
       /* 에이전트 시나리오 카드 — 재렌더 시 DOM 재사용 (애니메이션 재시작 방지) */
       if (m._node) return m._node;
@@ -517,6 +526,22 @@
 
   function sendMessage(userText) {
     if (state.streaming) return;
+    /* 화면 이동 의도면 LLM 없이 즉시 내비게이션 ("목표 화면으로 넘어가줘") */
+    if (window.EZNav && window.EZNav.resolve) {
+      var navHit = null;
+      try { navHit = window.EZNav.resolve(userText); } catch (e) { /* ignore */ }
+      if (navHit) {
+        pushMessage({ role: "user", text: userText });
+        pushMessage({ role: "nav", target: navHit });
+        renderMessages();
+        setTimeout(function () {
+          var ok = false;
+          try { ok = window.EZNav.go(navHit.s, navHit.p); } catch (e) { console.error("[elizax nav]", e); }
+          if (!ok) console.warn("[elizax nav] target not found:", navHit.s, navHit.p);
+        }, 380);
+        return;
+      }
+    }
     /* 의도가 에이전트 시나리오와 일치하면 LLM 대신 인라인 작업 카드 실행 */
     if (window.TXAgent && window.TXAgent.intentFor) {
       var scnKey = null;
@@ -586,7 +611,7 @@
       aiMsg.role = "err";
       aiMsg.streaming = false;
       aiMsg.text = "연결에 실패했습니다 (" + (err && err.message ? err.message : "network") +
-        "). 백엔드를 실행해 주세요: `demo-app/run.sh` 실행 후 ANTHROPIC_API_KEY 설정.";
+        "). 백엔드를 실행해 주세요: `node server/server.js` (환경변수 ANTHROPIC_API_KEY 설정).";
       finishStreaming();
       renderMessages();
     });
@@ -745,6 +770,21 @@
     } else if (msg.type === "done") {
       completeWork(aiMsg);
       aiMsg.streaming = false;
+      /* LLM이 화면 이동을 지시했으면 마커 제거 후 실행 */
+      if (window.EZNav && window.EZNav.extractMarker) {
+        try {
+          var ext = window.EZNav.extractMarker(aiMsg.text);
+          if (ext.nav) {
+            aiMsg.text = ext.clean;
+            aiMsg.note = "화면 전환 · " + ext.nav.label;
+            setTimeout(function () {
+              var ok = false;
+              try { ok = window.EZNav.go(ext.nav.s, ext.nav.p); } catch (e) { console.error("[elizax nav]", e); }
+              if (!ok) console.warn("[elizax nav] target not found:", ext.nav.s, ext.nav.p);
+            }, 380);
+          }
+        } catch (e) { /* ignore */ }
+      }
       if (msg.recommendations && msg.recommendations.length) aiMsg.recos = msg.recommendations;
       if (msg.truncated) { aiMsg.note = "일부 생략됨"; }
       renderMessages();
