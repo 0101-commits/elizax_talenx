@@ -44,9 +44,21 @@
     "s-wf": "승인결재"
   };
   function activeScreenLabel() {
-    var el = document.querySelector("section.screen.on");
-    if (!el) return "홈";
-    return SCREEN_LABELS[el.id] || "홈";
+    var sec = document.querySelector("section.screen.on");
+    if (!sec) return "홈";
+    var base = SCREEN_LABELS[sec.id] || "홈";
+    /* 서브탭까지 포함해 맥락 정밀화 (예: "성과관리 › 목표") */
+    try {
+      var tab = sec.querySelector(".subnav a.on");
+      if (tab && tab.textContent.trim()) base += " › " + tab.textContent.trim();
+    } catch (e) { /* ignore */ }
+    return base;
+  }
+
+  /* 현재 AI 연결 모드: proxy | direct | offline (EZAI 없으면 구식 판정) */
+  function aiMode() {
+    if (window.EZAI && window.EZAI.mode) { try { return window.EZAI.mode(); } catch (e) { /* ignore */ } }
+    return OFFLINE ? "offline" : "proxy";
   }
 
   var PERSPECTIVES = [
@@ -179,9 +191,13 @@
     exbtn.addEventListener("click", function () {
       if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub(); }
     });
+    var gear = h("button", "ezx-x", { "aria-label": "AI 연결 설정", title: "AI 연결 설정 (API 키)", text: "⚙" });
+    gear.addEventListener("click", function () {
+      if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { renderMessages(); });
+    });
     var xbtn = h("button", "ezx-x", { "aria-label": "닫기", text: "✕" });
     xbtn.addEventListener("click", closePanel);
-    top.appendChild(mark); top.appendChild(titles); top.appendChild(exbtn); top.appendChild(xbtn);
+    top.appendChild(mark); top.appendChild(titles); top.appendChild(gear); top.appendChild(exbtn); top.appendChild(xbtn);
     head.appendChild(top);
 
     /* perspective: 수동 탭 제거 — 역할 주체(TXRoles)에 따라 자동 전환 */
@@ -260,7 +276,15 @@
       if (e.key === "Escape" && state.open) closePanel();
     });
 
+    /* 화면 이동(GNB·서브탭·로고) 시 화면칩 실시간 갱신 — 패널 열림 여부 무관 */
+    document.addEventListener("click", function (e) {
+      if (e.target.closest("#gnb [data-s], .subnav a[data-p], .logo")) {
+        setTimeout(updateScreenChip, 140);
+      }
+    }, true);
+
     syncSubjectUI();
+    loadHistory();          /* 지난 대화 복원 (localStorage, 계정별) */
     renderMessages();
   }
 
@@ -358,8 +382,23 @@
     sub.textContent = "성과관리 · OKR · 평가에 대해 물어보세요.";
     wrap.appendChild(sub);
 
-    if (OFFLINE) {
-      wrap.appendChild(h("div", "ezx-agent-off", { text: "백엔드 미연결 — 오프라인 목업 응답 모드 (실시간 AI는 localhost:8080 서버 필요)" }));
+    var m = aiMode();
+    if (m === "offline") {
+      var off = h("div", "ezx-agent-off");
+      off.innerHTML = "AI 미연결 — 오프라인 목업 응답 모드. ";
+      var connect = h("button", "ezx-starter", { type: "button", text: "⚙ Claude API 연결" });
+      connect.style.marginLeft = "6px";
+      connect.addEventListener("click", function () {
+        if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { renderMessages(); });
+      });
+      off.appendChild(connect);
+      wrap.appendChild(off);
+    } else {
+      var onNote = h("div", "ezx-persp-note");
+      onNote.style.marginTop = "10px";
+      onNote.innerHTML = "● <b>Claude 연결됨</b> · " + esc(window.EZAI ? window.EZAI.modeLabel() : "프록시");
+      onNote.style.color = "#15803D";
+      wrap.appendChild(onNote);
     }
 
     /* 역할 기반 에이전트 제안 칩 — 클릭하면 대화 안에서 바로 실행 */
@@ -542,8 +581,9 @@
         return;
       }
     }
-    /* 의도가 에이전트 시나리오와 일치하면 LLM 대신 인라인 작업 카드 실행 */
-    if (window.TXAgent && window.TXAgent.intentFor) {
+    /* 오프라인일 때만 시나리오 가로채기 — 라이브 연결 시 Claude가 우선
+       (시나리오 카드는 제안 칩으로 여전히 실행 가능) */
+    if (aiMode() === "offline" && window.TXAgent && window.TXAgent.intentFor) {
       var scnKey = null;
       try { scnKey = window.TXAgent.intentFor(userText); } catch (e) { /* ignore */ }
       if (scnKey) { runScenarioInChat(scnKey, userText); return; }
@@ -556,7 +596,7 @@
       return;
     }
     pushMessage({ role: "user", text: userText });
-    var workMsg = OFFLINE ? null : pushMessage(makeWorkMsg(state.perspective));
+    var workMsg = (aiMode() !== "offline") ? pushMessage(makeWorkMsg(state.perspective)) : null;
     var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg };
     pushMessage(aiMsg);
     renderMessages();
@@ -581,10 +621,42 @@
     state.streaming = false;
     el.send.disabled = false;
     el.textarea.disabled = false;
+    saveHistory();
+  }
+
+  /* ---------------- direct 모드: 브라우저 → Anthropic API ---------------- */
+  function directRespond(body, aiMsg) {
+    /* 대화 히스토리 구성 (user/ai 텍스트만, 마지막 user는 컨텍스트 포함 payload) */
+    var msgs = [];
+    state.messages.forEach(function (m) {
+      if (m === aiMsg || !m.text) return;
+      if (m.role === "user") msgs.push({ role: "user", content: m.text });
+      else if (m.role === "ai") msgs.push({ role: "assistant", content: m.text });
+    });
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "user") { msgs[i] = { role: "user", content: body.message }; break; }
+    }
+    /* Anthropic 규격: user 시작 + 역할 교대 — 연속 동일 역할 병합, 선행 assistant 제거 */
+    var norm = [];
+    msgs.slice(-16).forEach(function (m) {
+      if (!norm.length && m.role !== "user") return;
+      if (norm.length && norm[norm.length - 1].role === m.role) norm[norm.length - 1].content += "\n" + m.content;
+      else norm.push({ role: m.role, content: m.content });
+    });
+    if (!norm.length) norm = [{ role: "user", content: body.message }];
+
+    window.EZAI.direct({
+      messages: norm,
+      onChunk: function (t) { applyEvent({ type: "chunk", content: t }, aiMsg); },
+      onDone: function () { applyEvent({ type: "done" }, aiMsg); finishStreaming(); },
+      onError: function (msg) { applyEvent({ type: "error", message: msg }, aiMsg); finishStreaming(); }
+    });
   }
 
   function streamChat(body, aiMsg) {
-    if (OFFLINE) { offlineRespond(body, aiMsg); return; }
+    var m = aiMode();
+    if (m === "offline") { offlineRespond(body, aiMsg); return; }
+    if (m === "direct") { directRespond(body, aiMsg); return; }
     var url = API_BASE + "/api/chat";
     fetch(url, {
       method: "POST",
@@ -787,6 +859,7 @@
       }
       if (msg.recommendations && msg.recommendations.length) aiMsg.recos = msg.recommendations;
       if (msg.truncated) { aiMsg.note = "일부 생략됨"; }
+      saveHistory();
       renderMessages();
     } else if (msg.type === "fallback") {
       completeWork(aiMsg);
@@ -810,11 +883,40 @@
     scrollToBottom();
   }
 
-  function pushMessage(m) { state.messages.push(m); return m; }
+  function pushMessage(m) { state.messages.push(m); saveHistory(); return m; }
+
+  /* ---------------- 대화 기록 영속화 (localStorage · 계정별) ---------------- */
+  function histId() { return "elizax_hist_v1:" + (CURRENT.emp_id || "anon"); }
+  function saveHistory() {
+    try {
+      var out = [];
+      state.messages.slice(-40).forEach(function (m) {
+        if (m.role === "work") return; /* 진행중 카드는 저장 제외 */
+        if (m.role === "nav" && m.target) { out.push({ role: "nav", target: { s: m.target.s, p: m.target.p, label: m.target.label } }); return; }
+        if (m.role === "scn" && m.key) { out.push({ role: "scn", key: m.key }); return; }
+        if ((m.role === "user" || m.role === "ai" || m.role === "err") && m.text) {
+          out.push({ role: m.role, text: m.text, note: m.note || undefined });
+        }
+      });
+      localStorage.setItem(histId(), JSON.stringify(out));
+    } catch (e) { /* storage 불가 환경 무시 */ }
+  }
+  function loadHistory() {
+    try {
+      var raw = localStorage.getItem(histId());
+      if (!raw) return;
+      var arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        state.messages = arr.filter(function (m) { return m && m.role; });
+        state.messages.forEach(function (m) { m.streaming = false; });
+      }
+    } catch (e) { /* ignore */ }
+  }
 
   /* ---------------- Reset ---------------- */
   function resetConversation() {
     state.messages = [];
+    try { localStorage.removeItem(histId()); } catch (e) { /* ignore */ }
     renderMessages();
     var url = API_BASE + "/api/chat/reset";
     try {

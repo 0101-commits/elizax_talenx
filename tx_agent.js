@@ -911,9 +911,32 @@
       logAudit("지시", q, "cmd");
       return;
     }
-    /* 백엔드 라이브 응답 (있으면) */
+    /* 라이브 응답 — EZAI 모드(proxy/direct/offline)에 따라 라우팅 */
     ctxAppend('<div class="agh-live">지시 수신 · "' + esc(q) + '"</div>');
     logAudit("지시", q, "cmd");
+    var aiMode = (window.EZAI && window.EZAI.mode) ? window.EZAI.mode() : "offline";
+    var ctxHost = el.ctx.querySelector("[data-agh-ctxchat]");
+    if (aiMode === "direct") {
+      var dnode = h("div", "agh-live ai", "…");
+      if (ctxHost) ctxHost.appendChild(dnode);
+      var acc2 = "";
+      window.EZAI.direct({
+        messages: [{ role: "user", content: "[현재 화면: elizax 전체화면 딥워크 / 관점: " + (role().persp || "subject") + "]\n" + q }],
+        onChunk: function (t) { acc2 += t; dnode.textContent = acc2.slice(0, 700); if (ctxHost) ctxHost.scrollTop = ctxHost.scrollHeight; },
+        onDone: function () {
+          if (window.EZNav && window.EZNav.extractMarker) {
+            var ex = window.EZNav.extractMarker(acc2);
+            if (ex.nav) { dnode.textContent = ex.clean.slice(0, 700); closeHub(); setTimeout(function () { window.EZNav.go(ex.nav.s, ex.nav.p); }, 420); }
+          }
+        },
+        onError: function (m) { dnode.textContent = "오류 — " + m; }
+      });
+      return;
+    }
+    if (aiMode === "offline") {
+      ctxAppend('<div class="agh-live ai">AI 미연결 — 과제 키워드(체크인·목표 초안·편향·정합성·캘리·리뷰…)로 지시하거나, 도킹 대화창 ⚙에서 Claude API 키를 연결하세요.</div>');
+      return;
+    }
     var base = (window.location.port === "8080") ? "" : "http://localhost:8080";
     fetch(base + "/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -987,6 +1010,11 @@
   function openHub(screen) {
     buildHub();
     state.open = true;
+    /* 블러 백드롭(패딩 영역) 클릭 시 닫기 */
+    if (!el.root._ezBackdrop) {
+      el.root._ezBackdrop = true;
+      el.root.addEventListener("click", function (e) { if (e.target === el.root) closeHub(); });
+    }
     el.root.classList.add("on");
     var rc = el.root.querySelector("[data-agh-role]");
     if (rc) rc.textContent = role().label + " 관점 · " + CU().name;

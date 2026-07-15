@@ -37,11 +37,29 @@
 .agh-entry:active { transform: scale(.95); }
 .agh-entry.inbar { margin: 0 0 0 auto; order: 99; }
 
-/* ---------- 루트 오버레이 — FAB에서 원형 확장 ---------- */
+/* ---------- 루트 오버레이 — FAB에서 원형 확장 + 배경 블러 시트 ----------
+   완전 전체화면이 아니라, 현재 화면이 뒤에 흐릿하게 비치는 frosted 시트. */
 .agh-root {
   position: fixed; inset: 0; z-index: 4000; display: none;
-  flex-direction: column; background: var(--agh-bg); color: var(--agh-ink);
+  flex-direction: column; color: var(--agh-ink);
   font-family: inherit; letter-spacing: -.01em;
+  padding: 26px 40px;
+  background: rgba(28, 30, 36, .32);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+}
+/* 시트 본체 라운딩 + 부유 섀도 */
+.agh-root > .agh-gbar { border-radius: 18px 18px 0 0; }
+.agh-root > .agh-mid { background: var(--agh-bg); }
+.agh-root > .agh-bottom { background: var(--agh-card); border-radius: 0 0 18px 18px; overflow: hidden; }
+.agh-root::before {
+  content: ""; position: absolute; inset: 26px 40px; border-radius: 18px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .32); pointer-events: none;
+}
+@media (max-width: 900px) {
+  .agh-root { padding: 0; }
+  .agh-root > .agh-gbar, .agh-root > .agh-bottom { border-radius: 0; }
+  .agh-root::before { display: none; }
 }
 .agh-root.on { display: flex; animation: aghMorphIn .52s var(--agh-ease) both; }
 .agh-root.closing { display: flex; animation: aghMorphOut .4s var(--agh-ease) both; pointer-events: none; }

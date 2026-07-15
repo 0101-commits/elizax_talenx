@@ -4,12 +4,15 @@ talenx HR·성과관리 SaaS 사용자 앱 목업 + **성과관리/평가 AI Age
 
 실제 서비스(app.talenx.com) 라이브 대조로 재구축한 정적 목업입니다. `index.html` 하나로 동작하며, 선택적으로 로컬 프록시 서버(`server/`)를 띄우면 실제 Claude API 응답까지 연결됩니다.
 
-## 실행
+## 실행 — AI 연결 3모드 (자동 선택)
 
 | 모드 | 방법 | 되는 것 |
 |---|---|---|
-| 오프라인 | `index.html`을 브라우저로 열기 (또는 GitHub Pages) | 전체 UI + 목업 응답 + 내비게이션 intent |
-| 라이브 AI | `ANTHROPIC_API_KEY` 설정 후 `node server/server.js` → `http://localhost:8080` | 위 전부 + 실제 Claude 스트리밍 응답 + LLM 주도 화면 전환 |
+| **direct** (권장·간편) | `index.html` 열기(또는 GitHub Pages) → elizax ⚙ 설정에서 Anthropic API 키 입력 | 서버 없이 브라우저에서 실제 Claude 스트리밍 응답 + LLM 주도 화면 전환. 키는 localStorage 저장(데모 전용) |
+| proxy | `ANTHROPIC_API_KEY` 설정 후 `node server/server.js` → `http://localhost:8080` | 위와 동일 + 키가 서버에만 존재 (운영 권장) |
+| offline | 키·서버 둘 다 없음 | 전체 UI + 목업 영수증 응답 + 내비게이션 intent |
+
+우선순위: 프록시(키 보유) → 브라우저 직접(로컬 키) → 오프라인 목업. `window.EZAI`가 자동 판정.
 
 ```powershell
 # Windows
@@ -51,7 +54,7 @@ ANTHROPIC_API_KEY=sk-ant-... ./server/run.sh
 
 - **도킹 대화창** — FAB 위치를 transform-origin으로 스프링 이징 확대(`cubic-bezier(.32,.72,.24,1)`). 프로스티드 글래스 헤더/컴포저, iMessage식 말풍선(사용자=블루, 에이전트=parchment), pill CTA 문법, press = `scale(.95)`.
 - **선제 알림 팝업** — FAB에서 떠오르는 rise 애니메이션(하단 FAB 중심 origin). 카드는 hairline + 단일 플로팅 섀도.
-- **전체화면 딥워크(Hub)** — FAB에서 원형으로 화면 전체를 덮는 **clip-path morph** 진입/이탈. 글로벌바는 Apple global-nav 문법(near-black `#1d1d1f`, 44px).
+- **전체화면 딥워크(Hub)** — FAB에서 원형 **clip-path morph** 진입/이탈. 완전 전체화면이 아니라 **현재 화면이 뒤에 흐릿하게 비치는 frosted 블러 시트**(배경 클릭·Esc로 닫힘). 글로벌바는 Apple global-nav 문법(near-black `#1d1d1f`, 44px).
 - **FAB 글로우 오브** — 상태를 텍스트 없이 색·모션으로만 표현: 유휴 / 작업 중(회전 shimmer) / 제안 도착(halo pulse) / 승인 대기(고정 링). Apple Intelligence Siri glow 패턴.
 - **컨텍스트 어웨어 칩** — 현재 탭에 맞는 제안이 FAB 옆에서 pill로 잠깐 내밈 (성과관리→"목표 정합성 점검", 평가관리→"평가 문장 품질 린트", 1:1 미팅→"AI 미팅 브리핑" …). M365 Copilot Dynamic Action Button 패턴.
 - `prefers-reduced-motion` 대응.
@@ -63,6 +66,12 @@ ANTHROPIC_API_KEY=sk-ant-... ./server/run.sh
 - 클라이언트 intent 라우터 `window.EZNav` — 이동 동사 + 화면 키워드 매칭 → 실제 GNB/서브내비 클릭으로 전환. GNB 8메뉴 + 서브탭 24개 전부 커버.
 - 라이브 AI 모드에서는 LLM이 응답 끝에 `@@NAV{"s":"perf","p":0}@@` 마커를 붙여 화면 전환을 직접 지시할 수도 있음 (클라이언트가 마커 제거 후 실행).
 - 대화창에는 "화면 전환 · 성과관리 › 목표 현황" 확인 카드가 남음.
+
+### 대화 기록 · 화면 맥락
+
+- **대화 기록 영속화** — 대화가 localStorage에 계정별로 저장되어 새로고침·재방문 후에도 유지. "대화 초기화"로 삭제.
+- **화면 맥락 실시간 추적** — GNB·서브탭 이동 시 "현재 화면" 칩이 즉시 갱신되고(서브탭까지: "성과관리 › 목표"), 라이브 모드에선 이 맥락이 Claude 프롬프트에 첨부됨.
+- 라이브 연결 시 일반 질문은 전부 Claude가 답변(오프라인에서만 키워드 시나리오 가로채기). 시나리오 카드는 제안 칩으로 계속 실행 가능.
 
 ### 4대 검증가능 답변(Verifiable Answer) 원칙
 
@@ -116,6 +125,7 @@ ANTHROPIC_API_KEY=sk-ant-... ./server/run.sh
 | `tx_fix_*.js` | 메뉴별 실동작 레이어 (홈/성과/평가/근무/인사/급여/결재/업무/360) |
 | `tx_elizax.js/css` | elizax 도킹 대화창 + FAB (`window.Elizax`) |
 | `tx_agent.js` / `tx_agent.css` | 전체화면 딥워크 Hub + 시나리오 + 선제 팝업 (`window.TXAgent`) |
+| `tx_ai.js` | 통합 AI 클라이언트 — proxy/direct/offline 자동 전환 + 키 설정 UI (`window.EZAI`) |
 | `tx_nav.js` | 자연어 내비게이션 intent 라우터 (`window.EZNav`) |
 | `tx_upgrade.js` | 2025-26 고도화 5종 (글로우 오브·컨텍스트 칩·린트·AI 고지·1:1 브리핑, `window.EZUpgrade`) |
 | `server/server.js` | Claude API 프록시 + 정적 서버 (zero-dep Node) |
