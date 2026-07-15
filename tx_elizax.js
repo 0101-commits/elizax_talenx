@@ -16,6 +16,14 @@
     return ""; // same-origin → '/api/...'
   }
   var API_BASE = resolveApiBase();
+  /* offline = no local backend reachable (file:// or not served on :8080).
+     In that case we synthesize a mockup answer-receipt instead of failing. */
+  var OFFLINE = (function () {
+    if (typeof window.ELIZAX_FORCE_OFFLINE === "boolean") return window.ELIZAX_FORCE_OFFLINE;
+    if (typeof window.ELIZAX_API_BASE === "string" && window.ELIZAX_API_BASE) return false;
+    var loc = window.location || {};
+    return loc.protocol === "file:" || loc.port !== "8080";
+  })();
 
   /* ---------------- Data access ---------------- */
   var DATA = window.TALENX_DATA || {};
@@ -412,6 +420,7 @@
   }
 
   function streamChat(body, aiMsg) {
+    if (OFFLINE) { offlineRespond(body, aiMsg); return; }
     var url = API_BASE + "/api/chat";
     fetch(url, {
       method: "POST",
@@ -440,6 +449,111 @@
       finishStreaming();
       renderMessages();
     });
+  }
+
+  /* ---------------- Offline mockup responder ----------------
+     No backend → build a verifiable answer-receipt (as-of / 근거 트레이스 /
+     감사 / What-if) from TALENX_DATA and stream it in char-batches. */
+  function evalOf(empId) {
+    var evs = Array.isArray(DATA.evaluations) ? DATA.evaluations : [];
+    return evs.find(function (e) { return e.emp_id === empId; }) || null;
+  }
+  function objsOwnedBy(empId) {
+    var objs = Array.isArray(DATA.objectives) ? DATA.objectives : [];
+    return objs.filter(function (o) { return o.owner_emp_id === empId; });
+  }
+  function krsOf(objId) {
+    var krs = Array.isArray(DATA.keyResults) ? DATA.keyResults : [];
+    return krs.filter(function (k) { return k.objective_id === objId; });
+  }
+  function offlineReceipt(body) {
+    var p = body.perspective || "subject";
+    var subjName = (needsSubject(p) && state.subject) ? state.subject.name : CURRENT.name;
+    var subjId = body.emp_id || CURRENT.emp_id;
+    var ev = evalOf(subjId);
+    var grade = ev ? ev.grade : "B+";
+    var score = ev ? ev.weighted_score : 73.3;
+    var owned = objsOwnedBy(subjId);
+    var objCount = owned.length;
+    var asof = "2026 상반기 · 6/30 마감 실적 기준";
+    var md = "", recos = [];
+
+    if (p === "manager") {
+      md =
+        "**기준 시점** · " + asof + "\n\n" +
+        "**" + subjName + "**님 등급 초안은 **" + grade + "** (종합 " + score + "/100)입니다. 팀 대비 실행 일관성이 안정적입니다.\n\n" +
+        "**계산·근거 트레이스**\n" +
+        "- `ERP` 목표 달성률 집계 → 종합 " + score + "/100 `eval.FY2026." + subjId + "`\n" +
+        "- `평가규정 v3.1` 등급 매핑 · §12\n" +
+        "- `talenx` 팀 내 1:1·피어리뷰 대조\n\n" +
+        "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 우리 팀\n\n" +
+        "**What-if** · 강제배분(상위 S~A ≤ 30%) 적용 시 팀 등급 분포를 재계산할 수 있습니다.\n\n" +
+        "> ⚠ 자동 확정 아님 — 승인/수정/보류는 조직장이 결정합니다.";
+    } else if (p === "hr") {
+      md =
+        "**기준 시점** · " + asof + "\n\n" +
+        "전사 평가 운영 관점 요약입니다. 관대화·미연결 신호를 먼저 보고합니다.\n\n" +
+        "**계산·근거 트레이스**\n" +
+        "- `평가규정 v3.1` 등급 비율 규칙 · 강제배분 상한 30%\n" +
+        "- `talenx` 목표 정렬·가중치 합 검증 `rule.weight.sum`\n" +
+        "- `ERP` 실적 대조 → 등급 상승폭 설명력 점검\n\n" +
+        "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 전사\n\n" +
+        "**What-if** · 특정 본부에 강제배분 적용 시 전사 분포 변화를 재계산할 수 있습니다.\n\n" +
+        "> 민감 이슈(관대화·편향)는 재검토만 제안하며 자동 수정하지 않습니다.";
+    } else if (p === "executive") {
+      md =
+        "**기준 시점** · " + asof + "\n\n" +
+        "전사 성과 조망입니다. 목표 정합성과 등급 분포 리스크를 요약합니다.\n\n" +
+        "**계산·근거 트레이스**\n" +
+        "- `talenx` 전사 OKR 트리 정렬 상태\n" +
+        "- `ERP` 전사 매출 달성률 대비 진척\n" +
+        "- `통계·분포` 본부 간 등급 분포 편차\n\n" +
+        "**감사** · 감사 로그 기록됨 · 탐색 범위: 전사\n\n" +
+        "**What-if** · 목표 미연결 항목 정렬 시 전사 정합성 지표 재계산.";
+    } else {
+      md =
+        "**기준 시점** · " + asof + "\n\n" +
+        subjName + "님 상반기 등급 초안은 **" + grade + "** (종합 " + score + "/100)입니다. 목표 달성률과 피어리뷰가 안정적입니다.\n\n" +
+        "**계산·근거 트레이스**\n" +
+        "- `ERP` 목표 달성률 집계 → 종합 " + score + "/100 `eval.FY2026." + subjId + "`\n" +
+        "- `평가규정 v3.1` 등급 매핑 (초과달성 120%↑) · §12\n" +
+        "- `talenx` 중간 1:1 기록 대조\n\n" +
+        "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 본인\n\n" +
+        "**What-if** · 달성률 -10%p 가정 시 등급이 한 단계 하향될 수 있습니다(재계산 가능).\n\n" +
+        "현재 담당 목표 " + objCount + "건 기준입니다.";
+      owned.slice(0, 2).forEach(function (o) {
+        recos.push({
+          objective: o.title,
+          rationale: "진행률 " + (o.progress != null ? o.progress + "%" : "-") + " · " + (o.status || ""),
+          krs: krsOf(o.objective_id).slice(0, 2).map(function (k) {
+            return { name: k.name, target: k.target_value, weight: k.weight, difficulty: k.difficulty };
+          })
+        });
+      });
+    }
+    return { text: md, recos: recos };
+  }
+  function offlineRespond(body, aiMsg) {
+    var built = offlineReceipt(body);
+    var full = built.text;
+    var idx = 0;
+    var step = Math.max(6, Math.round(full.length / 40));
+    function tick() {
+      if (!state.streaming) return;
+      idx = Math.min(full.length, idx + step);
+      aiMsg.text = full.slice(0, idx);
+      refreshBubble(aiMsg);
+      if (idx < full.length) {
+        setTimeout(tick, 24);
+      } else {
+        aiMsg.streaming = false;
+        if (built.recos && built.recos.length) aiMsg.recos = built.recos;
+        aiMsg.note = "오프라인 목업 응답 · 백엔드 미연결 (실시간 AI는 demo-app/run.sh 필요)";
+        finishStreaming();
+        renderMessages();
+      }
+    }
+    setTimeout(tick, 120);
   }
 
   function readSSE(res, aiMsg) {

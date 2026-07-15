@@ -1,0 +1,148 @@
+/* ============================================================
+   tx_roles.css — 역할 전환(조직원·조직장·HR·경영진) + 검증 가능한 답변 영수증
+   Additive layer. Reuses talenx tokens (--blue, --ink…); adds navy/orange
+   verifiable-answer receipt palette.
+   ============================================================ */
+:root {
+  --rcpt-navy: #23408E;
+  --rcpt-navy-bg: #EBF0FB;
+  --rcpt-anno: #C2410C;
+  --rcpt-anno-bg: #FDEDE3;
+  --rcpt-ok: #0E7C4A;
+  --rcpt-ok-bg: #E3F3EC;
+  --rcpt-warn: #B45309;
+  --rcpt-warn-bg: #FEF3C7;
+  --rcpt-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+}
+
+/* ---------- role switcher in GNB ---------- */
+.txr-switch {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-right: 14px;
+}
+.txr-switch > .txr-lab {
+  font-size: 11px; font-weight: 700; color: var(--ink-3);
+  letter-spacing: .02em; white-space: nowrap;
+}
+.txr-seg {
+  display: inline-flex; background: var(--soft); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px; gap: 2px;
+}
+.txr-seg button {
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  color: var(--ink-2); background: transparent; border: none; cursor: pointer;
+  padding: 5px 12px; border-radius: 999px; white-space: nowrap; line-height: 1.2;
+  transition: background .15s, color .15s;
+}
+.txr-seg button:hover { color: var(--ink); }
+.txr-seg button.on { background: var(--blue); color: #fff; box-shadow: 0 1px 3px rgba(31,122,240,.35); }
+.txr-seg button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---------- viewpoint bar under GNB ---------- */
+.txr-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 7px 24px; background: var(--rcpt-navy-bg);
+  border-bottom: 1px solid #D6E0F5; font-size: 12.5px; color: var(--ink-2);
+}
+.txr-bar .txr-role {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-weight: 700; color: var(--rcpt-navy);
+}
+.txr-bar .txr-role .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rcpt-navy); }
+.txr-bar .txr-as { color: var(--ink-2); }
+.txr-bar .txr-as b { color: var(--ink); font-weight: 700; }
+.txr-bar .txr-scope { color: var(--ink-3); }
+.txr-bar .txr-note { margin-left: auto; color: var(--ink-3); font-size: 11.5px; display: inline-flex; align-items: center; gap: 5px; }
+.txr-bar .txr-note .k { font-family: var(--rcpt-mono); font-size: 10.5px; background: #fff; border: 1px solid #D6E0F5; padding: 1px 6px; border-radius: 5px; color: var(--rcpt-navy); }
+
+/* ---------- verifiable-answer receipt (perf 목표 page) ---------- */
+.txr-receipt {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; margin: 14px 0 4px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(20,24,32,.04), 0 6px 18px rgba(20,24,32,.05);
+}
+.txr-rc-meta {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.txr-rc-left { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.txr-rc-title { font-size: 12px; font-weight: 700; color: var(--rcpt-navy); letter-spacing: .02em; }
+.txr-anno {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%; background: var(--rcpt-anno-bg);
+  color: var(--rcpt-anno); font-size: 11px; font-weight: 700; border: 1px solid #F0C9AE;
+  flex-shrink: 0;
+}
+.txr-chip {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600;
+  padding: 3px 10px; border-radius: 999px;
+}
+.txr-chip.asof { background: var(--rcpt-navy-bg); color: var(--rcpt-navy); cursor: pointer; user-select: none; }
+.txr-chip.asof:hover { background: #DEE7FA; }
+.txr-chip.audit { color: var(--ink-2); }
+.txr-chip.audit svg { width: 13px; height: 13px; }
+
+.txr-rc-body { padding: 14px; }
+.txr-verdict { font-size: 13.5px; line-height: 1.6; margin-bottom: 12px; color: var(--ink); }
+.txr-verdict b { font-weight: 700; }
+.txr-verdict .g { color: var(--rcpt-navy); font-weight: 800; }
+.txr-verdict mark { background: #FBF0D0; color: inherit; padding: 0 3px; border-radius: 3px; font-weight: 600; }
+.txr-verdict .warn { color: var(--rcpt-anno); font-weight: 600; }
+
+.txr-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px,1fr)); gap: 8px; margin-bottom: 12px; }
+.txr-metric { background: var(--soft); border-radius: 9px; padding: 9px 11px; }
+.txr-metric label { display: block; font-size: 11px; color: var(--ink-3); margin-bottom: 1px; }
+.txr-metric b { font-size: 16px; font-weight: 700; }
+
+.txr-trace { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.txr-trace-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--soft); cursor: pointer; user-select: none; }
+.txr-trace-head b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.txr-trace-head .cnt { font-size: 11px; color: var(--ink-3); }
+.txr-trace-head .tgl { margin-left: auto; color: var(--ink-3); transition: transform .18s; }
+.txr-trace.open .tgl { transform: rotate(180deg); }
+.txr-trace-steps { display: none; }
+.txr-trace.open .txr-trace-steps { display: block; }
+.txr-step { display: flex; gap: 10px; padding: 11px 12px; border-top: 1px solid var(--line); }
+.txr-step .n { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; background: var(--rcpt-navy-bg); color: var(--rcpt-navy); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+.txr-step b { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 1px; color: var(--ink); }
+.txr-step p { font-size: 12px; color: var(--ink-2); margin: 0; }
+.txr-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; margin-top: 5px; margin-right: 5px; }
+.txr-badge.ok { background: var(--rcpt-ok-bg); color: var(--rcpt-ok); }
+.txr-badge.ref { background: var(--soft); color: var(--ink-2); font-weight: 500; }
+.txr-rid { font-family: var(--rcpt-mono); font-size: 10.5px; background: var(--soft); padding: 1px 6px; border-radius: 5px; color: var(--ink-2); }
+.txr-sb { font-family: var(--rcpt-mono); font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 5px; }
+.txr-sb.talenx { background: var(--blue-soft); color: var(--blue-2); }
+.txr-sb.erp { background: var(--rcpt-ok-bg); color: var(--rcpt-ok); }
+.txr-sb.rule { background: #F1EBFB; color: #6D28D9; }
+.txr-sb.slack { background: var(--rcpt-warn-bg); color: var(--rcpt-warn); }
+
+.txr-actions { display: flex; gap: 7px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+.txr-btn { font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 13px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); }
+.txr-btn:hover { background: var(--soft); }
+.txr-btn.primary { background: var(--rcpt-navy); border-color: var(--rcpt-navy); color: #fff; }
+.txr-btn.primary:hover { background: #1B3373; }
+.txr-btn:focus-visible { outline: 2px solid var(--rcpt-navy); outline-offset: 2px; }
+
+.txr-whatif { display: none; margin-top: 12px; border: 1px solid #D8E2F5; background: #F6F9FE; border-radius: 9px; padding: 13px 14px; }
+.txr-whatif.show { display: block; }
+.txr-whatif h5 { font-size: 12.5px; font-weight: 700; color: var(--rcpt-navy); margin: 0 0 9px; }
+.txr-wf-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 5px 0; }
+.txr-wf-row + .txr-wf-row { border-top: 1px dashed #D8E2F5; }
+.txr-wf-row span { color: var(--ink-2); }
+.txr-wf-row b { font-family: var(--rcpt-mono); font-size: 12px; }
+.txr-wf-row b.neg { color: var(--red); }
+.txr-wf-row b.pos { color: var(--rcpt-ok); }
+.txr-wf-note { font-size: 11.5px; color: var(--ink-3); margin-top: 7px; }
+
+.txr-gate { display: flex; gap: 7px; margin-top: 12px; padding-top: 11px; border-top: 1px dashed var(--line-2); flex-wrap: wrap; align-items: center; }
+.txr-gate .lab { font-size: 11.5px; color: var(--ink-3); margin-right: auto; }
+
+@media (max-width: 720px) {
+  .txr-switch .txr-lab { display: none; }
+  .txr-seg button { padding: 5px 9px; font-size: 11px; }
+  .txr-bar { padding: 7px 14px; }
+  .txr-bar .txr-note { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .txr-trace-head .tgl { transition: none; }
+}
