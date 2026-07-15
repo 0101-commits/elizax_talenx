@@ -17,11 +17,74 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
+const crypto = require("crypto");
+
 const PORT = Number(process.env.PORT || 8080);
 const ROOT = path.resolve(__dirname, "..");
 const API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const MODEL = process.env.ELIZAX_MODEL || "claude-sonnet-5";
 const MAX_TOKENS = Number(process.env.ELIZAX_MAX_TOKENS || 1024);
+
+/* ---------------- AWS Bedrock 지원 (ANTHROPIC_API_KEY 없을 때 대체 경로) ----------
+   자격증명: AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY 환경변수,
+   또는 AWS_KEYS_CSV(IAM 콘솔에서 받은 *_accessKeys.csv 경로). */
+let AWS_AK = process.env.AWS_ACCESS_KEY_ID || "";
+let AWS_SK = process.env.AWS_SECRET_ACCESS_KEY || "";
+if (!AWS_AK && process.env.AWS_KEYS_CSV) {
+  try {
+    const lines = fs.readFileSync(process.env.AWS_KEYS_CSV, "utf8").trim().split(/\r?\n/);
+    const cols = lines[lines.length - 1].split(",");
+    AWS_AK = (cols[0] || "").trim();
+    AWS_SK = (cols[1] || "").trim();
+  } catch (e) { console.warn("[elizax] AWS_KEYS_CSV 읽기 실패:", e.message); }
+}
+const AWS_REGION = process.env.AWS_REGION || "ap-northeast-2";
+const BEDROCK_MODEL = process.env.ELIZAX_BEDROCK_MODEL || "apac.anthropic.claude-sonnet-4-20250514-v1:0";
+const BACKEND = API_KEY ? "anthropic" : (AWS_AK && AWS_SK) ? "bedrock" : "none";
+
+function sigv4(method, host, rawPath, query, region, service, body) {
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const canonHeaders = `content-type:application/json\nhost:${host}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = "content-type;host;x-amz-date";
+  const sha = (s) => crypto.createHash("sha256").update(s, "utf8").digest("hex");
+  /* non-S3 규칙: 이미 인코딩된 경로 세그먼트를 한 번 더 인코딩 */
+  const canonPath = rawPath.split("/").map((s) => encodeURIComponent(s)).join("/");
+  const canon = [method, canonPath, query || "", canonHeaders, signedHeaders, sha(body || "")].join("\n");
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const sts = ["AWS4-HMAC-SHA256", amzDate, scope, sha(canon)].join("\n");
+  let k = crypto.createHmac("sha256", "AWS4" + AWS_SK).update(dateStamp).digest();
+  for (const part of [region, service, "aws4_request"]) k = crypto.createHmac("sha256", k).update(part).digest();
+  const sig = crypto.createHmac("sha256", k).update(sts, "utf8").digest("hex");
+  return {
+    "content-type": "application/json",
+    "x-amz-date": amzDate,
+    "Authorization": `AWS4-HMAC-SHA256 Credential=${AWS_AK}/${scope}, SignedHeaders=${signedHeaders}, Signature=${sig}`
+  };
+}
+
+/* Bedrock InvokeModel (비스트리밍) → 텍스트 반환 */
+async function bedrockInvoke(system, messages) {
+  const host = `bedrock-runtime.${AWS_REGION}.amazonaws.com`;
+  const rawPath = `/model/${encodeURIComponent(BEDROCK_MODEL)}/invoke`;
+  const body = JSON.stringify({
+    anthropic_version: "bedrock-2023-05-31",
+    max_tokens: MAX_TOKENS,
+    system,
+    messages
+  });
+  const headers = sigv4("POST", host, rawPath, "", AWS_REGION, "bedrock", body);
+  const r = await fetch(`https://${host}${rawPath}`, { method: "POST", headers, body });
+  const text = await r.text();
+  if (!r.ok) {
+    let msg = "Bedrock HTTP " + r.status;
+    try { const j = JSON.parse(text); msg += " — " + (j.message || j.Message || ""); } catch (e) { /* ignore */ }
+    if (r.status === 403) msg += " · IAM 유저에 bedrock:InvokeModel 권한을 부여하세요 (AmazonBedrockLimitedAccess 정책 등)";
+    throw new Error(msg);
+  }
+  const j = JSON.parse(text);
+  return (j.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+}
 
 /* ---------------- lightweight session store ---------------- */
 const sessions = new Map(); // emp_id → [{role, content}]
@@ -88,10 +151,10 @@ async function handleChat(req, res) {
   const perspective = String(body.perspective || "subject");
   if (!message) return json(res, 400, { error: "empty message" });
 
-  if (!API_KEY) {
+  if (BACKEND === "none") {
     return json(res, 200, {
       type: "fallback", source: "fallback",
-      response: "ANTHROPIC_API_KEY가 설정되지 않았습니다. 서버 환경변수에 키를 설정한 뒤 다시 실행해 주세요."
+      response: "AI 자격증명이 없습니다. ANTHROPIC_API_KEY 또는 AWS 키(AWS_KEYS_CSV/AWS_ACCESS_KEY_ID)를 설정한 뒤 다시 실행해 주세요."
     });
   }
 
@@ -106,6 +169,20 @@ async function handleChat(req, res) {
     "Access-Control-Allow-Origin": "*"
   });
   const send = (obj) => res.write("data: " + JSON.stringify(obj) + "\n\n");
+
+  /* ---- Bedrock 경로: 비스트리밍 호출 → 단일 chunk로 전달 ---- */
+  if (BACKEND === "bedrock") {
+    try {
+      const out = await bedrockInvoke(SYSTEM, messages);
+      hist.push({ role: "assistant", content: out || "(빈 응답)" });
+      send({ type: "chunk", content: out || "(빈 응답)" });
+      send({ type: "done" });
+    } catch (e) {
+      send({ type: "chunk", content: "Bedrock 오류: " + (e && e.message ? e.message : "unknown") });
+      send({ type: "done" });
+    }
+    return res.end();
+  }
 
   let full = "";
   try {
@@ -187,11 +264,18 @@ const server = http.createServer((req, res) => {
       .catch(() => json(res, 400, { error: "bad json" }));
   }
   if (req.method === "GET" && req.url === "/api/health") {
-    return json(res, 200, { ok: true, model: MODEL, keySet: !!API_KEY });
+    return json(res, 200, {
+      ok: true, backend: BACKEND,
+      model: BACKEND === "bedrock" ? BEDROCK_MODEL : MODEL,
+      keySet: BACKEND !== "none"
+    });
   }
   return serveStatic(req, res);
 });
 
 server.listen(PORT, () => {
-  console.log("[elizax] http://localhost:" + PORT + "  (API key " + (API_KEY ? "set" : "NOT SET — fallback replies") + ", model " + MODEL + ")");
+  const desc = BACKEND === "anthropic" ? "Anthropic API, model " + MODEL
+    : BACKEND === "bedrock" ? "AWS Bedrock " + AWS_REGION + ", model " + BEDROCK_MODEL
+    : "자격증명 없음 — 폴백 응답";
+  console.log("[elizax] http://localhost:" + PORT + "  (" + desc + ")");
 });

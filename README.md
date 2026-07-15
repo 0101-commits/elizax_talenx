@@ -10,6 +10,7 @@ talenx HR·성과관리 SaaS 사용자 앱 목업 + **성과관리/평가 AI Age
 |---|---|---|
 | **direct** (권장·간편) | `index.html` 열기(또는 GitHub Pages) → elizax ⚙ 설정에서 Anthropic API 키 입력 | 서버 없이 브라우저에서 실제 Claude 스트리밍 응답 + LLM 주도 화면 전환. 키는 localStorage 저장(데모 전용) |
 | proxy | `ANTHROPIC_API_KEY` 설정 후 `node server/server.js` → `http://localhost:8080` | 위와 동일 + 키가 서버에만 존재 (운영 권장) |
+| proxy (Bedrock) | Anthropic 키 없이 AWS 키만 있을 때: `$env:AWS_KEYS_CSV="...accessKeys.csv"; .\server\run.ps1` | AWS Bedrock 경유 Claude (SigV4). IAM 유저에 `bedrock:InvokeModel` 권한 + Bedrock 모델 액세스 필요. 리전 `AWS_REGION`, 모델 `ELIZAX_BEDROCK_MODEL` |
 | offline | 키·서버 둘 다 없음 | 전체 UI + 목업 영수증 응답 + 내비게이션 intent |
 
 우선순위: 프록시(키 보유) → 브라우저 직접(로컬 키) → 오프라인 목업. `window.EZAI`가 자동 판정.
@@ -54,7 +55,7 @@ ANTHROPIC_API_KEY=sk-ant-... ./server/run.sh
 
 - **도킹 대화창** — FAB 위치를 transform-origin으로 스프링 이징 확대(`cubic-bezier(.32,.72,.24,1)`). 프로스티드 글래스 헤더/컴포저, iMessage식 말풍선(사용자=블루, 에이전트=parchment), pill CTA 문법, press = `scale(.95)`.
 - **선제 알림 팝업** — FAB에서 떠오르는 rise 애니메이션(하단 FAB 중심 origin). 카드는 hairline + 단일 플로팅 섀도.
-- **전체화면 딥워크(Hub)** — FAB에서 원형 **clip-path morph** 진입/이탈. 완전 전체화면이 아니라 **현재 화면이 뒤에 흐릿하게 비치는 frosted 블러 시트**(배경 클릭·Esc로 닫힘). 글로벌바는 Apple global-nav 문법(near-black `#1d1d1f`, 44px).
+- **전체화면 딥워크(Hub)** — FAB에서 원형 **clip-path morph** 진입/이탈. 완전 전체화면이 아니라 **현재 화면이 뒤에 흐릿하게 비치는 frosted 블러 시트**(배경 클릭·Esc로 닫힘). 글로벌바는 Apple global-nav 문법(near-black `#1d1d1f`, 44px). **컨텍스트 패널(판단 근거)은 필요할 때만** — 글로벌바 "☰ 근거" 토글 + 라이브 이벤트 발생 시 자동 오픈. 디버그: `index.html#ez=hub:home` / `#ez=panel` 로 자동 오픈.
 - **FAB 글로우 오브** — 상태를 텍스트 없이 색·모션으로만 표현: 유휴 / 작업 중(회전 shimmer) / 제안 도착(halo pulse) / 승인 대기(고정 링). Apple Intelligence Siri glow 패턴.
 - **컨텍스트 어웨어 칩** — 현재 탭에 맞는 제안이 FAB 옆에서 pill로 잠깐 내밈 (성과관리→"목표 정합성 점검", 평가관리→"평가 문장 품질 린트", 1:1 미팅→"AI 미팅 브리핑" …). M365 Copilot Dynamic Action Button 패턴.
 - `prefers-reduced-motion` 대응.

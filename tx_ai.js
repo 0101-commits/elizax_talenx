@@ -53,7 +53,14 @@
     return "offline";
   }
   function modeLabel() {
-    return { proxy: "로컬 프록시 연결됨", direct: "브라우저 직접 연결 (Claude API)", offline: "오프라인 목업" }[mode()];
+    var m = mode();
+    if (m === "proxy") return backend.keySet ? "로컬 프록시 연결됨" : "프록시 연결됨 · 서버 AI 키 미설정";
+    return { direct: "브라우저 직접 연결 (Claude API)", offline: "오프라인 목업" }[m];
+  }
+  /* 실제 AI 응답 가능 여부 (프록시가 떠 있어도 키 없으면 false) */
+  function ready() {
+    var m = mode();
+    return m === "direct" || (m === "proxy" && backend.keySet);
   }
 
   /* ---------------- system prompt (direct 모드 · 서버 SYSTEM과 동일 계약) ---------------- */
@@ -176,6 +183,7 @@
   window.EZAI = {
     mode: mode,
     modeLabel: modeLabel,
+    ready: ready,
     probe: probe,
     getKey: getKey,
     setKey: setKey,

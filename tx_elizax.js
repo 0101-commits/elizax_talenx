@@ -394,10 +394,11 @@
       off.appendChild(connect);
       wrap.appendChild(off);
     } else {
+      var ready = !window.EZAI || !window.EZAI.ready || window.EZAI.ready();
       var onNote = h("div", "ezx-persp-note");
       onNote.style.marginTop = "10px";
-      onNote.innerHTML = "● <b>Claude 연결됨</b> · " + esc(window.EZAI ? window.EZAI.modeLabel() : "프록시");
-      onNote.style.color = "#15803D";
+      onNote.innerHTML = (ready ? "● <b>Claude 연결됨</b> · " : "◐ ") + esc(window.EZAI ? window.EZAI.modeLabel() : "프록시");
+      onNote.style.color = ready ? "#15803D" : "#B45309";
       wrap.appendChild(onNote);
     }
 

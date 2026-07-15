@@ -250,6 +250,7 @@
       '<span class="agh-rolechip" data-agh-role></span></div>' +
       '<div class="agh-gr">' +
       '<button class="agh-gitem" data-agh-alerts>🔔 알림 <b data-agh-alertcnt>3</b></button>' +
+      '<button class="agh-gitem" data-agh-ctxtoggle title="판단 근거·Human-in-the-loop 패널 열기/닫기">☰ 근거</button>' +
       '<span class="agh-gitem">⚙ 백그라운드 작업 <b>2건</b></span>' +
       '<button class="agh-gitem" data-agh-dock title="도킹 대화창으로 전환">◱ 도킹으로</button>' +
       '<button class="agh-gitem" data-agh-close>닫기 ✕</button></div>';
@@ -295,6 +296,10 @@
       if (window.Elizax && window.Elizax.open) window.Elizax.open();
     });
     bar.querySelector("[data-agh-alerts]").addEventListener("click", showAlerts);
+    /* 컨텍스트 패널은 필요할 때만 — 수동 토글 + 라이브 이벤트 시 자동 오픈 */
+    bar.querySelector("[data-agh-ctxtoggle]").addEventListener("click", function () {
+      root.classList.toggle("agh-ctx-on");
+    });
     cmd.querySelector("[data-agh-cmdgo]").addEventListener("click", runCmd);
     cmd.querySelector("[data-agh-cmdin]").addEventListener("keydown", function (e) {
       if (e.key === "Enter") runCmd();
@@ -361,6 +366,8 @@
   }
   function ctxAppend(html) {
     if (!el.ctx) return;
+    /* 라이브 이벤트(지시·AI 응답·경고)가 오면 패널 자동 오픈 */
+    if (el.root) el.root.classList.add("agh-ctx-on");
     var c = el.ctx.querySelector("[data-agh-ctxchat]");
     if (c) { c.insertAdjacentHTML("beforeend", html); c.scrollTop = c.scrollHeight; }
   }
@@ -864,6 +871,11 @@
         ctxAppendIf(host, '<div class="agh-live">자연어 지시 수신 — 문서를 재작성하고 근거를 다시 인용했습니다.</div>');
       }
     });
+    /* 지시 입력창 Enter로도 실행 */
+    var revin = host.querySelector("[data-agh-revin]");
+    if (revin) revin.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { var go = host.querySelector("[data-agh-revgo]"); if (go) go.click(); }
+    });
   };
 
   /* ---------- 산출물 (자산화) ---------- */
@@ -1037,6 +1049,10 @@
   /* 진입점은 elizax 안에만 둔다: 패널 헤더 ⛶ 전체화면 + 랜딩 CTA. 별도 GNB 버튼 없음. */
   function init() {
     scheduleProactive();
+    /* 디버그/스크린샷용 자동 오픈: index.html#ez=hub */
+    var hubM = window.location.href.match(/[?#&]ez=hub(?::([a-z0-9]+))?/);
+    if (hubM) setTimeout(function () { openHub(hubM[1] || undefined); }, 700);
+    if (/[?#&]ez=panel/.test(window.location.href)) setTimeout(function () { if (window.Elizax) Elizax.open(); }, 700);
   }
   if (document.readyState === "complete") setTimeout(init, 400);
   else window.addEventListener("load", function () { setTimeout(init, 400); });
