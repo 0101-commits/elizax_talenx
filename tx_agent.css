@@ -385,3 +385,6 @@ button.agh-gitem:hover { background: rgba(255,255,255,.2); }
 .agh-holdcard .opts { display: flex; gap: 7px; margin-top: 10px; flex-wrap: wrap; }
 .agh-worklines .wl.hold .ck { color: var(--agh-bad); }
 .agh-worklines .wl.hold span, .agh-worklines .wl.hold b { color: var(--agh-bad); }
+
+/* elizax 브랜딩 (허브=elizax 전체화면 모드) */
+.agh-brand-sub { font-size: 11px; font-weight: 600; color: rgba(255,255,255,.55); margin-left: 2px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,.2); }

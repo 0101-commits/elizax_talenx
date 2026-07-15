@@ -172,12 +172,13 @@
     /* ① 글로벌바 */
     var bar = h("div", "agh-gbar");
     bar.innerHTML =
-      '<div class="agh-gl"><span class="agh-logo">◆</span><b>Performance AI Agent</b>' +
+      '<div class="agh-gl"><span class="agh-logo">✦</span><b>elizax</b><span class="agh-brand-sub">전체화면 딥워크</span>' +
       '<span class="agh-rolechip" data-agh-role></span></div>' +
       '<div class="agh-gr">' +
       '<button class="agh-gitem" data-agh-alerts>🔔 알림 <b data-agh-alertcnt>3</b></button>' +
       '<span class="agh-gitem">⚙ 백그라운드 작업 <b>2건</b></span>' +
-      '<button class="agh-gitem" data-agh-close>메인으로 ✕</button></div>';
+      '<button class="agh-gitem" data-agh-dock title="도킹 대화창으로 전환">◱ 도킹으로</button>' +
+      '<button class="agh-gitem" data-agh-close>닫기 ✕</button></div>';
 
     /* ② 내비 */
     var nav = h("nav", "agh-nav");
@@ -215,6 +216,10 @@
 
     /* events */
     bar.querySelector("[data-agh-close]").addEventListener("click", closeHub);
+    bar.querySelector("[data-agh-dock]").addEventListener("click", function () {
+      closeHub();
+      if (window.Elizax && window.Elizax.open) window.Elizax.open();
+    });
     bar.querySelector("[data-agh-alerts]").addEventListener("click", showAlerts);
     cmd.querySelector("[data-agh-cmdgo]").addEventListener("click", runCmd);
     cmd.querySelector("[data-agh-cmdin]").addEventListener("keydown", function (e) {
@@ -303,10 +308,10 @@
   /* ============================================================
      각 화면 렌더러 + 라이브 시뮬레이션
      ============================================================ */
-  function screenHead(key, exposure) {
+  function screenHead(key) {
     var s = SCREENS[key];
     return '<div class="agh-shead"><div><h2>' + esc(s.title) + "</h2>" +
-      '<span class="agh-exp">' + esc(exposure) + "</span>" + (s.mode ? autonomyBadge(s.mode) : "") +
+      (s.mode ? autonomyBadge(s.mode) : "") +
       '<span class="agh-auditchip">⛨ 감사 기록됨</span></div>' +
       '<span class="agh-asof2">as-of · ' + esc(AS_OF) + " ▾</span></div>" + protoStrip(key);
   }
@@ -339,7 +344,7 @@
     var objs = myObjectives().slice(0, 3);
     var pads = [{ title: "추천모델 v2 배포 · CTR +8%" }, { title: "온보딩 전환율 개선 +5%p" }, { title: "ML 온보딩 교육자료 (초안 제안)" }];
     var names = objs.concat(pads.slice(0, Math.max(0, 3 - objs.length))).slice(0, 3);
-    el.canvas.innerHTML = screenHead("qw2", "노출 · ①도킹 → ③전체화면") +
+    el.canvas.innerHTML = screenHead("qw2") +
       '<div class="agh-flow">' +
       ["지침수립", "자기목표", "검토회의", "피드백", "목표확정"].map(function (s, i) {
         return '<div class="agh-fstep" data-fs="' + i + '"><span class="n">' + (i + 1) + "</span>" + esc(s) + "</div>";
@@ -411,7 +416,7 @@
       { n: 3, goal: "실험 파이프라인 자동화", kr: "연결 없음", res: "▲ 미연계 — 어느 팀 KR에도 안 걸림", cls: "miss" },
       { n: 4, goal: "A/B 테스트 속도 2배", kr: "KR1 · 실험 velocity", res: "▲ 중복 B — 76% 유사 (관점 상이)", cls: "dupb" }
     ];
-    el.canvas.innerHTML = screenHead("qw7", "노출 · ③전체화면 딥워크") +
+    el.canvas.innerHTML = screenHead("qw7") +
       '<div class="agh-scanline" data-agh-scan>팀 목표 8건 스캔 중 <i class="agh-spin"></i></div>' +
       '<table class="agh-table" data-agh-tbl style="opacity:.35"><thead><tr><th>담당자 · 개인목표</th><th>상위 KR 연계</th><th>점검 결과</th></tr></thead><tbody>' +
       rows.map(function (r, i) {
@@ -445,7 +450,7 @@
 
   /* ---------- QW1 · 주간 체크인 팝업 (W3 p22) ---------- */
   RENDER.qw1 = function () {
-    el.canvas.innerHTML = screenHead("qw1", "노출 · ②선제 팝업 → ①도킹") +
+    el.canvas.innerHTML = screenHead("qw1") +
       '<div class="agh-scan3" data-agh-s3>' +
       [["talenx", "KR 업데이트 로그 스캔", "7일 무변동 3명"], ["ERP", "달성률 대비 잔여기간 대조", "진척 지연 1명"], ["1:1", "최근 체크인 이력 확인", "14일+ 미실시 2명"]].map(function (r, i) {
         return '<div class="agh-scanrow" data-sr="' + i + '"><span class="agh-src agh-s-' + (i === 0 ? "talenx" : i === 1 ? "erp" : "rule") + '">' + r[0] + '</span><span class="txt">' + esc(r[1]) + '</span><b class="out" data-out></b></div>';
@@ -489,7 +494,7 @@
       ["2025 · 07", "1:1", "'발표 자신감 부족' 개선 합의 → 4회 이행 확인", "talenx", "1:1 노트 · talenx"],
       ["2025 · 04", "피드백", "동료 3인 '협업 리드십 탁월' 수시 피드백 수신", "rule", "동료피드백 · 3건"]
     ];
-    el.canvas.innerHTML = screenHead("qw4", "노출 · ③전체화면 · 상시 수집") +
+    el.canvas.innerHTML = screenHead("qw4") +
       '<div class="agh-brief"><span class="ic">🗂</span><div><b>기억을 소환하지 않습니다. 1년치 근거가 이미 모여 있습니다.</b> 달성·프로젝트·피드백·1:1 기록이 발생 시점에 자동 적재됩니다(suggest · 자동 축적).</div></div>' +
       '<div class="agh-tl" data-agh-tl>' +
       items.map(function (it, i) {
@@ -511,7 +516,7 @@
 
   /* ---------- QW6 · 피드백 문장 정제 (W3 p25) ---------- */
   RENDER.qw6 = function () {
-    el.canvas.innerHTML = screenHead("qw6", "노출 · ①도킹 · 작성 컴포저") +
+    el.canvas.innerHTML = screenHead("qw6") +
       '<div class="agh-tones">' +
       ["톤", "담백", "따뜻", "직설"].map(function (t, i) {
         return i === 0 ? '<span class="lab">' + t + "</span>" : '<button class="agh-tone' + (i === 2 ? " on" : "") + '" data-tone="' + esc(t) + '">' + esc(t) + "</button>";
@@ -548,7 +553,7 @@
 
   /* ---------- QW3 · 평가 코멘트 근거초안 (W3 p20, 도킹 에이전트 패널) ---------- */
   RENDER.qw3 = function () {
-    el.canvas.innerHTML = screenHead("qw3", "노출 · ①도킹 · 에이전트 패널") +
+    el.canvas.innerHTML = screenHead("qw3") +
       '<div class="agh-workpanel"><div class="lab">⏳ 작업 중 <span class="who">김도현 · 실행력</span></div>' +
       '<div class="agh-worklines" data-agh-wl>' +
       [["ERP 실적을 확인하는 중…", "목표3 달성률 125% 확인"], ["동일 직무군 분포 대조 중 —", "상위 32%"], ["평가규정 §4.2 등급 기준을 대조하는 중…", ""]].map(function (l, i) {
@@ -589,7 +594,7 @@
 
   /* ---------- HOLD · 근거 부족 시 정지+질문 (W3 p9 — 확신 없으면 진행하지 않는다) ---------- */
   RENDER.hold = function () {
-    el.canvas.innerHTML = screenHead("hold", "노출 · ①도킹 · 정지 상태") +
+    el.canvas.innerHTML = screenHead("hold") +
       '<div class="agh-workpanel"><div class="lab">⏳ 작업 중 <span class="who">박지훈 · 등급 초안</span></div>' +
       '<div class="agh-worklines" data-agh-wl>' +
       [["KR1 체크인 기록 확인 중…", ""], ["KR2 실적 근거 탐색 중…", ""], ["KR3 실적 근거 탐색 중…", ""]].map(function (l, i) {
@@ -657,7 +662,7 @@
 
   /* ---------- QW5 · 평가 편향 점검 (W3 p18 #5) ---------- */
   RENDER.qw5 = function () {
-    el.canvas.innerHTML = screenHead("qw5", "노출 · ③전체화면 (횡단)") +
+    el.canvas.innerHTML = screenHead("qw5") +
       '<div class="agh-scanline" data-agh-scan>본부 4곳 등급 분포·근거량 스캔 중 <i class="agh-spin"></i></div>' +
       '<div class="agh-biasgrid" data-agh-bias style="opacity:.3">' +
       [["개발본부", "관대화 의심", "A비율 41% (전사 28%) · 근거량 평균 이하", "warn"],
@@ -687,7 +692,7 @@
 
   /* ---------- Calibration 라운드테이블 (W2 p13) + What-if 슬라이더 ---------- */
   RENDER.calib = function () {
-    el.canvas.innerHTML = screenHead("calib", "노출 · ③전체화면 · 다자 심의") +
+    el.canvas.innerHTML = screenHead("calib") +
       '<div class="agh-callayout"><div class="agh-round">' +
       '<div class="lab">Roundtable 에이전트 4종 <span class="live" data-agh-live>● LIVE 실시간 심의</span></div>' +
       '<div class="agh-rgraph"><div class="agh-orch" data-agh-orch>조정<br>오케스트레이터<small data-agh-orchst>조율 중</small></div>' +
@@ -754,7 +759,7 @@
 
   /* ---------- 리뷰 초안 co-writing (W2 p14) ---------- */
   RENDER.review = function () {
-    el.canvas.innerHTML = screenHead("review", "노출 · ①도킹 + 편집 캔버스") +
+    el.canvas.innerHTML = screenHead("review") +
       '<div class="agh-revlayout"><div class="agh-revside"><div class="lab">리뷰 대상 <b>5 / 12</b></div>' +
       [["김지훈 책임", "작성 중", "cur"], ["이수민 선임", "작성 완료", "done"], ["박도현 책임", "대기", ""]].map(function (r) {
         return '<div class="agh-revtgt ' + r[2] + '"><b>' + esc(r[0]) + "</b><span>" + esc(r[1]) + "</span></div>";
@@ -933,20 +938,8 @@
     document.body.style.overflow = "";
   }
 
-  /* GNB 진입점 주입: elizax 랜딩 버튼 외에 상단에서도 바로 진입 */
-  function injectGnbEntry() {
-    if (document.querySelector(".agh-entry")) return;
-    var b = h("button", "agh-entry", "⚡ AI Agent Hub");
-    b.title = "성과관리/평가 E2E AI Agent Hub";
-    b.addEventListener("click", function () { openHub(); });
-    var bar = document.querySelector(".txr-bar");
-    if (bar) { b.classList.add("inbar"); bar.appendChild(b); return; }
-    var right = document.querySelector(".gnb .gnb-right");
-    if (right) right.insertBefore(b, right.firstChild);
-  }
-
+  /* 진입점은 elizax 안에만 둔다: 패널 헤더 ⛶ 전체화면 + 랜딩 CTA. 별도 GNB 버튼 없음. */
   function init() {
-    injectGnbEntry();
     scheduleProactive();
   }
   if (document.readyState === "complete") setTimeout(init, 400);

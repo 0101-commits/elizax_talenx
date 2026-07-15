@@ -175,9 +175,13 @@
     var titles = h("div", "ezx-titles");
     titles.appendChild(h("div", "ezx-title", { text: "elizax" }));
     titles.appendChild(h("div", "ezx-sub", { text: "AI 성과관리 코치" }));
+    var exbtn = h("button", "ezx-x ezx-expand", { "aria-label": "전체화면으로 전환", title: "전체화면 딥워크로 전환", text: "⛶" });
+    exbtn.addEventListener("click", function () {
+      if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub(); }
+    });
     var xbtn = h("button", "ezx-x", { "aria-label": "닫기", text: "✕" });
     xbtn.addEventListener("click", closePanel);
-    top.appendChild(mark); top.appendChild(titles); top.appendChild(xbtn);
+    top.appendChild(mark); top.appendChild(titles); top.appendChild(exbtn); top.appendChild(xbtn);
     head.appendChild(top);
 
     /* perspective: 수동 탭 제거 — 역할 주체(TXRoles)에 따라 자동 전환 */
