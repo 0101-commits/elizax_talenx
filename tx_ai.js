@@ -19,6 +19,8 @@
   function apiBase() {
     if (typeof window.ELIZAX_API_BASE === "string") return window.ELIZAX_API_BASE;
     var loc = window.location || {};
+    /* GitHub Pages → Cloudflare Worker 프록시 (PC 꺼져 있어도 실 AI 응답) */
+    if (/\.github\.io$/.test(loc.hostname || "")) return "https://elizax-proxy.baldr0001.workers.dev";
     if (loc.protocol === "file:" || loc.port !== "8080") return "http://localhost:8080";
     return "";
   }

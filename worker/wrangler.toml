@@ -1,0 +1,6 @@
+name = "elizax-proxy"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# 키 등록(1회): npx wrangler secret put ANTHROPIC_API_KEY
+# 배포:        npx wrangler deploy
