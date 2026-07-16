@@ -98,8 +98,13 @@
     subject: defaultSubject(),   // {emp_id,name,jobTitle} chosen for manager/executive
     attachContext: true,
     streaming: false,
-    messages: []          // {role:'user'|'ai'|'err', text, recos?, note?}
+    surface: null         // 외부 마운트 대상(전체화면 허브 등) — null이면 FAB 리스트
   };
+
+  /* 메시지 원장은 공유 스토어(EZChat) — FAB·전체화면이 같은 대화를 본다.
+     스토어 부재(스크립트 로드 실패) 시에만 로컬 배열 폴백. */
+  var _localMsgs = [];
+  function msgs() { return window.EZChat ? EZChat.messages() : _localMsgs; }
 
   /* ---------------- DOM refs ---------------- */
   var el = {};
@@ -191,7 +196,8 @@
     el.sub = sub;
     var exbtn = h("button", "ezx-x ezx-expand", { "aria-label": "전체화면으로 전환", title: "전체화면 딥워크로 전환", text: "⛶" });
     exbtn.addEventListener("click", function () {
-      if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub(); }
+      /* 전체화면 전환 시 같은 대화가 이어지도록 대화 스크린으로 진입 */
+      if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub("chat"); }
     });
     var gear = h("button", "ezx-x", { "aria-label": "AI 연결 설정", title: "AI 연결 설정 (API 키)", text: "⚙" });
     gear.addEventListener("click", function () {
@@ -286,13 +292,20 @@
     }, true);
 
     syncSubjectUI();
-    loadHistory();          /* 지난 대화 복원 (localStorage, 계정별) */
-    renderMessages();
+    renderMessages();       /* 지난 대화는 EZChat 스토어가 이미 복원 */
+    /* 스토어 이벤트 구독 — 외부(허브·기능 모듈·타 탭) 변경도 즉시 반영 */
+    if (window.EZChat) {
+      EZChat.on("messages", function () { renderMessages(); });
+      EZChat.on("switch", function () {
+        if (state.streaming) stopStreaming();
+        renderMessages();
+      });
+    }
     /* 백엔드 probe는 비동기 — 완료 후 연결 상태 표기를 실제 모드로 갱신 */
     if (window.EZAI && window.EZAI.probe) {
       window.EZAI.probe(function () {
         updateAiBadge();
-        if (!state.messages.length) renderMessages();
+        if (!msgs().length) renderMessages();
       });
     }
   }
@@ -374,14 +387,17 @@
   }
 
   /* ---------------- Rendering ---------------- */
+  /* 렌더 대상 리스트 — 기본은 FAB, 허브가 attachSurface하면 그쪽 */
+  function surfaceEl() { return state.surface || el.list; }
   function renderMessages() {
-    var list = el.list;
+    var list = surfaceEl();
+    if (!list) return;
     list.innerHTML = "";
-    if (!state.messages.length) {
+    if (!msgs().length) {
       list.appendChild(buildEmptyState());
       return;
     }
-    state.messages.forEach(function (m) { list.appendChild(buildMsgNode(m)); });
+    msgs().forEach(function (m) { list.appendChild(buildMsgNode(m)); });
     scrollToBottom();
   }
   function buildEmptyState() {
@@ -574,7 +590,8 @@
     return wrap;
   }
   function scrollToBottom() {
-    el.list.scrollTop = el.list.scrollHeight;
+    var list = surfaceEl();
+    if (list) list.scrollTop = list.scrollHeight;
   }
 
   /* ---------------- Send / stream ---------------- */
@@ -650,6 +667,7 @@
     state.streaming = true;
     el.send.disabled = true;
     el.textarea.disabled = true;
+    if (window.EZChat) EZChat.emit("streaming", { on: true });
 
     var ids = resolveEmpIds();
     var body = {
@@ -667,24 +685,61 @@
     state.streaming = false;
     el.send.disabled = false;
     el.textarea.disabled = false;
+    if (window.EZChat) EZChat.emit("streaming", { on: false });
     saveHistory();
+  }
+
+  /* ---------------- 생성 중지 / 재생성 (기능 모듈 공개 API) ---------------- */
+  function stopStreaming() {
+    if (!state.streaming) return false;
+    var arr = msgs();
+    for (var i = arr.length - 1; i >= 0; i--) {
+      var m = arr[i];
+      if (m.role === "ai" && m.streaming) {
+        m.streaming = false;
+        m._stopped = true;
+        if (!m.note) m.note = "생성 중지됨";
+      }
+      if (m.role === "work" && !m.done) {
+        m.done = true;
+        (m._timers || []).forEach(function (t) { clearTimeout(t); });
+        refreshWork(m);
+      }
+    }
+    finishStreaming();
+    renderMessages();
+    return true;
+  }
+  function regenerate() {
+    if (state.streaming) return false;
+    var arr = msgs();
+    var lastUserIdx = -1;
+    for (var i = arr.length - 1; i >= 0; i--) {
+      if (arr[i].role === "user" && arr[i].text) { lastUserIdx = i; break; }
+    }
+    if (lastUserIdx < 0) return false;
+    var text = arr[lastUserIdx].text;
+    arr.splice(lastUserIdx, arr.length - lastUserIdx); /* 마지막 질문+응답 제거 후 재전송 */
+    saveHistory();
+    sendMessage(text);
+    return true;
   }
 
   /* ---------------- 대화 히스토리 → Anthropic messages 규격 ---------------- */
   function buildHistoryMsgs(body, aiMsg) {
     /* user/ai 텍스트만, 마지막 user는 컨텍스트 포함 payload */
-    var msgs = [];
-    state.messages.forEach(function (m) {
+    var hist = [];
+    msgs().forEach(function (m) {
       if (m === aiMsg || !m.text) return;
-      if (m.role === "user") msgs.push({ role: "user", content: m.text });
-      else if (m.role === "ai") msgs.push({ role: "assistant", content: m.text });
+      if (m.role === "user") hist.push({ role: "user", content: m.text });
+      else if (m.role === "ai") hist.push({ role: "assistant", content: m.text });
     });
-    for (var i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === "user") { msgs[i] = { role: "user", content: body.message }; break; }
+    for (var i = hist.length - 1; i >= 0; i--) {
+      if (hist[i].role === "user") { hist[i] = { role: "user", content: body.message }; break; }
     }
     /* Anthropic 규격: user 시작 + 역할 교대 — 연속 동일 역할 병합, 선행 assistant 제거 */
     var norm = [];
-    msgs.slice(-16).forEach(function (m) {
+    hist.slice(-16).forEach(function (m) {
       if (!norm.length && m.role !== "user") return;
       if (norm.length && norm[norm.length - 1].role === m.role) norm[norm.length - 1].content += "\n" + m.content;
       else norm.push({ role: m.role, content: m.content });
@@ -701,6 +756,7 @@
     window.EZAI.agent({
       messages: buildHistoryMsgs(body, aiMsg),
       onText: function (t) {
+        if (aiMsg._stopped) return;
         aiMsg.text += t;
         refreshBubble(aiMsg);
       },
@@ -925,6 +981,7 @@
   }
 
   function applyEvent(msg, aiMsg) {
+    if (aiMsg && aiMsg._stopped && msg && msg.type === "chunk") return;
     if (!msg || !msg.type) {
       // some servers send bare {response:...}
       if (msg && msg.response) { aiMsg.text = msg.response; refreshBubble(aiMsg); }
@@ -978,40 +1035,21 @@
     scrollToBottom();
   }
 
-  function pushMessage(m) { state.messages.push(m); saveHistory(); return m; }
-
-  /* ---------------- 대화 기록 영속화 (localStorage · 계정별) ---------------- */
-  function histId() { return "elizax_hist_v1:" + (CURRENT.emp_id || "anon"); }
-  function saveHistory() {
-    try {
-      var out = [];
-      state.messages.slice(-40).forEach(function (m) {
-        if (m.role === "work") return; /* 진행중 카드는 저장 제외 */
-        if (m.role === "nav" && m.target) { out.push({ role: "nav", target: { s: m.target.s, p: m.target.p, label: m.target.label } }); return; }
-        if (m.role === "scn" && m.key) { out.push({ role: "scn", key: m.key }); return; }
-        if ((m.role === "user" || m.role === "ai" || m.role === "err") && m.text) {
-          out.push({ role: m.role, text: m.text, note: m.note || undefined });
-        }
-      });
-      localStorage.setItem(histId(), JSON.stringify(out));
-    } catch (e) { /* storage 불가 환경 무시 */ }
+  /* 영속화·이벤트는 EZChat 스토어가 담당 (push 시 자동 저장+통지) */
+  function pushMessage(m) {
+    if (window.EZChat) return EZChat.push(m);
+    _localMsgs.push(m);
+    return m;
   }
-  function loadHistory() {
-    try {
-      var raw = localStorage.getItem(histId());
-      if (!raw) return;
-      var arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        state.messages = arr.filter(function (m) { return m && m.role; });
-        state.messages.forEach(function (m) { m.streaming = false; });
-      }
-    } catch (e) { /* ignore */ }
+  function saveHistory() {
+    if (window.EZChat) EZChat.save();
   }
 
   /* ---------------- Reset ---------------- */
   function resetConversation() {
-    state.messages = [];
-    try { localStorage.removeItem(histId()); } catch (e) { /* ignore */ }
+    if (state.streaming) stopStreaming();
+    if (window.EZChat) EZChat.clearCurrent();
+    else _localMsgs = [];
     renderMessages();
     var url = API_BASE + "/api/chat/reset";
     try {
@@ -1057,7 +1095,25 @@
     send: function (text) {
       if (!state.open) openPanel();
       if (text) sendMessage(String(text));
-    }
+    },
+    /* --- 전체화면 허브·기능 모듈 연동 API --- */
+    sendRaw: function (text) {          /* 패널 열지 않고 전송 (허브 컴포저용) */
+      if (text) sendMessage(String(text));
+    },
+    attachSurface: function (listEl) {  /* 대화 렌더 대상을 외부 컨테이너로 전환 */
+      state.surface = listEl || null;
+      renderMessages();
+    },
+    detachSurface: function () {        /* FAB 리스트로 복귀 */
+      state.surface = null;
+      renderMessages();
+    },
+    isStreaming: function () { return state.streaming; },
+    stopStreaming: stopStreaming,
+    regenerate: regenerate,
+    refresh: renderMessages,
+    reset: resetConversation,
+    perspective: function () { return state.perspective; }
   };
 
   /* ---------------- Init ---------------- */

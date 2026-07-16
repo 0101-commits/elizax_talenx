@@ -124,6 +124,7 @@
      ============================================================ */
   var SCREENS = {
     home:    { title: "오늘 브리핑",              nav: "오늘 브리핑",         mode: null },
+    chat:    { title: "elizax 대화",             nav: "대화 이어가기",       mode: null },
     qw2:     { title: "개인맥락 목표 초안 · 정렬 검증", nav: "목표 초안+정렬",   mode: "suggest",       group: "목표관리" },
     qw7:     { title: "목표 정합성·중복 점검",      nav: "목표 정합성 점검",    mode: "suggest",       group: "목표관리" },
     qw1:     { title: "주간 체크인 팝업 · 진척 요약", nav: "주간 체크인",       mode: "auto",          group: "성과관리" },
@@ -137,7 +138,7 @@
     assets:  { title: "산출물 · 프로세스 자산",     nav: "산출물",             mode: null,            group: "자산" },
     audit:   { title: "감사 로그",                nav: "감사 로그",           mode: null,            group: "자산" }
   };
-  var NAV_ORDER = ["home", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "assets", "audit"];
+  var NAV_ORDER = ["home", "chat", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "assets", "audit"];
 
   /* ============================================================
      시나리오 메타 — 채팅 임베드/제안 칩의 단일 원장 (tx_elizax 소비)
@@ -308,6 +309,12 @@
     root.addEventListener("click", function (e) {
       var nv = e.target.closest("[data-agh-nav]");
       if (nv) { showScreen(nv.getAttribute("data-agh-nav")); return; }
+      if (e.target.closest("[data-agh-newchat]")) {
+        if (window.EZChat) EZChat.newSession();
+        showScreen("chat");
+        logAudit("새 채팅", "세션 생성", "chat.new");
+        return;
+      }
     });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && state.open) closeHub();
@@ -342,8 +349,8 @@
   }
   function renderNav() {
     var rk = role().key;
-    var html = '<div class="agh-newchat"><button class="agh-btn primary wide" data-agh-nav="home">＋ 새 채팅 / 브리핑</button></div>';
-    html += '<div class="agh-ngroup">오늘</div>' + navItem("home", "오늘 브리핑", null);
+    var html = '<div class="agh-newchat"><button class="agh-btn primary wide" data-agh-newchat>＋ 새 채팅</button></div>';
+    html += '<div class="agh-ngroup">오늘</div>' + navItem("home", "오늘 브리핑", null) + navItem("chat", "💬 대화 이어가기", null);
     html += '<div class="agh-ngroup">제안</div>';
     SCENARIOS.forEach(function (sc) {
       if (sc.roles.indexOf(rk) >= 0) html += navItem(sc.key, sc.chip, sc.mode);
@@ -379,6 +386,8 @@
   function showScreen(key) {
     if (!SCREENS[key]) key = "home";
     clearTimers();
+    /* 대화 스크린을 떠나면 렌더 서피스를 FAB로 반납 */
+    if (state.screen === "chat" && key !== "chat" && window.Elizax && Elizax.detachSurface) Elizax.detachSurface();
     state.screen = key;
     renderNav();
     var fn = RENDER[key] || RENDER.home;
@@ -417,6 +426,49 @@
     ctxPanelIf(host, [
       { tag: "챗봇 vs 에이전트", title: "이 허브가 다른 점 (9축)", body: "촉발=선제 · 산출물=편집 가능한 객체 · 과정=노드 표출 · 근거=원천 인용 · 통제권=단계·문장 단위 승인 게이트 · 동시성=Sub-agent 병렬 실행" },
       { tag: "실행 규율", title: "읽기는 자율, 확정은 게이트", body: "읽기·계획·산출은 자율, 발송·확정·삭제는 propose→approve→commit. 승인 전 side-effect 0." }
+    ], "");
+  };
+
+  /* ---------- 대화 (FAB 도킹 대화와 동일 스레드 — EZChat 공유 스토어) ---------- */
+  RENDER.chat = function (host) {
+    host = host || el.canvas;
+    host.innerHTML =
+      '<div class="agh-shead"><div><h2>elizax 대화</h2>' +
+      '<span class="agh-exp">도킹 대화창(FAB)과 같은 대화가 이어집니다 · 세션 <b data-agh-chattitle></b></span></div>' +
+      '<span class="agh-asof2">as-of · ' + esc(AS_OF) + " ▾</span></div>" +
+      '<div class="agh-chatwrap">' +
+      '<div class="ezx-list agh-chatlist" data-agh-chatlist role="log" aria-live="polite"></div>' +
+      '<div class="agh-chatcomp"><textarea rows="1" placeholder="elizax에게 메시지… (Enter 전송 · Shift+Enter 줄바꿈)" data-agh-chatta></textarea>' +
+      '<button class="agh-btn primary" data-agh-chatsend>전송</button></div></div>';
+    var titleEl = host.querySelector("[data-agh-chattitle]");
+    function syncTitle() { if (titleEl && window.EZChat) titleEl.textContent = EZChat.currentTitle(); }
+    syncTitle();
+    var list = host.querySelector("[data-agh-chatlist]");
+    if (window.Elizax && Elizax.attachSurface) Elizax.attachSurface(list);
+    var ta = host.querySelector("[data-agh-chatta]");
+    var send = host.querySelector("[data-agh-chatsend]");
+    function submit() {
+      var v = (ta.value || "").trim();
+      if (!v || (window.Elizax && Elizax.isStreaming && Elizax.isStreaming())) return;
+      ta.value = "";
+      if (window.Elizax && Elizax.sendRaw) Elizax.sendRaw(v);
+      logAudit("지시", v, "chat");
+    }
+    send.addEventListener("click", submit);
+    ta.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+    });
+    /* 스트리밍 동안 컴포저 잠금 + 세션 전환 시 제목 갱신 */
+    if (window.EZChat) {
+      var onStream = function (d) { ta.disabled = !!d.on; send.disabled = !!d.on; };
+      var onSwitch = function () { syncTitle(); };
+      EZChat.on("streaming", onStream);
+      EZChat.on("switch", onSwitch);
+      EZChat.on("messages", onSwitch);
+    }
+    ctxPanelIf(host, [
+      { tag: "연동", title: "하나의 대화, 두 개의 화면", body: "도킹 대화창과 전체화면이 <b>같은 세션</b>을 읽고 씁니다. 어디서 묻든 기록·근거·감사가 한 원장에 남습니다. " + srcChip("talenx", "EZChat 공유 스토어") },
+      { tag: "전환", title: "◱ 도킹으로 / ⛶ 전체화면으로", body: "우상단 버튼으로 언제든 형태를 바꿔도 대화가 끊기지 않습니다." }
     ], "");
   };
 
@@ -923,44 +975,12 @@
       logAudit("지시", q, "cmd");
       return;
     }
-    /* 라이브 응답 — Claude tool-use 에이전트 (proxy·direct 공용) */
-    ctxAppend('<div class="agh-live">지시 수신 · "' + esc(q) + '"</div>');
+    /* 시나리오 키워드가 아니면 공유 대화 스레드로 라우팅 —
+       FAB와 같은 세션에 기록되고, 오프라인이면 목업 영수증으로 응답 */
     logAudit("지시", q, "cmd");
-    var ctxHost = el.ctx.querySelector("[data-agh-ctxchat]");
-    var agentReady = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
-    if (!agentReady) {
-      ctxAppend('<div class="agh-live ai">AI 미연결 — 과제 키워드(체크인·목표 초안·편향·정합성·캘리·리뷰…)로 지시하거나, 도킹 대화창 ⚙에서 Claude API 키를 연결하세요.</div>');
-      return;
-    }
-    var dnode = h("div", "agh-live ai", "…");
-    if (ctxHost) ctxHost.appendChild(dnode);
-    var acc = "", navigated = false;
-    function scrollCtx() { if (ctxHost) ctxHost.scrollTop = ctxHost.scrollHeight; }
-    window.EZAI.agent({
-      messages: [{ role: "user", content: "[현재 화면: elizax 전체화면 딥워크 / 관점: " + (role().persp || "subject") + "]\n" + q }],
-      onTool: function (name) {
-        var lbl = (window.EZTools && EZTools.labelOf(name)) || name;
-        var src = (window.EZTools && EZTools.srcOf(name)) || "talenx";
-        ctxAppend('<div class="agh-live">◉ ' + esc(src) + " · " + esc(lbl) + " 실행 중…</div>");
-      },
-      onToolResult: function (name, r, summary) {
-        var lbl = (window.EZTools && EZTools.labelOf(name)) || name;
-        ctxAppend('<div class="agh-live ok">✓ ' + esc(lbl) + (summary ? " → " + esc(summary) : "") + "</div>");
-        logAudit("도구 실행", lbl + (summary ? " → " + summary : ""), name);
-        if (name === "navigate" && r && r.ok) navigated = true;
-      },
-      onText: function (t) { acc += t; dnode.textContent = acc; scrollCtx(); },
-      onDone: function () {
-        /* 마커 폴백 (navigate 도구가 기본) */
-        if (window.EZNav && window.EZNav.extractMarker) {
-          var ex = window.EZNav.extractMarker(acc);
-          if (ex.nav) { dnode.textContent = ex.clean; navigated = true; setTimeout(function () { window.EZNav.go(ex.nav.s, ex.nav.p); }, 420); }
-        }
-        if (navigated) setTimeout(closeHub, 600); /* 이동한 화면이 보이도록 허브 닫기 */
-        scrollCtx();
-      },
-      onError: function (m) { dnode.textContent = "오류 — " + m; scrollCtx(); }
-    });
+    showScreen("chat");
+    if (window.Elizax && Elizax.sendRaw) Elizax.sendRaw(q);
+    else ctxAppend('<div class="agh-live ai">elizax 모듈이 아직 로드되지 않았습니다.</div>');
   }
 
   /* ============================================================
@@ -1030,6 +1050,8 @@
     if (!state.open) return; /* 허브 미오픈 시 clearTimers로 도킹 카드를 건드리지 않음 */
     state.open = false;
     clearTimers();
+    /* 대화 서피스를 FAB로 반납 — 대화는 그대로 이어짐 */
+    if (window.Elizax && Elizax.detachSurface) Elizax.detachSurface();
     if (el.root) {
       /* FAB로 되돌아가는 morph-out */
       el.root.classList.remove("on");
