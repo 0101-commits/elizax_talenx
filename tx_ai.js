@@ -33,6 +33,8 @@
       .then(function () { if (to) clearTimeout(to); backend.probed = true; if (cb) cb(); });
   }
   probe();
+  /* 백엔드가 재시작돼도 새로고침 없이 복구되도록 15초 주기 재프로브 */
+  setInterval(function () { probe(); }, 15000);
 
   /* ---------------- key / model ---------------- */
   function getKey() { try { return localStorage.getItem(LS_KEY) || ""; } catch (e) { return ""; } }
