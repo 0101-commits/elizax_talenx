@@ -2,30 +2,39 @@
 
 talenx HR·성과관리 SaaS 사용자 앱 목업 + **성과관리/평가 AI Agent `elizax`** 통합 데모.
 
-실제 서비스(app.talenx.com) 라이브 대조로 재구축한 정적 목업입니다. `index.html` 하나로 동작하며, 선택적으로 로컬 프록시 서버(`server/`)를 띄우면 실제 Claude API 응답까지 연결됩니다.
+실제 서비스(app.talenx.com) 라이브 대조로 재구축한 정적 목업입니다. `index.html` 하나로 동작하며, 백엔드를 띄우면 실제 Claude API 응답 + 실데이터 tool-use까지 연결됩니다. `window.EZAI`가 `GET /api/health`를 프로브해 아래 모드를 자동 판정합니다.
 
-## 실행 — AI 연결 3모드 (자동 선택)
+## 실행 — AI 연결 모드 (자동 선택)
 
 | 모드 | 방법 | 되는 것 |
 |---|---|---|
-| **direct** (권장·간편) | `index.html` 열기(또는 GitHub Pages) → elizax ⚙ 설정에서 Anthropic API 키 입력 | 서버 없이 브라우저에서 실제 Claude 스트리밍 응답 + LLM 주도 화면 전환. 키는 localStorage 저장(데모 전용) |
-| proxy | `ANTHROPIC_API_KEY` 설정 후 `node server/server.js` → `http://localhost:8080` | 위와 동일 + 키가 서버에만 존재 (운영 권장) |
-| proxy (Bedrock) | Anthropic 키 없이 AWS 키만 있을 때: `$env:AWS_KEYS_CSV="...accessKeys.csv"; .\server\run.ps1` | AWS Bedrock 경유 Claude (SigV4). IAM 유저에 `bedrock:InvokeModel` 권한 + Bedrock 모델 액세스 필요. 리전 `AWS_REGION`, 모델 `ELIZAX_BEDROCK_MODEL` |
-| offline | 키·서버 둘 다 없음 | 전체 UI + 목업 영수증 응답 + 내비게이션 intent |
+| **engine** (정식·권장) | Python 엔진 `ai-pm-engine/demo-app` 기동 → `http://localhost:8080/talenx` | HCG 221명 성과 데이터 컨텍스트 + Claude tool-use 에이전트. **키는 AWS Secrets Manager에서 런타임 로드**(코드/저장소에 키 없음). `/api/chat`·`/api/messages`·`/api/health`·`/api/chat/reset` 제공 |
+| direct | `index.html` 열기(또는 GitHub Pages) → elizax ⚙ 설정에서 Anthropic API 키 입력 | 서버 없이 브라우저에서 실제 Claude 스트리밍. 키는 localStorage 저장(데모 전용) |
+| proxy (Node) | `ANTHROPIC_API_KEY` 설정 후 `node server/server.js` → `:8080` | 경량 무의존 프록시(정식 엔진 없이 빠르게). 실데이터 컨텍스트는 없음 |
+| proxy (Bedrock) | Anthropic 키 없이 AWS 키만: `$env:AWS_KEYS_CSV="...accessKeys.csv"; .\server\run.ps1` | AWS Bedrock 경유 Claude(SigV4). IAM에 `bedrock:InvokeModel` + Bedrock 모델 액세스 필요 |
+| offline | 백엔드·키 둘 다 없음 | 전체 UI + 목업 영수증 응답 + 내비게이션 intent |
 
-우선순위: 프록시(키 보유) → 브라우저 직접(로컬 키) → 오프라인 목업. `window.EZAI`가 자동 판정.
+우선순위: 프록시/엔진(키 보유) → 브라우저 직접(로컬 키) → 오프라인 목업.
+
+### 정식 백엔드 — Python 엔진 (AWS Secrets Manager 경유, 키리스)
+
+`claude_api_quickstart_v3` 가이드 방식. 하드코딩 키 없이 팀 AWS 자격증명으로 Secrets Manager의 Anthropic 키를 부팅 시 로드합니다.
 
 ```powershell
-# Windows
-$env:ANTHROPIC_API_KEY="sk-ant-..." ; .\server\run.ps1
-```
-```bash
-# macOS/Linux
-ANTHROPIC_API_KEY=sk-ant-... ./server/run.sh
+# 1회: AWS 자격증명 등록 (~/.aws/credentials) — aws configure
+# demo-app/.env: ANTHROPIC_SECRET_ID=anthropic/api-key · AWS_REGION=us-east-1
+#                LLM_MODEL_DEFAULT=claude-sonnet-5 · LLM_MODEL_HIGH_STAKES=claude-opus-4-8
+pip install -r requirements.txt
+python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 ```
 
-- `server/server.js` — zero-dependency Node(≥18) 프록시. 정적 서빙 + `POST /api/chat`(Anthropic Messages API 스트리밍 → SSE `{type:"chunk"}` 변환) + `POST /api/messages`(tool-use용 범용 Messages 패스스루 · SSE 원문 파이프) + `POST /api/chat/reset` + `GET /api/health`.
-- 모델은 `ELIZAX_MODEL` 환경변수로 변경 가능 (기본 `claude-sonnet-5`).
+- 이 엔진이 `index.html`을 same-origin(`/talenx`)으로 서빙하므로 EZAI가 `proxy` 모드로 자동 연결됩니다.
+- `POST /api/messages` = tool-use용 범용 Anthropic Messages 패스스루(원문 SSE 파이프 → 클라이언트가 text/tool_use 블록 조립). `POST /api/chat` = 직원 컨텍스트 코칭 스트리밍. `GET /api/health` → `{ok, keySet}`.
+- Bedrock 백엔드도 내장(`LLM_BACKEND=bedrock`)이나 키리스 직접 API가 기본. 모델은 `.env`로 변경.
+
+### 경량 대안 — Node 프록시
+
+- `server/server.js` — zero-dependency Node(≥18). 정적 서빙 + `/api/chat`·`/api/messages`·`/api/chat/reset`·`/api/health`. 모델 `ELIZAX_MODEL`(기본 `claude-sonnet-5`). 실데이터 엔진 없이 빠른 데모용.
 
 ## talenx 목업 구성
 
