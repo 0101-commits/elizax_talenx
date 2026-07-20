@@ -103,7 +103,7 @@
       } },
     { name: "체크인",       type: "scn", key: "qw1",    fb: "주간 체크인 브리핑 만들어줘" },
     { name: "목표",         type: "scn", key: "qw2",    fb: "이번 분기 목표 초안 잡아줘" },
-    { name: "정합성",       type: "scn", key: "qw7",    fb: "팀 목표 정합성·중복 점검해줘" },
+    { name: "정렬점검",     type: "scn", key: "qw7",    fb: "팀 목표 정렬·중복 점검해줘" },
     { name: "근거",         type: "scn", key: "qw4",    fb: "내 성과 근거 타임라인 보여줘" },
     { name: "피드백정제",   type: "scn", key: "qw6",    fb: "피드백 문장 다듬어줘" },
     { name: "코멘트",       type: "scn", key: "qw3",    fb: "평가 코멘트 초안 써줘" },
