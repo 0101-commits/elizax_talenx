@@ -495,7 +495,7 @@
       if(el){ stop(e); openEvalResultDrawer(el); return; }
       el = t.closest('.ts-join');
       if(el){ stop(e); var ts=el.closest('.ts-card'); var nm=ts?txt(ts.querySelector('.ts-title')):'세션';
-        TX.confirm('탈렌트 세션 참여', nm+'에 참여하시겠습니까?', function(){ TX.toast('세션에 참여했습니다.','ok'); }, '참여'); return; }
+        TX.confirm('인재 리뷰 참여', nm+'에 참여하시겠습니까?', function(){ TX.toast('세션에 참여했습니다.','ok'); }, '참여'); return; }
       el = t.closest('.ap-filter');
       if(el){ stop(e); TX.toast('평가 필터를 적용합니다.'); return; }
       // ap-tabs / ts-ftabs handled by existing script

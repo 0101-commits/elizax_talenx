@@ -19,7 +19,7 @@
     hr:     { key: "hr",     label: "HR",     emp_id: "EMP-0005", persp: "hr",
       scope: "전사 평가 운영·규칙 검증" },
     exec:   { key: "exec",   label: "경영진", emp_id: "EMP-0001", persp: "executive",
-      scope: "전사 성과·정합성 조망" }
+      scope: "전사 성과·목표 정렬 조망" }
   };
   var ORDER = ["member", "leader", "hr", "exec"];
   var KEY = "tx_role";
@@ -164,17 +164,17 @@
       wfNote = "전사 룰 엔진 재산출. rule-exec.hr12";
       audit = "탐색 범위 · 권한 내 전사";
     } else if (role === "exec") {
-      title = "전사 성과 조망 · 정합성";
-      verdict = "전사 OKR 정합성과 등급 분포 리스크를 요약합니다. 전사 매출 목표 대비 진척과 <b>미정렬 목표</b>를 짚었습니다.";
+      title = "전사 성과 조망 · 목표 정렬";
+      verdict = "전사 OKR 정렬 상태와 등급 분포 리스크를 요약합니다. 전사 매출 목표 대비 진척과 <b>미정렬 목표</b>를 짚었습니다.";
       metrics = [["전사 목표 진척", "61%"], ["미정렬 목표", "3건"], ["분포 리스크", "중"]];
       steps = [
-        ["정합성 조회", "전사 OKR 트리 정렬 상태 집계 " + sb("talenx", "talenx") + ' <span class="txr-rid">okr.tree.FY2026</span>'],
+        ["정렬 현황 조회", "전사 OKR 트리 정렬 상태 집계 " + sb("talenx", "talenx") + ' <span class="txr-rid">okr.tree.FY2026</span>'],
         ["실적 대조", "전사 매출 달성률 61% · 목표 대비 진척 " + sb("erp", "ERP")],
         ["분포 점검", "본부 간 등급 분포 편차 → 캘리브레이션 우선순위 제안"]
       ];
-      wfTitle = "미정렬 목표 정렬 시 정합성 지표 재계산";
-      wfRows = [["정합성 82% → ", "94%", "pos"], ["미정렬 3 → ", "0", "pos"], ["전사 롤업 반영 ", "즉시", "pos"]];
-      wfNote = "전사 정합성 재산출. rule-exec.exe3";
+      wfTitle = "미정렬 목표 정렬 시 정렬률 지표 재계산";
+      wfRows = [["정렬률 82% → ", "94%", "pos"], ["미정렬 3 → ", "0", "pos"], ["전사 롤업 반영 ", "즉시", "pos"]];
+      wfNote = "전사 정렬률 재산출. rule-exec.exe3";
       audit = "탐색 범위 · 전사";
     } else {
       title = "내 목표 · 평가 근거";
@@ -280,7 +280,7 @@
       var t = e.target;
       var asof = t.closest("[data-asof]");
       if (asof) {
-        var snaps = ["2026 상반기 · 6/30 마감 실적", "2026 상반기 · 5/31 시점", "2025 하반기 · 확정 스냅샷"];
+        var snaps = ["2026 상반기 · 6/30 마감 실적", "2026 상반기 · 5/31 시점", "2025 하반기 · 확정 기준"];
         var cur = asof.childNodes[asof.childNodes.length - 1].nodeValue.replace(" ▾", "").trim();
         var i = snaps.indexOf(cur); i = (i + 1) % snaps.length;
         asof.childNodes[asof.childNodes.length - 1].nodeValue = " " + snaps[i] + " ▾";

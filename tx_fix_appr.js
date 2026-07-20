@@ -197,7 +197,7 @@
       tsCard({ title: '2025 승급 심사', date: '2025.03.08 ~ 2026.03.08', subjects: subj25, participants: part25, host: CU });
     container.innerHTML =
       '<div id="txf-appr1">' +
-      '<div class="ts-headcard"><h2>탈렌트세션</h2></div>' +
+      '<div class="ts-headcard"><h2>인재 리뷰</h2></div>' +
       '<div class="ts-ftabs"><button class="on" data-txf="ftab" data-ftab="0">진행중</button>' +
       '<button data-txf="ftab" data-ftab="1">마감</button></div>' +
       '<div data-fpane="0"><div class="ts-grid">' + cards + '</div></div>' +
@@ -398,13 +398,13 @@
       else if (act === 'join') {
         if (el.classList.contains('joined')) { TX.toast && TX.toast('이미 참여 중인 세션입니다.'); }
         else if (TX.confirm) {
-          TX.confirm('탈렌트 세션 참여', '이 탈렌트 세션에 참여하시겠습니까?<br>참여 후 심사 대상자 정보와 평가 자료가 공개됩니다.', function () {
+          TX.confirm('인재 리뷰 참여', '이 인재 리뷰 세션에 참여하시겠습니까?<br>참여 후 심사 대상자 정보와 평가 자료가 공개됩니다.', function () {
             el.classList.add('joined');
             el.textContent = '참여 중';
-            TX.toast && TX.toast('탈렌트 세션에 참여했습니다.', 'ok');
+            TX.toast && TX.toast('인재 리뷰에 참여했습니다.', 'ok');
           }, '참여');
         }
-        else { el.classList.add('joined'); el.textContent = '참여 중'; TX.toast && TX.toast('탈렌트 세션에 참여했습니다.', 'ok'); }
+        else { el.classList.add('joined'); el.textContent = '참여 중'; TX.toast && TX.toast('인재 리뷰에 참여했습니다.', 'ok'); }
       }
       else if (act === 'more') {
         var pane = root.querySelector('[data-pane="0"]');

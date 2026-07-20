@@ -38,7 +38,7 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 
 ## talenx 목업 구성
 
-- **홈 대시보드** + GNB 8개 메뉴: 인사관리 · 근무관리 · 업무관리 · 성과관리(목표/피드백/1:1 미팅/리뷰) · 360 진단 · 평가관리(매트릭스/탈렌트 세션) · 급여관리 · 신청/승인
+- **홈 대시보드** + GNB 8개 메뉴: 인사관리 · 근무관리 · 업무관리 · 성과관리(목표/피드백/1:1 미팅/리뷰) · 360 진단 · 평가관리(매트릭스/인재 리뷰) · 급여관리 · 신청/승인
 - 모든 버튼/탭/케밥/필터/행이 실제 동작 (모달·드로어·컨텍스트메뉴·토스트, 죽은 클릭 0)
 - 공통 헤더: 통합 검색(⌘/Ctrl+K), 알림 패널, 프로필 드로어
 - 전역 헬퍼 `window.TX` (modal/drawer/toast/confirm/menu)
@@ -81,7 +81,7 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 
 라이브 연결 시 elizax는 단순 챗이 아니라 **Claude tool-use 루프**로 동작합니다.
 
-- 도구 8종: `search_employee` · `get_employee_profile` · `get_objectives` · `get_checkins` · `get_team_status` · `get_org_overview` · `get_screen_context` · `navigate` — 전부 `TALENX_DATA`(직원 221·목표 40·체크인 360·평가 221) 실조회, 읽기 전용.
+- 도구 9종: `search_employee` · `get_employee_profile` · `get_objectives` · `get_checkins` · `get_team_status` · `get_org_overview` · `get_job_profile` · `get_screen_context` · `navigate` — 전부 `TALENX_DATA`(직원 221·직무 프로파일 98·목표 40·체크인 360·평가 221·전략 테마 5) 실조회, 읽기 전용.
 - Claude가 tool_use로 멈추면 브라우저가 로컬 실행 → tool_result 반환 → 최대 6턴 반복. 프록시 모드는 `POST /api/messages`(범용 Messages 패스스루), direct 모드는 브라우저→Anthropic 직행 — 동일 루프.
 - 대화창 "확인 내역" 카드에 **실제 도구 호출이 실시간으로** 찍힘 (오프라인에서만 연출 애니메이션). 화면 전환도 `navigate` 도구로 직접 수행(@@NAV 마커는 폴백).
 - 연결 상태 상시 표기: 패널 서브타이틀 · Hub 글로벌바 (● Claude 연결됨 / ◐ 키 미설정 / ○ 오프라인).
@@ -130,9 +130,21 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 | **FAB 글로우 오브** (위 참조) | Apple Intelligence Siri glow | FAB |
 | **컨텍스트 어웨어 FAB 칩** (위 참조) | M365 Copilot DAB | FAB 옆 |
 
-### W1 참조 조망 뷰
+### 9차: 평가자·대상자 관점 고도화 (2026-07 Mockup 피드백 반영)
 
-도킹 상단 "조망" 바 — **⌗ 에이전트 구조**(W1 5계층 오케스트레이션)와 **◈ E2E 프로세스 맵**(목표수립→중간점검→평가→피드백, 승인 게이트·Pillar 표기). 관점(페르소나)에 따라 참여 계층/단계 자동 강조, 각 단계에서 elizax 작업으로 드릴인.
+판단 기준 하나 — **"목표를 쓰는 구성원, 코멘트를 쓰는 팀장, 등급을 통보받는 당사자의 눈."**
+
+**① 용어 정제** — 시스템 설계 용어를 HR 실무 용어로 전면 교체 ([GLOSSARY.md](GLOSSARY.md)): 전체화면 딥워크→워크스페이스, 맥락 원장→성과 히스토리, 객체화/정초/자산화/게이팅→초안 생성됨/근거 확인 완료/기록 보관됨/승인 대기, auto/suggest/human_approve 칩→자동 처리/제안만/승인 필요, 정합성→목표 정렬, as-of·스냅샷→기준 시점, 탈렌트 세션→인재 리뷰. S1~S8은 이 문서에만 남고 UI에는 노출되지 않는다. 검수 기준: "HR 담당자가 옆자리 동료에게 설명 없이 쓸 수 있는 말인가."
+
+**② 성과 프로세스 맵** (`tx_journey.js`, 성과관리·평가관리 헤더 "◈ 프로세스 맵") — "내 등급은 어떤 과정을 거쳐, 무엇을 근거로 정해졌는가"를 한 장으로. 목표수립→실행·중간점검→평가→피드백/리뷰 흐름 위에 결정 노드 11종(승인 완료/승인 대기/예정 + AI 초안·사람 승인 배지), 클릭 드릴다운(시점·결정자·인용 근거 실데이터 recordId), 앞 단계 확정 기록→다음 단계 인용 근거 연결선(SVG), 성과 히스토리 단계별 카운터. 1:1 요약 확정(localStorage)·결정 게이트(sessionStorage) 라이브 반영. AI 관여 고지·이의제기 대응의 실체가 되는 화면.
+
+**③ 직무·HR 데이터 연결** (`tx_jobcontext.js` + `enrich_talenx_data.py`) — "직무 내용 없이 성과목표를 도출하는 것은 기초가 없는 것":
+- 데이터 보강: 직무 프로파일 63→**98종**, 직원 **221명 전원 직무 연결**, 전략 테마 5종 신설(ST-01~05), 목표 40건 전략 연결, KR 146건에 직무 과업·역량(D1~D5)·**난이도 근거**(무엇과 비교해 어려운지) 부여. `meta.linkage`에 연결률 집계.
+- 목표 생성 화면 옆 **"내 직무 기준" 패널**(미션·주요 과업·기대 스킬 + 지난 사이클 이어받기), ✦ AI 추천 KR마다 **"이 KR의 근거 — 직무 과업 ○○ + 상위목표 ○○"** 부착(라이브 모드는 `get_job_profile` 도구로 실조회), KR 폼에 난이도+난이도 근거 입력.
+- **연결 지도**("🧭 연결 지도") — 사업전략→조직 목표→내 목표·KR→직무 R&R→스킬·역량→평가 6열 데이터 지도. ②가 '시간·단계'의 지도라면 이것은 '데이터'의 지도.
+- HR 평가관리에 **연결 품질 지표** 카드(직무 연결률·전략 연결률·KR 직무 근거·난이도 근거·측정 가능 비율).
+
+**④ 운영 관찰 반영** — 목표 점검을 **문장 품질**(잘 쓴 목표인가: 중복·미연계·측정불가)과 **운영 신호**(잘 굴러가는 목표인가: 체크인 공백·진척 정체, 실데이터 계산) 2축으로 분리(QW7); **측정불가 표현 린트**("업계 Top 수준", "체계 구축 완료" — 목표명·KR 지표 input까지 검사); QW2 목표 초안에 **"이어받은 출발점"**(작년 평가 FY2025 + 피드백 요지 + 올해 직무 기준 인용 — 매년 백지에서 시작하지 않는다); **기록 보관·열람 규칙**(`tx_policy.js` — 보존 기간·열람 권한 매트릭스·상향 피드백 익명화 원칙 + 데모 한계 고지: 브라우저 80건 저장은 실서비스 부적합, 서버 보존 저장소가 다음 과제).
 
 ## 파일 구조
 
@@ -148,7 +160,12 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 | `tx_ai.js` | 통합 AI 클라이언트 — proxy/direct/offline 자동 전환 + tool-use 에이전트 루프 `EZAI.agent` + 키 설정 UI (`window.EZAI`) |
 | `tx_ai_tools.js` | 에이전트 도구 8종 — TALENX_DATA 실조회 + 화면 전환 (`window.EZTools`) |
 | `tx_nav.js` | 자연어 내비게이션 intent 라우터 (`window.EZNav`) |
-| `tx_upgrade.js` | 2025-26 고도화 5종 (글로우 오브·컨텍스트 칩·린트·AI 고지·1:1 브리핑, `window.EZUpgrade`) |
+| `tx_upgrade.js` | 2025-26 고도화 5종 (글로우 오브·컨텍스트 칩·품질 린트 리뷰/목표 2스코프·AI 고지·1:1 브리핑, `window.EZUpgrade`) |
+| `tx_journey.js` | 성과 프로세스 맵 — 사이클의 결정·근거를 한 장으로 (`window.EZJourney`) |
+| `tx_jobcontext.js` | 직무 프로파일 패널·연결 지도·연결 품질 지표 (`window.EZJob`) |
+| `tx_policy.js` | 기록 보관·열람 규칙 — 보존·민감정보 매트릭스 (`window.EZPolicy`) |
+| `enrich_talenx_data.py` | 목표–직무–전략 연결 데이터 보강 스크립트 (멱등, `enrich_assets/`) |
+| `GLOSSARY.md` | UI 카피 용어집 — 내부 설계 용어 ↔ 확정 사용자 용어 |
 | `server/server.js` | Claude API 프록시 + 정적 서버 (zero-dep Node) |
 
 - 순수 vanilla JS/CSS, 외부 의존성 없음. CSS 스코프: `.ezx-*`(도킹) · `.agh-*`(Hub) · `.ezup-*`(고도화) — 기존 `.tx-*`/`#s-*` 미간섭. 다크 테마 대응.

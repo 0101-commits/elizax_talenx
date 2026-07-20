@@ -45,7 +45,7 @@
 (function () {
   "use strict";
 
-  var AS_OF = "2026 상반기 · 7/16 06:00 스냅샷";
+  var AS_OF = "2026 상반기 · 7/16 06:00 기준";
   var REC_ID = "rec.0716";
   var LS_PREFIX = "elizax_1on1_v1:";
 
@@ -217,9 +217,9 @@
     var confirmed = !!loadState().confirmedAt;
     return '<div class="ez1o-bar" data-ez1o-bar>'
       + '<button class="ez1o-btn" data-ez1o="start">&#9210; elizax 녹음·요약</button>'
-      + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; suggest</span>'
+      + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
       + '<span class="ez1o-note">녹음→전사→요약은 자동, 기록 확정은 사람</span>'
-      + (confirmed ? '<span class="ez1o-donetag">&#10003; 7/16 요약 확정됨 · 원장 축적</span>' : '')
+      + (confirmed ? '<span class="ez1o-donetag">&#10003; 7/16 요약 확정됨 · 히스토리 기록</span>' : '')
       + '<button class="ez1o-linkbtn" data-ez1o="map">&#128506; 전주기 커버리지 맵</button>'
       + '</div>'
       + '<div class="ez1o-panel" data-ez1o-panel></div>';
@@ -323,8 +323,8 @@
     return '<div class="ez1o-sum" data-ez1o-sum>'
       + '<div class="ez1o-sumhead">'
       + '<span class="tt">1:1 미팅 요약 · 7/16</span>'
-      + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; suggest</span>'
-      + '<span class="ez1o-asof">as-of ' + esc(AS_OF) + '</span>'
+      + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
+      + '<span class="ez1o-asof">기준 시점 ' + esc(AS_OF) + '</span>'
       + '</div>'
       + '<div class="ez1o-body">'
       + '<div class="ez1o-h4">논의 주제 3</div>'
@@ -392,18 +392,18 @@
       if (bar && !bar.querySelector(".ez1o-donetag")) {
         var tag = document.createElement("span");
         tag.className = "ez1o-donetag";
-        tag.innerHTML = "&#10003; 7/16 요약 확정됨 · 원장 축적";
+        tag.innerHTML = "&#10003; 7/16 요약 확정됨 · 히스토리 기록";
         var link = bar.querySelector(".ez1o-linkbtn");
         bar.insertBefore(tag, link || null);
       }
-      toast("기록 확정 — 맥락 원장에 축적되었습니다 (감사 로그 기록).", "ok");
+      toast("기록 확정 — 성과 히스토리에 기록되었습니다 (감사 로그 기록).", "ok");
     } else { /* drop */
       card.classList.add("ez1o-collapsed");
       var note = document.createElement("div");
       note.className = "ez1o-drop";
-      note.textContent = "폐기됨 — 원장에 아무것도 축적되지 않았습니다. 확정되지 않은 요약은 맥락에 섞이지 않습니다(맥락 오염 방지).";
+      note.textContent = "폐기됨 — 성과 히스토리에 아무것도 남지 않았습니다. 확정되지 않은 요약은 기록에 섞이지 않습니다.";
       card.appendChild(note);
-      toast("요약 폐기 — 맥락 원장에는 축적되지 않았습니다.", "");
+      toast("요약 폐기 — 성과 히스토리에는 기록되지 않았습니다.", "");
     }
     var startBtn = document.querySelector('[data-ez1o="start"]');
     if (startBtn) startBtn.disabled = false;
@@ -415,7 +415,7 @@
   var MAP = [
     { col: "목표수립", items: [
       { name: "개인맥락 목표 초안 + 정렬 검증", st: "live", f: 2, c: 2 },
-      { name: "목표 정합성·중복 점검", st: "live", f: 1, c: 2 },
+      { name: "목표 정렬·중복 점검", st: "live", f: 1, c: 2 },
       { name: "목표 리밸런싱 제안", st: "cand", f: 1, c: 3 }
     ]},
     { col: "실행·중간점검", items: [
@@ -463,7 +463,7 @@
       '<div class="ez1o-map">'
       + '<div class="ez1o-maphead">'
       + '<span class="tt">성과관리 전 주기 × elizax 기능 커버리지</span>'
-      + '<span class="ez1o-asof">as-of ' + esc(AS_OF) + '</span>'
+      + '<span class="ez1o-asof">기준 시점 ' + esc(AS_OF) + '</span>'
       + '<button class="ez1o-mapx" data-ez1o="mapclose" title="닫기">&#10005;</button>'
       + '<span class="principle">선정 원칙 — 초기엔 <b>맥락 기여도 우선</b>: 축적이 임계치를 넘으면 <b>빈도 우선</b>으로 전환. '
       + '이번 신규 1순위 = 1on1 (빈도 ★★★ · 맥락기여 ★★★, 유일한 미지원 공백)</span>'

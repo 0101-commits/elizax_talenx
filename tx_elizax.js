@@ -194,7 +194,7 @@
     var sub = h("div", "ezx-sub", { text: "AI 성과관리 코치" });
     titles.appendChild(sub);
     el.sub = sub;
-    var exbtn = h("button", "ezx-x ezx-expand", { "aria-label": "전체화면으로 전환", title: "전체화면 딥워크로 전환", text: "⛶" });
+    var exbtn = h("button", "ezx-x ezx-expand", { "aria-label": "전체화면으로 전환", title: "워크스페이스로 전환", text: "⛶" });
     exbtn.addEventListener("click", function () {
       /* 전체화면 전환 시 같은 대화가 이어지도록 대화 스크린으로 진입 */
       if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub("chat"); }
@@ -459,7 +459,7 @@
     subject: [["talenx", "내 목표·KR 현황 조회"], ["ERP", "실적·체크인 기록 대조"], ["규정", "평가규정 해당 조항 확인"], ["맥락", "지난 대화·1:1 노트 로드"]],
     manager: [["talenx", "팀 목표·등급 초안 조회"], ["ERP", "팀 실적 대조"], ["규정", "강제배분 상한 확인"], ["맥락", "1:1·피어리뷰 로드"]],
     hr: [["talenx", "전사 등급 분포 스캔"], ["규정", "비율·가중치 규칙 검증"], ["ERP", "실적 대비 상승폭 대조"], ["맥락", "운영 이력 로드"]],
-    executive: [["talenx", "전사 목표 정합성 조회"], ["통계", "등급 분포 리스크 산출"], ["ERP", "사업 실적 대조"], ["맥락", "이전 브리핑 로드"]]
+    executive: [["talenx", "전사 목표 정렬 현황 조회"], ["통계", "등급 분포 리스크 산출"], ["ERP", "사업 실적 대조"], ["맥락", "이전 브리핑 로드"]]
   };
   function makeWorkMsg(p) {
     var steps = (WORK_STEPS[p] || WORK_STEPS.subject).map(function (s) {
@@ -892,13 +892,13 @@
     } else if (p === "executive") {
       md =
         "**기준 시점** · " + asof + "\n\n" +
-        "전사 성과 조망입니다. 목표 정합성과 등급 분포 리스크를 요약합니다.\n\n" +
+        "전사 성과 조망입니다. 목표 정렬 상태와 등급 분포 리스크를 요약합니다.\n\n" +
         "**계산·근거 트레이스**\n" +
         "- `talenx` 전사 OKR 트리 정렬 상태\n" +
         "- `ERP` 전사 매출 달성률 대비 진척\n" +
         "- `통계·분포` 본부 간 등급 분포 편차\n\n" +
         "**감사** · 감사 로그 기록됨 · 탐색 범위: 전사\n\n" +
-        "**What-if** · 목표 미연결 항목 정렬 시 전사 정합성 지표 재계산.";
+        "**What-if** · 목표 미연결 항목 정렬 시 전사 정렬률 지표 재계산.";
     } else {
       md =
         "**기준 시점** · " + asof + "\n\n" +

@@ -90,6 +90,15 @@
     css.id = 'txf-perf-style';
     css.textContent = [
       '#s-perf .txf-note{font-size:12px;color:var(--ink-3);margin-left:8px}',
+      '#s-perf .txf-krwhy{font-size:11.5px;color:var(--ink-2);background:rgba(31,122,240,.05);border:1px solid rgba(31,122,240,.18);border-radius:7px;padding:6px 9px;margin-top:7px;line-height:1.55}',
+      '#s-perf .txf-krwhy b{color:var(--blue,#1F7AF0)}',
+      '#s-perf .txf-diffrow{display:flex;gap:8px;align-items:center;margin-top:4px}',
+      '#s-perf .txf-diffrow select{width:88px}',
+      '#s-perf .txf-diffwhy{font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.5}',
+      '#s-perf .txf-linkrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-2);padding:6px 0;border-bottom:1px solid var(--line-2,#F1F2F5)}',
+      '#s-perf .txf-linkrow:last-child{border-bottom:none}',
+      '#s-perf .txf-linkchip{display:inline-block;font-size:11px;font-weight:700;color:#356CB5;background:rgba(31,122,240,.08);border-radius:5px;padding:1px 7px}',
+      '#s-perf .txf-linkchip.thm{color:#6D28D9;background:rgba(109,40,217,.08)}',
       '#s-perf .txf-note.warn{color:var(--red);font-weight:700}',
       '#s-perf .txf-sumtag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--green);background:#E4F5EC;border-radius:6px;padding:2px 9px}',
       '#s-perf .txf-sumtag.bad{color:var(--red);background:var(--red-soft)}',
@@ -736,6 +745,15 @@
           }).join('') + '</div>'
         + '<div class="txf-sub">핵심 성과 가중치 <span style="color:var(--red)">*</span></div>'
         + '<input class="txf-inp txf-krw" type="number" min="0" max="100" value="' + (data.weight != null ? data.weight : 100) + '">'
+        + '<div class="txf-sub">난이도 · 난이도 근거</div>'
+        + '<div class="txf-diffrow"><select class="txf-inp txf-krdiff">'
+        + ['S', 'A', 'B'].map(function (d) {
+            return '<option value="' + d + '"' + ((data.diff || 'A') === d ? ' selected' : '') + '>' + d + '</option>';
+          }).join('')
+        + '</select>'
+        + '<input class="txf-inp txf-krdiffwhy" placeholder="난이도 근거 — 예: 전년 실적 대비 +30% 상향" value="' + esc(data.diffwhy || '') + '"></div>'
+        + '<div class="txf-diffwhy">ⓘ 무엇과 비교해 어려운지(작년 실적·동료 수준) 남겨야 평가 시점의 난이도 반영이 가능합니다.</div>'
+        + (data.why ? '<div class="txf-krwhy">✦ 이 KR의 근거 — ' + data.why + '</div>' : '')
         + '</div>';
     }
     function renumberKR() {
@@ -778,6 +796,7 @@
         + '<label class="txf-ck" style="margin-bottom:8px;color:var(--ink-3)"><input type="checkbox" checked disabled> 목표 가중치를 설정합니다.</label>'
         + '<input class="txf-inp" type="number" placeholder="목표 가중치를 입력합니다." value="100"></div>'
         + '</div>'
+        + (window.EZJob && EZJob.panelHTML ? EZJob.panelHTML(cuEmp) : '')
         + '<div class="txf-step"><h3>목표 설정</h3>'
         + '<div class="s done"><span class="ic">✓</span><span class="lbl">상위 목표 연계</span></div>'
         + '<div class="s done"><span class="ic">✓</span><span class="lbl">목표명</span><span class="rq">*</span></div>'
@@ -900,6 +919,29 @@
       });
     }
 
+    /* 목표–직무–전략 연결 근거 — "직무 내용 없이 도출된 목표는 기초가 없다" */
+    function goalLinksHTML(o, ks) {
+      var themes = D.strategyThemes || [];
+      var th = null;
+      themes.forEach(function (t) { if (t.theme_id === o.strategy_theme_id) th = t; });
+      var jp = o.job_ref && (D.jobProfiles || {})[o.job_ref.jobProfileId];
+      var compName = {};
+      (D.competencies || []).forEach(function (c) { compName[c.dimension_id] = c.name; });
+      if (!th && !jp && !ks.some(function (k) { return k.job_task_ref; })) return '';
+      var head = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+        + (th ? '<span class="txf-linkchip thm">전략 · ' + esc(th.name) + '</span>' : '')
+        + (jp ? '<span class="txf-linkchip">직무 · ' + esc(jp.title) + (o.job_ref.task_area ? ' › ' + esc(o.job_ref.task_area) : '') + '</span>' : '')
+        + '</div>';
+      var rows = ks.filter(function (k) { return k.job_task_ref || k.competency_id; }).map(function (k) {
+        var r = k.job_task_ref || {};
+        return '<div class="txf-linkrow"><b style="min-width:0;flex:1">' + esc(k.name) + '</b>'
+          + (r.task_area ? '<span class="txf-linkchip">직무 과업 · ' + esc(r.task_area) + '</span>' : '')
+          + (k.competency_id ? '<span class="txf-linkchip" style="color:#166534;background:rgba(47,163,107,.1)">역량 · ' + esc(compName[k.competency_id] || k.competency_id) + '</span>' : '')
+          + '</div>';
+      }).join('');
+      return '<div class="txf-fcard"><h3>연결 근거 — 이 목표가 서 있는 자리</h3>' + head + rows
+        + '<div style="font-size:11.5px;color:var(--ink-3);margin-top:8px">ⓘ 전략 테마 · 직무 과업 · 역량과의 연결은 평가 단계에서 "왜 이 목표였는가"의 근거가 됩니다. <span data-ezjc="map" style="color:var(--blue,#1F7AF0);font-weight:700;cursor:pointer">🧭 연결 지도에서 전체 보기</span></div></div>';
+    }
     function goalDetailHTML(o) {
       var owner = empById[o.owner_emp_id] || {};
       var org = orgById[owner.org_id || o.org_id] || {};
@@ -919,7 +961,10 @@
           + '<td>' + esc(cur) + deltaChip + '</td>'
           + '<td>' + wnum(k) + '%</td>'
           + '<td style="white-space:nowrap">' + bar(kp, 110) + ' <b>' + pct(kp) + '</b></td>'
-          + '<td>' + esc(k.difficulty || '—') + '</td></tr>';
+          + '<td' + (k.difficulty_basis ? ' title="' + esc(k.difficulty_basis.note || '') + '"' : '') + '>'
+          + '<b>' + esc(k.difficulty || '—') + '</b>'
+          + (k.difficulty_basis ? '<div style="font-size:10.5px;color:var(--ink-3);line-height:1.4;margin-top:2px;max-width:150px">' + esc(k.difficulty_basis.label || '') + '</div>' : '')
+          + '</td></tr>';
       }).join('') : '<tr><td colspan="6" style="color:var(--ink-3)">등록된 핵심 성과가 없습니다.</td></tr>';
       var tl = goalTimeline(o).map(function (c) {
         return '<div class="ti"><span class="dt">' + esc(c.date) + '</span>'
@@ -947,7 +992,7 @@
       var aiCard = (!pend && isOwner)
         ? '<div class="txf-fcard" style="border:1px solid rgba(31,122,240,.3);background:rgba(31,122,240,.03)">'
           + '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'
-          + '<span style="font-size:10.5px;font-weight:800;color:#356CB5;background:rgba(31,122,240,.1);border-radius:4px;padding:2px 7px;font-family:ui-monospace,monospace">● suggest</span>'
+          + '<span style="font-size:10.5px;font-weight:800;color:#356CB5;background:rgba(31,122,240,.1);border-radius:4px;padding:2px 7px">● 제안만</span>'
           + '<b style="font-size:13.5px">✦ elizax가 진척 신호를 감지했습니다</b></div>'
           + '<p style="font-size:12.5px;color:var(--ink-2);line-height:1.6;margin:7px 0 9px">주간 업무보드 완료 3건 · 6/30 1:1 합의사항 이행 확인 — 마지막 체크인 이후 12일이 지났습니다. 감지한 신호로 체크인 초안을 만들어 드릴까요? <span style="color:var(--ink-4)">근거: 업무보드 <b>tsk.wb-0715</b> · 1:1 노트 <b>memo.0630</b> · 감사 기록됨</span></p>'
           + '<div style="display:flex;gap:7px"><button class="btn-blue" data-txf="gd-aick">체크인 초안 열기</button>'
@@ -967,6 +1012,7 @@
         + aiCard
         + '<div class="txf-fcard"><h3>핵심 성과</h3><table class="txf-krt"><thead><tr>'
         + '<th>KR명</th><th>목표값</th><th>현재값</th><th>가중치</th><th>진행률</th><th>난이도</th></tr></thead><tbody>' + krRows + '</tbody></table></div>'
+        + goalLinksHTML(o, ks)
         + '<div class="txf-fcard"><h3>체크인 타임라인</h3><div class="txf-tl">' + tl + '</div></div>'
         + '<div class="txf-fcard"><h3>코멘트 · 활동</h3>' + cmHTML + '</div>'
         + '<div style="display:flex;justify-content:flex-end;margin:4px 0 20px"><button class="btn-blue" data-txf="gd-close">닫기</button></div>'
@@ -1174,31 +1220,48 @@
         if (k === 'ai') {
           var list2 = newOv && newOv.querySelector('[data-txf="kr-list"]');
           if (list2) {
+            /* 근거 재료 — 내 직무 프로파일 과업 + 선택된 상위 목표 (근거 없는 추천 금지 원칙) */
+            var jp = (window.EZJob && EZJob.profileOf) ? EZJob.profileOf(cuEmp)
+                     : ((D.jobProfiles || {})[cuEmp.jobProfileId] || null);
+            var areas = jp ? Object.keys(jp.tasks || {}) : [];
+            var parentSel = newOv.querySelector('.txf-fcard select.txf-inp');
+            var parentTitle = (parentSel && parentSel.value && parentSel.options[parentSel.selectedIndex])
+              ? parentSel.options[parentSel.selectedIndex].text
+              : ((objs.filter(function (o) { return o.owner_emp_id === cuEmp.manager_id; })[0] || objs[0] || {}).title || '상위 조직 목표');
+            var whyOf = function (i) {
+              var a = areas.length ? areas[i % areas.length] : (cuEmp.jobTitle || '내 직무');
+              return '직무 과업 <b>「' + esc(a) + '」</b> + 상위목표 <b>「' + esc(parentTitle) + '」</b>';
+            };
             var canned = [
-              { name: '신규 기능 기획서 사용자 검증 통과율 90% 달성', mode: 0, weight: 40 },
-              { name: '기획 산출물 평균 리드타임 5일 이내 단축', mode: 1, weight: 30 },
-              { name: '분기별 사용자 인터뷰 12회 실시', mode: 3, weight: 30 }
+              { name: '신규 기능 기획서 사용자 검증 통과율 90% 달성', mode: 0, weight: 40, diff: 'A', diffwhy: '전년 통과율 실적 대비 +15%p 상향', why: whyOf(0) },
+              { name: '기획 산출물 평균 리드타임 5일 이내 단축', mode: 1, weight: 30, diff: 'A', diffwhy: '전년 평균 6.5일 대비 단축', why: whyOf(1) },
+              { name: '분기별 사용자 인터뷰 12회 실시', mode: 3, weight: 30, diff: 'B', diffwhy: '전년 수준 유지 — 안정 운영', why: whyOf(2) }
             ];
             var insertKRs = function (items, live) {
               items.forEach(function (s) { list2.insertAdjacentHTML('beforeend', krRowHTML(s)); });
               renumberKR();
-              TX.toast && TX.toast(live ? 'elizax가 직무·목표 실데이터 기반으로 KR 3건을 추천했습니다.'
-                                        : 'AI가 핵심 성과 3건을 추천했습니다.', 'ok');
+              TX.toast && TX.toast(live ? 'elizax가 직무 프로파일·상위목표를 근거로 KR 3건을 추천했습니다.'
+                                        : 'AI가 직무 과업·상위목표를 근거로 핵심 성과 3건을 추천했습니다.', 'ok');
             };
             /* Claude 연결 시: 직무·기존 목표 실데이터 기반 실제 추천 */
             var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
             if (live) {
               TX.toast && TX.toast('elizax가 실데이터를 조회해 추천 중…');
               window.EZAI.agent({
-                maxTurns: 3, maxTokens: 512,
+                maxTurns: 3, maxTokens: 640,
                 messages: [{ role: 'user', content:
-                  '현재 사용자의 직무·기존 목표를 도구로 조회한 뒤, 새 목표에 넣을 핵심성과(KR) 3건을 추천해줘. ' +
-                  '반드시 아래 형식으로만 답해 — 각 줄 "KR명 | 가중치%" 형태 3줄, 그 외 텍스트 금지. 가중치 합 100.' }],
+                  '현재 사용자의 직무 프로파일(get_job_profile)과 기존 목표를 도구로 조회한 뒤, 새 목표에 넣을 핵심성과(KR) 3건을 추천해줘. ' +
+                  '반드시 아래 형식으로만 답해 — 각 줄 "KR명 | 가중치% | 근거" 형태 3줄, 그 외 텍스트 금지. 가중치 합 100. ' +
+                  '근거는 "직무 과업 ○○ · 상위목표 ○○" 형식으로 실제 과업명과 목표명을 인용해.' }],
                 onDone: function (text) {
                   var items = [];
                   String(text || '').split(/\r?\n/).forEach(function (ln) {
-                    var m2 = ln.match(/^\s*(?:\d+[.)]\s*)?(.+?)\s*\|\s*(\d{1,3})\s*%?\s*$/);
-                    if (m2 && items.length < 3) items.push({ name: m2[1].trim(), mode: 0, weight: Number(m2[2]) });
+                    var m2 = ln.match(/^\s*(?:\d+[.)]\s*)?(.+?)\s*\|\s*(\d{1,3})\s*%?\s*(?:\|\s*(.+?)\s*)?$/);
+                    if (m2 && items.length < 3) items.push({
+                      name: m2[1].trim(), mode: 0, weight: Number(m2[2]),
+                      diff: 'A', diffwhy: '전년 실적 대비 상향',
+                      why: m2[3] ? esc(m2[3].trim()) : whyOf(items.length)
+                    });
                   });
                   insertKRs(items.length === 3 ? items : canned, items.length === 3);
                 },
