@@ -128,6 +128,22 @@
       };
     },
 
+    get_job_profile: function (input) {
+      var e = findEmp(input.emp_id || input.name) || CU();
+      var jp = (D().jobProfiles || {})[e.jobProfileId];
+      if (!jp) return { error: "직무 프로파일 미연결: " + (e.name || e.emp_id) };
+      var areas = Object.keys(jp.tasks || {}).map(function (a) {
+        return { area: a, tasks: (jp.tasks[a] || []).slice(0, 5) };
+      });
+      return {
+        emp_id: e.emp_id, name: e.name, jobTitle: e.jobTitle,
+        profile: {
+          job_id: jp.job_id, title: jp.title, group: jp.group, series: jp.series,
+          mission: jp.mission, task_areas: areas, skills: (jp.skills || []).slice(0, 15)
+        }
+      };
+    },
+
     get_screen_context: function () {
       var label = "홈";
       try {
@@ -170,9 +186,11 @@
       input_schema: { type: "object", properties: { manager_emp_id: { type: "string" }, name: { type: "string" } } } },
     { name: "get_org_overview", description: "전사 개요: 등급 분포·전사 목표 진척·본부 목록.",
       input_schema: { type: "object", properties: {} } },
+    { name: "get_job_profile", description: "직원의 직무 프로파일(미션·주요 과업·기대 스킬)을 조회한다. 목표/KR 추천의 직무 근거로 사용. emp_id 생략 시 현재 사용자.",
+      input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" } } } },
     { name: "get_screen_context", description: "사용자가 지금 보고 있는 talenx 화면·역할·현재 사용자 정보.",
       input_schema: { type: "object", properties: {} } },
-    { name: "navigate", description: "talenx 화면을 전환한다. section: home/work/perf/msf/appr/pay/att/hrm/wf. tab은 서브탭 인덱스(없으면 null). perf: 0목표 1피드백 2미팅 3리뷰 · appr: 0매트릭스 1탈렌트 · work: 0업무 1스크럼 · pay: 0급여 1연말정산 · att: 0내근무 1내휴가 2구성원근무 3구성원휴가 4스케줄 5위치 6연차촉진 · hrm: 0사용자 1구성원 2인재검색 3인원현황 · wf: 0받은 1보낸 2서명",
+    { name: "navigate", description: "talenx 화면을 전환한다. section: home/work/perf/msf/appr/pay/att/hrm/wf. tab은 서브탭 인덱스(없으면 null). perf: 0목표 1피드백 2미팅 3리뷰 · appr: 0매트릭스 1인재리뷰 · work: 0업무 1스크럼 · pay: 0급여 1연말정산 · att: 0내근무 1내휴가 2구성원근무 3구성원휴가 4스케줄 5위치 6연차촉진 · hrm: 0사용자 1구성원 2인재검색 3인원현황 · wf: 0받은 1보낸 2서명",
       input_schema: { type: "object", properties: { section: { type: "string" }, tab: { type: ["number", "null"] } }, required: ["section"] } }
   ];
 
@@ -187,6 +205,7 @@
         case "get_checkins": return result.owner.name + " 체크인 " + result.count + "건";
         case "get_team_status": return "팀원 " + result.team_size + "명 요약";
         case "get_org_overview": return "전사 " + result.employees + "명 · 등급분포 산출";
+        case "get_job_profile": return "직무 프로파일 · " + result.profile.title;
         case "get_screen_context": return result.screen;
         case "navigate": return result.ok ? result.moved_to + " 이동" : "이동 실패";
       }
@@ -197,12 +216,12 @@
   var SRC_OF = {
     search_employee: "talenx", get_employee_profile: "talenx", get_objectives: "talenx",
     get_checkins: "ERP", get_team_status: "talenx", get_org_overview: "통계",
-    get_screen_context: "맥락", navigate: "화면"
+    get_screen_context: "맥락", navigate: "화면", get_job_profile: "talenx"
   };
   var LABEL_OF = {
     search_employee: "직원 검색", get_employee_profile: "프로필·평가 조회", get_objectives: "목표·KR 조회",
     get_checkins: "체크인 기록 대조", get_team_status: "팀 현황 요약", get_org_overview: "전사 분포 스캔",
-    get_screen_context: "현재 화면 확인", navigate: "화면 전환"
+    get_screen_context: "현재 화면 확인", navigate: "화면 전환", get_job_profile: "직무 프로파일 조회"
   };
 
   window.EZTools = {

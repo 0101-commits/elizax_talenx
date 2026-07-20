@@ -244,7 +244,7 @@
 
     /* 규칙 1 */
     out.push(mkSeed(5, 1, 9, 0, "rule", "rule.weight.sum",
-      "rule.weight.sum — KR 가중치 합 100%", "목표 가중치 검증 규칙 · 위반 시 저장 차단 · as-of 스냅샷 기준", 3, 3));
+      "rule.weight.sum — KR 가중치 합 100%", "목표 가중치 검증 규칙 · 위반 시 저장 차단 · 기준 시점 데이터 기준", 3, 3));
 
     /* leader/hr/exec — 팀/전사 관점 1~2건 */
     if (role === "leader") {
@@ -349,6 +349,10 @@
       ".ezl-foot{flex:none;padding:11px 18px;border-top:1px solid #e8e8ed;background:#f5f5f7;",
       "font-size:11px;line-height:1.55;color:#424245;}",
       ".ezl-foot b{color:#1F7AF0;}",
+      ".ezl-foot-policy{display:inline-flex;align-items:center;gap:4px;margin-left:6px;font:inherit;",
+      "font-size:10.5px;font-weight:700;color:#1F7AF0;background:#fff;border:1px solid rgba(31,122,240,.35);",
+      "border-radius:999px;padding:2px 9px;cursor:pointer;vertical-align:1px;transition:background .12s;}",
+      ".ezl-foot-policy:hover{background:rgba(31,122,240,.08);}",
       /* ---- 답변 근거 스트립 ---- */
       ".ezl-ev-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:3px 4px 7px;}",
       ".ezl-ev-cap{font-size:10.5px;font-weight:700;color:#424245;background:#f5f5f7;",
@@ -394,14 +398,14 @@
     b.type = "button";
     b.id = "ezl-badge";
     b.className = "ezl-badge";
-    b.title = "맥락 원장 열기";
+    b.title = "성과 히스토리 열기";
     var host = document.querySelector(".ezx-root") || document.body;
     host.appendChild(b);
     return b;
   }
   function updateBadge(bump) {
     var b = ensureBadge();
-    b.innerHTML = '<span class="dot"></span>맥락 ' + loadStore().length;
+    b.innerHTML = '<span class="dot"></span>히스토리 ' + loadStore().length;
     if (bump) {
       b.classList.remove("bump");
       void b.offsetWidth; /* reflow로 애니 재시작 */
@@ -429,7 +433,7 @@
     p.id = "ezl-panel";
     p.className = "ezl-panel";
     p.setAttribute("role", "dialog");
-    p.setAttribute("aria-label", "맥락 원장");
+    p.setAttribute("aria-label", "성과 히스토리");
     document.body.appendChild(p);
     return p;
   }
@@ -481,17 +485,18 @@
       list += itemHtml(arr[i], highlightId && arr[i].id === highlightId);
       shown++;
     }
-    if (!shown) list = '<div class="ezl-empty">해당 유형의 맥락이 아직 없습니다.<br>기능을 사용하면 자동으로 축적됩니다.</div>';
+    if (!shown) list = '<div class="ezl-empty">해당 유형의 기록이 아직 없습니다.<br>기능을 사용하면 자동으로 기록됩니다.</div>';
 
     p.innerHTML =
       '<div class="ezl-head"><div class="ezl-head-top">'
-      + '<div class="ezl-title">맥락 원장<small>Context Ledger</small></div>'
+      + '<div class="ezl-title">성과 히스토리<small>Performance History</small></div>'
       + '<button type="button" class="ezl-x" data-ezl-close="1" aria-label="닫기">×</button></div>'
-      + '<div class="ezl-sub"><span class="ezl-asof">as-of 2026 상반기 · ' + esc(nowStamp()) + " 스냅샷</span>"
+      + '<div class="ezl-sub"><span class="ezl-asof">기준 시점 2026 상반기 · ' + esc(nowStamp()) + " 기준</span>"
       + "<span>총 <b>" + arr.length + "</b>건 축적</span></div></div>"
       + '<div class="ezl-strip">' + chips + "</div>"
       + '<div class="ezl-body">' + list + "</div>"
-      + '<div class="ezl-foot">기능을 쓸수록 맥락이 쌓이고, 맥락이 쌓일수록 답이 좋아집니다 — <b>축적은 자동, 인용은 투명.</b></div>';
+      + '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 데모: 브라우저에 최근 80건 보관 '
+      + '<button type="button" class="ezl-foot-policy" data-ezl-policy="1">🔒 보관·열람 규칙</button></div>';
 
     if (highlightId) {
       setTimeout(function () {
@@ -656,19 +661,19 @@
     }
 
     var level = evidenceLevel();
-    var html = '<span class="ezl-ev-cap">근거 · 맥락 ' + picked.length + "건</span>";
+    var html = '<span class="ezl-ev-cap">근거 · 기록 ' + picked.length + "건</span>";
     for (i = 0; i < picked.length; i++) {
       var it2 = picked[i];
       var meta = TYPES[it2.type] || TYPES.org;
       var clickable = level !== "core";
       html += '<span class="ezl-ev-chip' + (clickable ? " click" : "") + '" style="--ezl-c:' + meta.color + '"'
-        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="원장에서 보기"' : ' title="' + esc(it2.title) + '"') + ">"
+        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="히스토리에서 보기"' : ' title="' + esc(it2.title) + '"') + ">"
         + '<span class="tb">' + esc(meta.label) + "</span>" + esc(shorten(it2.title, 14))
         + (level !== "core" ? '<span class="sr">' + esc(it2.source || "") + "</span>" : "")
         + "</span>";
     }
     if (level !== "core") {
-      html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">원장에서 보기</button>';
+      html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">히스토리에서 보기</button>';
     }
     if (level === "logic") {
       html += '<button type="button" class="ezl-ev-logic" data-ezl-logic="1" data-ezl-refs="'
@@ -709,7 +714,7 @@
     if (!ruleSrcs.length) ruleSrcs = ["rule.asof.snapshot"];
     var citedTxt = cited.length
       ? cited.map(function (t) { return shorten(t, 18); }).join(" · ")
-      : "축적 맥락 없음";
+      : "축적된 기록 없음";
 
     var pop = document.createElement("div");
     pop.id = "ezl-pop";
@@ -717,13 +722,13 @@
     pop.innerHTML =
       "<h4>산출 로직 — 이 답은 이렇게 만들어졌습니다</h4>"
       + '<div class="ezl-step"><span class="n">1</span><div class="t"><b>입력 수집</b>'
-      + "<span>인용 맥락 " + cited.length + "건: " + esc(citedTxt) + "</span></div></div>"
+      + "<span>인용 기록 " + cited.length + "건: " + esc(citedTxt) + "</span></div></div>"
       + '<div class="ezl-step"><span class="n">2</span><div class="t"><b>규칙 적용</b>'
       + "<span>" + ruleSrcs.map(function (s) { return "<code>" + esc(s) + "</code>"; }).join(" ") + " 검증 통과</span></div></div>"
       + '<div class="ezl-step"><span class="n">3</span><div class="t"><b>모델 판단</b>'
-      + "<span>인용 맥락 범위 안에서 요약·초안 생성 (범위 밖 추정 없음)</span></div></div>"
+      + "<span>인용 기록 범위 안에서 요약·초안 생성 (범위 밖 추정 없음)</span></div></div>"
       + '<div class="ezl-step"><span class="n">4</span><div class="t"><b>검증</b>'
-      + "<span>as-of 스냅샷 정합 확인 · 결정 게이트 대기 — 승인 전 side-effect 0</span></div></div>"
+      + "<span>기준 시점 데이터 확인 · 승인 대기 — 승인 전 변경 없음</span></div></div>"
       + '<div class="ezl-pop-ga">감사 기록됨 · <b>' + esc(ga) + "</b></div>";
     document.body.appendChild(pop);
 
@@ -765,7 +770,16 @@
       return;
     }
 
-    /* 근거칩·"원장에서 보기" → 패널 열고 해당 항목 하이라이트 */
+    /* 보관·열람 규칙 (tx_policy.js) — 패널을 닫고 모달을 연다 (모달 z가 패널보다 낮음) */
+    var pol = closestAttr(t, "data-ezl-policy");
+    if (pol) {
+      ev.preventDefault();
+      closePanel();
+      if (window.EZPolicy && EZPolicy.open) EZPolicy.open();
+      return;
+    }
+
+    /* 근거칩·"히스토리에서 보기" → 패널 열고 해당 항목 하이라이트 */
     var op = closestAttr(t, "data-ezl-open");
     if (op) { ev.preventDefault(); openPanel(op.getAttribute("data-ezl-open") || null); return; }
 
@@ -791,7 +805,7 @@
     var e = addEntry(d);
     if (e) {
       updateBadge(true);
-      toast("맥락 원장에 축적됨 · " + shorten(e.title, 22));
+      toast("성과 히스토리에 기록됨 · " + shorten(e.title, 22));
     }
   }
 
