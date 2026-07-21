@@ -6,7 +6,7 @@ import json, sys, io, re, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 import os
-PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "talenx_data.js")
+PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "js", "talenx_data.js")
 raw = open(PATH, "r", encoding="utf-8").read()
 m = re.match(r"\s*window\.TALENX_DATA\s*=\s*(\{.*\})\s*;?\s*$", raw, re.DOTALL)
 assert m, "wrapper not matched"

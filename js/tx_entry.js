@@ -336,7 +336,7 @@
         '<button class="eze-ib" data-eze-close title="닫기" aria-label="닫기">×</button>' +
       "</div>" +
       '<button class="eze-txt" data-eze-act>' + esc(sg.text(rk)) + ' <span class="go">›</span></button>' +
-      '<div class="eze-src">근거: <b>화면 문맥</b> · <b>맥락 원장</b></div>';
+      '<div class="eze-src">근거: <b>화면 문맥</b> · <b>성과 히스토리</b></div>';
     document.body.appendChild(pill);
     currentSg = { key: key, sg: sg };
 
@@ -392,7 +392,7 @@
       items.push({ ic: "◎", label: "Agent 허브", run: function () { window.TXAgent.openHub(); } });
     }
     if (window.EZLedger && typeof window.EZLedger.openPanel === "function") {
-      items.push({ ic: "▤", label: "맥락 원장", run: function () { window.EZLedger.openPanel(); } });
+      items.push({ ic: "▤", label: "성과 히스토리", run: function () { window.EZLedger.openPanel(); } });
     }
     if (window.EZCycle && typeof window.EZCycle.openMap === "function") {
       items.push({ ic: "◇", label: "전주기 맵", run: function () { window.EZCycle.openMap(); } });

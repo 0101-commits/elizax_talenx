@@ -3,6 +3,7 @@
    B1 FAB 상태 글로우 오브   (Apple Intelligence Siri glow 패턴)
    B2 컨텍스트 어웨어 FAB 칩 (M365 Copilot Dynamic Action Button)
    A3 리뷰 품질·편향 린트    (Culture Amp "Improve" · SAP Calibration)
+      + 목표 스코프 측정 가능성 린트 (목표 생성 overlay 목표명·KR 지표 input 포함)
    A6 AI 관여 고지·이의제기  (EU AI Act 2026.8 · PIPA §37조의2)
    A1 1:1 미팅 코파일럿      (Lattice·15Five·SAP Joule 공통 투자 영역)
    전부 vanilla JS · .ezup-* 스코프 · 기존 화면 미간섭 · 목업 동작.
@@ -61,6 +62,11 @@
     ".ezup-aiog-body .sec{ margin-bottom:13px; }",
     ".ezup-aiog-body .sec b{ display:block; margin-bottom:3px; font-weight:600; letter-spacing:-.02em; }",
     ".ezup-aiog-body .reg{ font-size:11.5px; color:var(--ink-3,#7a7a7a); background:var(--soft,#f5f5f7); border-radius:8px; padding:8px 11px; }",
+    ".ezup-aiog-policy{ display:inline-flex; align-items:center; gap:5px; margin-top:11px; font-family:var(--sans); font-size:11.5px; font-weight:600;",
+    "  color:var(--blue-2,#1F7AF0); background:none; border:1px solid var(--line,#e0e0e0); border-radius:999px; padding:5px 13px; cursor:pointer;",
+    "  transition:border-color .12s, transform .15s cubic-bezier(.32,.72,.24,1); }",
+    ".ezup-aiog-policy:hover{ border-color:var(--blue,#1F7AF0); }",
+    ".ezup-aiog-policy:active{ transform:scale(.95); }",
 
     /* ---- A1 1:1 브리핑 ---- */
     ".ezup-brief-btn{ display:inline-flex; align-items:center; gap:6px; font-family:var(--sans); font-size:12px; font-weight:600;",
@@ -112,7 +118,7 @@
      ============================================================ */
   var CTX_SUGGEST = {
     home: { chip: "이번 주 성과 브리핑", ask: "이번 주 내 성과 현황을 브리핑해줘" },
-    perf: { chip: "목표 정합성 점검", ask: "팀 목표 정합성·중복 점검해줘" },
+    perf: { chip: "목표 정렬 점검", ask: "팀 목표 정렬·중복 점검해줘" },
     "perf-1": { chip: "피드백 문장 정제", ask: "피드백 문장 정제해줘" },
     "perf-2": { chip: "1:1 미팅 브리핑", ask: "__brief__" },
     "perf-3": { chip: "리뷰 초안 지원", ask: "리뷰 초안 작성 도와줘" },
@@ -159,33 +165,54 @@
   }, true);
 
   /* ============================================================
-     A3 — 리뷰 품질·편향 린트 (평가·피드백 textarea 인라인 검사)
+     A3 — 품질 린트 (스코프별 규칙)
+     review: 평가·피드백 문장 편향 검사 (기존 4 규칙)
+     goal:   목표/KR 측정 가능성 검사 — 목표 생성 overlay·KR 목록 안 필드.
+             "업계 Top 수준 달성" 류는 쓰는 시점에 잡아야 평가 갈등이 안 생긴다.
      ============================================================ */
-  var LINT_RULES = [
-    { re: /(항상|절대|전혀|결코|맨날)/, tag: "단정 표현", cls: "bad", tip: "근거 없는 일반화 — 구체 사례로 교체" },
-    { re: /(열심히|성실히|많이 노력|태도가 좋|잘함|잘 함)/, tag: "모호 표현", cls: "warn", tip: "측정 불가 — 행동·결과 중심으로" },
-    { re: /(최근|요즘|지난달부터)/, tag: "최신 편향 위험", cls: "warn", tip: "평가 기간 전체 근거를 인용했는지 확인" },
-    { re: /(여직원|남직원|여자|남자)\s*(치고|답게|라서)/, tag: "성별화 표현", cls: "bad", tip: "속성 언급 제거" }
-  ];
-  function lintText(v) {
+  var LINT_RULES = {
+    review: [
+      { re: /(항상|절대|전혀|결코|맨날)/, tag: "단정 표현", cls: "bad", tip: "근거 없는 일반화 — 구체 사례로 교체" },
+      { re: /(열심히|성실히|많이 노력|태도가 좋|잘함|잘 함)/, tag: "모호 표현", cls: "warn", tip: "측정 불가 — 행동·결과 중심으로" },
+      { re: /(최근|요즘|지난달부터)/, tag: "최신 편향 위험", cls: "warn", tip: "평가 기간 전체 근거를 인용했는지 확인" },
+      { re: /(여직원|남직원|여자|남자)\s*(치고|답게|라서)/, tag: "성별화 표현", cls: "bad", tip: "속성 언급 제거" }
+    ],
+    goal: [
+      { re: /업계\s*(Top|톱|최고|선도)|최고\s*수준|세계적\s*수준|글로벌\s*(리더|Top|수준)/i, tag: "측정 불가 표현", cls: "bad", tip: '평가 시점에 "달성 근거"를 다투게 됩니다 — 수치·순위·기한으로 바꾸세요' },
+      { re: /(체계|기반|프로세스|시스템)\s*(구축|마련|정착)\s*완료?|고도화\s*완료/, tag: "완료 판정 기준 없음", cls: "warn", tip: "무엇이 되면 완료인지 검증 조건을 명시하세요 (예: 적용 조직 3곳·만족도 80점)" },
+      { re: /(향상|개선|강화|확대|제고)\s*$/, tag: "측정 기준 없음", cls: "warn", tip: "얼마나·언제까지인지 목표 수치와 기준선을 붙이세요" },
+      { re: /(적극|최선|열심히|노력)/, tag: "행동·결과 아님", cls: "warn", tip: "노력 표현 대신 결과 지표로" }
+    ]
+  };
+  /* 필드 위치로 스코프 판정 — 목표 생성 overlay 또는 KR 목록 안이면 goal */
+  function lintScopeOf(field) {
+    if (!field || !field.closest) return "review";
+    if (field.closest('[data-txf-ov="new"]') || field.closest('[data-txf="kr-list"]')) return "goal";
+    return "review";
+  }
+  function lintText(v, scope) {
     var hits = [];
-    LINT_RULES.forEach(function (r) { var m = v.match(r.re); if (m) hits.push({ tag: r.tag, cls: r.cls, tip: r.tip, word: m[0] }); });
+    var rules = LINT_RULES[scope] || LINT_RULES.review;
+    rules.forEach(function (r) { var m = v.match(r.re); if (m) hits.push({ tag: r.tag, cls: r.cls, tip: r.tip, word: m[0] }); });
     return hits;
   }
-  function attachLint(ta) {
-    if (ta._ezupLint) return;
-    ta._ezupLint = true;
+  function attachLint(field) {
+    if (field._ezupLint) return;
+    field._ezupLint = true;
+    var scope = lintScopeOf(field);
     var bar = document.createElement("div");
     bar.className = "ezup-lint";
     bar.style.display = "none";
-    ta.insertAdjacentElement("afterend", bar);
+    /* textarea는 기존과 동일하게 바로 뒤, input도 폭 100% 블록이라 바로 뒤 삽입이 레이아웃 안전 */
+    field.insertAdjacentElement("afterend", bar);
     var deb = null;
     function run() {
-      var hits = lintText(ta.value || "");
-      if (!ta.value || !ta.value.trim()) { bar.style.display = "none"; return; }
+      var v = field.value || "";
+      var hits = lintText(v, scope);
+      if (!v.trim()) { bar.style.display = "none"; return; }
       bar.style.display = "flex";
       var html = '<span class="lab">품질 린트</span>';
-      if (!hits.length) html += '<span class="ezup-lint-chip ok">✓ 문제 없음</span>';
+      if (!hits.length) html += '<span class="ezup-lint-chip ok">' + (scope === "goal" ? "✓ 측정 가능한 표현입니다" : "✓ 문제 없음") + "</span>";
       else hits.forEach(function (hi) {
         html += '<span class="ezup-lint-chip ' + hi.cls + '" title="' + esc(hi.tip) + '">' + esc(hi.tag) + " · “" + esc(hi.word) + "”</span>";
       });
@@ -193,19 +220,31 @@
       bar.innerHTML = html;
       var fix = bar.querySelector(".ezup-lint-fix");
       if (fix) fix.addEventListener("click", function () {
-        elizaxSend("다음 평가/피드백 문장을 SBI 구조로 정제하고 편향 표현을 제거해줘:\n" + (ta.value || "").slice(0, 500));
+        var body = (field.value || "").slice(0, 500);
+        if (scope === "goal") elizaxSend("다음 목표/KR 문장을 측정 가능하게 바꿔줘 — 수치·기한·판정 기준 포함:\n" + body);
+        else elizaxSend("다음 평가/피드백 문장을 SBI 구조로 정제하고 편향 표현을 제거해줘:\n" + body);
       });
     }
-    ta.addEventListener("input", function () { clearTimeout(deb); deb = setTimeout(run, 350); });
-    ta.addEventListener("focus", run);
+    field.addEventListener("input", function () { clearTimeout(deb); deb = setTimeout(run, 350); });
+    field.addEventListener("focus", run);
     run();
   }
-  /* 평가·성과 화면 안 textarea 전부 (모달/드로어 포함 — 상위 감시) */
+  /* 평가·성과 화면 안 textarea 전부 (모달/드로어 포함 — 상위 감시)
+     + 목표 스코프 text input: KR 성과지표([data-txf="kr-list"] 안)·목표명([data-txf="new-name"]) */
   document.addEventListener("focusin", function (e) {
-    var ta = e.target;
-    if (ta.tagName !== "TEXTAREA") return;
-    var inScope = ta.closest("#s-appr, #s-perf, .tx-modal, .tx-drawer");
-    if (inScope) attachLint(ta);
+    var f = e.target;
+    if (!f || f.nodeType !== 1 || !f.tagName) return;
+    if (f.tagName === "TEXTAREA") {
+      if (f.closest("#s-appr, #s-perf, .tx-modal, .tx-drawer")) attachLint(f);
+      return;
+    }
+    if (f.tagName === "INPUT") {
+      var ty = (f.getAttribute("type") || "text").toLowerCase();
+      if (ty !== "text") return;
+      var isGoalInput = false;
+      try { isGoalInput = !!(f.closest('[data-txf="kr-list"]') || (f.matches && f.matches('[data-txf="new-name"]'))); } catch (err) { isGoalInput = false; }
+      if (isGoalInput) attachLint(f);
+    }
   }, true);
 
   /* ============================================================
@@ -213,18 +252,23 @@
      ============================================================ */
   function aiogModal() {
     if (!TX.modal) return;
-    TX.modal({
+    var m = TX.modal({
       title: "AI 관여 고지",
       body: '<div class="ezup-aiog-body">' +
         '<div class="sec"><b>이 화면의 AI 관여 범위</b>평가 코멘트·등급 <u>초안 작성</u>과 근거 수집에 elizax가 관여했습니다. 최종 판단·확정은 담당 리더와 HR이 수행하며, AI는 어떤 결정도 자동 확정하지 않습니다.</div>' +
         '<div class="sec"><b>인간 검토 기록</b>초안 생성 → 조직장 수정 2회 → 캘리브레이션 심의 → HR 승인. 전 과정이 감사 로그에 기록되어 있습니다.</div>' +
         '<div class="sec reg">근거 규정: EU AI Act Annex III(고용·근로자 관리 = 고위험, 2026.8 전면 시행) · 개인정보보호법 §37조의2(자동화된 결정에 대한 설명 요구·거부권)</div>' +
+        '<button type="button" class="ezup-aiog-policy">🔒 기록 보관·열람 규칙 보기</button>' +
         "</div>",
       actions: [
         { label: "설명 요구", kind: "ghost", onClick: function () { elizaxSend("내 평가 결과 산출 과정을 근거와 함께 설명해줘"); } },
-        { label: "이의 신청", kind: "ghost", onClick: function () { if (TX.toast) TX.toast("이의 신청이 접수되었습니다 · HR 검토 후 as-of 재조회로 처리됩니다", "ok"); } },
+        { label: "이의 신청", kind: "ghost", onClick: function () { if (TX.toast) TX.toast("이의 신청이 접수되었습니다 · HR 검토 후 기준 시점 재조회로 처리됩니다", "ok"); } },
         { label: "닫기", kind: "primary" }
       ]
+    });
+    var pb = m && m.body && m.body.querySelector ? m.body.querySelector(".ezup-aiog-policy") : null;
+    if (pb) pb.addEventListener("click", function () {
+      if (window.EZPolicy && EZPolicy.open) EZPolicy.open();
     });
   }
   function injectAiog() {
@@ -260,7 +304,7 @@
     }).join("") : '<div>분기 목표 3건 · 평균 진척 64% <span class="src">talenx</span><div class="bar"><i style="width:64%"></i></div></div>';
     TX.drawer({
       title: "✦ AI 미팅 브리핑 — " + esc(d.me.name),
-      subtitle: "1:1 미팅 전 자동 취합 · as-of 오늘 · 감사 기록됨",
+      subtitle: "1:1 미팅 전 자동 취합 · 기준 시점 오늘 · 감사 기록됨",
       width: "440px",
       body: '<div class="ezup-brief">' +
         '<div class="bsec"><b>목표 진척</b>' + objHtml + "</div>" +
