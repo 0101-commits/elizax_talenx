@@ -400,6 +400,9 @@
     if (window.EZCycle && typeof window.EZCycle.openMap === "function") {
       items.push({ ic: "◇", label: "전주기 커버리지 맵", run: function () { window.EZCycle.openMap(); } });
     }
+    if (window.EZJob && typeof window.EZJob.openLinkMap === "function") {
+      items.push({ ic: "🧩", label: "목표–직무 연결 지도", run: function () { window.EZJob.openLinkMap(); } });
+    }
     return items;
   }
 

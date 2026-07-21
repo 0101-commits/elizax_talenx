@@ -151,12 +151,20 @@
       wfNote = "같은 계산 규칙에서 배분 기준만 적용해 즉시 재산출. rule-exec.cal7";
       audit = "탐색 범위 · 권한 내 우리 팀";
     } else if (role === "hr") {
+      /* 연결·규칙 지표는 실데이터 전수 계산 (하드코딩 금지) */
+      var dd = D();
+      var ksAll = dd.keyResults || [], osAll = dd.objectives || [];
+      var wSum = {};
+      ksAll.forEach(function (k) { wSum[k.objective_id] = (wSum[k.objective_id] || 0) + (parseFloat(k.weight) || 0); });
+      var wBad = Object.keys(wSum).filter(function (o) { return Math.abs(wSum[o] - 100) > 0.5; }).length;
+      var noJobKr = ksAll.filter(function (k) { return !k.job_task_ref; }).length;
+      var noTheme = osAll.filter(function (o) { return !o.strategy_theme_id; }).length;
       title = "전사 평가 운영 · 규칙 검증";
-      verdict = "전사 목표·평가에서 <b>규칙 위반·미연결 신호</b>를 먼저 보고합니다. 관대화 의심 본부와 가중치 이상을 감지했습니다. <span class=\"warn\">재검토 제안 · 자동 수정 아님.</span>";
-      metrics = [["가중치 이상", "5건"], ["전사 미연결", "3건"], ["관대화 의심", "2본부"]];
+      verdict = "전사 목표·평가에서 <b>규칙 위반·미연결 신호</b>를 먼저 보고합니다. 가중치·직무 근거·전략 연결은 전수 검증했고, 관대화 의심 본부를 감지했습니다. <span class=\"warn\">재검토 제안 · 자동 수정 아님.</span>";
+      metrics = [["가중치 이상", wBad + "건"], ["직무근거 없는 KR", noJobKr + "건"], ["관대화 의심", "2본부"]];
       steps = [
-        ["규칙 스캔", "전체 목표 가중치 합 100% 초과 5건 " + sb("rule", "규칙") + ' <span class="txr-rid">rule.weight.sum</span>'],
-        ["정렬 검증", "전사 목표 미연결 3건 감지 " + sb("talenx", "talenx") + " " + sb("rule", "원칙") + " 전사 정렬 필수"],
+        ["규칙 스캔", "목표별 KR 가중치 합 100% 검증 → 이상 " + wBad + "건 " + sb("rule", "규칙") + ' <span class="txr-rid">rule.weight.sum</span>'],
+        ["정렬 검증", "목표 " + osAll.length + "건 전략 미연결 " + noTheme + "건 · KR " + ksAll.length + "건 직무근거 누락 " + noJobKr + "건 " + sb("talenx", "talenx") + " " + sb("rule", "원칙") + " 전사 정렬 필수"],
         ["분포 대비", "본부 간 등급 분포 편차 → 관대화 의심 2본부 " + sb("erp", "ERP") + " 실적 대비 상승폭 점검"]
       ];
       wfTitle = "특정 본부 강제배분 적용 시 전사 분포 재계산";

@@ -58,6 +58,37 @@
     for (var i = 0; i < cs.length; i++) if (cs[i] && cs[i].dimension_id === id) return cs[i].name || id;
     return id || '';
   }
+  function compFacets(id) {
+    var cs = arr('competencies');
+    for (var i = 0; i < cs.length; i++) if (cs[i] && cs[i].dimension_id === id) return (cs[i].facets || []).join(' · ');
+    return '';
+  }
+  /* 직무 기준 역량 가중치 (enrich_job_links.py가 생성한 competency_profile) */
+  function compProfile(jp) {
+    return (jp && Array.isArray(jp.competency_profile)) ? jp.competency_profile : [];
+  }
+  /* 스킬 사전 — skill_id → {name, category} */
+  var _skillIdx = null;
+  function skillIdx() {
+    if (_skillIdx) return _skillIdx;
+    _skillIdx = {};
+    (arr('skillDict') || []).forEach(function (s) { if (s && s.skill_id) _skillIdx[s.skill_id] = s; });
+    return _skillIdx;
+  }
+  /* 직무 기대 스킬을 분류별로 묶음 → [{cat, names:[]}] (사전 없으면 단일 그룹) */
+  function skillsByCat(jp) {
+    var names = (jp && jp.skills) || [];
+    var ids = (jp && jp.skill_ids) || [];
+    var idx = skillIdx();
+    var byCat = {}, order = [];
+    names.forEach(function (n, i) {
+      var e = ids[i] ? idx[ids[i]] : null;
+      var cat = (e && e.category) || '기타';
+      if (!byCat[cat]) { byCat[cat] = []; order.push(cat); }
+      byCat[cat].push(n);
+    });
+    return order.map(function (c) { return { cat: c, names: byCat[c] }; });
+  }
   function roleKey() {
     try {
       return (window.TXRoles && window.TXRoles.current && window.TXRoles.current().key) || 'member';
@@ -112,6 +143,12 @@
       '.ezjc-chips{display:flex;flex-wrap:wrap;gap:5px}',
       '.ezjc-chip2{font-size:11px;font-weight:600;color:var(--ink-2,#5C6474);background:var(--soft,#F5F6F8);border:1px solid var(--line,#ECEEF2);border-radius:999px;padding:2px 9px}',
       '.ezjc-chip2.more{color:var(--blue-2,#0E63D6);background:var(--blue-soft,#E9F1FE);border-color:transparent}',
+      '.ezjc-chip2.comp{color:#5B47CC;background:rgba(123,97,255,.08);border-color:rgba(123,97,255,.25)}',
+      '.ezjc-chip2.comp .cw{font-weight:800;color:#7B61FF}',
+      '.ezjc-skcat{font-size:10.5px;font-weight:700;color:var(--ink-3,#9096A3);margin:8px 0 4px}',
+      '.ezjc-item .sm.kpi b{color:var(--blue-2,#0E63D6)}',
+      '.ezjc-dockchip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--ink-2,#5C6474);background:var(--card,#fff);border:1px solid var(--line,#ECEEF2);border-radius:999px;padding:3px 10px;cursor:pointer;white-space:nowrap}',
+      '.ezjc-dockchip:hover{background:var(--blue-soft,#E9F1FE);color:var(--blue-2,#0E63D6)}',
       '.ezjc-carry{margin-top:12px;background:rgba(123,97,255,.06);border:1px solid rgba(123,97,255,.22);border-radius:10px;padding:10px 11px}',
       '.ezjc-carry .ct{font-size:11.5px;font-weight:800;color:#7B61FF;margin-bottom:5px}',
       '.ezjc-carry .cg{font-size:12px;color:var(--ink,#2A2E39)}',
@@ -193,6 +230,16 @@
     if (skills.length > max) out += '<span class="ezjc-chip2 more">+' + (skills.length - max) + '</span>';
     return '<div class="ezjc-chips">' + (out || '<span class="ezjc-chip2">—</span>') + '</div>';
   }
+  /* 직무 기준 핵심 역량 칩 — 가중치순, hover에 하위 요소(facets) */
+  function compChips(jp, max) {
+    var cp = compProfile(jp).slice(0, max || 3);
+    if (!cp.length) return '';
+    return '<div class="ezjc-chips">' + cp.map(function (c) {
+      return '<span class="ezjc-chip2 comp" title="' + esc(compFacets(c.dimension_id)) + '">'
+        + esc(c.dimension_id) + ' ' + esc(compName(c.dimension_id))
+        + ' <b class="cw">' + esc(c.weight) + '%</b></span>';
+    }).join('') + '</div>';
+  }
   function carryOverHTML(emp) {
     var h25 = histOf(emp.emp_id, 'FY2025');
     var ev = evalOf(emp.emp_id);
@@ -227,7 +274,10 @@
         + '<div class="ezjc-sec">주요 과업</div>'
         + areasHTML(jp, true)
         + '<div class="ezjc-sec">기대 스킬</div>'
-        + skillsChips(jp.skills, 8);
+        + skillsChips(jp.skills, 8)
+        + (compProfile(jp).length
+            ? '<div class="ezjc-sec">직무 기준 역량</div>' + compChips(jp, 3)
+            : '');
     }
     h += carryOverHTML(emp);
     h += '<div class="ezjc-foot"><a class="ezjc-link" data-ezjc="drawer" data-emp="' + esc(emp.emp_id || '') + '">전체 프로파일 보기 →</a></div>';
@@ -261,7 +311,12 @@
         + '<div class="ezjc-sec">주요 과업</div>'
         + areasHTML(jp, false)
         + '<div class="ezjc-sec">기대 스킬 (' + ((jp.skills || []).length) + ')</div>'
-        + skillsChips(jp.skills, 15);
+        + skillsByCat(jp).map(function (g) {
+            return '<div class="ezjc-skcat">' + esc(g.cat) + '</div>' + skillsChips(g.names, 12);
+          }).join('')
+        + (compProfile(jp).length
+            ? '<div class="ezjc-sec">직무 기준 역량 (가중치)</div>' + compChips(jp, 5)
+            : '');
     }
     body += '<div class="ezjc-sec">이 직무 기준을 참조한 목표</div>';
     body += refs.length ? refs.map(function (o) {
@@ -388,13 +443,22 @@
     if (ev) Object.keys(linkedComps).forEach(function (cid) {
       curPairs.push(['c:' + cid, 'ev:1', '#5C6474']);
     });
+    /* 직무 기준 역량 — 프로파일에 정의된 사전 연결 (점선) */
+    var profComps = {};
+    compProfile(jp).forEach(function (c) { profComps[c.dimension_id] = c.weight; });
+    Object.keys(profComps).slice(0, 3).forEach(function (cid) {
+      curPairs.push(['p:1', 'c:' + cid, '#7B61FF', 'dash']);
+    });
 
     /* ---- 컬럼 렌더 ---- */
     var c1 = ths.map(function (t) {
       var hl = !!themeTo[t.theme_id];
+      var kpi = (t.kpis && t.kpis[0]) || null;
       return '<div class="ezjc-item' + (hl ? ' hl' : ' dim') + '" data-jm="t:' + esc(t.theme_id) + '">'
         + '<b>' + esc(t.theme_id) + '</b> ' + esc(t.name)
         + (t.description ? '<div class="sm">' + esc(t.description) + '</div>' : '')
+        + (kpi ? '<div class="sm kpi">KPI · ' + esc(kpi.name) + ' <b>' + esc(kpi.target) + '</b> (' + esc(kpi.current) + ')</div>' : '')
+        + (t.owner_org ? '<div class="sm">주관 · ' + esc(t.owner_org) + '</div>' : '')
         + '</div>';
     }).join('');
 
@@ -435,8 +499,11 @@
         + skillsChips((jp.skills || []).slice(0, 5), 5) + '</div>' : '')
       + (comps.length ? comps.map(function (c) {
           var hl = !!linkedComps[c.dimension_id];
-          return '<div class="ezjc-item' + (hl ? ' hl' : ' dim') + '" data-jm="c:' + esc(c.dimension_id) + '">'
-            + '<b>' + esc(c.dimension_id) + '</b> ' + esc(c.name) + '</div>';
+          var pw = profComps[c.dimension_id];
+          return '<div class="ezjc-item' + (hl ? ' hl' : (pw ? '' : ' dim')) + '" data-jm="c:' + esc(c.dimension_id) + '">'
+            + '<b>' + esc(c.dimension_id) + '</b> ' + esc(c.name)
+            + (pw ? '<div class="sm">직무 기준 가중치 ' + esc(pw) + '%</div>' : '')
+            + '</div>';
         }).join('') : '<div class="ezjc-item dim">역량 사전이 없습니다</div>');
 
     var h25 = histOf(e.emp_id, 'FY2025'), h24 = histOf(e.emp_id, 'FY2024');
@@ -456,8 +523,13 @@
         + '<div class="cap">' + esc(c.cap) + '</div>' + bodies[i] + '</div>';
     }).join('');
 
+    var krWithJob = myKrs.filter(function (k) { return k.job_task_ref && k.job_task_ref.task_area; }).length;
+    var summary = '연결선 ' + curPairs.length + '개 · KR 직무 근거 ' + krWithJob + '/' + myKrs.length + '건'
+      + ' · 참조 역량 ' + Object.keys(linkedComps).length + '종'
+      + (jp ? ' · 직무 기준 역량 ' + Math.min(3, compProfile(jp).length) + '종(점선)' : '');
     return '<svg class="ezjc-svg" data-ezjc-svg></svg>'
       + '<div class="ezjc-cols">' + colsHTML + '</div>'
+      + '<div class="ezjc-note"><b>연결 요약</b> · ' + esc(summary) + '</div>'
       + '<div class="ezjc-note">' + esc(e.name || '') + ' 님 기준 · 흐리게 표시된 항목은 아직 데이터로 연결되지 않은 기준입니다.</div>';
   }
 
@@ -482,7 +554,7 @@
       paths += '<path d="M' + x1.toFixed(1) + ' ' + y1.toFixed(1)
         + ' C' + mx.toFixed(1) + ' ' + y1.toFixed(1) + ',' + mx.toFixed(1) + ' ' + y2.toFixed(1)
         + ',' + x2.toFixed(1) + ' ' + y2.toFixed(1) + '" fill="none" stroke="' + (pr[2] || '#1F7AF0')
-        + '" stroke-width="1.6" opacity=".55"/>';
+        + '" stroke-width="1.6" opacity=".55"' + (pr[3] === 'dash' ? ' stroke-dasharray="5 4"' : '') + '/>';
     });
     svg.innerHTML = paths;
   }
@@ -513,7 +585,7 @@
       + '<button class="ezjc-mapx" data-ezjc="mapclose" title="닫기">✕</button>'
       + '<div class="sub">사업전략부터 평가까지, 데이터가 어떻게 이어지는지 봅니다</div></div>'
       + '<div class="ezjc-subj"><span>대상</span>' + selHTML
-      + '<span class="ezjc-legend">테두리 강조 = 연결됨 · 흐림 = 미연결 · 연결선 = 실제 데이터 참조</span></div>'
+      + '<span class="ezjc-legend">테두리 강조 = 연결됨 · 흐림 = 미연결 · 실선 = 실제 데이터 참조 · 점선 = 직무 기준(사전 정의)</span></div>'
       + '<div class="ezjc-mapwrap" data-ezjc-wrap></div>'
       + '</div>';
     document.body.appendChild(ov);
@@ -534,6 +606,7 @@
       [pctOf(es.filter(function (e) { return e.jobProfileId != null && e.jobProfileId !== ''; }).length, es.length), '직무 프로파일 연결률'],
       [pctOf(os.filter(function (o) { return !!o.strategy_theme_id; }).length, os.length), '목표의 전략 연결률'],
       [pctOf(ks.filter(function (k) { return !!k.job_task_ref; }).length, ks.length), 'KR 직무 근거 보유율'],
+      [pctOf(ks.filter(function (k) { return !!k.competency_id; }).length, ks.length), 'KR 역량 연결률'],
       [pctOf(ks.filter(function (k) { return !!k.difficulty_basis; }).length, ks.length), 'KR 난이도 근거 보유율'],
       [pctOf(ks.filter(function (k) { return /[0-9%]/.test(String(k.target_value || '')); }).length, ks.length), '측정 가능 KR 비율']
     ];
@@ -567,6 +640,19 @@
     var rk = roleKey();
     if ((rk === 'hr' || rk === 'exec') && ah && !document.querySelector('[data-ezjc-quality]')) {
       ah.insertAdjacentHTML('afterend', qualityHTML());
+    }
+    /* elizax 도킹 패널 맥락 칩 — 대화 중에도 내 직무 기준으로 바로 진입 */
+    var ctx = document.querySelector('.ezx-panel .ezx-ctx');
+    if (ctx && !ctx.querySelector('[data-ezjc-dock]')) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'ezjc-dockchip';
+      chip.setAttribute('data-ezjc-dock', '1');
+      chip.setAttribute('data-ezjc', 'drawer');
+      chip.setAttribute('data-emp', (cu().emp_id || ''));
+      chip.title = '내 직무 프로파일 — 미션·주요 과업·기대 스킬·직무 기준 역량';
+      chip.innerHTML = '🧩 내 직무';
+      ctx.appendChild(chip);
     }
   }
 

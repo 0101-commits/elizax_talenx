@@ -1228,9 +1228,17 @@
             var parentTitle = (parentSel && parentSel.value && parentSel.options[parentSel.selectedIndex])
               ? parentSel.options[parentSel.selectedIndex].text
               : ((objs.filter(function (o) { return o.owner_emp_id === cuEmp.manager_id; })[0] || objs[0] || {}).title || '상위 조직 목표');
+            /* 직무 기준 역량(competency_profile) 1순위 — 근거 문구에 함께 인용 */
+            var topComp = (jp && jp.competency_profile && jp.competency_profile[0]) || null;
+            var compLabel = '';
+            if (topComp) {
+              var compRec = (D.competencies || []).filter(function (c) { return c.dimension_id === topComp.dimension_id; })[0];
+              compLabel = topComp.dimension_id + ' ' + ((compRec && compRec.name) || '');
+            }
             var whyOf = function (i) {
               var a = areas.length ? areas[i % areas.length] : (cuEmp.jobTitle || '내 직무');
-              return '직무 과업 <b>「' + esc(a) + '」</b> + 상위목표 <b>「' + esc(parentTitle) + '」</b>';
+              return '직무 과업 <b>「' + esc(a) + '」</b> + 상위목표 <b>「' + esc(parentTitle) + '」</b>'
+                + (compLabel ? ' · 역량 <b>' + esc(compLabel) + '</b>' : '');
             };
             var canned = [
               { name: '신규 기능 기획서 사용자 검증 통과율 90% 달성', mode: 0, weight: 40, diff: 'A', diffwhy: '전년 통과율 실적 대비 +15%p 상향', why: whyOf(0) },
