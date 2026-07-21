@@ -101,6 +101,11 @@
         if (!(window.TXAgent && TXAgent.openHub)) { toast("허브 모듈을 찾을 수 없습니다", "warn"); return; }
         TXAgent.openHub("chat");
       } },
+    { name: "프로세스맵",   type: "action", desc: "성과 사이클의 과정과 근거를 한 장으로 봅니다",
+      run: function () {
+        if (!(window.EZJourney && EZJourney.open)) { toast("프로세스 맵 모듈을 찾을 수 없습니다", "warn"); return; }
+        EZJourney.open();
+      } },
     { name: "체크인",       type: "scn", key: "qw1",    fb: "주간 체크인 브리핑 만들어줘" },
     { name: "목표",         type: "scn", key: "qw2",    fb: "이번 분기 목표 초안 잡아줘" },
     { name: "정렬점검",     type: "scn", key: "qw7",    fb: "팀 목표 정렬·중복 점검해줘" },

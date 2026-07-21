@@ -678,6 +678,7 @@
     }
     if (level !== "core") {
       html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">히스토리에서 보기</button>';
+      html += '<button type="button" class="ezl-ev-link" data-ezl-journey="1" title="이 근거들이 성과 사이클 어느 단계의 결정으로 이어지는지 봅니다">&#9672; 프로세스 맵</button>';
     }
     if (level === "logic") {
       html += '<button type="button" class="ezl-ev-logic" data-ezl-logic="1" data-ezl-refs="'

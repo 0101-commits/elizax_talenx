@@ -483,7 +483,8 @@
     st.id = "ezpm-css";
     st.textContent = [
       /* 오버레이 */
-      ".ezpm-root{position:fixed;inset:0;z-index:1300;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:22px;}",
+      /* z 4100 = Agent 허브(.agh-root 4000) 위 — 허브·도킹 어디서 열어도 보인다 */
+      ".ezpm-root{position:fixed;inset:0;z-index:4100;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:22px;}",
       ".ezpm-card{background:var(--card,#fff);color:var(--ink,#2A2E39);border-radius:18px;max-width:1180px;width:100%;max-height:90vh;",
       "display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(15,23,42,.3);overflow:hidden;}",
       "@media (prefers-reduced-motion:no-preference){.ezpm-card{animation:ezpmIn .18s ease;}}",
@@ -590,6 +591,8 @@
       ".ezpm-cycle .cur{color:var(--blue,#1F7AF0);font-weight:800;}",
       ".ezpm-cycle .nxt{color:var(--ink-4,#B4B9C4);}",
       ".ezpm-cycle .sep{color:var(--ink-4,#B4B9C4);font-weight:400;}",
+      /* 도킹 패널용 컴팩트 변형 — .ezx-ctx 칩 행에 맞춤 */
+      ".ezpm-cycle--dock{margin-left:0;padding:2px 8px;font-size:10.5px;gap:4px;}",
       /* reduced motion 총괄 차단 */
       "@media (prefers-reduced-motion:reduce){.ezpm-root *,.ezpm-root{animation:none!important;transition:none!important;}}"
     ].join("");
@@ -872,6 +875,18 @@
         if (anchor.nextSibling) anchor.parentNode.insertBefore(chip, anchor.nextSibling);
         else anchor.parentNode.appendChild(chip);
       }
+    }
+    /* (0-b) elizax 도킹 패널 맥락 칩 행 — 대화 중에도 사이클 위치 상시 노출 */
+    var ctx = document.querySelector(".ezx-panel .ezx-ctx");
+    if (ctx && !ctx.querySelector("[data-ezpm-cycle]")) {
+      var dchip = document.createElement("button");
+      dchip.type = "button";
+      dchip.className = "ezpm-cycle ezpm-cycle--dock";
+      dchip.setAttribute("data-ezpm-cycle", "1");
+      dchip.setAttribute("data-ezpm-open", "1");
+      dchip.title = "성과 사이클 — 목표수립·실행 완료, 지금 평가 단계 · 클릭하면 과정과 근거를 한 장으로 봅니다";
+      dchip.innerHTML = '&#9672; <span class="cur">평가 진행중</span><span class="sep">&#8250;</span><span class="nxt">리뷰</span>';
+      ctx.appendChild(dchip);
     }
     /* (a) 성과관리 목표 화면 .perf-head */
     var perf = document.getElementById("s-perf");
