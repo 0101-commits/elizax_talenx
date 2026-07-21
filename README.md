@@ -159,6 +159,30 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 
 **④ 운영 관찰 반영** — 목표 점검을 **문장 품질**(잘 쓴 목표인가: 중복·미연계·측정불가)과 **운영 신호**(잘 굴러가는 목표인가: 체크인 공백·진척 정체, 실데이터 계산) 2축으로 분리(QW7); **측정불가 표현 린트**("업계 Top 수준", "체계 구축 완료" — 목표명·KR 지표 input까지 검사); QW2 목표 초안에 **"이어받은 출발점"**(작년 평가 FY2025 + 피드백 요지 + 올해 직무 기준 인용 — 매년 백지에서 시작하지 않는다); **기록 보관·열람 규칙**(`tx_policy.js` — 보존 기간·열람 권한 매트릭스·상향 피드백 익명화 원칙 + 데모 한계 고지: 브라우저 80건 저장은 실서비스 부적합, 서버 보존 저장소가 다음 과제).
 
+### 10차: 직무/스킬/역량/전략 연결 고도화 (`scripts/enrich_job_links.py` · `tx_jobcontext.js`)
+
+9차 직무 연결(③)을 역량·스킬·전략 지표까지 확장 — "직무는 연결됐는데 그 직무가 요구하는 역량·스킬이 안 보이면 반쪽":
+
+- **역량 프로파일** — 직무 98종마다 `competency_profile`(직무↔역량 직접 연결) 신설. 목표 생성 "내 직무 기준" 패널·상세 drawer에 역량 칩으로 노출, ✦ AI KR 추천 근거에도 인용.
+- **스킬 사전 정규화** — 기대 스킬 767→**749종**을 8분류 `skillDict` + `skill_ids`로 표준화, drawer에서 분류별 그룹 표시.
+- **전략 KPI·연결 지도 고도화** — `strategyThemes`에 `kpis`·`owner_org` 추가, 연결 지도(🧭)에 전략 KPI·직무→역량 점선(사전 정의) 표기 + 연결 요약. HR 품질 카드에 KR 역량 연결률 추가.
+- **버그 수정** — `currentUser.jobProfileId` null 케이스 보정, `tx_roles.js` HR 영수증 지표 하드코딩 제거(가중치·직무근거·전략연결 전수 실계산).
+
+### 11차(plan11): 워크스루 피드백 6건 고도화
+
+목업 워크스루에서 나온 지적 6건을 근본 수정 — 기획서: [`docs/PLAN-11-walkthrough-upgrade.md`](docs/PLAN-11-walkthrough-upgrade.md).
+
+| # | 과제 | 내용 |
+|---|---|---|
+| F1 | QW7 2채널 조망 | 행단위 처방 버튼(수정/병합/리마인드/1:1) + 수립품질·운영신호 배지 + 진척 드리프트 신호, QW1 실데이터 연결 |
+| F2 | EZLint 승격 | `goal-1~7` 구조 린트(수치·기준선·binary 판정조건) + 저장 게이트(사유 필수 → 원장 기록) |
+| F3 | 난이도 근거 | 비교대상 구조화 입력(yoy/peer/market) + S등급 근거 필수 + 평가 배지 + 보정 데모(`DIFF_COEF`, 원본 불변) + 캘리브레이션 실측 |
+| F4 | 원장 보존 | 평가 인용 기록 핀 고정(80건 롤링 면제) + `prev_hash` 체인 검증 + JSON 내보내기/가져오기 + 보존 3등급 정책 |
+| F5 | 정책 강제 | `EZPolicy.check()` 6행 매트릭스 — 원장·근거 스트립·AI 도구 공통 게이트 + 상향 피드백 익명 임계 3명 |
+| F6 | carry-over 실데이터 | `evaluationsPrev`/`feedbackHistory`/`upwardFeedback`/`jobHistory` mock(`scripts/enrich_prev_cycle.py`) + 이어받은 출발점 패널 + 이월 버튼 + AI 초안 출처 칩 |
+
+브라우저 통합 검증(게이트·QW7·캘리브·원장 체인·AI 게이트) 콘솔 에러 0 확인.
+
 ### W1 참조 조망 뷰
 
 도킹 상단 "조망" 바 — **⌗ 에이전트 구조**(W1 5계층 오케스트레이션)와 **◈ E2E 프로세스 맵**(목표수립→중간점검→평가→피드백, 승인 게이트·Pillar 표기). 관점(페르소나)에 따라 참여 계층/단계 자동 강조, 각 단계에서 elizax 작업으로 드릴인.
@@ -174,7 +198,11 @@ elizax_talenx/
 ├── scripts/
 │   ├── fix_talenx_data.py         js/talenx_data.js 정합성 보정 (재실행 가능·멱등)
 │   ├── enrich_talenx_data.py      목표–직무–전략 연결 데이터 보강 (재실행 가능·멱등)
+│   ├── enrich_job_links.py        역량 프로파일·스킬 사전(8분류)·전략 KPI 보강 (재실행 가능·멱등)
+│   ├── enrich_prev_cycle.py       carry-over 실데이터(전기 평가·상향피드백·직무이력) mock 생성 (재실행 가능·멱등)
 │   └── enrich_assets/             job_profiles_new.json — 신규 직무 프로파일 병합 소스
+├── docs/
+│   └── PLAN-11-walkthrough-upgrade.md   11차(plan11) 워크스루 피드백 6건 기획서
 ├── reference/                     실서비스(app.talenx.com) 크롤링 스크린샷 3계정분 (Playwright 산출물)
 │   ├── talenx_user_screens_20260714/
 │   ├── talenx_user_screens_minsoopark_20260714/
@@ -213,6 +241,8 @@ elizax_talenx/
 | `worker/worker.js` | Claude API 클라우드 프록시 (Cloudflare Worker) |
 | `scripts/fix_talenx_data.py` | `js/talenx_data.js` 정합성 보정 (재실행 가능, 멱등) |
 | `scripts/enrich_talenx_data.py` | 목표–직무–전략 연결 데이터 보강 스크립트 (멱등, `scripts/enrich_assets/`) |
+| `scripts/enrich_job_links.py` | 역량 프로파일(직무↔역량)·스킬 사전(8분류, 749종)·전략 KPI 보강 (멱등) |
+| `scripts/enrich_prev_cycle.py` | carry-over 실데이터(전기 평가·상향피드백·직무이력) mock 생성 (멱등) |
 | `GLOSSARY.md` | UI 카피 용어집 — 내부 설계 용어 ↔ 확정 사용자 용어 |
 
 - 순수 vanilla JS/CSS, 외부 의존성 없음. CSS 스코프: `.ezx-*`(도킹) · `.agh-*`(Hub) · `.ezup-*`(고도화) — 기존 `.tx-*`/`#s-*` 미간섭. 다크 테마 대응.
