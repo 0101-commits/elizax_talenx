@@ -1,5 +1,8 @@
 /* ===== talenx mockup — interaction kit styles (native tokens) ===== */
-#tx-overlay-root{position:relative;z-index:1000}
+/* 전 TX 오버레이(모달/메뉴/토스트)의 스태킹 컨텍스트 상한.
+   Agent 허브(4000)·프로세스 맵(4100)·히스토리 패널(100020) 등 body 레벨
+   오버레이 "안에서" 열리는 모달·토스트가 뒤에 깔리지 않도록 최상위로 둔다. */
+#tx-overlay-root{position:relative;z-index:100100}
 /* toasts */
 #tx-toasts{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:1200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
 .tx-toast{background:var(--dark);color:#fff;font-size:13.5px;font-weight:600;padding:11px 20px;border-radius:9px;box-shadow:0 8px 26px rgba(0,0,0,.24);opacity:0;transform:translateY(10px);transition:.24s;max-width:80vw}
