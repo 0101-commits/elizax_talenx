@@ -394,8 +394,11 @@
     if (window.EZLedger && typeof window.EZLedger.openPanel === "function") {
       items.push({ ic: "▤", label: "성과 히스토리", run: function () { window.EZLedger.openPanel(); } });
     }
+    if (window.EZJourney && typeof window.EZJourney.open === "function") {
+      items.push({ ic: "◈", label: "프로세스 맵", run: function () { window.EZJourney.open(); } });
+    }
     if (window.EZCycle && typeof window.EZCycle.openMap === "function") {
-      items.push({ ic: "◇", label: "전주기 맵", run: function () { window.EZCycle.openMap(); } });
+      items.push({ ic: "◇", label: "전주기 커버리지 맵", run: function () { window.EZCycle.openMap(); } });
     }
     return items;
   }

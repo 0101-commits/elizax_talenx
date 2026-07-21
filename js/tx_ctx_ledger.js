@@ -496,7 +496,11 @@
       + '<div class="ezl-strip">' + chips + "</div>"
       + '<div class="ezl-body">' + list + "</div>"
       + '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 데모: 브라우저에 최근 80건 보관 '
-      + '<button type="button" class="ezl-foot-policy" data-ezl-policy="1">🔒 보관·열람 규칙</button></div>';
+      + '<button type="button" class="ezl-foot-policy" data-ezl-policy="1">🔒 보관·열람 규칙</button>'
+      + (window.EZJourney && EZJourney.open
+        ? '<button type="button" class="ezl-foot-policy" data-ezl-journey="1" title="이 기록들을 시간순이 아니라 프로세스 단계 순서로 봅니다">&#9672; 프로세스 순서로 보기</button>'
+        : "")
+      + "</div>";
 
     if (highlightId) {
       setTimeout(function () {
@@ -767,6 +771,15 @@
       var ft = fc.getAttribute("data-ezl-filter") || "";
       filterType = (filterType === ft) ? "" : ft;
       renderPanelBody(null);
+      return;
+    }
+
+    /* 프로세스 순서로 보기 (tx_journey.js) — 패널을 닫고 프로세스 맵을 연다 */
+    var jn = closestAttr(t, "data-ezl-journey");
+    if (jn) {
+      ev.preventDefault();
+      closePanel();
+      if (window.EZJourney && EZJourney.open) EZJourney.open();
       return;
     }
 

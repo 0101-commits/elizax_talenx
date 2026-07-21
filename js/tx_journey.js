@@ -128,12 +128,45 @@
   };
   var STAGE_NAME = { goal: "목표수립", run: "실행·중간점검", eval: "평가", review: "피드백/리뷰" };
 
-  /* 증거 흐름 선 (from → to 노드 id) */
-  var LINKS = [
+  /* 증거 흐름 선 — 개념적 연결(원천 id로는 안 잡히는 인용 관계)만 고정 */
+  var BASE_LINKS = [
     { from: "r1", to: "r2" },   /* 주간 체크인 → 중간점검 요약 확정 */
     { from: "r3", to: "e1" },   /* 1:1 미팅 요약 확정 → 등급 초안 */
     { from: "r2", to: "f1" }    /* 중간점검 요약 확정 → 평가 코멘트 확정 */
   ];
+  var MAX_LINKS = 14;
+
+  /* 앞 노드 evidence의 원천 id(src)가 뒤 노드에 재등장하면 = 그 기록이
+     다음 결정의 인용 근거로 이어졌다는 뜻 → 선으로 잇는다(동적 계보). */
+  function computeLinks(stages) {
+    var flat = [];
+    stages.forEach(function (st) {
+      st.nodes.forEach(function (n) {
+        var srcs = {};
+        (n.evidence || []).forEach(function (ev) {
+          if (ev && ev.src && ev.src !== "chk.none") srcs[ev.src] = 1;
+        });
+        flat.push({ id: n.id, srcs: srcs });
+      });
+    });
+    var links = BASE_LINKS.slice();
+    var seen = {};
+    links.forEach(function (L) { seen[L.from + ">" + L.to] = 1; });
+    for (var i = 0; i < flat.length && links.length < MAX_LINKS; i++) {
+      for (var j = i + 1; j < flat.length && links.length < MAX_LINKS; j++) {
+        var key = flat[i].id + ">" + flat[j].id;
+        if (seen[key]) continue;
+        for (var s in flat[i].srcs) {
+          if (flat[j].srcs[s]) {
+            seen[key] = 1;
+            links.push({ from: flat[i].id, to: flat[j].id });
+            break;
+          }
+        }
+      }
+    }
+    return links;
+  }
 
   /* ================= 여정 모델 빌드 (실데이터 + 라이브 스토어) ================= */
   function buildJourney(subj) {
@@ -548,6 +581,15 @@
       ".ezpm-foot{padding:11px 22px;border-top:1px solid var(--line,#ECEEF2);font-size:11px;color:var(--ink-3,#9096A3);line-height:1.6;}",
       /* 진입 버튼 */
       ".ezpm-openbtn{white-space:nowrap;}",
+      /* 역할 바 상시 사이클 칩 — 지금 어느 단계인지 한 눈에 */
+      ".ezpm-cycle{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:3px 10px;cursor:pointer;",
+      "border:1px solid rgba(31,122,240,.35);border-radius:12px;background:var(--card,#fff);",
+      "font:inherit;font-size:11px;font-weight:600;color:var(--ink-2,#5C6474);white-space:nowrap;}",
+      ".ezpm-cycle:hover{background:rgba(31,122,240,.06);}",
+      ".ezpm-cycle .stp{color:#15803D;}",
+      ".ezpm-cycle .cur{color:var(--blue,#1F7AF0);font-weight:800;}",
+      ".ezpm-cycle .nxt{color:var(--ink-4,#B4B9C4);}",
+      ".ezpm-cycle .sep{color:var(--ink-4,#B4B9C4);font-weight:400;}",
       /* reduced motion 총괄 차단 */
       "@media (prefers-reduced-motion:reduce){.ezpm-root *,.ezpm-root{animation:none!important;transition:none!important;}}"
     ].join("");
@@ -559,6 +601,7 @@
   var selectedNode = null;
   var hoverNode = null;
   var journeyCache = null;   /* buildJourney 결과 (노드 조회용) */
+  var curLinks = [];         /* computeLinks 결과 (렌더마다 갱신) */
 
   function overlay() { return document.querySelector("[data-ezpm-root]"); }
 
@@ -626,6 +669,7 @@
     if (!ov) return;
     var subj = subjectEmp();
     journeyCache = buildJourney(subj);
+    curLinks = computeLinks(journeyCache);
     var flowin = ov.querySelector(".ezpm-flowin");
     if (flowin) flowin.innerHTML = flowHTML(journeyCache);
     var subjHost = ov.querySelector("[data-ezpm-subjhost]");
@@ -726,7 +770,7 @@
       + '<marker id="ezpm-arr-hl" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="#1F7AF0"/></marker>'
       + "</defs>";
     var paths = "";
-    LINKS.forEach(function (L) {
+    curLinks.forEach(function (L) {
       var a = ov.querySelector('[data-ezpm-node="' + L.from + '"]');
       var b = ov.querySelector('[data-ezpm-node="' + L.to + '"]');
       if (!a || !b) return;
@@ -810,6 +854,25 @@
       + ">&#9672; 프로세스 맵</button>";
   }
   function tryInjectButtons() {
+    /* (0) 역할 관점 바 — 사이클 현재 위치 상시 노출, 클릭 → 프로세스 맵 */
+    var bar = document.querySelector(".txr-bar");
+    if (bar && !bar.querySelector("[data-ezpm-cycle]")) {
+      var anchor = bar.querySelector(".eze-ev") || bar.querySelector(".txr-scope");
+      if (anchor) {
+        var chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "ezpm-cycle";
+        chip.setAttribute("data-ezpm-cycle", "1");
+        chip.setAttribute("data-ezpm-open", "1");
+        chip.title = "성과 사이클 — 목표수립·실행 완료, 지금 평가 단계 · 클릭하면 과정과 근거를 한 장으로 봅니다";
+        chip.innerHTML = '&#9672; 사이클 <span class="stp">목표 &#10003;</span><span class="sep">&#8250;</span>'
+          + '<span class="stp">실행 &#10003;</span><span class="sep">&#8250;</span>'
+          + '<span class="cur">평가 진행중</span><span class="sep">&#8250;</span>'
+          + '<span class="nxt">리뷰 예정</span>';
+        if (anchor.nextSibling) anchor.parentNode.insertBefore(chip, anchor.nextSibling);
+        else anchor.parentNode.appendChild(chip);
+      }
+    }
     /* (a) 성과관리 목표 화면 .perf-head */
     var perf = document.getElementById("s-perf");
     if (perf) {
