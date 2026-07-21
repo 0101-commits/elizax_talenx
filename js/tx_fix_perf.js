@@ -94,6 +94,7 @@
       '#s-perf .txf-krwhy b{color:var(--blue,#1F7AF0)}',
       '#s-perf .txf-diffrow{display:flex;gap:8px;align-items:center;margin-top:4px}',
       '#s-perf .txf-diffrow select{width:88px}',
+      '#s-perf .txf-diffrow select.txf-krdiffbasis{width:136px}',
       '#s-perf .txf-diffwhy{font-size:11px;color:var(--ink-3);margin-top:2px;line-height:1.5}',
       '#s-perf .txf-linkrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-2);padding:6px 0;border-bottom:1px solid var(--line-2,#F1F2F5)}',
       '#s-perf .txf-linkrow:last-child{border-bottom:none}',
@@ -109,6 +110,26 @@
       '#s-perf .txf-ai:hover{background:var(--blue-soft)}',
       '#s-perf .txf-ck{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);cursor:pointer;user-select:none}',
       '#s-perf .txf-ck input{width:15px;height:15px;accent-color:var(--blue)}',
+      /* --- F6: 이어받은 출발점 패널 --- */
+      '#s-perf .txf-carry{width:270px;flex:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;font-size:12.5px}',
+      '#s-perf .txf-carry .ch{font-size:13px;font-weight:800;color:var(--ink)}',
+      '#s-perf .txf-carry .ch .sub{display:block;font-size:11px;font-weight:600;color:var(--ink-3);margin-top:2px}',
+      '#s-perf .txf-cv{border:1px solid var(--line-2,#F1F2F5);border-radius:9px;padding:9px 11px;margin-top:9px}',
+      '#s-perf .txf-cv .cvt{font-size:11px;font-weight:800;color:var(--ink-3);margin-bottom:5px}',
+      '#s-perf .txf-cv .cvb{font-size:12.5px;color:var(--ink)}',
+      '#s-perf .txf-cv .cvb .gr{font-size:15px;font-weight:800}',
+      '#s-perf .txf-cv .pd{font-size:11px;color:var(--ink-4)}',
+      '#s-perf .txf-cv .cvn{font-size:11.5px;color:var(--ink-2);line-height:1.55;margin-top:4px}',
+      '#s-perf .txf-cv .cvs{font-size:10.5px;color:var(--ink-4);margin-top:6px}',
+      '#s-perf .txf-cv .cvk{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--line-2,#F1F2F5)}',
+      '#s-perf .txf-cv .cvk .nm{flex:1;min-width:0;font-size:11.5px;color:var(--ink-2);line-height:1.4}',
+      '#s-perf .txf-cv .cvk .ach{font-size:11px;font-weight:800;color:#B45309;flex:none}',
+      '#s-perf .txf-cv .cvbtn{flex:none;border:1px solid var(--line);background:var(--card);border-radius:6px;font-size:10.5px;font-weight:700;color:var(--ink-2);padding:3px 7px;cursor:pointer}',
+      '#s-perf .txf-cv .cvbtn:hover{background:var(--soft)}',
+      '#s-perf .txf-src{display:inline-block;font-size:10px;font-weight:800;color:#356CB5;background:rgba(31,122,240,.08);border-radius:4px;padding:0 5px;cursor:pointer}',
+      '#s-perf .txf-src:hover{background:rgba(31,122,240,.16)}',
+      '#s-perf .txf-carryai{width:100%;margin-top:11px;border:1.5px solid var(--purple,#7C3AED);color:var(--purple,#7C3AED);background:var(--card);font-size:12px;font-weight:700;padding:8px;border-radius:8px;cursor:pointer}',
+      '#s-perf .txf-carryai:hover{background:var(--blue-soft)}',
       /* --- overlays --- */
       '#s-perf .txf-ov{position:fixed;left:0;right:0;top:60px;bottom:0;background:var(--soft);z-index:60;display:none;overflow-y:auto}',
       '#s-perf .txf-ov.open{display:block}',
@@ -751,7 +772,12 @@
             return '<option value="' + d + '"' + ((data.diff || 'A') === d ? ' selected' : '') + '>' + d + '</option>';
           }).join('')
         + '</select>'
-        + '<input class="txf-inp txf-krdiffwhy" placeholder="난이도 근거 — 예: 전년 실적 대비 +30% 상향" value="' + esc(data.diffwhy || '') + '"></div>'
+        + '<select class="txf-inp txf-krdiffbasis">'
+        + [['yoy', '전년 실적'], ['peer', '동료·직군 평균'], ['market', '시장·고객 기준']].map(function (b) {
+            return '<option value="' + b[0] + '"' + ((data.difftype || 'yoy') === b[0] ? ' selected' : '') + '>' + b[1] + '</option>';
+          }).join('')
+        + '</select>'
+        + '<input class="txf-inp txf-krdiffwhy" placeholder="난이도 근거 수치·설명 — 예: 전년 실적 대비 +30% 상향" value="' + esc(data.diffwhy || '') + '"></div>'
         + '<div class="txf-diffwhy">ⓘ 무엇과 비교해 어려운지(작년 실적·동료 수준) 남겨야 평가 시점의 난이도 반영이 가능합니다.</div>'
         + (data.why ? '<div class="txf-krwhy">✦ 이 KR의 근거 — ' + data.why + '</div>' : '')
         + '</div>';
@@ -762,6 +788,130 @@
       rows.forEach(function (r, i) { var n = r.querySelector('.krn'); if (n) n.textContent = (i + 1); });
       var stepKR = newOv.querySelector('[data-step="kr"]');
       if (stepKR) stepKR.firstChild && (stepKR.querySelector('.lbl').textContent = '핵심 성과 ' + rows.length);
+    }
+    /* ---- 저장 게이트 (F2·F3) — bad 린트·근거 없는 S 난이도는 사유 없이 저장 불가 ---- */
+    function gateIssues() {
+      var out = [];
+      if (!window.EZLint || !newOv) return out;
+      var rows = newOv.querySelectorAll('.txf-kr');
+      Array.prototype.forEach.call(rows, function (row, i) {
+        var kr = EZLint.krFromRow(row);
+        if (!String(kr.name || '').trim()) return;
+        var bad = EZLint.lintKR(kr).filter(function (h) { return h.cls === 'bad'; });
+        if (kr.diff === 'S' && !String(kr.basisVal || '').trim())
+          bad.push({ id: 'diff-s', tag: 'S 난이도 근거 없음', tip: 'S 난이도는 비교 근거가 필요합니다', word: '난이도 S' });
+        if (bad.length) out.push({ idx: i + 1, name: kr.name, kr: kr, hits: bad });
+      });
+      return out;
+    }
+    function finishNewSave(reason) {
+      if (reason) {
+        /* "알고도 남긴 근거"를 맥락 원장에 기록 — 평가 시점에 조회 가능 */
+        try {
+          document.dispatchEvent(new CustomEvent('ez:ctx', { detail: {
+            type: 'goal', source: 'goal.gate.override',
+            title: '측정 가능성 경고를 확인하고 저장',
+            summary: '사유: ' + reason,
+            weight: 2
+          } }));
+        } catch (e) { /* 원장 부재 — 무해화 */ }
+      }
+      TX.toast && TX.toast('목표를 생성했습니다.', 'ok'); closeNew();
+    }
+    function openSaveGate(issues) {
+      if (!TX.modal) { finishNewSave(); return; }
+      var MODES = ['달성률', '절대값', '구간', '여부'];
+      var body = document.createElement('div');
+      body.innerHTML =
+        '<div style="font-weight:700;margin-bottom:9px">이 표현은 평가 시점에 측정할 수 없습니다</div>'
+        + issues.map(function (it) {
+            return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:7px;font-size:12.5px">'
+              + '<b>KR ' + it.idx + '</b> · ' + esc(it.name)
+              + '<div style="margin-top:4px">'
+              + it.hits.map(function (h) {
+                  return '<div style="color:var(--red)">· [' + esc(h.tag) + ']'
+                    + (h.word ? ' “' + esc(h.word) + '”' : '') + ' — ' + esc(h.tip) + '</div>';
+                }).join('')
+              + '</div></div>';
+          }).join('')
+        + '<div style="font-size:12px;color:var(--ink-3);margin:10px 0 5px">그대로 저장하려면 사유가 필요합니다 — 사유는 맥락 원장에 기록되어 평가 시점에 함께 조회됩니다.</div>'
+        + '<textarea class="txf-inp" data-gate-reason placeholder="그대로 저장하는 사유 (필수)" style="width:100%;min-height:58px;resize:vertical"></textarea>';
+      TX.modal({
+        title: '저장 전 확인 — 측정 가능성', body: body,
+        actions: [
+          { label: '✦ elizax로 정제', kind: 'ghost', onClick: function () {
+              var lines = issues.map(function (it) {
+                return '- ' + it.name + ' (관리 방식: ' + (MODES[it.kr.mode] || '미선택') + ' · 난이도 ' + (it.kr.diff || '-')
+                  + (it.kr.basisVal ? ' · 비교 근거: ' + it.kr.basisVal : ' · 비교 근거 없음') + ')';
+              }).join('\n');
+              window.Elizax && Elizax.send && Elizax.send('다음 KR 문장을 측정 가능하게 바꿔줘 — 수치·기한·판정 기준 포함:\n' + lines);
+            } },
+          { label: '그대로 저장', kind: 'primary', onClick: function () {
+              var ta = body.querySelector('[data-gate-reason]');
+              var reason = ta ? ta.value.trim() : '';
+              if (!reason) { TX.toast && TX.toast('사유를 입력해야 저장할 수 있습니다.', 'warn'); return false; }
+              finishNewSave(reason + ' (지적 항목: ' + issues.map(function (it) {
+                return 'KR' + it.idx + ' ' + it.hits.map(function (h) { return h.tag; }).join('·');
+              }).join(' / ') + ')');
+            } }
+        ]
+      });
+    }
+    /* ---- F6: 이어받은 출발점 — 작년 기록 실데이터 (currentUser 기준) ---- */
+    var GR_COL = { S: '#C2410C', A: '#1F7AF0', B: '#4B5563', C: '#E23B3B' };
+    var prevEval = (D.evaluationsPrev || []).filter(function (x) { return x.emp_id === CU.emp_id; })[0] || null;
+    var prevFbs = (D.feedbackHistory || []).filter(function (x) { return x.emp_id === CU.emp_id; }).slice(0, 2);
+    var jobChg = (cuEmp.jobHistory || [])[0] || null;
+    var srcMap = {};   // 출처 ID → 원본 요약 (칩 클릭 시 표시)
+    if (prevEval) srcMap[prevEval.evaluation_id] = 'FY2025 평가 — 등급 ' + prevEval.grade + (prevEval.score != null ? ' · ' + prevEval.score + '점' : '') + '. ' + (prevEval.rationale_summary || '');
+    prevFbs.forEach(function (f) { srcMap[f.fb_id] = 'FY2025 피드백(' + (f.source_type === 'leader' ? '리더' : '동료') + ') — ' + f.summary; });
+    if (jobChg) srcMap['JOB-CHG'] = '직무 전환 ' + jobChg.prev_label + ' → ' + jobChg.new_label + '. ' + (jobChg.note || '');
+    function srcChip(id, label) {
+      if (!id || !srcMap[id]) return '';
+      return ' <span class="txf-src" data-txf="src" data-sid="' + esc(id) + '" title="출처 원본 보기">' + esc(label || id) + '</span>';
+    }
+    function undoneKRs() {
+      return prevEval ? (prevEval.krs || []).filter(function (k) { return !k.done; }) : [];
+    }
+    function emitGoalCtx(source, title, summary) {
+      try {
+        document.dispatchEvent(new CustomEvent('ez:ctx', { detail: {
+          type: 'goal', source: source, title: title, summary: summary, weight: 2
+        } }));
+      } catch (e) { /* 원장 부재 — 무해화 */ }
+    }
+    function carryPanelHTML() {
+      if (!prevEval && !prevFbs.length && !jobChg) return '';
+      var h = '<div class="txf-carry"><div class="ch">↩ 이어받은 출발점<span class="sub">작년 기록 — 올해 목표의 재료</span></div>';
+      if (prevEval) {
+        h += '<div class="txf-cv"><div class="cvt">작년 등급</div>'
+          + '<div class="cvb"><b class="gr" style="color:' + (GR_COL[prevEval.grade] || 'var(--ink)') + '">' + esc(prevEval.grade) + '</b> '
+          + (prevEval.score != null ? prevEval.score + '점' : '') + ' <span class="pd">' + esc(prevEval.period || '') + '</span></div>'
+          + (prevEval.rationale_summary ? '<div class="cvn">' + esc(prevEval.rationale_summary) + '</div>' : '')
+          + '<div class="cvs">출처' + srcChip(prevEval.evaluation_id) + '</div></div>';
+        var und = undoneKRs();
+        if (und.length) {
+          h += '<div class="txf-cv"><div class="cvt">미완 KR ' + und.length + '건</div>'
+            + und.map(function (k, i) {
+                return '<div class="cvk"><span class="nm">' + esc(k.name) + '</span><span class="ach">' + k.achievement_pct + '%</span>'
+                  + '<button class="cvbtn" data-txf="carry-kr" data-ci="' + i + '">그대로 이월</button></div>';
+              }).join('')
+            + '<div class="cvs">출처' + srcChip(prevEval.evaluation_id) + '</div></div>';
+        }
+      }
+      if (prevFbs.length) {
+        h += '<div class="txf-cv"><div class="cvt">피드백 요지</div>'
+          + prevFbs.map(function (f) { return '<div class="cvn">· ' + esc(f.summary) + srcChip(f.fb_id) + '</div>'; }).join('')
+          + '</div>';
+      }
+      if (jobChg) {
+        h += '<div class="txf-cv"><div class="cvt">직무 변경</div>'
+          + '<div class="cvb">' + esc(jobChg.prev_label) + ' → <b>' + esc(jobChg.new_label) + '</b> <span class="pd">' + esc(jobChg.period || '') + '</span></div>'
+          + (jobChg.note ? '<div class="cvn">' + esc(jobChg.note) + '</div>' : '')
+          + '<div class="cvs">출처' + srcChip('JOB-CHG', '직무 전환') + '</div></div>';
+      }
+      h += '<button class="txf-carryai" data-txf="ai">✦ AI 초안에 반영</button></div>';
+      return h;
     }
     function buildNewOverlay() {
       newOv = document.createElement('div');
@@ -796,7 +946,10 @@
         + '<label class="txf-ck" style="margin-bottom:8px;color:var(--ink-3)"><input type="checkbox" checked disabled> 목표 가중치를 설정합니다.</label>'
         + '<input class="txf-inp" type="number" placeholder="목표 가중치를 입력합니다." value="100"></div>'
         + '</div>'
+        + '<div style="flex:none;display:flex;flex-direction:column;gap:14px">'
+        + carryPanelHTML()
         + (window.EZJob && EZJob.panelHTML ? EZJob.panelHTML(cuEmp) : '')
+        + '</div>'
         + '<div class="txf-step"><h3>목표 설정</h3>'
         + '<div class="s done"><span class="ic">✓</span><span class="lbl">상위 목표 연계</span></div>'
         + '<div class="s done"><span class="ic">✓</span><span class="lbl">목표명</span><span class="rq">*</span></div>'
@@ -1181,7 +1334,9 @@
         if (k === 'new-save') {
           var nm = newOv && newOv.querySelector('[data-txf="new-name"]');
           if (nm && !nm.value.trim()) { TX.toast && TX.toast('목표명을 입력하세요.', 'warn'); return; }
-          TX.toast && TX.toast('목표를 생성했습니다.', 'ok'); closeNew(); return;
+          var issues = gateIssues();
+          if (issues.length) { openSaveGate(issues); return; }
+          finishNewSave(); return;
         }
         if (k === 'weight') { openWeightEditor(); return; }
         if (k === 'gd-close') { ev.preventDefault(); closeGoalDetail(); return; }
@@ -1217,6 +1372,27 @@
           else TX.toast && TX.toast('핵심 성과는 최소 1개가 필요합니다.', 'warn');
           return;
         }
+        if (k === 'src') {   // 출처 칩 → 원본 요약 표시
+          var sid = tag.getAttribute('data-sid');
+          if (sid && srcMap[sid]) TX.toast && TX.toast('[' + sid + '] ' + srcMap[sid]);
+          return;
+        }
+        if (k === 'carry-kr') {   // 미완 KR 그대로 이월 (진척 개념 없는 폼 — name 프리필)
+          var und2 = undoneKRs();
+          var ck = und2[parseInt(tag.getAttribute('data-ci'), 10)];
+          var list3 = newOv && newOv.querySelector('[data-txf="kr-list"]');
+          if (!ck || !list3 || !prevEval) return;
+          list3.insertAdjacentHTML('beforeend', krRowHTML({
+            name: ck.name, weight: '', diff: 'A', difftype: 'yoy',
+            diffwhy: '작년 달성률 ' + ck.achievement_pct + '% — 미완 과제 이월',
+            why: '작년 미완 KR 이월 (달성률 ' + ck.achievement_pct + '%)' + srcChip(prevEval.evaluation_id)
+          }));
+          renumberKR();
+          emitGoalCtx('goal.carryover', '작년 미완 KR 이월 — ' + ck.name,
+            '출처 ' + prevEval.evaluation_id + ' · 작년 달성률 ' + ck.achievement_pct + '%');
+          TX.toast && TX.toast('작년 미완 KR을 이월했습니다. 출처가 함께 기록됩니다.', 'ok');
+          return;
+        }
         if (k === 'ai') {
           var list2 = newOv && newOv.querySelector('[data-txf="kr-list"]');
           if (list2) {
@@ -1240,16 +1416,34 @@
               return '직무 과업 <b>「' + esc(a) + '」</b> + 상위목표 <b>「' + esc(parentTitle) + '」</b>'
                 + (compLabel ? ' · 역량 <b>' + esc(compLabel) + '</b>' : '');
             };
+            /* F6: 작년 기록 4컨텍스트 — 프롬프트 주입 + 출처 칩 재료 */
+            var carryCtx = '';
+            if (prevEval) {
+              var undNames = undoneKRs().map(function (x) { return x.name + '(달성률 ' + x.achievement_pct + '%)'; }).join(', ');
+              carryCtx += ' [작년 평가 ' + prevEval.evaluation_id + '] 등급 ' + prevEval.grade + ' · ' + prevEval.score + '점. 미완 KR: ' + (undNames || '없음') + '.';
+            }
+            if (prevFbs.length) carryCtx += ' [작년 피드백] ' + prevFbs.map(function (f) { return f.fb_id + ': ' + f.summary; }).join(' / ');
+            if (jobChg) carryCtx += ' [직무 변경] ' + jobChg.prev_label + ' → ' + jobChg.new_label + (jobChg.note ? ' (' + jobChg.note + ')' : '');
+            var carryChipsOf = function (i) {   // KR별 출처 칩 — 근거 표시 영역에 부착
+              if (i === 0 && prevEval) return srcChip(prevEval.evaluation_id);
+              if (i === 1 && prevFbs[0]) return srcChip(prevFbs[0].fb_id);
+              if (i === 2) return jobChg ? srcChip('JOB-CHG', '직무 전환') : (prevFbs[1] ? srcChip(prevFbs[1].fb_id) : '');
+              return '';
+            };
             var canned = [
-              { name: '신규 기능 기획서 사용자 검증 통과율 90% 달성', mode: 0, weight: 40, diff: 'A', diffwhy: '전년 통과율 실적 대비 +15%p 상향', why: whyOf(0) },
-              { name: '기획 산출물 평균 리드타임 5일 이내 단축', mode: 1, weight: 30, diff: 'A', diffwhy: '전년 평균 6.5일 대비 단축', why: whyOf(1) },
-              { name: '분기별 사용자 인터뷰 12회 실시', mode: 3, weight: 30, diff: 'B', diffwhy: '전년 수준 유지 — 안정 운영', why: whyOf(2) }
+              { name: '신규 기능 기획서 사용자 검증 통과율 90% 달성', mode: 0, weight: 40, diff: 'A', diffwhy: '전년 통과율 실적 대비 +15%p 상향', why: whyOf(0) + carryChipsOf(0) },
+              { name: '기획 산출물 평균 리드타임 5일 이내 단축', mode: 1, weight: 30, diff: 'A', diffwhy: '전년 평균 6.5일 대비 단축', why: whyOf(1) + carryChipsOf(1) },
+              { name: '분기별 사용자 인터뷰 12회 실시', mode: 3, weight: 30, diff: 'B', diffwhy: '전년 수준 유지 — 안정 운영', why: whyOf(2) + carryChipsOf(2) }
             ];
             var insertKRs = function (items, live) {
               items.forEach(function (s) { list2.insertAdjacentHTML('beforeend', krRowHTML(s)); });
               renumberKR();
-              TX.toast && TX.toast(live ? 'elizax가 직무 프로파일·상위목표를 근거로 KR 3건을 추천했습니다.'
-                                        : 'AI가 직무 과업·상위목표를 근거로 핵심 성과 3건을 추천했습니다.', 'ok');
+              if (carryCtx) {
+                emitGoalCtx('goal.ai.draft', '작년 기록 반영 AI 목표 초안 ' + items.length + '건 삽입',
+                  '출처 ' + [prevEval && prevEval.evaluation_id, prevFbs[0] && prevFbs[0].fb_id, jobChg && '직무 전환'].filter(Boolean).join(' · '));
+              }
+              TX.toast && TX.toast(live ? 'elizax가 직무 프로파일·상위목표·작년 기록을 근거로 KR 3건을 추천했습니다.'
+                                        : 'AI가 직무 과업·상위목표·작년 기록을 근거로 핵심 성과 3건을 추천했습니다.', 'ok');
             };
             /* Claude 연결 시: 직무·기존 목표 실데이터 기반 실제 추천 */
             var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
@@ -1260,7 +1454,8 @@
                 messages: [{ role: 'user', content:
                   '현재 사용자의 직무 프로파일(get_job_profile)과 기존 목표를 도구로 조회한 뒤, 새 목표에 넣을 핵심성과(KR) 3건을 추천해줘. ' +
                   '반드시 아래 형식으로만 답해 — 각 줄 "KR명 | 가중치% | 근거" 형태 3줄, 그 외 텍스트 금지. 가중치 합 100. ' +
-                  '근거는 "직무 과업 ○○ · 상위목표 ○○" 형식으로 실제 과업명과 목표명을 인용해.' }],
+                  '근거는 "직무 과업 ○○ · 상위목표 ○○" 형식으로 실제 과업명과 목표명을 인용해.' +
+                  (carryCtx ? ' 아래 작년 기록을 반영해 — 미완 과제 이월, 피드백 보완, 새 직무 적합성 순으로 고려:' + carryCtx : '') }],
                 onDone: function (text) {
                   var items = [];
                   String(text || '').split(/\r?\n/).forEach(function (ln) {
@@ -1268,7 +1463,7 @@
                     if (m2 && items.length < 3) items.push({
                       name: m2[1].trim(), mode: 0, weight: Number(m2[2]),
                       diff: 'A', diffwhy: '전년 실적 대비 상향',
-                      why: m2[3] ? esc(m2[3].trim()) : whyOf(items.length)
+                      why: (m2[3] ? esc(m2[3].trim()) : whyOf(items.length)) + carryChipsOf(items.length)
                     });
                   });
                   insertKRs(items.length === 3 ? items : canned, items.length === 3);

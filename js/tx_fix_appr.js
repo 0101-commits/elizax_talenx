@@ -22,6 +22,27 @@
 
   var GC = { S: '#C2410C', A: '#1F7AF0', B: '#4B5563', C: '#E23B3B' };
 
+  /* ---------- F3: 난이도 판단 재료 + 보정 데모 (표시 계산만 — 원본 불변) ---------- */
+  var DIFF_COEF = { S: 1.15, A: 1.0, B: 0.9 };   // 계약 상수 (데모 계수)
+  var krByObj = {};
+  (D.keyResults || []).forEach(function (k) { (krByObj[k.objective_id] = krByObj[k.objective_id] || []).push(k); });
+  function diffBadge(k) {
+    var d = k.difficulty || '-';
+    var lab = k.difficulty_basis && k.difficulty_basis.label;
+    if (lab) return '<span class="txf-diffb' + (d === 'S' ? ' dS' : '') + '" title="' + esc((k.difficulty_basis.note || '')) + '">난이도 ' + esc(d) + ' · ' + esc(lab) + '</span>';
+    return '<span class="txf-diffb nob">난이도 ' + esc(d) + ' · 근거 없음</span>';
+  }
+  function diffCoefOf(objList) {   // KR 난이도의 가중 평균 계수
+    var s = 0, w = 0;
+    objList.forEach(function (o) {
+      (krByObj[(o || {}).objective_id] || []).forEach(function (k) {
+        var wt = parseFloat(k.weight) || 1;
+        s += (DIFF_COEF[k.difficulty] || 1) * wt; w += wt;
+      });
+    });
+    return w ? s / w : 1;
+  }
+
   /* ---------- one-time CSS ---------- */
   function styleOnce() {
     if (document.getElementById('txf-appr-style')) return;
@@ -81,7 +102,16 @@
       '.txfd-row:last-child{border-bottom:0}' +
       '.txfd-row .nm{font-size:13px;font-weight:700;color:var(--ink)}' +
       '.txfd-row .tm{font-size:12px;color:var(--ink-3)}' +
-      '.txfd-pill{margin-left:auto;background:#FDECEC;color:var(--red,#E23B3B);font-size:11.5px;font-weight:800;border-radius:12px;padding:3px 10px}';
+      '.txfd-pill{margin-left:auto;background:#FDECEC;color:var(--red,#E23B3B);font-size:11.5px;font-weight:800;border-radius:12px;padding:3px 10px}' +
+      /* F3 난이도 배지 · 보정 데모 */
+      '.txf-krd{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11.5px;color:var(--ink-3)}' +
+      '.txf-krd .knm{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '.txf-diffb{display:inline-block;font-size:10.5px;font-weight:800;border-radius:5px;padding:1px 7px;background:rgba(31,122,240,.08);color:#356CB5;white-space:nowrap}' +
+      '.txf-diffb.dS{background:rgba(194,65,12,.08);color:#C2410C}' +
+      '.txf-diffb.nob{background:var(--soft);color:var(--ink-3);border:1px dashed var(--line)}' +
+      '.txf-coefbox{margin-top:12px;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:10px 13px;font-size:12.5px;color:var(--ink-2);line-height:1.6}' +
+      '.txf-coefbox .c{color:var(--ink-3);font-size:11.5px}' +
+      '.txfd-dpill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:14px;padding:3px 11px;font-size:12px;font-weight:700;color:var(--ink-2);margin:0 6px 6px 0}';
     document.head.appendChild(s);
   }
 
@@ -253,10 +283,28 @@
     var objs = objsFor(empId);
     var goalRows = objs.map(function (o, i) {
       o = o || {};
-      return '<tr><td>' + esc(o.title || '-') + '</td>' +
+      var krLines = (krByObj[o.objective_id] || []).slice(0, 3).map(function (k) {
+        return '<div class="txf-krd"><span class="knm" title="' + esc(k.name) + '">' + esc(k.name) + '</span>' + diffBadge(k) + '</div>';
+      }).join('');
+      return '<tr><td>' + esc(o.title || '-') + krLines + '</td>' +
         '<td style="white-space:nowrap;color:var(--ink-2);font-weight:700">' + (o.progress != null ? o.progress + '%' : '-') + '</td>' +
         '<td style="white-space:nowrap">' + radioRow('txfw-g' + i) + '</td></tr>';
     }).join('');
+    /* 난이도 보정 데모 — 원본 점수는 그대로, 화면 병기만 */
+    var ev0 = evalOf(empId);
+    var baseScore = ev0 ? (ev0.weighted_score != null ? ev0.weighted_score : (ev0.components && ev0.components.achievement_norm)) : null;
+    if (baseScore == null) {
+      var ps = 0, pn = 0;
+      objs.forEach(function (o) { if (o && o.progress != null) { ps += o.progress; pn++; } });
+      if (pn) baseScore = Math.round(ps / pn * 10) / 10;
+    }
+    var coefBox = '';
+    if (baseScore != null) {
+      var coef = diffCoefOf(objs);
+      var adj = Math.round(baseScore * coef * 10) / 10;
+      coefBox = '<div class="txf-coefbox">난이도 보정 데모 — 달성 점수 <b>' + baseScore + '</b> → 난이도 반영 <b>' + adj + '</b>' +
+        ' <span class="c">(데모 계수 ×' + (Math.round(coef * 100) / 100) + ' · S 1.15 / A 1.0 / B 0.9 — KR 난이도 가중 평균, 원본 점수는 바뀌지 않습니다)</span></div>';
+    }
     var compRows = ['커뮤니케이션', '문제해결', '협업', '직무 전문성'].map(function (c, i) {
       return '<tr><td>' + c + '</td><td style="color:var(--ink-3)">공통 역량</td>' +
         '<td style="white-space:nowrap">' + radioRow('txfw-c' + i) + '</td></tr>';
@@ -266,7 +314,7 @@
       '<div class="txfw-emp">' + F.avatar(e.name || '대상자', 36) +
       '<div><div class="nm">' + esc(e.name || empId || '대상자') + '</div>' +
       '<div class="tm">' + esc(F.teamName(e)) + (e.level_kr ? ' · ' + esc(e.level_kr) : '') + '</div></div></div>' +
-      '<div data-wpane="0"><table class="txf-adj"><thead><tr><th>목표명</th><th>달성도</th><th>등급</th></tr></thead><tbody>' + goalRows + '</tbody></table></div>' +
+      '<div data-wpane="0"><table class="txf-adj"><thead><tr><th>목표명</th><th>달성도</th><th>등급</th></tr></thead><tbody>' + goalRows + '</tbody></table>' + coefBox + '</div>' +
       '<div data-wpane="1" style="display:none"><table class="txf-adj"><thead><tr><th>역량 항목</th><th>구분</th><th>등급</th></tr></thead><tbody>' + compRows + '</tbody></table></div>' +
       '<div class="txf-fld" style="margin-top:16px"><span>종합의견</span><textarea class="txfw-op" rows="4" placeholder="평가 근거와 종합 의견을 입력하세요."></textarea></div>';
     var m = TX.modal({
@@ -321,8 +369,22 @@
       '<div class="txfd-sec first">진행률 요약 — 2026 상반기 평가</div>' +
       '<div class="txfd-big">작성 완료 ' + done + ' <span style="color:var(--ink-3);font-weight:600">/ 전체 ' + total + ' (' + pct + '%)</span></div>' +
       '<div class="txfd-prog"><i style="width:' + pct + '%"></i></div>' +
-      '<div class="txfd-sec">등급 분포</div>' + bars +
-      '<div class="txfd-sec">지연자 (' + delayed.length + '명)</div>' + lateRows;
+      '<div class="txfd-sec">등급 분포</div>' + bars;
+    /* F3: 난이도 분포 미니 표기 — 수립된 KR 기준 */
+    var krAll = D.keyResults || [];
+    if (krAll.length) {
+      var dd = { S: 0, A: 0, B: 0 }, basisN = 0;
+      krAll.forEach(function (k) {
+        if (dd[k.difficulty] != null) dd[k.difficulty]++;
+        if (k.difficulty_basis && k.difficulty_basis.label) basisN++;
+      });
+      body += '<div class="txfd-sec">난이도 분포 — 수립된 핵심 성과 ' + krAll.length + '건</div><div>' +
+        ['S', 'A', 'B'].map(function (g) {
+          return '<span class="txfd-dpill"><b style="color:' + (GC[g] || 'var(--ink-2)') + '">' + g + '</b> ' + dd[g] + '건 (' + Math.round(dd[g] / krAll.length * 100) + '%)</span>';
+        }).join('') +
+        '<span class="txfd-dpill">근거 기재 ' + Math.round(basisN / krAll.length * 100) + '%</span></div>';
+    }
+    body += '<div class="txfd-sec">지연자 (' + delayed.length + '명)</div>' + lateRows;
     TX.modal({ title: '평가 대시보드', wide: true, body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
   }
 

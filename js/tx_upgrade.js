@@ -170,18 +170,30 @@
      goal:   목표/KR 측정 가능성 검사 — 목표 생성 overlay·KR 목록 안 필드.
              "업계 Top 수준 달성" 류는 쓰는 시점에 잡아야 평가 갈등이 안 생긴다.
      ============================================================ */
+  function isBinaryMode(mode) { return mode === 3 || mode === "3" || mode === "여부" || String(mode).toLowerCase() === "binary"; }
   var LINT_RULES = {
     review: [
-      { re: /(항상|절대|전혀|결코|맨날)/, tag: "단정 표현", cls: "bad", tip: "근거 없는 일반화 — 구체 사례로 교체" },
-      { re: /(열심히|성실히|많이 노력|태도가 좋|잘함|잘 함)/, tag: "모호 표현", cls: "warn", tip: "측정 불가 — 행동·결과 중심으로" },
-      { re: /(최근|요즘|지난달부터)/, tag: "최신 편향 위험", cls: "warn", tip: "평가 기간 전체 근거를 인용했는지 확인" },
-      { re: /(여직원|남직원|여자|남자)\s*(치고|답게|라서)/, tag: "성별화 표현", cls: "bad", tip: "속성 언급 제거" }
+      { id: "review-1", re: /(항상|절대|전혀|결코|맨날)/, tag: "단정 표현", cls: "bad", tip: "근거 없는 일반화 — 구체 사례로 교체" },
+      { id: "review-2", re: /(열심히|성실히|많이 노력|태도가 좋|잘함|잘 함)/, tag: "모호 표현", cls: "warn", tip: "측정 불가 — 행동·결과 중심으로" },
+      { id: "review-3", re: /(최근|요즘|지난달부터)/, tag: "최신 편향 위험", cls: "warn", tip: "평가 기간 전체 근거를 인용했는지 확인" },
+      { id: "review-4", re: /(여직원|남직원|여자|남자)\s*(치고|답게|라서)/, tag: "성별화 표현", cls: "bad", tip: "속성 언급 제거" }
     ],
     goal: [
-      { re: /업계\s*(Top|톱|최고|선도)|최고\s*수준|세계적\s*수준|글로벌\s*(리더|Top|수준)/i, tag: "측정 불가 표현", cls: "bad", tip: '평가 시점에 "달성 근거"를 다투게 됩니다 — 수치·순위·기한으로 바꾸세요' },
-      { re: /(체계|기반|프로세스|시스템)\s*(구축|마련|정착)\s*완료?|고도화\s*완료/, tag: "완료 판정 기준 없음", cls: "warn", tip: "무엇이 되면 완료인지 검증 조건을 명시하세요 (예: 적용 조직 3곳·만족도 80점)" },
-      { re: /(향상|개선|강화|확대|제고)\s*$/, tag: "측정 기준 없음", cls: "warn", tip: "얼마나·언제까지인지 목표 수치와 기준선을 붙이세요" },
-      { re: /(적극|최선|열심히|노력)/, tag: "행동·결과 아님", cls: "warn", tip: "노력 표현 대신 결과 지표로" }
+      { id: "goal-1", re: /업계\s*(Top|톱|최고|선도)|최고\s*수준|세계적\s*수준|글로벌\s*(리더|Top|수준)/i, tag: "측정 불가 표현", cls: "bad", tip: '평가 시점에 "달성 근거"를 다투게 됩니다 — 수치·순위·기한으로 바꾸세요' },
+      { id: "goal-2", re: /(체계|기반|프로세스|시스템)\s*(구축|마련|정착)\s*완료?|고도화\s*완료/, tag: "완료 판정 기준 없음", cls: "warn", tip: "무엇이 되면 완료인지 검증 조건을 명시하세요 (예: 적용 조직 3곳·만족도 80점)" },
+      { id: "goal-3", re: /(향상|개선|강화|확대|제고)\s*$/, tag: "측정 기준 없음", cls: "warn", tip: "얼마나·언제까지인지 목표 수치와 기준선을 붙이세요" },
+      { id: "goal-4", re: /(적극|최선|열심히|노력)/, tag: "행동·결과 아님", cls: "warn", tip: "노력 표현 대신 결과 지표로" },
+      /* goal-5~7 구조 규칙 — 문장이 아니라 KR 구조 필드를 검사(lintKR 전용, re 없음) */
+      { id: "goal-5", tag: "목표 수치 없음", cls: "bad", tip: "목표 수치가 없습니다 — 달성을 판정할 숫자를 넣으세요",
+        check: function (kr) {
+          if (isBinaryMode(kr.mode)) return false; /* 여부형은 goal-7이 판정 조건을 검사 */
+          var tv = (kr.targetValue != null && String(kr.targetValue).trim()) ? kr.targetValue : kr.name;
+          return !/\d/.test(String(tv || ""));
+        } },
+      { id: "goal-6", tag: "기준선 없음", cls: "warn", tip: "무엇에서 출발하는지 없으면 달성률을 다툽니다 — 현재값·전년 실적을 남기세요",
+        check: function (kr) { return !String(kr.baseline == null ? "" : kr.baseline).trim(); } },
+      { id: "goal-7", tag: "판정 조건 없음", cls: "warn", tip: "무엇이 되면 완료인지 판정 조건 필수",
+        check: function (kr) { return isBinaryMode(kr.mode) && !String(kr.verifyCond == null ? "" : kr.verifyCond).trim(); } }
     ]
   };
   /* 필드 위치로 스코프 판정 — 목표 생성 overlay 또는 KR 목록 안이면 goal */
@@ -193,9 +205,41 @@
   function lintText(v, scope) {
     var hits = [];
     var rules = LINT_RULES[scope] || LINT_RULES.review;
-    rules.forEach(function (r) { var m = v.match(r.re); if (m) hits.push({ tag: r.tag, cls: r.cls, tip: r.tip, word: m[0] }); });
+    rules.forEach(function (r) { if (!r.re) return; var m = String(v || "").match(r.re); if (m) hits.push({ id: r.id, tag: r.tag, cls: r.cls, tip: r.tip, word: m[0] }); });
     return hits;
   }
+  /* KR 구조 전체 검사 — kr={name, targetValue, baseline, mode, verifyCond} */
+  function lintKR(kr) {
+    kr = kr || {};
+    var hits = lintText(String(kr.name || ""), "goal");
+    LINT_RULES.goal.forEach(function (r) { if (r.check && r.check(kr)) hits.push({ id: r.id, tag: r.tag, cls: r.cls, tip: r.tip }); });
+    return hits;
+  }
+  /* 목표 생성 overlay의 KR 행(.txf-kr) DOM → kr 객체.
+     전용 target/기준선 필드가 없는 화면이라 name·난이도 근거 입력을 폴백으로 쓴다. */
+  function krFromRow(row) {
+    if (!row || !row.querySelector) return { name: "" };
+    var nameInp = row.querySelector("input.txf-inp"); /* 행 첫 input = 성과 지표 */
+    var desc = row.querySelector("textarea");
+    var mode = -1;
+    var radios = row.querySelectorAll('input[type="radio"]');
+    Array.prototype.forEach.call(radios, function (r, i) { if (r.checked) mode = i; });
+    var diffSel = row.querySelector(".txf-krdiff");
+    var basisSel = row.querySelector(".txf-krdiffbasis");
+    var basisInp = row.querySelector(".txf-krdiffwhy");
+    var basisVal = basisInp ? (basisInp.value || "") : "";
+    return {
+      name: nameInp ? (nameInp.value || "") : "",
+      targetValue: null,               /* 전용 필드 없음 — lintKR가 name으로 폴백 */
+      baseline: basisVal,              /* 비교 근거(전년 실적 등)를 기준선으로 간주 */
+      mode: mode,                      /* 0 달성률 · 1 절대값 · 2 구간 · 3 여부 */
+      verifyCond: desc ? (desc.value || "") : "",
+      diff: diffSel ? diffSel.value : "",
+      basisType: basisSel ? basisSel.value : "",
+      basisVal: basisVal
+    };
+  }
+  window.EZLint = { RULES: LINT_RULES, lint: lintText, lintKR: lintKR, krFromRow: krFromRow };
   function attachLint(field) {
     if (field._ezupLint) return;
     field._ezupLint = true;
@@ -206,27 +250,40 @@
     /* textarea는 기존과 동일하게 바로 뒤, input도 폭 100% 블록이라 바로 뒤 삽입이 레이아웃 안전 */
     field.insertAdjacentElement("afterend", bar);
     var deb = null;
+    /* KR 이름 input이면 같은 행의 구조 필드(관리 방식·근거)까지 goal-5~7로 검사 */
+    var krRow = (scope === "goal" && field.closest) ? field.closest(".txf-kr") : null;
+    var isKrName = !!(krRow && field === krRow.querySelector("input.txf-inp"));
     function run() {
       var v = field.value || "";
-      var hits = lintText(v, scope);
+      var hits = isKrName ? lintKR(krFromRow(krRow)) : lintText(v, scope);
       if (!v.trim()) { bar.style.display = "none"; return; }
       bar.style.display = "flex";
       var html = '<span class="lab">품질 린트</span>';
       if (!hits.length) html += '<span class="ezup-lint-chip ok">' + (scope === "goal" ? "✓ 측정 가능한 표현입니다" : "✓ 문제 없음") + "</span>";
       else hits.forEach(function (hi) {
-        html += '<span class="ezup-lint-chip ' + hi.cls + '" title="' + esc(hi.tip) + '">' + esc(hi.tag) + " · “" + esc(hi.word) + "”</span>";
+        html += '<span class="ezup-lint-chip ' + hi.cls + '" title="' + esc(hi.tip) + '">' + esc(hi.tag) + (hi.word ? " · “" + esc(hi.word) + "”" : "") + "</span>";
       });
       html += '<button type="button" class="ezup-lint-fix">✦ elizax로 정제</button>';
       bar.innerHTML = html;
       var fix = bar.querySelector(".ezup-lint-fix");
       if (fix) fix.addEventListener("click", function () {
         var body = (field.value || "").slice(0, 500);
-        if (scope === "goal") elizaxSend("다음 목표/KR 문장을 측정 가능하게 바꿔줘 — 수치·기한·판정 기준 포함:\n" + body);
+        if (scope === "goal") {
+          var ctx = "";
+          if (krRow) {
+            var kr = krFromRow(krRow);
+            var MODES = ["달성률", "절대값", "구간", "여부"];
+            ctx = "\n(관리 방식: " + (MODES[kr.mode] || "미선택") + " · 난이도 " + (kr.diff || "-")
+              + (kr.basisVal ? " · 비교 근거: " + kr.basisVal : " · 비교 근거 없음") + ")";
+          }
+          elizaxSend("다음 목표/KR 문장을 측정 가능하게 바꿔줘 — 수치·기한·판정 기준 포함:\n" + body + ctx);
+        }
         else elizaxSend("다음 평가/피드백 문장을 SBI 구조로 정제하고 편향 표현을 제거해줘:\n" + body);
       });
     }
     field.addEventListener("input", function () { clearTimeout(deb); deb = setTimeout(run, 350); });
     field.addEventListener("focus", run);
+    if (isKrName) krRow.addEventListener("change", run); /* 관리 방식 라디오·근거 변경 시 구조 칩 갱신 */
     run();
   }
   /* 평가·성과 화면 안 textarea 전부 (모달/드로어 포함 — 상위 감시)

@@ -27,6 +27,32 @@
     for (var k = 0; k < es.length; k++) if ((es[k].name || "").indexOf(q) >= 0) return es[k];
     return null;
   }
+  /* ---------------- 열람 규칙 게이트 (F5) ----------------
+     화면을 우회해 AI에게 물어도 같은 규칙이 적용된다.
+     공통 필터: 모든 도구가 반환하는 데이터 종류(recordType)를
+     EZPolicy.check(역할, 종류, 관계)에 통과시켜 full/summ/anon/no 판정. */
+  var POLICY_NOTE = "응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)";
+  var BLOCK_NOTE = "열람 권한이 없어 표시하지 않습니다 (정책 v3.1)";
+  function viewerRole() {
+    var c = CU();
+    if (c._role) return c._role;
+    try { if (window.TXRoles && TXRoles.current) return (TXRoles.current() || {}).key || "member"; } catch (e) { /* ignore */ }
+    return c.is_leader ? "leader" : "member";
+  }
+  function relOf(ownerId) {
+    var me = CU();
+    if (!ownerId || ownerId === me.emp_id) return "self";
+    var o = findEmp(ownerId);
+    if (o && (o.manager_id === me.emp_id || o.org_id === me.org_id)) return "team";
+    return "org";
+  }
+  function gate(recordType, ownerId) {
+    try {
+      if (window.EZPolicy && EZPolicy.check) return EZPolicy.check(viewerRole(), recordType, relOf(ownerId));
+    } catch (e) { /* 정책 모듈 미로드 */ }
+    return "full";
+  }
+
   function krsOf(objectiveId) {
     return arr("keyResults").filter(function (k) { return k.objective_id === objectiveId; })
       .map(function (k) {
@@ -57,17 +83,33 @@
         skills = {};
         ((D().skills || {}).columns || []).forEach(function (c, i) { skills[c] = sk.prof[i]; });
       }
+      /* 평가 초안·이력은 열람 규칙 통과분만 — full=전체 / summ=요약 / anon·no=비노출 */
+      var evLv = gate("eval_draft", e.emp_id);
+      var evOut = null;
+      if (ev && evLv === "full") evOut = { period: ev.period, grade: ev.grade, weighted_score: ev.weighted_score, components: ev.components };
+      else if (ev && evLv === "summ") evOut = { period: ev.period, grade: ev.grade, weighted_score: ev.weighted_score, note: "확정 후 공개 — 요약만 제공됩니다 (정책 v3.1)" };
+      else if (ev) evOut = { policy: evLv === "anon" ? "등급 분포만 제공됩니다 (정책 v3.1)" : BLOCK_NOTE };
+      var hiLv = gate("history", e.emp_id);
+      var histOut = (hiLv === "full" || hiLv === "summ") ? hist
+        : (hiLv === "anon" ? { count: hist.length, policy: POLICY_NOTE } : { policy: BLOCK_NOTE });
       return {
         profile: empBrief(e),
         tenure_years: e.tenure_years, join_date: e.join_date,
-        evaluation: ev ? { period: ev.period, grade: ev.grade, weighted_score: ev.weighted_score, components: ev.components } : null,
-        grade_history: hist,
+        evaluation: evOut,
+        grade_history: histOut,
         skills: skills
       };
     },
 
     get_objectives: function (input) {
       var e = findEmp(input.emp_id || input.name) || CU();
+      var lv = gate("goal_checkin", e.emp_id);
+      if (lv === "no") return { blocked: true, policy: BLOCK_NOTE };
+      if (lv === "anon") {
+        var agOb = arr("objectives").filter(function (o) { return o.owner_emp_id === e.emp_id; });
+        var agAvg = agOb.length ? Math.round(agOb.reduce(function (s, o) { return s + (o.progress || 0); }, 0) / agOb.length) : null;
+        return { owner: { orgName: e.orgName }, count: agOb.length, avg_progress: agAvg, policy: POLICY_NOTE };
+      }
       var objs = arr("objectives").filter(function (o) { return o.owner_emp_id === e.emp_id; })
         .map(function (o) {
           return {
@@ -81,6 +123,12 @@
 
     get_checkins: function (input) {
       var e = findEmp(input.emp_id || input.name) || CU();
+      var lv = gate("goal_checkin", e.emp_id);
+      if (lv === "no") return { blocked: true, policy: BLOCK_NOTE };
+      if (lv === "anon") {
+        var agCs = arr("checkins").filter(function (c) { return c.emp_id === e.emp_id; });
+        return { count: agCs.length, policy: POLICY_NOTE };
+      }
       var limit = Math.min(Number(input.limit) || 10, 20);
       var cs = arr("checkins").filter(function (c) { return c.emp_id === e.emp_id; })
         .sort(function (a, b) { return (b.checkin_date || "").localeCompare(a.checkin_date || ""); })
@@ -101,12 +149,13 @@
         var last = arr("checkins").filter(function (c) { return c.emp_id === e.emp_id; })
           .sort(function (a, b) { return (b.checkin_date || "").localeCompare(a.checkin_date || ""); })[0];
         var ev = arr("evaluations").filter(function (v) { return v.emp_id === e.emp_id; })[0];
+        var evLv = gate("eval_draft", e.emp_id); /* 등급 초안은 열람 규칙 통과분만 */
         return {
           emp_id: e.emp_id, name: e.name, jobTitle: e.jobTitle,
           objectives: objs.length, avg_progress: avg,
           last_checkin: last ? last.checkin_date : null,
           blocker: last && last.blocker ? last.blocker : null,
-          grade_draft: ev ? ev.grade : null
+          grade_draft: (ev && (evLv === "full" || evLv === "summ")) ? ev.grade : null
         };
       });
       return { manager: empBrief(mgr), team_size: rows.length, members: rows };
@@ -142,6 +191,29 @@
           mission: jp.mission, task_areas: areas, skills: (jp.skills || []).slice(0, 15)
         }
       };
+    },
+
+    get_upward_feedback: function (input) {
+      /* 상향 피드백(구성원→조직장) — 매트릭스 하이라이트 행의 강제 지점.
+         조직장 본인은 원문(raw) 대신 themes 집계만, 응답 3명 미만은 집계도 비공개. */
+      var list = (D().upwardFeedback || []); /* 병렬 데이터 생성 중 — 방어적 접근 */
+      var me = CU();
+      var target = findEmp(input.leader_emp_id || input.name) || me;
+      var rows = list.filter(function (f) { return f.leader_emp_id === target.emp_id; });
+      if (!rows.length) return { count: 0, note: "해당 조직장에 대한 상향 피드백 기록이 없습니다." };
+      var lv = gate("upward_feedback", target.emp_id);
+      if (lv === "no") return { blocked: true, policy: "응답자 보호 정책에 따라 열람할 수 없습니다 (정책 v3.1)" };
+      var min = (window.EZPolicy && EZPolicy.ANON_MIN) || 3;
+      var items = rows.map(function (f) {
+        if ((f.respondents || 0) < min) {
+          return { uf_id: f.uf_id, period: f.period, note: "응답 인원이 적어 결과를 표시하지 않습니다 (익명 보호 · 최소 " + min + "명)" };
+        }
+        var r = { uf_id: f.uf_id, period: f.period, respondents: f.respondents, themes: f.themes || [] };
+        if (lv === "full") r.raw = f.raw || [];
+        else r.policy = POLICY_NOTE;
+        return r;
+      });
+      return { leader: empBrief(target), count: items.length, items: items };
     },
 
     get_screen_context: function () {
@@ -188,6 +260,8 @@
       input_schema: { type: "object", properties: {} } },
     { name: "get_job_profile", description: "직원의 직무 프로파일(미션·주요 과업·기대 스킬)을 조회한다. 목표/KR 추천의 직무 근거로 사용. emp_id 생략 시 현재 사용자.",
       input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" } } } },
+    { name: "get_upward_feedback", description: "조직장에 대한 상향 피드백(구성원→조직장)을 조회한다. 응답자 보호: 조직장 본인은 익명 집계(themes)만, 응답 3명 미만은 집계도 비공개. leader_emp_id 생략 시 현재 사용자.",
+      input_schema: { type: "object", properties: { leader_emp_id: { type: "string" }, name: { type: "string" } } } },
     { name: "get_screen_context", description: "사용자가 지금 보고 있는 talenx 화면·역할·현재 사용자 정보.",
       input_schema: { type: "object", properties: {} } },
     { name: "navigate", description: "talenx 화면을 전환한다. section: home/work/perf/msf/appr/pay/att/hrm/wf. tab은 서브탭 인덱스(없으면 null). perf: 0목표 1피드백 2미팅 3리뷰 · appr: 0매트릭스 1인재리뷰 · work: 0업무 1스크럼 · pay: 0급여 1연말정산 · att: 0내근무 1내휴가 2구성원근무 3구성원휴가 4스케줄 5위치 6연차촉진 · hrm: 0사용자 1구성원 2인재검색 3인원현황 · wf: 0받은 1보낸 2서명",
@@ -198,11 +272,13 @@
   function summarize(name, result) {
     try {
       if (result && result.error) return "⚠ " + result.error;
+      if (result && result.blocked) return "🔒 열람 규칙으로 차단됨";
       switch (name) {
         case "search_employee": return result.count + "명 검색됨";
-        case "get_employee_profile": return result.profile.name + " · " + (result.evaluation ? result.evaluation.grade + " (" + result.evaluation.weighted_score + ")" : "평가 없음");
-        case "get_objectives": return result.owner.name + " 목표 " + result.count + "건";
-        case "get_checkins": return result.owner.name + " 체크인 " + result.count + "건";
+        case "get_employee_profile": return result.profile.name + " · " + (result.evaluation && result.evaluation.grade ? result.evaluation.grade + " (" + result.evaluation.weighted_score + ")" : "평가 비노출/없음");
+        case "get_objectives": return result.owner && result.owner.name ? result.owner.name + " 목표 " + result.count + "건" : "목표 " + result.count + "건 · 집계만";
+        case "get_checkins": return result.owner ? result.owner.name + " 체크인 " + result.count + "건" : "체크인 " + result.count + "건 · 집계만";
+        case "get_upward_feedback": return result.count ? "상향 피드백 " + result.count + "건 · 익명 보호 적용" : "상향 피드백 없음";
         case "get_team_status": return "팀원 " + result.team_size + "명 요약";
         case "get_org_overview": return "전사 " + result.employees + "명 · 등급분포 산출";
         case "get_job_profile": return "직무 프로파일 · " + result.profile.title;
@@ -216,12 +292,14 @@
   var SRC_OF = {
     search_employee: "talenx", get_employee_profile: "talenx", get_objectives: "talenx",
     get_checkins: "ERP", get_team_status: "talenx", get_org_overview: "통계",
-    get_screen_context: "맥락", navigate: "화면", get_job_profile: "talenx"
+    get_screen_context: "맥락", navigate: "화면", get_job_profile: "talenx",
+    get_upward_feedback: "talenx"
   };
   var LABEL_OF = {
     search_employee: "직원 검색", get_employee_profile: "프로필·평가 조회", get_objectives: "목표·KR 조회",
     get_checkins: "체크인 기록 대조", get_team_status: "팀 현황 요약", get_org_overview: "전사 분포 스캔",
-    get_screen_context: "현재 화면 확인", navigate: "화면 전환", get_job_profile: "직무 프로파일 조회"
+    get_screen_context: "현재 화면 확인", navigate: "화면 전환", get_job_profile: "직무 프로파일 조회",
+    get_upward_feedback: "상향 피드백 조회 (익명 보호)"
   };
 
   window.EZTools = {

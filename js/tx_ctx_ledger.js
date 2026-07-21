@@ -120,6 +120,64 @@
     for (i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
     return Math.abs(h);
   }
+  function hashStr(s) { return ("00000000" + hashNum(s).toString(16)).slice(-8); }
+
+  /* ---------------- 보존 등급 (F4) ---------------- */
+  /* 핀 고정 = 평가에 인용됐거나(usedCount) 기여도 최상(weight 3)이거나 평가 이력 자체 */
+  function isPinned(it) {
+    return !!it && ((it.usedCount || 0) > 0 || it.weight === 3 || it.type === "eval");
+  }
+  /* 불변 등급 해시 체인 — 내용 서명은 불변 필드만 (usedCount/weight 변동은 체인 무관) */
+  function chainSig(it) {
+    return [it.id, it.ts, it.type, it.title, it.summary, it.prev_hash].join("|");
+  }
+  function ensureChain() {
+    var chained = [], fresh = [], i;
+    for (i = 0; i < items.length; i++) {
+      if (items[i].hash) chained.push(items[i]);
+      else if (isPinned(items[i])) fresh.push(items[i]);
+    }
+    if (!fresh.length) return;
+    chained.sort(function (a, b) { return (a.chainSeq || 0) - (b.chainSeq || 0); });
+    fresh.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+    var last = chained.length ? chained[chained.length - 1] : null;
+    var seqN = last ? (last.chainSeq || 0) : 0;
+    for (i = 0; i < fresh.length; i++) {
+      var it = fresh[i];
+      it.prev_hash = last ? last.hash : "GENESIS";
+      it.chainSeq = ++seqN;
+      it.hash = hashStr(chainSig(it));
+      last = it;
+    }
+  }
+  /* 체인 재계산 대조 — 변조·유실 탐지 */
+  function verifyChain() {
+    var chained = loadStore().filter(function (it) { return it.hash; });
+    chained.sort(function (a, b) { return (a.chainSeq || 0) - (b.chainSeq || 0); });
+    var prev = "GENESIS";
+    for (var i = 0; i < chained.length; i++) {
+      var it = chained[i];
+      if (it.prev_hash !== prev || hashStr(chainSig(it)) !== it.hash) {
+        return { ok: false, count: chained.length, brokenAt: it.id };
+      }
+      prev = it.hash;
+    }
+    return { ok: true, count: chained.length };
+  }
+
+  /* ---------------- 열람 규칙 소비 (F5) ---------------- */
+  var REC_TYPE_MAP = { goal: "goal_checkin", checkin: "goal_checkin", oneonone: "oneonone", feedback: "peer_feedback", eval: "eval_draft" };
+  function policyType(t) { return REC_TYPE_MAP[t] || "history"; }
+  function recRelation(it) {
+    /* 현 원장은 본인 키 저장이라 대부분 self — emp_id가 붙은 레코드만 관계 판정 */
+    return (it && it.emp_id && it.emp_id !== CU.emp_id) ? "team" : "self";
+  }
+  function polCheck(it) {
+    try {
+      if (window.EZPolicy && EZPolicy.check) return EZPolicy.check(roleKey(), policyType(it.type), recRelation(it));
+    } catch (e) { /* 정책 모듈 미로드 */ }
+    return "full";
+  }
 
   /* ================= 스토어 ================= */
   function loadStore() {
@@ -142,9 +200,17 @@
   }
   function saveStore() {
     try {
+      ensureChain();
       if (items.length > MAX_ITEMS) {
+        /* 80건 롤링은 비핀(임시 맥락)만 — 핀 고정(평가 인용·기여도 3·평가 이력)은 삭제 대상 제외 */
         items.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
-        items = items.slice(items.length - MAX_ITEMS);
+        var over = items.length - MAX_ITEMS;
+        var kept = [];
+        for (var i = 0; i < items.length; i++) {
+          if (over > 0 && !isPinned(items[i])) { over--; continue; }
+          kept.push(items[i]);
+        }
+        items = kept;
       }
       localStorage.setItem(KEY, JSON.stringify({ v: 1, items: items }));
     } catch (e) { /* storage 불가 환경 무시 */ }
@@ -353,6 +419,14 @@
       "font-size:10.5px;font-weight:700;color:#1F7AF0;background:#fff;border:1px solid rgba(31,122,240,.35);",
       "border-radius:999px;padding:2px 9px;cursor:pointer;vertical-align:1px;transition:background .12s;}",
       ".ezl-foot-policy:hover{background:rgba(31,122,240,.08);}",
+      ".ezl-foot-row2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed #e0e0e0;}",
+      ".ezl-chain{font-size:10.5px;font-weight:700;}",
+      ".ezl-chain.ok{color:#15803D;}",
+      ".ezl-chain.bad{color:#B42318;}",
+      ".ezl-pin{font-size:9.5px;font-weight:700;color:#B45309;background:rgba(180,83,9,.08);",
+      "border:1px solid rgba(180,83,9,.32);border-radius:5px;padding:1.5px 6px;}",
+      ".ezl-lvchip{font-size:9.5px;font-weight:700;color:#0E63D6;background:rgba(31,122,240,.07);",
+      "border:1px solid rgba(31,122,240,.3);border-radius:5px;padding:1.5px 6px;}",
       /* ---- 답변 근거 스트립 ---- */
       ".ezl-ev-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:3px 4px 7px;}",
       ".ezl-ev-cap{font-size:10.5px;font-weight:700;color:#424245;background:#f5f5f7;",
@@ -451,24 +525,46 @@
     return s;
   }
 
-  function itemHtml(it, hl) {
+  function itemHtml(it, hl, lv) {
     var meta = TYPES[it.type] || TYPES.org;
     var used = it.usedCount || 0;
+    lv = lv || "full";
+    if (lv === "anon") {
+      /* 익명 집계 치환 카드 — 원문·출처 비노출 */
+      return '<div class="ezl-item' + (hl ? " ezl-hl" : "") + '" data-ezl-id="' + esc(it.id) + '" style="--ezl-c:#7a7a7a">'
+        + '<div class="ezl-row1"><span class="ezl-tb">' + esc(meta.label) + "</span>"
+        + '<span class="ezl-at">' + esc(it.at || "") + "</span></div>"
+        + '<div class="ezl-it-title">익명 집계</div>'
+        + '<div class="ezl-it-sum">응답자 보호 정책에 따라 익명 집계로만 제공됩니다 (정책 v3.1)</div>'
+        + "</div>";
+    }
+    var pin = isPinned(it) ? '<span class="ezl-pin">평가 인용됨 · 보존 대상</span>' : "";
     return '<div class="ezl-item' + (hl ? " ezl-hl" : "") + '" data-ezl-id="' + esc(it.id) + '" style="--ezl-c:' + meta.color + '">'
       + '<div class="ezl-row1"><span class="ezl-tb">' + esc(meta.label) + "</span>"
       + '<span class="ezl-at">' + esc(it.at || "") + "</span>"
       + '<span class="ezl-w" title="판단 기여도 ' + it.weight + "/3\">" + weightDots(it.weight || 1) + "</span></div>"
       + '<div class="ezl-it-title">' + esc(it.title) + "</div>"
       + (it.summary ? '<div class="ezl-it-sum">' + esc(it.summary) + "</div>" : "")
-      + '<div class="ezl-row2"><span class="ezl-src">' + esc(it.source || "") + "</span>"
-      + '<span class="ezl-used' + (used > 0 ? " hot" : "") + '">답변 인용 ' + used + "회</span></div>"
+      + '<div class="ezl-row2">'
+      + (lv === "summ"
+        ? '<span class="ezl-lvchip">요약 열람 — 원문·출처 비노출</span>'
+        : '<span class="ezl-src">' + esc(it.source || "") + "</span>")
+      + '<span class="ezl-used' + (used > 0 ? " hot" : "") + '">답변 인용 ' + used + "회</span>" + pin + "</div>"
       + "</div>";
   }
 
   function renderPanelBody(highlightId) {
     var p = ensurePanel();
-    var arr = sorted();
-    var counts = {}, i;
+    var all = sorted();
+    /* 열람 규칙 적용 — no는 목록에서 제외, anon/summ은 렌더 시 형태 변환 */
+    var arr = [], levels = [], i;
+    for (i = 0; i < all.length; i++) {
+      var lv0 = polCheck(all[i]);
+      if (lv0 === "no") continue;
+      arr.push(all[i]);
+      levels.push(lv0);
+    }
+    var counts = {};
     for (i = 0; i < arr.length; i++) counts[arr[i].type] = (counts[arr[i].type] || 0) + 1;
 
     var chips = '<button type="button" class="ezl-tchip' + (filterType ? "" : " on") + '" data-ezl-filter=""'
@@ -482,10 +578,15 @@
     var shown = 0;
     for (i = 0; i < arr.length; i++) {
       if (filterType && arr[i].type !== filterType) continue;
-      list += itemHtml(arr[i], highlightId && arr[i].id === highlightId);
+      list += itemHtml(arr[i], highlightId && arr[i].id === highlightId, levels[i]);
       shown++;
     }
     if (!shown) list = '<div class="ezl-empty">해당 유형의 기록이 아직 없습니다.<br>기능을 사용하면 자동으로 기록됩니다.</div>';
+
+    var vc = verifyChain();
+    var chainLine = vc.ok
+      ? '<span class="ezl-chain ok">기록 체인 검증 ✓ (' + vc.count + "건 이상 없음)</span>"
+      : '<span class="ezl-chain bad">⚠ 기록 체인 불일치 — 위·변조 또는 유실 의심 (' + vc.count + "건 대조)</span>";
 
     p.innerHTML =
       '<div class="ezl-head"><div class="ezl-head-top">'
@@ -495,12 +596,15 @@
       + "<span>총 <b>" + arr.length + "</b>건 기록</span></div></div>"
       + '<div class="ezl-strip">' + chips + "</div>"
       + '<div class="ezl-body">' + list + "</div>"
-      + '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 데모: 브라우저에 최근 80건 보관 '
+      + '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 임시 맥락만 80건 롤링, 평가 인용 기록은 보존 '
       + '<button type="button" class="ezl-foot-policy" data-ezl-policy="1">🔒 보관·열람 규칙</button>'
       + (window.EZJourney && EZJourney.open
         ? '<button type="button" class="ezl-foot-policy" data-ezl-journey="1" title="이 기록들을 시간순이 아니라 프로세스 단계 순서로 봅니다">&#9672; 프로세스 순서로 보기</button>'
         : "")
-      + "</div>";
+      + '<div class="ezl-foot-row2">' + chainLine
+      + '<button type="button" class="ezl-foot-policy" data-ezl-export="1" title="성과 히스토리를 JSON 파일로 내려받습니다">⬇ 내보내기</button>'
+      + '<button type="button" class="ezl-foot-policy" data-ezl-import="1" title="내보낸 JSON을 불러와 병합합니다 (중복 기록은 건너뜀)">⬆ 가져오기</button>'
+      + "</div></div>";
 
     if (highlightId) {
       setTimeout(function () {
@@ -664,18 +768,34 @@
       try { if (window.EZChat && EZChat.persist) EZChat.persist(); } catch (e) { /* 무시 */ }
     }
 
-    var level = evidenceLevel();
-    var html = '<span class="ezl-ev-cap">근거 · 기록 ' + picked.length + "건</span>";
+    /* 열람 규칙 적용 — no는 근거칩에서도 제외, anon은 익명 집계 칩으로 치환 */
+    var gated = [];
     for (i = 0; i < picked.length; i++) {
-      var it2 = picked[i];
+      var glv = polCheck(picked[i]);
+      if (glv === "no") continue;
+      gated.push({ it: picked[i], lv: glv });
+    }
+    if (!gated.length) return;
+
+    var level = evidenceLevel();
+    var html = '<span class="ezl-ev-cap">근거 · 기록 ' + gated.length + "건</span>";
+    for (i = 0; i < gated.length; i++) {
+      var it2 = gated[i].it;
+      var lv2 = gated[i].lv;
       var meta = TYPES[it2.type] || TYPES.org;
+      if (lv2 === "anon") {
+        html += '<span class="ezl-ev-chip" style="--ezl-c:#7a7a7a" title="응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)">'
+          + '<span class="tb">' + esc(meta.label) + "</span>익명 집계</span>";
+        continue;
+      }
       var clickable = level !== "core";
       html += '<span class="ezl-ev-chip' + (clickable ? " click" : "") + '" style="--ezl-c:' + meta.color + '"'
         + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="히스토리에서 보기"' : ' title="' + esc(it2.title) + '"') + ">"
         + '<span class="tb">' + esc(meta.label) + "</span>" + esc(shorten(it2.title, 14))
-        + (level !== "core" ? '<span class="sr">' + esc(it2.source || "") + "</span>" : "")
+        + (level !== "core" && lv2 === "full" ? '<span class="sr">' + esc(it2.source || "") + "</span>" : "")
         + "</span>";
     }
+    picked = gated.map(function (g) { return g.it; });
     if (level !== "core") {
       html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">히스토리에서 보기</button>';
       html += '<button type="button" class="ezl-ev-link" data-ezl-journey="1" title="이 근거들이 성과 사이클 어느 단계의 결정으로 이어지는지 봅니다">&#9672; 프로세스 맵</button>';
@@ -747,6 +867,59 @@
     pop.style.top = Math.max(8, top) + "px";
   }
 
+  /* ================= 내보내기 / 가져오기 (F4) ================= */
+  function exportJson() {
+    try {
+      var blob = new Blob([JSON.stringify({ v: 1, emp_id: CU.emp_id, exported_at: nowStamp(), items: loadStore() }, null, 2)],
+        { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "elizax_history_" + (CU.emp_id || "anon") + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+      toast("성과 히스토리 " + loadStore().length + "건 내보냄");
+    } catch (e) { toast("내보내기 실패"); }
+  }
+  function importFile() {
+    var inp = document.getElementById("ezl-import-file");
+    if (!inp) {
+      inp = document.createElement("input");
+      inp.type = "file";
+      inp.id = "ezl-import-file";
+      inp.accept = ".json,application/json";
+      inp.style.display = "none";
+      document.body.appendChild(inp);
+      inp.addEventListener("change", function () {
+        var f = inp.files && inp.files[0];
+        inp.value = "";
+        if (!f || !window.FileReader) return;
+        var rd = new FileReader();
+        rd.onload = function () {
+          var added = 0;
+          try {
+            var obj = JSON.parse(String(rd.result || ""));
+            var list = obj && Object.prototype.toString.call(obj.items) === "[object Array]" ? obj.items : [];
+            loadStore();
+            for (var i = 0; i < list.length; i++) {
+              var it = list[i];
+              if (!it || !it.id || !it.type || !it.title) continue;
+              if (byId(it.id)) continue; /* id 중복은 건너뜀 */
+              items.push(it);
+              added++;
+            }
+            if (added) { saveStore(); updateBadge(true); }
+            if (isPanelOpen()) renderPanelBody(null);
+            toast(added ? "기록 " + added + "건 가져옴 (중복 제외)" : "가져올 새 기록이 없습니다");
+          } catch (e) { toast("가져오기 실패 — JSON 형식을 확인하세요"); }
+        };
+        rd.readAsText(f);
+      });
+    }
+    inp.click();
+  }
+
   /* ================= 이벤트 위임 ================= */
   function onDocClick(ev) {
     var t = ev.target;
@@ -792,6 +965,10 @@
       if (window.EZPolicy && EZPolicy.open) EZPolicy.open();
       return;
     }
+
+    /* 내보내기 / 가져오기 */
+    if (closestAttr(t, "data-ezl-export")) { ev.preventDefault(); exportJson(); return; }
+    if (closestAttr(t, "data-ezl-import")) { ev.preventDefault(); importFile(); return; }
 
     /* 근거칩·"히스토리에서 보기" → 패널 열고 해당 항목 하이라이트 */
     var op = closestAttr(t, "data-ezl-open");
@@ -876,7 +1053,9 @@
     list: function () { return sorted(); },
     openPanel: openPanel,
     closePanel: closePanel,
-    count: function () { return loadStore().length; }
+    count: function () { return loadStore().length; },
+    verifyChain: verifyChain,
+    isPinned: isPinned
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
