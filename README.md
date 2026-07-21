@@ -8,13 +8,14 @@ talenx HR·성과관리 SaaS 사용자 앱 목업 + **성과관리/평가 AI Age
 
 | 모드 | 방법 | 되는 것 |
 |---|---|---|
-| **engine** (정식·권장) | Python 엔진 `ai-pm-engine/demo-app` 기동 → `http://localhost:8080/talenx` | HCG 221명 성과 데이터 컨텍스트 + Claude tool-use 에이전트. **키는 AWS Secrets Manager에서 런타임 로드**(코드/저장소에 키 없음). `/api/chat`·`/api/messages`·`/api/health`·`/api/chat/reset` 제공 |
-| direct | `index.html` 열기(또는 GitHub Pages) → elizax ⚙ 설정에서 Anthropic API 키 입력 | 서버 없이 브라우저에서 실제 Claude 스트리밍. 키는 localStorage 저장(데모 전용) |
+| **engine** (정식·권장) | Python 엔진 `ai-pm-engine/demo-app` 기동 → `http://localhost:8080/talenx` | HCG 221명 성과 데이터 컨텍스트 + Claude tool-use 에이전트. **키는 AWS Secrets Manager에서 런타임 로드**(코드/저장소에 키 없음). `/api/chat`·`/api/messages`·`/api/health`·`/api/chat/reset` 제공. 로그온 자동시작 + 5초 watchdog으로 상시화 |
+| **cloud (Cloudflare Worker)** | GitHub Pages(`0101-commits.github.io`)로 열기 — 별도 구동 없이 자동 연결 | `worker/worker.js` 배포본이 PC 구동 여부와 무관하게 실제 Claude 응답 제공. Origin 화이트리스트·모델 화이트리스트·토큰 상한으로 공개 URL 가드레일 적용 |
+| direct | `index.html` 열기 → elizax ⚙ 설정에서 Anthropic API 키 입력 | 서버 없이 브라우저에서 실제 Claude 스트리밍. 키는 localStorage 저장(데모 전용) |
 | proxy (Node) | `ANTHROPIC_API_KEY` 설정 후 `node server/server.js` → `:8080` | 경량 무의존 프록시(정식 엔진 없이 빠르게). 실데이터 컨텍스트는 없음 |
 | proxy (Bedrock) | Anthropic 키 없이 AWS 키만: `$env:AWS_KEYS_CSV="...accessKeys.csv"; .\server\run.ps1` | AWS Bedrock 경유 Claude(SigV4). IAM에 `bedrock:InvokeModel` + Bedrock 모델 액세스 필요 |
 | offline | 백엔드·키 둘 다 없음 | 전체 UI + 목업 영수증 응답 + 내비게이션 intent |
 
-우선순위: 프록시/엔진(키 보유) → 브라우저 직접(로컬 키) → 오프라인 목업.
+우선순위: 프록시/엔진(키 보유) → 클라우드 Worker → 브라우저 직접(로컬 키) → 오프라인 목업. `tx_ai.js`가 15초 주기로 백엔드를 재프로브해 엔진 재시작 후에도 새로고침 없이 자동 복구.
 
 ### 정식 백엔드 — Python 엔진 (AWS Secrets Manager 경유, 키리스)
 
@@ -35,6 +36,12 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 ### 경량 대안 — Node 프록시
 
 - `server/server.js` — zero-dependency Node(≥18). 정적 서빙 + `/api/chat`·`/api/messages`·`/api/chat/reset`·`/api/health`. 모델 `ELIZAX_MODEL`(기본 `claude-sonnet-5`). 실데이터 엔진 없이 빠른 데모용.
+
+### 클라우드 대안 — Cloudflare Worker 프록시
+
+- `worker/worker.js` — GitHub Pages(정적 배포)에서도 PC 구동 여부와 무관하게 실제 Claude 응답을 받기 위한 무료 클라우드 백엔드. `server/server.js`와 동일한 API 계약(`/api/health`·`/api/chat`·`/api/messages`·`/api/chat/reset`)을 구현.
+- 보안 가드레일: Origin 화이트리스트(GitHub Pages + localhost) · 모델 화이트리스트 · `max_tokens`/메시지 길이·개수 상한 — 공개 URL에 조직 키가 걸리므로 필수.
+- 배포: `cd worker && npx wrangler deploy` · 키 등록: `npx wrangler secret put ANTHROPIC_API_KEY`.
 
 ## talenx 목업 구성
 
@@ -130,27 +137,60 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 | **FAB 글로우 오브** (위 참조) | Apple Intelligence Siri glow | FAB |
 | **컨텍스트 어웨어 FAB 칩** (위 참조) | M365 Copilot DAB | FAB 옆 |
 
+### 8차 고도화 — 맥락·기능·경험 3축 (tx_ctx_ledger.js · tx_1on1.js · tx_entry.js)
+
+- **맥락 원장(Context Ledger, `window.EZLedger`)** — 에이전트 답변이 참조한 근거를 core/trace/logic 3단 스트립으로 노출하고, 세션 전반의 판단 근거를 원장 형태로 누적.
+- **1:1 미팅 녹음 요약(`window.EZOneOnOne` / `window.EZCycle`)** — 녹음 → 승인 게이트 통과 → `ez:ctx` 컨텍스트로 축적, 이후 코칭·브리핑에 재사용.
+- **단일 진입점(`window.EZEntry`)** — 화면별 proactive pill 제안 + `window.EZEvidencePolicy`(역할별 근거 노출 수준: member=core, leader=trace, hr/exec=logic)로 진입 동선을 하나로 수렴.
+
 ### W1 참조 조망 뷰
 
 도킹 상단 "조망" 바 — **⌗ 에이전트 구조**(W1 5계층 오케스트레이션)와 **◈ E2E 프로세스 맵**(목표수립→중간점검→평가→피드백, 승인 게이트·Pillar 표기). 관점(페르소나)에 따라 참여 계층/단계 자동 강조, 각 단계에서 elizax 작업으로 드릴인.
 
-## 파일 구조
+## 파일·폴더 구조
+
+```
+elizax_talenx/
+├── index.html                     talenx 목업 본체 (화면·GNB·서브내비) — 유일한 진입 HTML
+├── css/                           스타일시트 4종
+├── js/                            vanilla JS 전부 (39개, 아래 표)
+├── scripts/
+│   └── fix_talenx_data.py         talenx_data.js 원본 보정 스크립트 (로드 시점 미러 대상)
+├── reference/                     실서비스(app.talenx.com) 크롤링 스크린샷 3계정분 (Playwright 산출물)
+│   ├── talenx_user_screens_20260714/
+│   ├── talenx_user_screens_minsoopark_20260714/
+│   └── talenx_user_screens_soohyunkim_20260714/
+├── server/                        Node 프록시 + 정적 서버 (로컬 실행)
+│   ├── server.js · run.ps1 · run.sh
+├── worker/                        Cloudflare Worker 클라우드 프록시 (GitHub Pages용)
+│   ├── worker.js · wrangler.toml
+└── perf-agent-verifiable-ui/      성과관리 AI Agent Verifiable UI 별도 목업 (자체 README)
+```
+
+### `js/` 핵심 파일
 
 | 파일 | 역할 |
 |---|---|
-| `index.html` | talenx 목업 본체 (화면·GNB·서브내비) |
 | `talenx_data.js` | 목업 데이터레이크 (조직·목표·평가·근거) |
-| `ui_kit.js/css` | 공통 인터랙션 킷 `window.TX` |
-| `tx_roles.js/css` | persona(역할) 전환 |
+| `ui_kit.js` (+ `css/ui_kit.css`) | 공통 인터랙션 킷 `window.TX` |
+| `tx_roles.js` (+ `css/tx_roles.css`) | persona(역할) 전환 |
 | `tx_fix_*.js` | 메뉴별 실동작 레이어 (홈/성과/평가/근무/인사/급여/결재/업무/360) |
-| `tx_elizax.js/css` | elizax 도킹 대화창 + FAB (`window.Elizax`) |
-| `tx_agent.js` / `tx_agent.css` | 전체화면 딥워크 Hub + 시나리오 + 선제 팝업 (`window.TXAgent`) |
-| `tx_ai.js` | 통합 AI 클라이언트 — proxy/direct/offline 자동 전환 + tool-use 에이전트 루프 `EZAI.agent` + 키 설정 UI (`window.EZAI`) |
+| `tx_elizax.js` (+ `css/tx_elizax.css`) | elizax 도킹 대화창 + FAB (`window.Elizax`) |
+| `tx_agent.js` (+ `css/tx_agent.css`) | 전체화면 딥워크 Hub + 시나리오 + 선제 팝업 (`window.TXAgent`) |
+| `tx_ai.js` | 통합 AI 클라이언트 — engine/cloud/direct/proxy/offline 자동 전환 + 15초 재프로브 + tool-use 에이전트 루프 `EZAI.agent` + 키 설정 UI (`window.EZAI`) |
 | `tx_ai_tools.js` | 에이전트 도구 8종 — TALENX_DATA 실조회 + 화면 전환 (`window.EZTools`) |
 | `tx_nav.js` | 자연어 내비게이션 intent 라우터 (`window.EZNav`) |
 | `tx_upgrade.js` | 2025-26 고도화 5종 (글로우 오브·컨텍스트 칩·린트·AI 고지·1:1 브리핑, `window.EZUpgrade`) |
+| `tx_chat_*.js` (9개) | 대화창 기능 10종 — 세션/액션/중지/검색/내보내기/피드백/후속질문/슬래시커맨드/안읽음/퀵애스크 |
+| `tx_chatstore.js` | 대화 영속화 스토어 |
+| `tx_ctx_ledger.js` | 맥락 원장 `window.EZLedger` — core/trace/logic 근거 스트립 |
+| `tx_1on1.js` | 1:1 미팅 녹음→요약 `window.EZOneOnOne`/`window.EZCycle` |
+| `tx_entry.js` | 단일 진입점 `window.EZEntry` + 역할별 근거정책 `window.EZEvidencePolicy` |
+| `tx_hydrate.js` / `tx_cleanup.js` / `tx_revive.js` / `tx_enhance.js` / `tx_datafix.js` | 목업 데이터 보정·정리·복구 파이프라인 |
 | `server/server.js` | Claude API 프록시 + 정적 서버 (zero-dep Node) |
+| `worker/worker.js` | Claude API 클라우드 프록시 (Cloudflare Worker) |
 
 - 순수 vanilla JS/CSS, 외부 의존성 없음. CSS 스코프: `.ezx-*`(도킹) · `.agh-*`(Hub) · `.ezup-*`(고도화) — 기존 `.tx-*`/`#s-*` 미간섭. 다크 테마 대응.
+- `index.html`은 `js/`·`css/` 상대경로로 스크립트/스타일을 로드 — 정적 서버(`server/server.js`)는 저장소 루트를 그대로 서빙하므로 폴더 이동 후에도 경로만 맞으면 별도 설정 불필요.
 
 > 데이터는 테스트 워크스페이스 기준 샘플입니다. 에이전트의 모든 발송·저장·확정은 승인 게이트 뒤 목업 동작이며 서버 반영은 없습니다.
