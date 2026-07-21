@@ -339,8 +339,8 @@
       + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · ML 교육 수요 감지 — 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>'
       + '</div>'
       + '<div class="ez1o-gate" data-ez1o-gate>'
-      + '<span class="lab">결정 게이트 · 사람이 확정 (승인 전 side-effect 0)</span>'
-      + '<button class="ez1o-gbtn primary" data-ez1o-gact="confirm">기록 확정·맥락 축적</button>'
+      + '<span class="lab">결정 게이트 · 사람이 확정 (승인 전에는 아무것도 반영되지 않음)</span>'
+      + '<button class="ez1o-gbtn primary" data-ez1o-gact="confirm">기록 확정·히스토리 저장</button>'
       + '<button class="ez1o-gbtn" data-ez1o-gact="edit">수정</button>'
       + '<button class="ez1o-gbtn" data-ez1o-gact="drop">폐기</button>'
       + '</div>'
@@ -359,7 +359,7 @@
         body.setAttribute("contenteditable", "true");
         body.style.outline = "2px dashed rgba(31,122,240,.4)";
         body.style.borderRadius = "8px";
-        toast("수정 모드 — 요약을 직접 고친 뒤 [기록 확정·맥락 축적]을 누르세요.", "");
+        toast("수정 모드 — 요약을 직접 고친 뒤 [기록 확정·히스토리 저장]을 누르세요.", "");
       }
       return;
     }
@@ -454,7 +454,7 @@
         return '<div class="ez1o-card ' + it.st + '">'
           + '<span class="ez1o-st ' + it.st + '">' + esc(ST_LABEL[it.st]) + '</span>'
           + '<div class="nm">' + esc(it.name) + '</div>'
-          + '<div class="ez1o-stars"><span>빈도 <b>' + stars(it.f) + '</b></span><span>맥락기여 <b>' + stars(it.c) + '</b></span></div>'
+          + '<div class="ez1o-stars"><span>빈도 <b>' + stars(it.f) + '</b></span><span>기록 기여 <b>' + stars(it.c) + '</b></span></div>'
           + '</div>';
       }).join("");
       return '<div class="ez1o-col"><div class="ch"><span class="step">' + (ci + 1) + '</span>' + esc(col.col) + '</div>' + cards + '</div>';
@@ -462,15 +462,15 @@
     ov.innerHTML =
       '<div class="ez1o-map">'
       + '<div class="ez1o-maphead">'
-      + '<span class="tt">성과관리 전 주기 × elizax 기능 커버리지</span>'
+      + '<span class="tt">성과관리 전 주기 × elizax 기능 지원 범위</span>'
       + '<span class="ez1o-asof">기준 시점 ' + esc(AS_OF) + '</span>'
       + '<button class="ez1o-mapx" data-ez1o="mapclose" title="닫기">&#10005;</button>'
-      + '<span class="principle">선정 원칙 — 초기엔 <b>맥락 기여도 우선</b>: 축적이 임계치를 넘으면 <b>빈도 우선</b>으로 전환. '
-      + '이번 신규 1순위 = 1on1 (빈도 ★★★ · 맥락기여 ★★★, 유일한 미지원 공백)</span>'
+      + '<span class="principle">선정 원칙 — 초기엔 <b>기록 기여도 우선</b>: 기록이 충분히 쌓이면 <b>빈도 우선</b>으로 전환. '
+      + '이번 신규 1순위 = 1on1 (빈도 ★★★ · 기록 기여 ★★★, 유일한 미지원 공백)</span>'
       + '</div>'
       + '<div class="ez1o-legend">'
       + '<span class="ez1o-st live">제공중</span><span class="ez1o-st new">신규 ★이번 추가</span><span class="ez1o-st cand">후보</span>'
-      + '<span>· 우선순위 2기준: 빈도 ★1~3 / 맥락기여 ★1~3</span>'
+      + '<span>· 우선순위 2기준: 빈도 ★1~3 / 기록 기여 ★1~3</span>'
       + '</div>'
       + '<div class="ez1o-cols">' + cols + '</div>'
       + '</div>';

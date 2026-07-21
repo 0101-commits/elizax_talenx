@@ -256,7 +256,7 @@
       out.push(mkSeed(7, 7, 9, 10, "org", "org.dist.FY2026H1",
         "전사 평가 분포 기준선", "등급 분포 가이드 · 관대화/중심화 편향 모니터링 지표", 3, 2));
       out.push(mkSeed(7, 14, 10, 0, "rule", "rule.calibration.gate",
-        "rule.calibration.gate — 캘리브레이션 게이트", "조정은 심의 게이트 통과 후 확정 · 승인 전 side-effect 0", 3, 1));
+        "rule.calibration.gate — 캘리브레이션 게이트", "조정은 심의 게이트 통과 후 확정 · 승인 전에는 반영되지 않음", 3, 1));
     }
 
     return out;
@@ -492,7 +492,7 @@
       + '<div class="ezl-title">성과 히스토리<small>Performance History</small></div>'
       + '<button type="button" class="ezl-x" data-ezl-close="1" aria-label="닫기">×</button></div>'
       + '<div class="ezl-sub"><span class="ezl-asof">기준 시점 2026 상반기 · ' + esc(nowStamp()) + " 기준</span>"
-      + "<span>총 <b>" + arr.length + "</b>건 축적</span></div></div>"
+      + "<span>총 <b>" + arr.length + "</b>건 기록</span></div></div>"
       + '<div class="ezl-strip">' + chips + "</div>"
       + '<div class="ezl-body">' + list + "</div>"
       + '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 데모: 브라우저에 최근 80건 보관 '
@@ -714,7 +714,7 @@
     if (!ruleSrcs.length) ruleSrcs = ["rule.asof.snapshot"];
     var citedTxt = cited.length
       ? cited.map(function (t) { return shorten(t, 18); }).join(" · ")
-      : "축적된 기록 없음";
+      : "인용한 기록 없음";
 
     var pop = document.createElement("div");
     pop.id = "ezl-pop";

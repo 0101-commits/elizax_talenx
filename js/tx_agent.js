@@ -100,7 +100,7 @@
         (dec ? " disabled" : "") + (dec && dec.act === l ? ' data-chosen="1"' : "") + ">" + esc(l) + "</button>";
     }).join("");
     return '<div class="agh-gate" data-gate="' + esc(key) + '">' +
-      '<span class="lab">결정 게이트 · 사람이 확정 (승인 전 side-effect 0)</span>' + btns +
+      '<span class="lab">결정 게이트 · 사람이 확정 (승인 전에는 아무것도 반영되지 않음)</span>' + btns +
       (dec ? '<span class="agh-dec">✓ ' + esc(dec.act) + " · 감사 기록됨</span>" : "") + "</div>";
   }
   function decideGate(key, act, note) {
@@ -149,7 +149,7 @@
     { key: "qw1",    chip: "주간 체크인 브리핑 만들어줘",        desc: "talenx·ERP·1:1 기록을 스캔해 체크인 대상과 부진 인원을 요약하고, 리더가 보낼 메시지 초안까지 준비합니다.", roles: ["leader"],        heavy: false, mode: "auto" },
     { key: "qw2",    chip: "이번 분기 목표 초안 잡아줘",         desc: "작년 평가·피드백과 직무 R&R을 이어받아 목표 초안 3안을 만들고 상위목표 정렬을 검증합니다.",                   roles: ["member"],        heavy: false, mode: "suggest" },
     { key: "qw7",    chip: "팀 목표 정렬·중복 점검해줘",         desc: "팀 목표 전건을 문장 품질(중복·미연계·측정불가)과 운영 신호(체크인 공백·진척 정체) 두 축으로 점검합니다.",     roles: ["leader", "exec"], heavy: true,  mode: "suggest" },
-    { key: "qw4",    chip: "내 성과 근거 타임라인 보여줘",       desc: "달성·프로젝트·피드백·1:1 기록이 발생 시점에 자동 적재된 1년치 근거 타임라인입니다.",                        roles: ["member"],        heavy: true,  mode: "suggest" },
+    { key: "qw4",    chip: "내 성과 근거 타임라인 보여줘",       desc: "달성·프로젝트·피드백·1:1 기록이 발생 시점에 자동으로 기록된 1년치 근거 타임라인입니다.",                        roles: ["member"],        heavy: true,  mode: "suggest" },
     { key: "qw6",    chip: "피드백 문장 다듬어줘",              desc: "SBI 구조로 피드백 문장을 정제합니다. 의도는 유지하고 전달 방식만 다듬습니다.",                              roles: ["leader"],        heavy: false, mode: "suggest" },
     { key: "qw3",    chip: "평가 코멘트 초안 써줘",             desc: "ERP 실적·직무군 분포·평가규정을 대조해 문장별 출처가 붙은 코멘트 초안을 만듭니다.",                          roles: ["leader"],        heavy: false, mode: "human_approve" },
     { key: "hold",   chip: "박지훈 등급 초안 만들어줘",          desc: "근거가 부족하면 추정하지 않고 정지 후 질문합니다. 보강 경로를 고르면 재개됩니다.",                            roles: ["leader"],        heavy: false, mode: "suggest" },
@@ -165,7 +165,7 @@
   var STUB_NUMS = {
     calib:  "S 8%→6% · A 32%→25% 조정안",
     qw7:    "8건 스캔 · 문장 품질 3건 · 운영 신호 3건",
-    qw4:    "근거 24건 적재",
+    qw4:    "근거 24건 기록",
     qw5:    "4본부 스캔 · 편향 플래그 2",
     review: "5/12 작성 · AI 보조 ON"
   };
@@ -432,7 +432,7 @@
       '<div class="agh-qwgrid">' + cards + "</div>";
     ctxPanelIf(host, [
       { tag: "챗봇 vs 에이전트", title: "이 허브가 다른 점 (9축)", body: "촉발=선제 · 산출물=편집 가능한 객체 · 과정=노드 표출 · 근거=원천 인용 · 통제권=단계·문장 단위 승인 게이트 · 동시성=Sub-agent 병렬 실행" },
-      { tag: "실행 규율", title: "읽기는 자율, 확정은 게이트", body: "읽기·계획·산출은 자율, 발송·확정·삭제는 propose→approve→commit. 승인 전 side-effect 0." }
+      { tag: "실행 규율", title: "읽기는 자율, 확정은 게이트", body: "읽기·계획·산출은 자율, 발송·확정·삭제는 제안→승인→실행 순서로만 진행됩니다. 승인 전에는 아무것도 반영되지 않습니다." }
     ], "");
   };
 
@@ -717,7 +717,7 @@
       gateHTML("qw1", ["승인·발송", "수정", "보류"]);
     ctxPanelIf(host, [
       { tag: "자동 처리 배지", title: "집계는 바로, 발송은 게이트", body: "데이터 스캔·요약은 에이전트가 상시 자동 처리하지만, 사람에게 닿는 메시지는 <b>승인 필요</b> — 승인 없이는 발송되지 않습니다." },
-      { tag: "선제 감지", title: "이번 주 트리거", body: "월요일 06:00 정기 스캔에서 지연 신호 포착 → 리더에게 선제 팝업으로 먼저 말 걸었습니다. " + srcChip("rule", "cron.weekly.checkin") }
+      { tag: "선제 감지", title: "이번 주 감지 계기", body: "월요일 06:00 정기 스캔에서 지연 신호 포착 → 리더에게 선제 팝업으로 먼저 말 걸었습니다. " + srcChip("rule", "cron.weekly.checkin") }
     ], "");
     var outs = ["7일 무변동 3명", "진척 지연 1명", "14일+ 미실시 2명"];
     Array.prototype.forEach.call(host.querySelectorAll("[data-sr]"), function (r, i) {
@@ -741,11 +741,11 @@
       ["2025 · 04", "피드백", "동료 3인 '협업 리드십 탁월' 수시 피드백 수신", "rule", "동료피드백 · 3건"]
     ];
     host.innerHTML = screenHead("qw4") +
-      '<div class="agh-brief"><span class="ic">🗂</span><div><b>기억을 소환하지 않습니다. 1년치 근거가 이미 모여 있습니다.</b> 달성·프로젝트·피드백·1:1 기록이 발생 시점에 자동 적재됩니다(제안만 모드 · 자동 축적).</div></div>' +
+      '<div class="agh-brief"><span class="ic">🗂</span><div><b>기억을 소환하지 않습니다. 1년치 근거가 이미 모여 있습니다.</b> 달성·프로젝트·피드백·1:1 기록이 발생 시점에 자동으로 기록됩니다(제안만 모드).</div></div>' +
       '<div class="agh-tl" data-agh-tl>' +
       items.map(function (it, i) {
         return '<div class="agh-tli" data-ti="' + i + '" style="opacity:0"><span class="dt">' + esc(it[0]) + '</span><span class="agh-tag">' + esc(it[1]) + "</span><div class=\"bd\">" + esc(it[2]) + "</div>" + srcChip(it[3], it[4]) + "</div>";
-      }).join("") + '<div class="agh-tlmore">↑ 이전 8개월 · 총 24건 적재됨</div></div>' +
+      }).join("") + '<div class="agh-tlmore">↑ 이전 8개월 · 총 24건 기록됨</div></div>' +
       '<div class="agh-sidecard"><div class="lab">수집 요약</div><b class="big">24건</b>' +
       '<div class="mini">목표·달성 8 · 프로젝트 6 · 수시 피드백 7 · 1:1 기록 3</div>' +
       '<button class="agh-btn primary wide" data-agh-nav="qw3">이 근거로 등급 초안 만들기 →</button>' +
@@ -934,7 +934,7 @@
     host.innerHTML = screenHead("calib") +
       '<div class="agh-callayout"><div class="agh-round">' +
       '<div class="lab">Roundtable 에이전트 4종 <span class="live" data-agh-live>● LIVE 실시간 심의</span></div>' +
-      '<div class="agh-rgraph"><div class="agh-orch" data-agh-orch>조정<br>오케스트레이터<small data-agh-orchst>조율 중</small></div>' +
+      '<div class="agh-rgraph"><div class="agh-orch" data-agh-orch>조정<br>진행자<small data-agh-orchst>조율 중</small></div>' +
       [["증거검증", "자기평가·실적 대조", "tl"], ["정치배제", "관대화·강제배분 감사", "tr"], ["편향필터", "난이도 편차 보정", "bl"], ["전략기여", "전사목표 연계 검증", "br"]].map(function (a, i) {
         return '<div class="agh-ragent ' + a[2] + '" data-ra="' + i + '"><b>' + esc(a[0]) + "</b><small>" + esc(a[1]) + "</small><span class=\"rel\" data-rel></span></div>";
       }).join("") + "</div>" +
@@ -942,11 +942,11 @@
       '<div class="agh-calside"><div class="lab">등급 분포 · 조정 전 → 후</div><div data-agh-dist></div>' +
       '<div class="agh-whatif"><div class="lab">What-if · 강제배분 상한 <b data-agh-cap>30%</b></div>' +
       '<input type="range" min="20" max="40" step="5" value="30" data-agh-capslider>' +
-      "<small>동일 룰 엔진에서 상한만 바꿔 즉시 재산출 · rule-exec.cal7</small></div>" +
+      "<small>같은 계산 규칙에서 상한만 바꿔 즉시 재산출 · rule-exec.cal7</small></div>" +
       '<div class="agh-sumbox" data-agh-calsum style="display:none"><b>심의 결과 요약</b><ul><li>강제배분 상한 준수 → A 25%</li><li>이상치 3건 → 0건으로 해소</li></ul></div></div></div>' +
       gateHTML("calib", ["조정안 승인", "수정", "보류"]);
     ctxPanelIf(host, [
-      { tag: "발의/보강/합의/충돌", title: "다자 심의 구조", body: "4개 관점 에이전트가 조정 논거를 교차 심의하고 오케스트레이터가 합의로 수렴합니다. 충돌 논거도 기록에 남아 <b>사람이 단일 요약이 아닌 심의 과정</b>을 봅니다." },
+      { tag: "발의/보강/합의/충돌", title: "다자 심의 구조", body: "4개 관점 에이전트가 조정 논거를 교차 심의하고 진행자 에이전트가 합의로 수렴합니다. 충돌 논거도 기록에 남아 <b>사람이 단일 요약이 아닌 심의 과정</b>을 봅니다." },
       { tag: "인간 최종 승인", title: "조정안 확정은 사람", kind: "warn", body: "심의 결과는 제안일 뿐 — 조정안 확정 지점은 아래 게이트입니다." }
     ], "");
     renderDist(host, 30, false);
@@ -1048,10 +1048,10 @@
     host = host || el.canvas;
     var rows = state.assets.length ? state.assets.map(function (a) {
       return '<div class="agh-tli"><span class="dt">' + esc(a.at) + '</span><span class="agh-tag">' + esc(a.kind) + '</span><div class="bd">' + esc(a.title) + '</div><button class="agh-btn sm" data-agh-nav="' + esc(a.screen) + '">다시 열기</button></div>';
-    }).join("") : '<div class="agh-emptybox">아직 보관된 산출물이 없습니다. 과제 화면에서 결정 게이트를 통과하면 여기 축적됩니다 — 매 상호작용이 소모되지 않고 남습니다.</div>';
-    host.innerHTML = '<div class="agh-shead"><div><h2>산출물 · 프로세스 자산</h2><span class="agh-exp">과정/판단/근거가 구조화 데이터로 축적 · 다음 사이클이 이어받음</span></div></div><div class="agh-tl">' + rows + "</div>";
+    }).join("") : '<div class="agh-emptybox">아직 보관된 산출물이 없습니다. 과제 화면에서 결정 게이트를 통과하면 여기 보관됩니다 — 한 번 만든 근거와 결정이 사라지지 않고 남습니다.</div>';
+    host.innerHTML = '<div class="agh-shead"><div><h2>산출물 · 기록 보관함</h2><span class="agh-exp">과정·판단·근거가 기록으로 남아 다음 사이클이 이어받습니다</span></div></div><div class="agh-tl">' + rows + "</div>";
     ctxPanelIf(host, [
-      { tag: "기록 보관", title: "왜 축적하나", body: "지속되는 평가 사이클을 위한 성과 히스토리 — 목표/피드백/평가 근거가 휘발되지 않고 다음 사이클이 이어받는 기록으로 남습니다." }
+      { tag: "기록 보관", title: "왜 남기나", body: "지속되는 평가 사이클을 위한 성과 히스토리 — 목표/피드백/평가 근거가 휘발되지 않고 다음 사이클이 이어받는 기록으로 남습니다." }
     ], "");
   };
 

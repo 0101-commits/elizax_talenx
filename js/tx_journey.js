@@ -327,8 +327,8 @@
               {
                 t: "rule", title: "기록 확정 절차",
                 ex: confirmed
-                  ? "본인 확정 완료 · 성과 히스토리에 축적됨 (확정 전 side-effect 0)"
-                  : "확정 전에는 어디에도 축적되지 않습니다 (승인 대기)",
+                  ? "본인 확정 완료 · 성과 히스토리에 기록됨 (확정 전에는 반영되지 않음)"
+                  : "확정 전에는 어디에도 기록되지 않습니다 (승인 대기)",
                 src: "1on1.gate.confirm"
               }
             ],
@@ -355,7 +355,7 @@
             evidence: [
               {
                 t: "rule", title: "캘리브레이션 게이트",
-                ex: "조정은 인재 리뷰 심의 통과 후 확정 · 승인 전 side-effect 0",
+                ex: "조정은 인재 리뷰 심의 통과 후 확정 · 승인 전에는 반영되지 않음",
                 src: "rule.calibration.gate"
               },
               {
@@ -703,7 +703,7 @@
         + '<span class="src">' + esc(e.source || "") + "</span><br>"
         + '<button class="ezpm-lbtn" data-ezpm-ledger="' + esc(e.id) + '">성과 히스토리에서 보기</button>'
         + "</div>";
-    }).join("") : '<div class="ezpm-empty">이 단계에 축적된 성과 히스토리가 아직 없습니다. 체크인·1:1 확정 등 기능을 쓸수록 기록이 쌓입니다.</div>';
+    }).join("") : '<div class="ezpm-empty">이 단계에 쌓인 성과 기록이 아직 없습니다. 체크인·1:1 확정 등 기능을 쓸수록 기록이 쌓입니다.</div>';
     openPane('<div class="ph"><h3>성과 히스토리 · ' + esc(STAGE_NAME[stageKey] || stageKey) + " (" + entries.length + '건)</h3>'
       + '<button class="px" data-ezpm-pane-close title="닫기">&#10005;</button></div>' + body);
   }

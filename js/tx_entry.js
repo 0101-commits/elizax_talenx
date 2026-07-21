@@ -330,7 +330,7 @@
       '<div class="eze-hd">' +
         '<span class="eze-dot"></span>' +
         '<span class="eze-who">elizax</span>' +
-        '<span class="eze-badge" title="자율성 레벨: 제안 — 승인 전 side-effect 0">제안</span>' +
+        '<span class="eze-badge" title="자율성 수준: 제안 — 승인 전에는 아무것도 반영되지 않음">제안</span>' +
         '<span class="sp"></span>' +
         '<button class="eze-ib" data-eze-menu title="AI 진입점 메뉴" aria-label="진입점 메뉴">⋯</button>' +
         '<button class="eze-ib" data-eze-close title="닫기" aria-label="닫기">×</button>' +
