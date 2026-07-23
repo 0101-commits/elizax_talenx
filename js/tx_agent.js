@@ -140,10 +140,12 @@
     qw5:     { title: "평가 편향 점검",            nav: "편향 점검",          mode: "suggest",       group: "평가관리" },
     calib:   { title: "등급 조정 심의 회의", nav: "등급 조정 심의", mode: "human_approve", group: "평가관리" },
     review:  { title: "리뷰 초안 함께 쓰기",       nav: "리뷰 초안 작성",      mode: "human_approve", group: "평가관리" },
+    connmap: { title: "연결 지도 · 전략–목표–직무–역량–평가", nav: "연결 지도", mode: "suggest", group: "연결·계보" },
+    procmap: { title: "프로세스 맵 · 결정의 계보",   nav: "결정의 계보",        mode: "human_approve", group: "연결·계보" },
     assets:  { title: "산출물 · 기록 보관함",       nav: "산출물",             mode: null,            group: "자산" },
     audit:   { title: "감사 로그",                nav: "감사 로그",           mode: null,            group: "자산" }
   };
-  var NAV_ORDER = ["home", "chat", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "assets", "audit"];
+  var NAV_ORDER = ["home", "chat", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "connmap", "procmap", "assets", "audit"];
 
   /* ============================================================
      시나리오 메타 — 채팅 임베드/제안 칩의 단일 원장 (tx_elizax 소비)
@@ -160,7 +162,9 @@
     { key: "hold",   chip: "박지훈 등급 초안 만들어줘",          desc: "근거가 부족하면 추정하지 않고 정지 후 질문합니다. 보강 경로를 고르면 재개됩니다.",                            roles: ["leader"],        heavy: false, mode: "suggest" },
     { key: "qw5",    chip: "평가 편향 점검해줘",                desc: "본부별 등급 분포·근거량을 대조해 관대화·중심화 의심을 플래그와 근거로만 제시합니다.",                        roles: ["hr", "exec"],    heavy: true,  mode: "suggest" },
     { key: "calib",  chip: "등급 조정 심의 열어줘",       desc: "4개 관점 에이전트가 조정 논거를 교차 심의하고, 가정 슬라이더로 상한을 즉시 재산출합니다.",                 roles: ["hr"],            heavy: true,  mode: "human_approve" },
-    { key: "review", chip: "리뷰 초안 같이 쓰자",               desc: "AI가 근거를 인용해 초안 문장을 제안하고, 사용자가 문장 단위로 반영·무시합니다.",                             roles: ["leader", "hr"],  heavy: true,  mode: "human_approve" }
+    { key: "review", chip: "리뷰 초안 같이 쓰자",               desc: "AI가 근거를 인용해 초안 문장을 제안하고, 사용자가 문장 단위로 반영·무시합니다.",                             roles: ["leader", "hr"],  heavy: true,  mode: "human_approve" },
+    { key: "connmap", chip: "연결 지도 보여줘 (전략–목표–직무–역량)", desc: "사업전략·조직목표·개인목표·직무 R&R·스킬·역량·평가가 어떻게 이어지는지 한 장으로 보여주고, 데이터에 없는 연결은 AI가 근거로 잇습니다. 직무 연결률도 표시합니다.", roles: ["hr", "exec", "leader"], heavy: true, mode: "suggest" },
+    { key: "procmap", chip: "이 등급이 나온 과정(결정의 계보) 보여줘", desc: "목표수립→중간점검→평가→피드백 각 단계의 결정과 근거를 시간순 계보로 묶고, 앞 근거가 다음 단계로 인용되는 흐름과 차년도 승계를 보여줍니다.", roles: ["leader", "hr", "member"], heavy: true, mode: "human_approve" }
   ];
   function scenarioOf(key) {
     for (var i = 0; i < SCENARIOS.length; i++) if (SCENARIOS[i].key === key) return SCENARIOS[i];
@@ -210,6 +214,8 @@
     if (/편향|관대화/.test(q)) return "qw5";
     if (/캘리|calibration|심의/i.test(q)) return "calib";
     if (/리뷰|총평/.test(q)) return "review";
+    if (/연결 ?지도|연결률|전략.*목표.*직무|직무.*연결/.test(q)) return "connmap";
+    if (/계보|프로세스 ?맵|어떤 과정|왜 이 등급|의사결정 흐름/.test(q)) return "procmap";
     return null;
   }
 
@@ -1262,7 +1268,9 @@
   var ALERTS = [
     { title: "가중치 합계 105%", body: "목표 가중치 합이 상한을 5%p 초과 — 조정안 준비됨", screen: "qw2" },
     { title: "체크인 지연 3명", body: "7일+ 무변동 3명 · 진척 지연 1명 — 초안 발송 대기", screen: "qw1" },
-    { title: "등급 조정 D-3", body: "개발본부 관대화 의심 — 심의 안건 검토 필요", screen: "calib" }
+    { title: "등급 조정 D-3", body: "개발본부 관대화 의심 — 심의 안건 검토 필요", screen: "calib" },
+    { title: "진척 신호 감지", body: "체크인 지표 급변 2건 — 목표 대비 이탈 신호, 체크인 초안 준비됨", screen: "qw1" },
+    { title: "직무 미연결 147명", body: "목표가 직무에 정박하지 못한 인원 다수 — 연결 지도에서 확인", screen: "connmap" }
   ];
   function showAlerts() {
     if (!(window.TX && TX.menu)) return;
@@ -1346,6 +1354,143 @@
   }
   if (document.readyState === "complete") setTimeout(init, 400);
   else window.addEventListener("load", function () { setTimeout(init, 400); });
+
+  /* ============================================================
+     연결 지도 (데이터의 지도) — 전략–조직목표–개인목표–직무–스킬–역량–평가
+     피드백 반영: 기본 HR 데이터-목표 연결이 '보여야' + 연결률 품질지표
+     ============================================================ */
+  RENDER.connmap = function (host) {
+    host = host || el.canvas;
+    var d = D(), emps = d.employees || [], objs = d.objectives || [], krs = d.keyResults || [],
+        profs = d.jobProfiles || {}, evals = d.evaluations || [], comps = d.competencies || [], co = d.company || {};
+    var empById = {}, objById = {}, evalByEmp = {};
+    emps.forEach(function (e) { empById[e.emp_id] = e; });
+    objs.forEach(function (o) { objById[o.objective_id] = o; });
+    evals.forEach(function (v) { evalByEmp[v.emp_id] = v; });
+    var withProf = emps.filter(function (e) { return e.jobProfileId; }).length;
+    var n = emps.length || 1, rate = Math.round(withProf / n * 100);
+    var ownedObjs = objs.filter(function (o) { return o.owner_emp_id; });
+    var goalWithProf = ownedObjs.filter(function (o) { return empById[o.owner_emp_id] && empById[o.owner_emp_id].jobProfileId; }).length;
+    var goalRate = Math.round(goalWithProf / (ownedObjs.length || 1) * 100);
+    var indiv = objs.filter(function (o) { return o.level !== "company" && o.owner_emp_id && empById[o.owner_emp_id] && empById[o.owner_emp_id].jobProfileId; });
+    var pick = indiv[0] || ownedObjs[0] || objs[0] || {};
+    var owner = empById[pick.owner_emp_id] || {};
+    var prof = owner.jobProfileId ? profs[owner.jobProfileId] : null;
+    var parent = pick.parent_objective_id ? objById[pick.parent_objective_id] : null;
+    var comp = objs.filter(function (o) { return o.level === "company"; })[0] || parent || {};
+    var krList = krs.filter(function (k) { return k.objective_id === pick.objective_id; }).slice(0, 3);
+    var ev = evalByEmp[owner.emp_id] || {};
+    var tasks = prof && prof.tasks ? Object.keys(prof.tasks) : [];
+    var skills = prof && prof.skills ? prof.skills.slice(0, 4) : [];
+
+    function colN(kind, label, inner, inferred) {
+      return '<div class="agh-cmcol"><div class="agh-cmh ' + kind + '">' + esc(label) + '</div>' +
+        '<div class="agh-cmn' + (inferred ? " inf" : "") + '">' + inner + '</div>' +
+        (inferred ? '<div class="agh-cmtag">AI 추론</div>' : '') + '</div>';
+    }
+    var chain =
+      colN("s1", "사업전략", '<b>' + esc(co.revenue_target_2026 || "FY2026 매출 목표") + '</b><span>' + esc((co.business_domains || []).slice(0, 2).join(" · ") || "전사 사업영역") + '</span>') +
+      '<div class="agh-cmarrow inf">┈</div>' +
+      colN("s2", "조직목표", '<b>' + esc((parent || comp).title || "조직 목표") + '</b><span>' + esc((parent || comp).period || "FY2026") + ' · 진척 ' + (((parent || comp).progress) || 0) + '%</span>') +
+      '<div class="agh-cmarrow">→</div>' +
+      colN("s3", "개인목표 · KR", '<b>' + esc(pick.title || "개인 목표") + '</b>' + (krList.length ? krList.map(function (k) { return '<span>· ' + esc(k.name) + ' <em>(' + esc(k.weight || "") + ' · 난이도 ' + esc(k.difficulty || "-") + ')</em></span>'; }).join("") : '<span>KR 없음</span>')) +
+      '<div class="agh-cmarrow inf">┈</div>' +
+      (prof
+        ? colN("s4", "직무 (R&R)", '<b>' + esc(prof.title) + '</b><span>' + esc(tasks[0] || "") + (tasks[1] ? " 외 " + (tasks.length - 1) : "") + '</span>', true)
+        : colN("s4", "직무 (R&R)", '<b>직무 프로파일 미연결</b><span>' + esc(owner.jobTitle || owner.name || "") + ' — 프로파일 없음</span>', true)) +
+      '<div class="agh-cmarrow inf">┈</div>' +
+      colN("s5", "스킬", skills.length ? skills.map(function (s) { return '<span>· ' + esc(s) + '</span>'; }).join("") : '<span>직무 미연결로 스킬 근거 없음</span>', true) +
+      '<div class="agh-cmarrow inf">┈</div>' +
+      colN("s6", "역량 (D1–D5)", comps.slice(0, 5).map(function (c) { return '<span>· ' + esc(c.dimension_id) + ' ' + esc(c.name) + '</span>'; }).join("") || '<span>역량 사전</span>', true) +
+      '<div class="agh-cmarrow">→</div>' +
+      colN("s7", "평가", '<b>' + esc(ev.grade || "-") + '등급</b><span>종합 ' + (ev.weighted_score != null ? ev.weighted_score : "-") + '</span>');
+
+    host.innerHTML = screenHead("connmap") +
+      '<div class="agh-cmbar">' +
+        '<span class="agh-chip asof">◷ 기준 시점 · 2026 상반기 · 6/30 마감</span>' +
+        '<span class="agh-auditchip">⛨ 감사 기록됨 · 권한 내 전사 조회</span>' +
+        '<span class="agh-cmstat">직무 프로파일 연결 <b>' + withProf + '/' + n + ' (' + rate + '%)</b></span>' +
+        '<span class="agh-cmstat">직무 근거 있는 목표 <b>' + goalRate + '%</b></span>' +
+      '</div>' +
+      '<div class="agh-cmwrap">' + chain + '</div>' +
+      '<div class="agh-cmlegend"><span class="sol">— 실제 데이터 연결(FK)</span><span class="dsh">┈ AI 추론 연결(데이터에 FK 부재 · 근거 필요)</span></div>' +
+      '<div class="agh-verdict"><b>조직목표→개인목표→평가</b>는 실제 연결(FK)이지만, <b>전략→목표·목표→직무·스킬→역량</b>은 데이터에 연결 고리가 없어 AI가 근거로 이어야 함(점선). 전사 <b>' + (n - withProf) + '명</b>이 직무 프로파일 미연결 — 직무 없이 세운 목표는 평가 단계에서 흔들립니다. ' + srcChip("talenx", "objectives.fk") + srcChip("rule", "직무기술서 " + Object.keys(profs).length + "종") + '</div>' +
+      '<div class="agh-linkrow"><button class="agh-btn" data-cm-wf>What-if · 직무 프로파일 100% 연결 가정</button><span data-cm-wfout class="agh-cmwfout"></span></div>' +
+      gateHTML("connmap", ["AI 추론 연결 승인", "직무 매핑 요청", "보류"]);
+    ctxPanelIf(host, [
+      { tag: "근거 부재", title: "무엇이 연결되어 있지 않나", body: "objectives는 상위목표·조직·소유자만 참조하고 직무·스킬·전략 참조가 없음. 스킬 어휘 3종(직무기술서 free-text · 7축 · 역량 D1–D5)에 크로스워크 없음. AI 연결의 값어치가 바로 이 지점." },
+      { tag: "품질 지표", title: "연결률을 HR 품질 지표로", body: "'직무 근거가 있는 목표 비율'(" + goalRate + "%)을 상시 지표로 노출해 연결 개선을 추적." }
+    ]);
+    var wf = host.querySelector("[data-cm-wf]");
+    if (wf) wf.addEventListener("click", function () {
+      var out = host.querySelector("[data-cm-wfout]");
+      if (out) out.innerHTML = ' → 연결률 ' + rate + '% → <b>100%</b> 가정 시: 목표의 직무 정박 100%, \'근거 없는 목표\' 0건, 이의제기 대응 근거 충족 <b>+' + (100 - rate) + '%p</b> ' + srcChip("rule", "rule-exec.connfill");
+    });
+  };
+
+  /* ============================================================
+     프로세스 맵 · 결정의 계보 — 목표수립→중간점검→평가→피드백 결정 타임라인
+     피드백 반영: 흩어진 근거 통합 · 난이도 근거 · 측정불가 KR 경고 · 작년→올해 승계
+     ============================================================ */
+  RENDER.procmap = function (host) {
+    host = host || el.canvas;
+    function gaId(seed) { var hh = 7; for (var i = 0; i < seed.length; i++) hh = (hh * 31 + seed.charCodeAt(i)) >>> 0; return "GA-2026-" + ("000" + (hh % 10000)).slice(-4); }
+    var d = D(), emps = d.employees || [], evals = d.evaluations || [], hist = d.evalHistory || [], krs = d.keyResults || [], objs = d.objectives || [];
+    var cu = CU();
+    var subj = emps.filter(function (e) { return evals.some(function (v) { return v.emp_id === e.emp_id; }); })[0] || emps[0] || { name: cu.name, emp_id: cu.emp_id };
+    var ev = evals.filter(function (v) { return v.emp_id === subj.emp_id; })[0] || {};
+    var hrow = ((hist.filter(function (x) { return x.emp_id === subj.emp_id; })[0]) || {}).history || [];
+    var myObj = objs.filter(function (o) { return o.owner_emp_id === subj.emp_id; })[0] || {};
+    var myKr = krs.filter(function (k) { return k.objective_id === (myObj.objective_id || ""); });
+    var hardKr = myKr.filter(function (k) { return /A|S/.test(k.difficulty || ""); })[0] || myKr[0] || {};
+    var vagueKr = myKr.filter(function (k) { return !/[\d%]|억|건|명|점/.test(k.name || "") && !/[\d%]/.test(k.target_value || ""); })[0];
+    var prev = hrow.length ? hrow[hrow.length - 1] : null;
+
+    function node(stage, code, title, st, asof, evid, cite, warn) {
+      return '<div class="agh-pmnode ' + st + '" data-pm-node>' +
+        '<div class="agh-pmstage">' + esc(stage) + '</div>' +
+        '<div class="agh-pmtitle">' + esc(title) + ' <span class="agh-pmst">' + (st === "ok" ? "✓ 승인됨" : st === "wait" ? "⏳ 승인 대기" : "● 진행") + '</span></div>' +
+        '<div class="agh-pmasof">◷ ' + esc(asof) + '</div>' +
+        '<div class="agh-pmev">' + evid + '</div>' +
+        (warn || '') +
+        (cite ? '<div class="agh-pmcite">↳ ' + cite + '</div>' : '') +
+        '<span class="agh-auditchip">⛨ ' + gaId(code + subj.emp_id) + ' 기록됨</span></div>';
+    }
+
+    host.innerHTML = screenHead("procmap") +
+      '<div class="agh-cmbar"><span class="agh-chip asof">◷ 기준 시점 · 2026 상반기</span><span class="agh-auditchip">⛨ 대상 ' + esc(subj.name || "") + ' · 권한 내 조회</span></div>' +
+      '<div class="agh-pmflow">' +
+        node("목표수립", "pm1", "목표·가중치 확정", "ok", "1월 · 확정 스냅샷",
+          'KR ' + myKr.length + '건 · 가중치 합 검증 · 핵심 KR <b>난이도 ' + esc(hardKr.difficulty || "-") + '</b> ' + srcChip("talenx", "okr.tree"),
+          "평가 단계의 '어려운 목표였다' 판단 근거로 인용됨",
+          '<div class="agh-pmwarn">난이도 근거(신설 제안): "' + esc(hardKr.name || "핵심 KR") + '"은 작년 실적 대비 상향폭이 커 ' + esc(hardKr.difficulty || "A") + '로 판단 — 지금은 근거 필드가 없어 평가 시 분쟁 소지</div>' +
+          (vagueKr ? '<div class="agh-pmwarn crit">⚠ 측정 가능성 경고: "' + esc(vagueKr.name) + '"은 정량 기준이 없어 평가 시점 분쟁 위험 — 작성 시점에 지표화 권고(POC 검증됨)</div>' : '')) +
+        node("중간점검", "pm2", "중간점검 요약 확정", "ok", "6월 · 6/30 마감",
+          '체크인·1:1 기록을 종합한 진척 요약 ' + srcChip("talenx", "checkins") + srcChip("talenx", "1:1 로그"),
+          "평가 코멘트의 '과정 근거'로 이 요약이 인용됨", null) +
+        node("평가", "pm3", "등급 초안 → 캘리브레이션 조정", "wait", "7월 · 평가 시즌",
+          '자기·상사·피어 종합 <b>' + esc(ev.grade || "-") + '</b> (종합 ' + (ev.weighted_score != null ? ev.weighted_score : "-") + ') ' + srcChip("erp", "실적") + srcChip("rule", "평가규정 v3.1"),
+          "중간점검 요약(6월) + 목표수립 난이도를 근거로 인용", null) +
+        node("피드백", "pm4", "리뷰 확정 · 차년도 이월", "wait", "8월 · 피드백 면담",
+          '근거 인용 리뷰 초안 + 개선계획 ' + srcChip("talenx", "review.draft"),
+          '작년 <b>' + (prev ? esc(prev.grade) + "등급(" + esc(prev.period) + ")" : "평가·피드백") + '</b> → 올해 목표수립 초안으로 <b>승계</b> (매년 백지에서 시작하지 않음)', null) +
+      '</div>' +
+      '<div class="agh-verdict">이 계보 한 장이 "왜 이 등급인가"를 설명하고 <b>AI 관여 고지·이의제기 대응</b>의 실체가 됩니다. 앞 단계 근거가 다음 단계로 인용선(↳)으로 이어지고, 마지막 확정은 차년도 목표수립으로 승계됩니다. 새로 만드는 것이 아니라 <b>흩어진 근거(트레이스·맥락 기록·감사 로그)를 프로세스 순서로 묶는 일</b>. ' + srcChip("talenx", "context.timeline") + '</div>' +
+      '<div class="agh-linkrow"><button class="agh-btn" data-pm-wf>What-if · 중간점검 근거 제외하고 재구성</button><span data-pm-wfout class="agh-cmwfout"></span></div>' +
+      gateHTML("procmap", ["계보 확정", "근거 보강", "보류"]);
+    ctxPanelIf(host, [
+      { tag: "통합", title: "흩어진 근거를 한 장으로", body: "답변 단위 계산 트레이스·시간순 맥락 기록·감사 로그·1:1 커버리지 맵을 프로세스 순서로 재배열. 이미 쌓인 데이터를 묶는 일에 가까움." },
+      { tag: "영속성", title: "다음 단계 숙제", body: "데모 기록은 브라우저 저장·80건 초과 삭제됨. 실서비스는 무엇을 얼마나 보관하고 누가 볼 수 있는지 규칙 정의 필요(상태 저장소)." }
+    ]);
+    var pw = host.querySelector("[data-pm-wf]");
+    if (pw) pw.addEventListener("click", function () {
+      var out = host.querySelector("[data-pm-wfout]");
+      if (out) out.innerHTML = " → 중간점검 근거 제외 시 평가 코멘트의 <b>과정 근거</b>가 사라져 '결과만 있는 평가'가 됩니다 — 근거 연결의 가치 확인. " + srcChip("rule", "rule-exec.lineage");
+    });
+    Array.prototype.forEach.call(host.querySelectorAll("[data-pm-node]"), function (nd) {
+      nd.addEventListener("click", function (e) { if (e.target.closest(".agh-btn")) return; nd.classList.toggle("open"); });
+    });
+  };
 
   window.TXAgent = {
     openHub: openHub,

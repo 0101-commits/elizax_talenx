@@ -481,3 +481,45 @@ button.agh-gitem:active { transform: scale(.95); }
 .agh-chatcomp textarea{ flex:1; resize:none; max-height:120px; border:1px solid var(--line,#D0D5DD);
   border-radius:10px; padding:9px 12px; font:inherit; font-size:13.5px; background:var(--card,#fff); color:inherit; }
 .agh-chatcomp textarea:disabled{ opacity:.55; }
+
+/* ===== 연결 지도(connmap) + 결정의 계보(procmap) ===== */
+.agh-cmbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.agh-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+.agh-chip.asof { background: #E7EEFB; color: #23408E; }
+.agh-cmstat { font-size: 11.5px; color: #3C424B; font-weight: 600; }
+.agh-cmstat b { color: #1F7AF0; font-weight: 800; font-variant-numeric: tabular-nums; }
+.agh-cmwrap { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 4px 2px 10px; }
+.agh-cmcol { flex: 1 0 128px; min-width: 128px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.agh-cmh { font-size: 11px; font-weight: 800; color: #fff; background: #274E86; border-radius: 6px; padding: 5px 8px; text-align: center; }
+.agh-cmh.s1 { background: #6B4A9E; } .agh-cmh.s2 { background: #274E86; } .agh-cmh.s3 { background: #1F7AF0; }
+.agh-cmh.s4 { background: #0E7C86; } .agh-cmh.s5 { background: #3E8E8B; } .agh-cmh.s6 { background: #A15C2E; } .agh-cmh.s7 { background: #794039; }
+.agh-cmn { flex: 1; background: #fff; border: 1px solid #DCE3EC; border-radius: 8px; padding: 8px 9px; font-size: 10.6px; line-height: 1.45; color: #2b3038; display: flex; flex-direction: column; gap: 2px; }
+.agh-cmn b { font-size: 11.2px; color: #20242A; }
+.agh-cmn span { color: #4A5560; display: block; }
+.agh-cmn em { color: #8A4A3A; font-style: normal; font-weight: 700; }
+.agh-cmn.inf { border-style: dashed; border-color: #D8A05E; background: #FBF6EF; }
+.agh-cmtag { position: absolute; top: 27px; right: 4px; font-size: 8px; font-weight: 800; color: #A15C2E; background: #F5E7D5; border-radius: 4px; padding: 0 4px; }
+.agh-cmarrow { align-self: center; color: #9AA6B2; font-size: 16px; font-weight: 800; padding: 0 3px; flex: 0 0 auto; }
+.agh-cmarrow.inf { color: #D8A05E; }
+.agh-cmlegend { display: flex; gap: 16px; font-size: 10px; color: #6A7178; margin: 2px 0 8px; }
+.agh-cmlegend .sol { color: #274E86; font-weight: 700; } .agh-cmlegend .dsh { color: #A15C2E; font-weight: 700; }
+.agh-cmwfout { font-size: 11px; color: #2b3038; }
+.agh-cmwfout b { color: #1F7AF0; }
+/* procmap */
+.agh-pmflow { display: flex; gap: 10px; align-items: stretch; overflow-x: auto; padding: 2px 2px 10px; }
+.agh-pmnode { flex: 1 0 210px; min-width: 210px; background: #fff; border: 1px solid #DCE3EC; border-left: 4px solid #1F7AF0; border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: box-shadow .15s; position: relative; }
+.agh-pmnode:hover { box-shadow: 0 4px 14px rgba(31,58,95,.12); }
+.agh-pmnode.ok { border-left-color: #15803D; } .agh-pmnode.wait { border-left-color: #B45309; }
+.agh-pmstage { font-size: 9.5px; font-weight: 800; letter-spacing: .04em; color: #7A828B; text-transform: uppercase; }
+.agh-pmtitle { font-size: 12.5px; font-weight: 800; color: #20242A; margin: 2px 0 5px; }
+.agh-pmst { font-size: 10px; font-weight: 700; color: #15803D; }
+.agh-pmnode.wait .agh-pmst { color: #B45309; }
+.agh-pmasof { font-size: 10px; color: #6A7178; margin-bottom: 5px; }
+.agh-pmev { font-size: 11px; line-height: 1.5; color: #3C424B; }
+.agh-pmcite { font-size: 10.4px; color: #23408E; background: #EEF3FB; border-radius: 6px; padding: 4px 7px; margin-top: 6px; display: none; }
+.agh-pmnode.open .agh-pmcite { display: block; }
+.agh-pmwarn { font-size: 10.2px; line-height: 1.45; color: #7A5B2E; background: #FBF3E4; border: 1px solid #EAD9B5; border-radius: 6px; padding: 5px 7px; margin-top: 6px; display: none; }
+.agh-pmwarn.crit { color: #9A3412; background: #FBEBE4; border-color: #EAC7B5; }
+.agh-pmnode.open .agh-pmwarn { display: block; }
+.agh-pmnode .agh-auditchip { margin-top: 7px; }
+.agh-pmnode:not(.open) .agh-pmev { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
