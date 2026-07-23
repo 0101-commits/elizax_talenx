@@ -224,6 +224,7 @@
   }
   function openNotif() {
     var data = buildNotifs();
+    if (curRole()==='member') data.forEach(function(n){ n.appr = 0; });
     var apprN = data.filter(function (n) { return n.appr; }).length;
     var state = { tab: 'appr', chip: 'all' };
 
@@ -759,6 +760,7 @@
         cardByTitle(home, '360 피드백')
       ];
       order.forEach(function (c) { if (c) leftCol.appendChild(c); });
+      if (curRole()==='member'){ var _dc=cardByTitle(home,'처리할 문서'); if(_dc)_dc.style.display='none'; }
     }
 
     /* ---- widget navigation (chevrons + rows) ---- */

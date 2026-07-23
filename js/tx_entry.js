@@ -304,6 +304,7 @@
   }
 
   function dismissPill(instant) {
+    if (window.EZProactive) EZProactive.release("eze-pill");
     clearHideTimer();
     currentSg = null;
     if (!pillEl) return;
@@ -361,6 +362,8 @@
 
     requestAnimationFrame(function () { pill.classList.add("eze-show"); });
     pillEl = pill;
+    /* 선제 알림 단일화: 이미 떠 있는 다른 선제 팝업(agh-popup/ctxchip)을 닫고 이 pill로 교체 */
+    if (window.EZProactive) EZProactive.claim("eze-pill", function () { dismissPill(true); });
     armAutoHide(AUTOHIDE_MS);
     return true;
   }

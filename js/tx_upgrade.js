@@ -146,9 +146,12 @@
     chipEl._ask = cfg.ask;
     clearTimeout(chipTimer);
     requestAnimationFrame(function () { chipEl.classList.add("show"); });
+    /* 선제 알림 단일화: 이미 떠 있는 다른 선제 팝업(agh-popup/pill)을 닫고 이 chip으로 교체 */
+    if (window.EZProactive) EZProactive.claim("ezup-ctxchip", hideCtxChip);
     chipTimer = setTimeout(hideCtxChip, 6000);
   }
   function hideCtxChip() {
+    if (window.EZProactive) EZProactive.release("ezup-ctxchip");
     clearTimeout(chipTimer);
     if (chipEl) chipEl.classList.remove("show");
   }

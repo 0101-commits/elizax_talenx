@@ -238,8 +238,10 @@
   }
 
   /* ================= 2. 구성원 근무 ================= */
-  function memberRows() {
-    var emps = (F.D && F.D.employees ? F.D.employees : []).filter(function (e) { return e && e.name; }).slice(0, 11);
+  function memberRows(filterFn) {
+    var emps = (F.D && F.D.employees ? F.D.employees : []).filter(function (e) { return e && e.name; });
+    if (filterFn) emps = emps.filter(filterFn);
+    emps = emps.slice(0, 11);
     var cols = ''; for (var c = 0; c < 14; c++) cols += '<span class="gcol"></span>';
     var block = '<div class="gblock"><span class="core"></span><span class="rest"></span>' +
       '<div class="bt">' + SVG_CLK + '시차출퇴근 (9-18)</div><div class="bs">09:00 - 18:00</div></div>';
@@ -284,16 +286,22 @@
       }, false);
     }
 
+    /* leader(조직장)=본인 팀 범위만, hr/exec=전사 (fix: leader over-scope leak) */
+    var teamFilter = (ROLE === 'leader' && F.teamName && F.CU) ? function (e) { return F.teamName(e) === F.teamName(F.CU); } : null;
+    var teamSize = teamFilter ? (F.D && F.D.employees ? F.D.employees : []).filter(function (e) { return e && e.name; }).filter(teamFilter).length : 472;
+    var headCount = teamFilter ? teamSize : 100;
+    var pagerTxt = teamFilter ? ('1–' + teamSize + ' of ' + teamSize) : '1–100 of 472';
+
     var card = q(p, '.card');
     if (card) {
       var ghl = q(card, '.gh-l');
-      if (ghl) ghl.innerHTML = '구성원 (100) <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M6 12h12M10 18h4"/></svg>';
+      if (ghl) ghl.innerHTML = '구성원 (' + headCount + ') <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M6 12h12M10 18h4"/></svg>';
       qa(card, '.grow').forEach(function (r) { r.parentNode.removeChild(r); });
       var pager = q(card, '.pager');
       if (pager) {
-        pager.insertAdjacentHTML('beforebegin', memberRows());
+        pager.insertAdjacentHTML('beforebegin', memberRows(teamFilter));
         var spans = qa(pager, 'span');
-        for (var i = 0; i < spans.length; i++) if (/of/.test(spans[i].textContent) && spans[i].className !== 'rpp') { spans[i].textContent = '1–100 of 472'; break; }
+        for (var i = 0; i < spans.length; i++) if (/of/.test(spans[i].textContent) && spans[i].className !== 'rpp') { spans[i].textContent = pagerTxt; break; }
       }
       /* wire toolbar (fix #7) */
       var dt = q(card, '.dtbox');

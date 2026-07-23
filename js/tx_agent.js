@@ -1284,10 +1284,12 @@
         "<b>" + esc(a.title) + "</b><p>" + esc(a.body) + "</p>" +
         '<div class="acts"><button class="agh-btn primary" data-pgo>열어서 확인</button><button class="agh-btn" data-pdis>나중에</button></div><small>1일 뒤 다시 알림 · 승인하면 반영</small>';
       document.body.appendChild(card);
+      /* 선제 알림 단일화: 이미 떠 있는 다른 선제 팝업(pill/chip)을 닫고 이 카드로 교체 */
+      if (window.EZProactive) EZProactive.claim("agh-popup", function () { if (card.parentNode) card.remove(); });
       requestAnimationFrame(function () { card.classList.add("show"); });
       card.addEventListener("click", function (e) {
-        if (e.target.closest("[data-pgo]")) { card.remove(); openHub(a.screen); }
-        if (e.target.closest("[data-pdis]")) { card.classList.remove("show"); setTimeout(function () { card.remove(); }, 250); }
+        if (e.target.closest("[data-pgo]")) { if (window.EZProactive) EZProactive.release("agh-popup"); card.remove(); openHub(a.screen); }
+        if (e.target.closest("[data-pdis]")) { if (window.EZProactive) EZProactive.release("agh-popup"); card.classList.remove("show"); setTimeout(function () { card.remove(); }, 250); }
       });
     }, 9000);
   }

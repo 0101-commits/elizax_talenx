@@ -311,7 +311,7 @@
   function cardMenu(anchor, bid) {
     var b = boardById(bid); if (!b) return;
     TX.menu(anchor, [
-      { label: '보드 열기', onClick: function () { TX.toast('‘' + b.name + '’ 보드를 엽니다.'); } },
+      { label: '보드 열기', onClick: function () { openBoardDetail(bid); } },
       { label: '이름 변경', onClick: function () { TX.toast('보드 이름을 변경합니다.'); } },
       { label: b.fav ? '즐겨찾기 해제' : '즐겨찾기', onClick: function () { toggleFav(bid); } },
       { label: '멤버 관리', onClick: function () { TX.toast('멤버 관리 화면으로 이동합니다.'); } },

@@ -82,6 +82,23 @@
       while (c && orgById[c] && guard++ < 20) { out.push(c); c = orgById[c].parent_id; }
       return out;
     }
+    function roleKey() { return (CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member'; }
+    function pickParentObjective() {   // D: most relevant 상위(조직) 목표 default
+      var orgObjs = objs.filter(function (o) { return o.type === '조직'; });
+      if (!orgObjs.length) return null;
+      var chain = ancestorOrgs(cuEmp.org_id);   // [self, parent, ... root] — closest first
+      for (var i = 0; i < chain.length; i++) {
+        var hit = orgObjs.filter(function (o) { return o.org_id === chain[i]; })[0];
+        if (hit) return hit;
+      }
+      var byMgr = orgObjs.filter(function (o) { return o.owner_emp_id === cuEmp.manager_id; })[0];
+      if (byMgr) return byMgr;
+      if (cuEmp.strategy_theme_id) {
+        var byThm = orgObjs.filter(function (o) { return o.strategy_theme_id === cuEmp.strategy_theme_id; })[0];
+        if (byThm) return byThm;
+      }
+      return orgObjs[0];
+    }
 
     /* ============================================================= *
      *  STYLE                                                        *
@@ -413,7 +430,9 @@
         html = myGoalsCard(false) + roleCard();
       } else if (activePill === 3) {     // 나의 전체 목표
         html = allCard();
-      } else {                           // 소속 기준 (default) — fix 6: cascade lives here
+      } else if (roleKey() === 'member') { // 소속 기준 · 조직원 — 본인 범위만 (동료 목표·진행률 비노출)
+        html = myGoalsCard(true);
+      } else {                           // 소속 기준 (default) — fix 6: cascade lives here (leader/hr/exec)
         html = myGoalsCard(true)
           + '<div class="cardset"><button class="ghost-btn" data-txf="cardset">조직 카드 설정</button></div>'
           + ancestorOrgs(cuEmp.org_id).map(orgCard).join('');
@@ -586,6 +605,8 @@
       };
     }
     function tabMeetings(idx) {
+      // A: 조직원은 본인 1:1(idx 0)만 — 관리자(idx 1)·열람가능(idx 2) 탭은 동료의 사적 1:1 노트라 비노출
+      if (roleKey() === 'member' && idx !== 0) return [];
       if (mtTabs[idx]) return mtTabs[idx];
       var pool = idx === 1
         ? emps.filter(function (e) { return e.manager_id === CU.emp_id; }).slice(0, 3)
@@ -956,6 +977,12 @@
         + '<div class="s done"><span class="ic">✓</span><span class="lbl">목표 가중치</span><span class="rq">*</span></div>'
         + '</div></div></div>';
       sec.appendChild(newOv);
+      // D: 상위 목표 연계 — 조직 상위 목표를 합리적 기본값으로 자동 선택(사용자가 변경 가능)
+      var defParent = pickParentObjective();
+      if (defParent) {
+        var psel = newOv.querySelector('.txf-fcard select');
+        if (psel) psel.value = defParent.objective_id;
+      }
       renumberKR();
     }
     function openNew() { if (!newOv) buildNewOverlay(); newOv.classList.add('open'); }
@@ -1434,6 +1461,12 @@
               { name: '분기별 사용자 인터뷰 12회 실시', mode: 3, weight: 30, diff: 'B', diffwhy: '전년 수준 유지 — 안정 운영', why: whyOf(2) + carryChipsOf(2) }
             ];
             var insertKRs = function (items, live) {
+              // C fix: drop still-empty (unnamed) KR rows first so the 1st 추천이 핵심 성과 1에 들어감
+              // (그대로 두면 초기 빈 KR1 위에 append → 추천이 핵심 성과 2부터 채워지던 off-by-one)
+              Array.prototype.forEach.call(list2.querySelectorAll('.txf-kr'), function (row) {
+                var nameInp = row.querySelector('.txf-inp');
+                if (nameInp && !nameInp.value.trim()) row.remove();
+              });
               items.forEach(function (s) { list2.insertAdjacentHTML('beforeend', krRowHTML(s)); });
               renumberKR();
               if (carryCtx) {

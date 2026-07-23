@@ -29,6 +29,8 @@
     var D = TXFIX.D || {};
     var CU = TXFIX.CU || {};
     var comps = (D.competencies || []).slice(0, 5);
+    var ROLE = (CU && CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
+    var canManage = (ROLE === 'leader' || ROLE === 'hr'); // 조직원=권한없음, 경영진=조망만
 
     /* ---------------- helpers ---------------- */
     function emp(id) { return TXFIX.emp(id); }
@@ -107,6 +109,10 @@
         ]
       }
     ];
+    // member: only 360s the current user is subject or rater of (본인 관련만 노출)
+    if (ROLE === 'member') {
+      cards = cards.filter(function (c) { return c.subj === CU || (c.raters && c.raters.indexOf(CU) >= 0); });
+    }
     cards.forEach(function (c, i) { c.order = i; c.title = c.type; c.qs = Q(nt(c.subj)); });
 
     /* ================= 현황 LIST rebuild ================= */
@@ -219,6 +225,7 @@
 
     /* ================= 평가자 설정 menu ================= */
     var btnSet = reclone(root.querySelector('.btn-set'));
+    if (btnSet && ROLE === 'member') { btnSet.style.display = 'none'; btnSet = null; }
     if (btnSet) {
       btnSet.addEventListener('click', function (e) {
         e.preventDefault(); e.stopPropagation();
@@ -284,7 +291,7 @@
         '<div class="txf-mlab" style="margin-top:16px">요청 사유</div><div class="txf-box">' + esc(c.reason) + '</div>' +
         '<div class="txf-mlab" style="margin-top:18px">평가자 <span class="txf-count">' + c.raters.length + '</span></div>' +
         '<div class="txf-raterlist">' + c.raters.map(function (r) { return '<div class="txf-inline txf-mv">' + ava(r.name, 22) + esc(nt(r)) + '</div>'; }).join('') + '</div>' +
-        '<button class="txf-btn-ghost txf-sm" style="margin-top:10px" data-noop>평가자 수정</button>' +
+        (canManage ? '<button class="txf-btn-ghost txf-sm" style="margin-top:10px" data-noop>평가자 수정</button>' : '') +
         '<div class="txf-mlab" style="margin-top:18px">공개 범위</div><div class="txf-mv">' + esc(c.scope) + '</div>' +
         '<div class="txf-mlab" style="margin-top:18px">응답률</div>' +
         '<div class="txf-inline" style="gap:14px;margin-top:6px">' + ringSVG(c.pct) + '<span class="txf-muted">' + c.resp + ' / ' + c.total + '</span></div>' +
@@ -326,7 +333,7 @@
 
       pg.innerHTML =
         pageBar('360 피드백 결과',
-          '<button class="txf-btn-danger txf-del">삭제</button><button class="txf-btn-ghost txf-edit">수정</button>') +
+          canManage ? '<button class="txf-btn-danger txf-del">삭제</button><button class="txf-btn-ghost txf-edit">수정</button>' : '') +
         '<div class="txf-pgbody">' + profileHTML + metaHTML +
         radarHTML +
         '<div class="txf-qhead"><h3>360 피드백 문항</h3><label class="txf-toggle"><span>응답 비율 표시(%)</span><input type="checkbox" class="txf-ratio-tg"><i></i></label></div>' +
@@ -334,12 +341,14 @@
         '</div>';
 
       pg.querySelector('.txf-back').addEventListener('click', function () { pageClose(pg); });
-      pg.querySelector('.txf-del').addEventListener('click', function () {
+      var btnDel = pg.querySelector('.txf-del');
+      if (btnDel) btnDel.addEventListener('click', function () {
         TX.confirm('360 피드백 삭제', '이 360 피드백 결과를 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.', function () {
           toast('360 피드백을 삭제했습니다.', 'ok'); pageClose(pg);
         }, '삭제');
       });
-      pg.querySelector('.txf-edit').addEventListener('click', function () { toast('수정 모드로 전환합니다.'); });
+      var btnEdit = pg.querySelector('.txf-edit');
+      if (btnEdit) btnEdit.addEventListener('click', function () { toast('수정 모드로 전환합니다.'); });
       var tg = pg.querySelector('.txf-ratio-tg');
       if (tg) tg.addEventListener('change', function () {
         pg.querySelectorAll('.txf-ratio').forEach(function (r) { r.hidden = !tg.checked; });
@@ -416,6 +425,10 @@
       return '<div class="txf-field"><label class="txf-flabel">' + esc(label) + (req ? '<span class="txf-req-mark">*</span>' : '') + '</label>' + inner + '</div>';
     }
     function openRequest() {
+      if (!canManage) { // member=권한없음, exec=조망만
+        TX.confirm('360 피드백 생성', '생성·요청 권한이 없습니다. 조직장 또는 HR에게 요청하세요.', null, '확인');
+        return;
+      }
       var pg = pageOpen('txf-request-page');
       var empList = (D.employees || []).slice(0, 80);
       var opt = '<option value="">대상자를 선택합니다.</option>' +
