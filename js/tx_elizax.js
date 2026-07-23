@@ -177,12 +177,12 @@
     root.setAttribute("data-theme-host", "1");
 
     /* FAB */
-    var fab = h("button", "ezx-fab", { "aria-label": "elizax AI 코치 열기", "title": "elizax" });
+    var fab = h("button", "ezx-fab", { "aria-label": "elizax 열기", "title": "elizax" });
     fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 2z" fill="currentColor"/><circle cx="18.5" cy="16.5" r="2" fill="currentColor" opacity=".85"/></svg>';
     fab.addEventListener("click", openPanel);
 
     /* Panel */
-    var panel = h("div", "ezx-panel", { role: "dialog", "aria-label": "elizax AI 성과관리 코치", "aria-modal": "false" });
+    var panel = h("div", "ezx-panel", { role: "dialog", "aria-label": "elizax", "aria-modal": "false" });
 
     /* Header */
     var head = h("div", "ezx-head");
@@ -191,9 +191,7 @@
     mark.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 2z" fill="currentColor"/></svg>';
     var titles = h("div", "ezx-titles");
     titles.appendChild(h("div", "ezx-title", { text: "elizax" }));
-    var sub = h("div", "ezx-sub", { text: "AI 성과관리 코치" });
-    titles.appendChild(sub);
-    el.sub = sub;
+    el.sub = null;   // 서브타이틀(‘AI 성과관리 코치’ 라벨 · ● Claude 모델칩) 제거 — Siri식 최소 헤더
     var exbtn = h("button", "ezx-x ezx-expand", { "aria-label": "전체화면으로 전환", title: "워크스페이스로 전환", text: "⛶" });
     exbtn.addEventListener("click", function () {
       /* 전체화면 전환 시 같은 대화가 이어지도록 대화 스크린으로 진입 */
@@ -208,14 +206,8 @@
     top.appendChild(mark); top.appendChild(titles); top.appendChild(gear); top.appendChild(exbtn); top.appendChild(xbtn);
     head.appendChild(top);
 
-    /* perspective: 수동 탭 제거 — 역할 주체(TXRoles)에 따라 자동 전환 */
-    var persp = h("div", "ezx-persp ezx-persp-auto", { "aria-label": "관점 (역할 자동 연동)" });
-    persp.innerHTML =
-      '<span class="ezx-persp-chip"><span class="dot"></span><b data-ezx-plabel>' +
-      esc(perspectiveLabel(state.perspective)) + "</b> 관점</span>" +
-      '<span class="ezx-persp-note">역할 주체에 따라 자동 전환 · 상단 관점 스위처 연동</span>';
-    head.appendChild(persp);
-    el.persp = persp;
+    /* perspective 스트립 제거 — 관점 자동전환 로직(setPerspective)은 유지, 시각 chrome만 삭제 */
+    el.persp = null;
 
     /* employee picker */
     var picker = h("div", "ezx-picker");
@@ -404,7 +396,7 @@
     var wrap = h("div", "ezx-empty");
     wrap.appendChild(h("div", "eh", { text: "무엇을 도와드릴까요?" }));
     var sub = h("div", "es");
-    sub.textContent = "성과관리 · 목표 · 평가에 대해 물어보세요.";
+    sub.textContent = "목표·평가부터 근무·급여까지, 화면 이동·조회·초안 작성을 도와드립니다.";
     wrap.appendChild(sub);
 
     var m = aiMode();
@@ -422,7 +414,7 @@
       var ready = !window.EZAI || !window.EZAI.ready || window.EZAI.ready();
       var onNote = h("div", "ezx-persp-note");
       onNote.style.marginTop = "10px";
-      onNote.innerHTML = (ready ? "● <b>Claude 연결됨</b> · " : "◐ ") + esc(window.EZAI ? window.EZAI.modeLabel() : "확인 중");
+      onNote.innerHTML = (ready ? "● <b>연결됨</b> · " : "◐ ") + esc(window.EZAI ? window.EZAI.modeLabel() : "확인 중");
       onNote.style.color = ready ? "#15803D" : "#B45309";
       wrap.appendChild(onNote);
     }
@@ -446,7 +438,7 @@
     }
 
     var starters = h("div", "ezx-starters");
-    ["내 목표 진행상황 점검", "평가 근거 설명해줘", "동료 피드백 요약"].forEach(function (s) {
+    ["내 목표 진행상황 점검", "이번 달 근무기록 확인", "급여명세서 열어줘"].forEach(function (s) {
       var b = h("button", "ezx-starter", { text: s, type: "button" });
       b.addEventListener("click", function () { sendMessage(s); });
       starters.appendChild(b);

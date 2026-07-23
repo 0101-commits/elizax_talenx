@@ -1313,7 +1313,7 @@
     if (ai && window.EZAI) {
       var rdy = EZAI.ready && EZAI.ready();
       var md = EZAI.mode ? EZAI.mode() : "offline";
-      ai.textContent = rdy ? "● Claude 연결됨" : md === "offline" ? "○ 오프라인 예시 응답" : "◐ AI 연결 전";
+      ai.textContent = rdy ? "● 연결됨" : md === "offline" ? "○ 오프라인 예시 응답" : "◐ AI 연결 전";
       ai.style.color = rdy ? "#15803D" : md === "offline" ? "" : "#B45309";
     }
     document.body.style.overflow = "hidden";

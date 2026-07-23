@@ -49,6 +49,12 @@
     var s = document.createElement('style');
     s.id = 'txf-appr-style';
     s.textContent =
+      '#s-appr .txf-selfnote{background:var(--soft);border:1px solid var(--line-2);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--ink-2);margin-bottom:16px}' +
+      '#s-appr .txf-selfbar{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}' +
+      '#s-appr .txf-selfbar .ghost-btn,#s-appr .txf-selfbar .hbtn{cursor:pointer;padding:10px 20px;border-radius:9px;font-size:13px;font-weight:700}' +
+      '#s-appr .txf-selfbar .ghost-btn{border:1px solid var(--line);background:var(--card);color:var(--ink-2)}' +
+      '#s-appr .txf-selfbar .hbtn{border:none;background:var(--blue);color:#fff}' +
+      '#s-appr .txfw-form .txfw-tabs{margin-top:4px}' +
       '#s-appr .txf-avwrap{position:relative;flex:none}' +
       '#s-appr .txf-plus{position:absolute;top:-5px;left:-7px;background:var(--ink-2);color:#fff;font-size:9px;font-weight:800;border-radius:20px;padding:1px 4px;line-height:1.4;z-index:1}' +
       '#s-appr .sdot.s-info{background:var(--blue)}' +
@@ -246,17 +252,25 @@
       ? '<div class="ap-more"><a data-txf="more">더 보기 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a></div>' : '';
     // 조직원: 본인 평가만 — '평가 검토'(타인 리뷰) 탭 숨김
     var reviewTab = roleKey() === 'member' ? '' : '<button data-txf="tab" data-tab="2">평가 검토</button>';
-    container.innerHTML =
-      '<div id="txf-appr0">' +
-      '<div class="ap-head"><h2>평가 현황</h2><div class="r">' + dashBtn +
+    // 조직원(피평가자): 평가자용 대상자 매트릭스 대신 '본인 평가 작성' 폼으로 바로 진입
+    var isSelf = plan.mode === 'self';
+    var pane0 = isSelf
+      ? '<div class="txf-selfnote">아래는 <b>' + esc((CU && CU.name) || '본인') + '</b>님 본인 평가 작성입니다. 확정 등급·근거는 위 <b>검증 가능한 답변</b> 카드에서 확인하세요.</div>' +
+        writeFormBody((CU && CU.emp_id) || '') +
+        '<div class="txf-selfbar"><button class="ghost-btn" data-txf="self-save">임시저장</button><button class="hbtn" data-txf="self-submit">제출</button></div>'
+      : (planProjects + moreBtn);
+    var filterBtn = isSelf ? '' :
       '<button class="ap-filter" data-txf="filter" title="필터">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>' +
-      '<span class="fb">1</span></button></div></div>' +
+      '<span class="fb">1</span></button>';
+    container.innerHTML =
+      '<div id="txf-appr0">' +
+      '<div class="ap-head"><h2>평가 현황</h2><div class="r">' + dashBtn + filterBtn + '</div></div>' +
       '<div class="ap-tabs">' +
       '<button class="on" data-txf="tab" data-tab="0">평가 작성</button>' +
       '<button data-txf="tab" data-tab="1">결과 확인</button>' +
       reviewTab + '</div>' +
-      '<div data-pane="0">' + planProjects + moreBtn +
+      '<div data-pane="0">' + pane0 +
       '</div>' +
       '<div data-pane="1" style="display:none"><div class="ap-empty2">평가 현황이 없습니다.</div></div>' +
       '<div data-pane="2" style="display:none"><div class="ap-empty2">검색 결과가 없습니다.' +
@@ -344,10 +358,7 @@
       return '<label class="txfw-rad"><input type="radio" name="' + name + '" value="' + g + '"' + (g === 'B' ? ' checked' : '') + '>' + g + '</label>';
     }).join('');
   }
-  function openWrite(btn) {
-    if (!TX.modal) return;
-    var tr = btn.closest('tr');
-    var empId = tr ? tr.getAttribute('data-emp') : null;
+  function writeFormBody(empId) {
     var e = F.emp(empId) || {};
     var objs = objsFor(empId);
     var goalRows = objs.map(function (o, i) {
@@ -378,14 +389,21 @@
       return '<tr><td>' + c + '</td><td style="color:var(--ink-3)">공통 역량</td>' +
         '<td style="white-space:nowrap">' + radioRow('txfw-c' + i) + '</td></tr>';
     }).join('');
-    var body =
+    return '<div class="txfw-form">' +
       '<div class="txfw-tabs"><button class="on" data-wtab="0">성과평가</button><button data-wtab="1">역량평가</button></div>' +
       '<div class="txfw-emp">' + F.avatar(e.name || '대상자', 36) +
       '<div><div class="nm">' + esc(e.name || empId || '대상자') + '</div>' +
       '<div class="tm">' + esc(F.teamName(e)) + (e.level_kr ? ' · ' + esc(e.level_kr) : '') + '</div></div></div>' +
       '<div data-wpane="0"><table class="txf-adj"><thead><tr><th>목표명</th><th>달성도</th><th>등급</th></tr></thead><tbody>' + goalRows + '</tbody></table>' + coefBox + '</div>' +
       '<div data-wpane="1" style="display:none"><table class="txf-adj"><thead><tr><th>역량 항목</th><th>구분</th><th>등급</th></tr></thead><tbody>' + compRows + '</tbody></table></div>' +
-      '<div class="txf-fld" style="margin-top:16px"><span>종합의견</span><textarea class="txfw-op" rows="4" placeholder="평가 근거와 종합 의견을 입력하세요."></textarea></div>';
+      '<div class="txf-fld" style="margin-top:16px"><span>종합의견</span><textarea class="txfw-op" rows="4" placeholder="평가 근거와 종합 의견을 입력하세요."></textarea></div>' +
+      '</div>';
+  }
+  function openWrite(btn) {
+    if (!TX.modal) return;
+    var tr = btn.closest('tr');
+    var empId = tr ? tr.getAttribute('data-emp') : null;
+    var body = writeFormBody(empId);
     var m = TX.modal({
       title: '평가 작성', wide: true, body: body, actions: [
         { label: '임시저장', kind: 'ghost', onClick: function () { TX.toast && TX.toast('임시 저장되었습니다.', 'ok'); return false; } },
@@ -515,12 +533,22 @@
     if (root.dataset.txfBound) return;
     root.dataset.txfBound = '1';
     root.addEventListener('click', function (ev) {
+      // inline 자기평가 폼 성과/역량 탭 (본인 평가 작성 화면)
+      var wt = ev.target.closest('[data-wtab]');
+      if (wt && root.contains(wt)) {
+        var form = wt.closest('.txfw-form') || root, ti = wt.getAttribute('data-wtab');
+        [].forEach.call(form.querySelectorAll('[data-wtab]'), function (x) { x.classList.toggle('on', x === wt); });
+        [].forEach.call(form.querySelectorAll('[data-wpane]'), function (p) { p.style.display = (p.getAttribute('data-wpane') === ti) ? '' : 'none'; });
+        return;
+      }
       var el = ev.target.closest('[data-txf]'); if (!el || !root.contains(el)) return;
       var act = el.getAttribute('data-txf');
       /* these classes (.ap-btn/.ap-btn-o/.ts-join/.ap-filter) are also caught by the
          tx_revive document-level delegate — stop the event so only one UI opens */
       if (act === 'write' || act === 'result' || act === 'join' || act === 'filter') ev.stopPropagation();
-      if (act === 'result') { openResult(el.getAttribute('data-emp')); }
+      if (act === 'self-save') { ev.preventDefault(); TX.toast && TX.toast('임시 저장되었습니다.', 'ok'); }
+      else if (act === 'self-submit') { ev.preventDefault(); TX.toast && TX.toast('본인 평가를 제출했습니다.', 'ok'); }
+      else if (act === 'result') { openResult(el.getAttribute('data-emp')); }
       else if (act === 'write') { openWrite(el); }
       else if (act === 'adjust') { ev.preventDefault(); openAdjust(el); }
       else if (act === 'members') { ev.preventDefault(); openMembers(el); }
