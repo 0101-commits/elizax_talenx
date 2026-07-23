@@ -137,65 +137,126 @@
     '<span class="li"><i class="ap-ic ic-grade">◆</i>등급 조정 완료</span>' +
     '<span class="li"><i class="ap-ic ic-delay"></i>지연중</span></div>';
 
-  /* ---------- project (stage pipeline) ---------- */
+  /* ---------- role ---------- */
+  function roleKey() {
+    return (CU && CU._role) ||
+      (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
+  }
+  function hrRep() { return F.emp('EMP-0005') || CU; }
+
+  /* ---------- project (stage pipeline) — role-aware ----------
+     mode 'self'  : 대상자=본인(CU). 본인 평가 셀에 '작성'(자기평가). 1·2차·확정은 열람.
+     mode 'first' : 대상자=팀원. 1차 상위자 셀(=CU)에 '작성'(1차 평가). 2차·확정 열람.
+     mode 'hr'    : 대상자=전사. 2차 등급 조정/결과 확정 셀이 CU(HR). 기존 동작.        */
+  function rowCells(t, mode, i) {
+    var tn = F.teamName(t), mgr = mgrOf(t), mgrTeam = F.teamName(mgr);
+    var done = (i % 3 !== 2);                 // vary: last row of trio still in review
+    var writeBtn = { cls: 'ap-btn', label: '작성', attr: 'data-txf="write"' };
+    var resultBtn = done ? { cls: 'ap-btn-o', label: '응답 확인', attr: 'data-txf="result" data-emp="' + t.emp_id + '"' } : null;
+    var selfC, firstC, secondC, resultC;
+    if (mode === 'self') {
+      selfC = cell(t.name, tn, { status: done ? 'done' : 'delay', btn: done ? null : writeBtn });
+      firstC = cell(mgr.name, mgrTeam, { status: done ? 'done' : 'info' });
+      secondC = cell(hrRep().name, F.teamName(hrRep()), { status: 'info' });
+      resultC = cell(t.name, tn, { status: done ? 'done' : null, btn: resultBtn });
+    } else if (mode === 'first') {
+      selfC = cell(t.name, tn, { status: done ? 'done' : 'delay' });            // 팀원 자기평가 — 리더는 열람만
+      firstC = cell(CU.name, F.teamName(CU), { status: done ? 'done' : 'info', btn: done ? null : writeBtn });
+      secondC = cell((mgrOf(CU) || hrRep()).name, F.teamName(mgrOf(CU) || hrRep()), { status: 'info' });
+      resultC = cell(t.name, tn, { status: done ? 'done' : null, btn: resultBtn });
+    } else {                                   // hr / exec
+      selfC = cell(t.name, tn, { status: done ? 'done' : 'delay', btn: done ? null : writeBtn });
+      firstC = cell(mgr.name, mgrTeam, { status: done ? 'done' : 'info' });
+      secondC = cell(CU.name, F.teamName(CU));
+      resultC = cell(CU.name, F.teamName(CU), { status: done ? 'done' : null, btn: resultBtn });
+    }
+    return '<tr data-emp="' + t.emp_id + '">' +
+      '<td>' + cell(t.name, tn) + '</td>' +
+      '<td>' + selfC + '</td>' +
+      '<td>' + firstC + '</td>' +
+      '<td>' + secondC + '</td>' +
+      '<td>' + resultC + '</td>' +
+      '</tr>';
+  }
   function group(g) {
-    var members = team(g.team).slice(g.from, g.to);
-    var rows = members.map(function (t, i) {
-      var tn = F.teamName(t), mgr = mgrOf(t), mgrTeam = F.teamName(mgr);
-      var firstDone = (i % 3 !== 2);           // vary: last row of trio still in review
-      var selfBtn = firstDone ? null : { cls: 'ap-btn', label: '작성', attr: 'data-txf="write"' };
-      return '<tr data-emp="' + t.emp_id + '">' +
-        '<td>' + cell(t.name, tn) + '</td>' +
-        '<td>' + cell(t.name, tn, { status: firstDone ? 'done' : 'delay', btn: selfBtn }) + '</td>' +
-        '<td>' + cell(mgr.name, mgrTeam, { status: firstDone ? 'done' : 'info' }) + '</td>' +
-        '<td>' + cell(CU.name, F.teamName(CU)) + '</td>' +
-        '<td>' + cell(CU.name, F.teamName(CU), { status: firstDone ? 'done' : null,
-          btn: firstDone ? { cls: 'ap-btn-o', label: '응답 확인', attr: 'data-txf="result" data-emp="' + t.emp_id + '"' } : null }) + '</td>' +
-        '</tr>';
-    }).join('');
+    var rows = (g.members || []).map(function (t, i) { return rowCells(t, g.mode, i); }).join('');
+    if (!rows) rows = '<tr><td colspan="5" style="padding:22px;text-align:center;color:var(--ink-3);font-size:13px">대상자가 없습니다.</td></tr>';
+    var adjBtn = g.canAdjust ? '<button class="hbtn" data-txf="adjust">조정 등급 입력</button>' : '';
     return '<div class="ap-group">' + esc(g.label) + '</div>' +
       '<div class="ap-tbl-wrap"><table class="ap-tbl"><thead><tr>' +
       '<th style="width:180px">평가 대상자</th>' +
       '<th>본인 평가<span class="pr">' + g.dates + '</span></th>' +
       '<th>1차 상위자 평가<span class="pr">' + g.dates + '</span></th>' +
-      '<th>2차 등급 조정<span class="pr">' + g.dates + '</span><button class="hbtn" data-txf="adjust">조정 등급 입력</button></th>' +
+      '<th>2차 등급 조정<span class="pr">' + g.dates + '</span>' + adjBtn + '</th>' +
       '<th>결과 확정<span class="pr">' + g.dates + '</span></th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
   function project(p) {
-    var groups = p.groups.map(function (gg) { return group({ label: gg.label, team: gg.team, from: gg.from, to: gg.to, dates: p.dates }); }).join('');
+    var groups = p.groups.map(function (gg) {
+      return group({ label: gg.label, members: gg.members, mode: p.mode, dates: p.dates, canAdjust: p.canAdjust });
+    }).join('');
     return '<div class="ap-proj"><div class="ap-proj-h"><span class="t">' + esc(p.title) + '</span>' + LEGEND + '</div>' + groups + '</div>';
   }
 
-  // distinct sub-orgs + distinct rosters per group (fixes CPO duplication)
-  var PROJECTS = [
-    { title: '2026 상반기 평가', dates: '03.12 ~ 08.27', groups: [
-      { label: 'hunel R&D Center', team: 'hunel R&D Center', from: 0, to: 3 },
-      { label: 'S1 BU', team: 'S1 BU', from: 0, to: 3 } ] },
-    { title: '2025 평가', dates: '01.02 ~ 06.30', groups: [
-      { label: 'E1 BU', team: 'E1 BU', from: 0, to: 3 },
-      { label: 'talenx R&D Center', team: 'talenx R&D Center', from: 0, to: 3 } ] }
-  ];
-  var MORE_PROJECT = { title: '2024 하반기 평가', dates: '09.01 ~ 12.20', groups: [
-    { label: 'CS BU', team: 'CS BU', from: 0, to: 3 },
-    { label: 'E2 BU', team: 'E2 BU', from: 0, to: 3 } ] };
+  /* ---------- roster per role ---------- */
+  function reportsOf(cu) {
+    var r = (D.employees || []).filter(function (e) { return e.manager_id === cu.emp_id; });
+    if (!r.length) r = (byOrg[cu.orgName] || []).filter(function (e) { return e.emp_id !== cu.emp_id; });
+    return r;
+  }
+  function orgTrio(name, from, to) { return team(name).slice(from, to); }
+  function evalPlan() {
+    var rk = roleKey();
+    if (rk === 'member') {
+      return { mode: 'self', canAdjust: false, canDash: false, canMore: false, projects: [
+        { title: '2026 상반기 평가', dates: '03.12 ~ 08.27', groups: [{ label: F.teamName(CU), members: [CU] }] },
+        { title: '2025 평가',       dates: '01.02 ~ 06.30', groups: [{ label: F.teamName(CU), members: [CU] }] }
+      ] };
+    }
+    if (rk === 'leader') {
+      var rep = reportsOf(CU);
+      return { mode: 'first', canAdjust: false, canDash: true, canMore: false, projects: [
+        { title: '2026 상반기 평가', dates: '03.12 ~ 08.27', groups: [{ label: F.teamName(CU) + ' 팀', members: rep.slice(0, 6) }] },
+        { title: '2025 평가',       dates: '01.02 ~ 06.30', groups: [{ label: F.teamName(CU) + ' 팀', members: rep.slice(0, 6) }] }
+      ] };
+    }
+    // hr / exec — 전사 (기존 하드코딩 BU 로스터 유지 — 전사 관점이라 맥락 정합)
+    return { mode: 'hr', canAdjust: rk === 'hr', canDash: true, canMore: true, projects: [
+      { title: '2026 상반기 평가', dates: '03.12 ~ 08.27', groups: [
+        { label: 'hunel R&D Center', members: orgTrio('hunel R&D Center', 0, 3) },
+        { label: 'S1 BU',            members: orgTrio('S1 BU', 0, 3) } ] },
+      { title: '2025 평가', dates: '01.02 ~ 06.30', groups: [
+        { label: 'E1 BU',            members: orgTrio('E1 BU', 0, 3) },
+        { label: 'talenx R&D Center', members: orgTrio('talenx R&D Center', 0, 3) } ] }
+    ] };
+  }
+  var MORE_PROJECT = { title: '2024 하반기 평가', dates: '09.01 ~ 12.20', mode: 'hr', canAdjust: true, groups: [
+    { label: 'CS BU', members: [] }, { label: 'E2 BU', members: [] } ] };
+  (function fillMore() { MORE_PROJECT.groups[0].members = orgTrio('CS BU', 0, 3); MORE_PROJECT.groups[1].members = orgTrio('E2 BU', 0, 3); })();
 
   /* ---------- build 평가 subpage ---------- */
   function buildEval(container) {
-    var projHtml = PROJECTS.map(project).join('');
+    var plan = evalPlan();
+    var planProjects = plan.projects.map(function (p) {
+      return project({ title: p.title, dates: p.dates, groups: p.groups, mode: plan.mode, canAdjust: plan.canAdjust });
+    }).join('');
+    var dashBtn = plan.canDash
+      ? '<button class="ghost-btn" data-txf="dash" style="padding:9px 16px;font-size:13px">대시보드</button>' : '';
+    var moreBtn = plan.canMore
+      ? '<div class="ap-more"><a data-txf="more">더 보기 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a></div>' : '';
+    // 조직원: 본인 평가만 — '평가 검토'(타인 리뷰) 탭 숨김
+    var reviewTab = roleKey() === 'member' ? '' : '<button data-txf="tab" data-tab="2">평가 검토</button>';
     container.innerHTML =
       '<div id="txf-appr0">' +
-      '<div class="ap-head"><h2>평가 현황</h2><div class="r">' +
-      '<button class="ghost-btn" data-txf="dash" style="padding:9px 16px;font-size:13px">대시보드</button>' +
+      '<div class="ap-head"><h2>평가 현황</h2><div class="r">' + dashBtn +
       '<button class="ap-filter" data-txf="filter" title="필터">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>' +
       '<span class="fb">1</span></button></div></div>' +
       '<div class="ap-tabs">' +
       '<button class="on" data-txf="tab" data-tab="0">평가 작성</button>' +
       '<button data-txf="tab" data-tab="1">결과 확인</button>' +
-      '<button data-txf="tab" data-tab="2">평가 검토</button></div>' +
-      '<div data-pane="0">' + projHtml +
-      '<div class="ap-more"><a data-txf="more">더 보기 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a></div>' +
+      reviewTab + '</div>' +
+      '<div data-pane="0">' + planProjects + moreBtn +
       '</div>' +
       '<div data-pane="1" style="display:none"><div class="ap-empty2">평가 현황이 없습니다.</div></div>' +
       '<div data-pane="2" style="display:none"><div class="ap-empty2">검색 결과가 없습니다.' +
@@ -220,6 +281,14 @@
       '</div><button class="ts-join" data-txf="join">참여</button></div>';
   }
   function buildTalent(container) {
+    if (roleKey() === 'member') {   // 조직원: 인재 리뷰(승급 심사) 주관/참여 대상 아님
+      container.innerHTML =
+        '<div id="txf-appr1">' +
+        '<div class="ts-headcard"><h2>인재 리뷰</h2></div>' +
+        '<div class="ap-empty2">참여 가능한 인재 리뷰 세션이 없습니다.<div style="margin-top:8px;font-size:12.5px;color:var(--ink-4)">인재 리뷰는 조직장·HR이 주관합니다.</div></div>' +
+        '</div>';
+      return;
+    }
     var subj26 = team('E1 BU').slice(0, 3), part26 = team('hunel R&D Center').slice(0, 3);
     var subj25 = team('S1 BU').slice(0, 3), part25 = team('talenx R&D Center').slice(0, 3);
     var cards =
@@ -249,7 +318,7 @@
         '<div><div class="rc-score">종합 ' + (ev.weighted_score != null ? ev.weighted_score : '-') + '점</div>' +
         '<div class="rc-sub">' + esc((e && e.name) || '') + ' · ' + esc(F.teamName(e)) + ' · ' + (ev.period || '') + '</div></div></div>' +
         r('목표 달성', (c.achievement_norm != null ? c.achievement_norm : '-') + ' / 100') +
-        r('피어 리뷰', (c.peer_strength_norm != null ? c.peer_strength_norm : '-') + ' / 100') +
+        r('동료 평가', (c.peer_strength_norm != null ? c.peer_strength_norm : '-') + ' / 100') +
         r('실행 일관성', (c.exec_consistency_norm != null ? c.exec_consistency_norm : '-') + ' / 100') +
         (ev.rationale_summary ? '<div class="txf-rat">' + esc(ev.rationale_summary) + '</div>' : '') +
         '</div>';
@@ -303,7 +372,7 @@
       var coef = diffCoefOf(objs);
       var adj = Math.round(baseScore * coef * 10) / 10;
       coefBox = '<div class="txf-coefbox">난이도 보정 데모 — 달성 점수 <b>' + baseScore + '</b> → 난이도 반영 <b>' + adj + '</b>' +
-        ' <span class="c">(데모 계수 ×' + (Math.round(coef * 100) / 100) + ' · S 1.15 / A 1.0 / B 0.9 — KR 난이도 가중 평균, 원본 점수는 바뀌지 않습니다)</span></div>';
+        ' <span class="c">(데모 반영 비율 ×' + (Math.round(coef * 100) / 100) + ' · S 1.15 / A 1.0 / B 0.9 — 핵심 성과 난이도 평균, 원본 점수는 바뀌지 않습니다)</span></div>';
     }
     var compRows = ['커뮤니케이션', '문제해결', '협업', '직무 전문성'].map(function (c, i) {
       return '<tr><td>' + c + '</td><td style="color:var(--ink-3)">공통 역량</td>' +

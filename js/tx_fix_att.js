@@ -255,6 +255,20 @@
     var p = q(root, '.subpage[data-p="2"]');
     if (!p || !once(p)) return;
 
+    /* role gate (fix #7): 조직원(member)은 타인 근태 목록/전체 승인 권한 없음.
+       leader=본인팀, hr=전사는 기존 동작 유지. */
+    var ROLE = (F.CU && F.CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
+    if (ROLE === 'member') {
+      var mBlue = q(p, '.bluebtn'); if (mBlue) mBlue.style.display = 'none';          // 요청 모아보기/전체 승인 숨김
+      var mSeg  = q(p, '.segtabs'); if (mSeg) mSeg.style.display = 'none';
+      var mCard = q(p, '.card');
+      if (mCard) mCard.innerHTML =
+        '<div class="txf-emptybox"><div class="ic">i</div>' +
+        '구성원 근무 현황은 조직장·HR에게만 제공됩니다.<br>' +
+        '나의 근무는 ‘나의 근무’ 탭에서 확인하세요.</div>';
+      return;
+    }
+
     var blue = q(p, '.bluebtn');
     if (blue) {
       blue.childNodes[0].nodeValue = '요청 모아보기 1';    // badge 21 -> 1 (fix #7)

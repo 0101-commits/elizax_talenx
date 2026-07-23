@@ -199,7 +199,7 @@
       /* 전체화면 전환 시 같은 대화가 이어지도록 대화 스크린으로 진입 */
       if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub("chat"); }
     });
-    var gear = h("button", "ezx-x", { "aria-label": "AI 연결 설정", title: "AI 연결 설정 (API 키)", text: "⚙" });
+    var gear = h("button", "ezx-x", { "aria-label": "AI 연결 설정", title: "AI 연결 설정", text: "⚙" });
     gear.addEventListener("click", function () {
       if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateAiBadge(); renderMessages(); });
     });
@@ -404,14 +404,14 @@
     var wrap = h("div", "ezx-empty");
     wrap.appendChild(h("div", "eh", { text: "무엇을 도와드릴까요?" }));
     var sub = h("div", "es");
-    sub.textContent = "성과관리 · OKR · 평가에 대해 물어보세요.";
+    sub.textContent = "성과관리 · 목표 · 평가에 대해 물어보세요.";
     wrap.appendChild(sub);
 
     var m = aiMode();
     if (m === "offline") {
       var off = h("div", "ezx-agent-off");
-      off.innerHTML = "AI 미연결 — 오프라인 목업 응답 모드. ";
-      var connect = h("button", "ezx-starter", { type: "button", text: "⚙ Claude API 연결" });
+      off.innerHTML = "AI 미연결 — 연결 없이 예시 응답을 보여줍니다. ";
+      var connect = h("button", "ezx-starter", { type: "button", text: "⚙ AI 연결" });
       connect.style.marginLeft = "6px";
       connect.addEventListener("click", function () {
         if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateAiBadge(); renderMessages(); });
@@ -422,7 +422,7 @@
       var ready = !window.EZAI || !window.EZAI.ready || window.EZAI.ready();
       var onNote = h("div", "ezx-persp-note");
       onNote.style.marginTop = "10px";
-      onNote.innerHTML = (ready ? "● <b>Claude 연결됨</b> · " : "◐ ") + esc(window.EZAI ? window.EZAI.modeLabel() : "프록시");
+      onNote.innerHTML = (ready ? "● <b>Claude 연결됨</b> · " : "◐ ") + esc(window.EZAI ? window.EZAI.modeLabel() : "확인 중");
       onNote.style.color = ready ? "#15803D" : "#B45309";
       wrap.appendChild(onNote);
     }
@@ -823,7 +823,7 @@
           aiMsg.streaming = false;
           aiMsg.text = j.response || j.message || "(빈 응답)";
           if (j.recommendations && j.recommendations.length) aiMsg.recos = j.recommendations;
-          if (j.type === "fallback" || j.source === "fallback") { aiMsg.note = "AI 키 미설정 — 기본 응답"; }
+          if (j.type === "fallback" || j.source === "fallback") { aiMsg.note = "AI 미연결 — 기본 응답"; }
           finishStreaming();
           renderMessages();
         });
@@ -834,7 +834,7 @@
       aiMsg.role = "err";
       aiMsg.streaming = false;
       aiMsg.text = "연결에 실패했습니다 (" + (err && err.message ? err.message : "network") +
-        "). 백엔드를 실행해 주세요: `node server/server.js` (환경변수 ANTHROPIC_API_KEY 설정).";
+        "). 잠시 후 다시 시도해 주세요. 문제가 계속되면 AI 연결 설정(⚙)을 확인하세요.";
       finishStreaming();
       renderMessages();
     });
@@ -842,7 +842,7 @@
 
   /* ---------------- Offline mockup responder ----------------
      No backend → build a verifiable answer-receipt (as-of / 근거 트레이스 /
-     감사 / What-if) from TALENX_DATA and stream it in char-batches. */
+     감사 / 가정) from TALENX_DATA and stream it in char-batches. */
   function evalOf(empId) {
     var evs = Array.isArray(DATA.evaluations) ? DATA.evaluations : [];
     return evs.find(function (e) { return e.emp_id === empId; }) || null;
@@ -871,44 +871,44 @@
       md =
         "**기준 시점** · " + asof + "\n\n" +
         "**" + subjName + "**님 등급 초안은 **" + grade + "** (종합 " + score + "/100)입니다. 팀 대비 실행 일관성이 안정적입니다.\n\n" +
-        "**계산·근거 트레이스**\n" +
-        "- `ERP` 목표 달성률 집계 → 종합 " + score + "/100 `eval.FY2026." + subjId + "`\n" +
+        "**계산·근거**\n" +
+        "- `ERP` 목표 달성률 집계 → 종합 " + score + "/100 `평가기록 FY2026`\n" +
         "- `평가규정 v3.1` 등급 매핑 · §12\n" +
         "- `talenx` 팀 내 1:1·피어리뷰 대조\n\n" +
         "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 우리 팀\n\n" +
-        "**What-if** · 강제배분(상위 S~A ≤ 30%) 적용 시 팀 등급 분포를 재계산할 수 있습니다.\n\n" +
+        "**가정** · 강제배분(상위 S~A ≤ 30%) 적용 시 팀 등급 분포를 재계산할 수 있습니다.\n\n" +
         "> ⚠ 자동 확정 아님 — 승인/수정/보류는 조직장이 결정합니다.";
     } else if (p === "hr") {
       md =
         "**기준 시점** · " + asof + "\n\n" +
         "전사 평가 운영 관점 요약입니다. 관대화·미연결 신호를 먼저 보고합니다.\n\n" +
-        "**계산·근거 트레이스**\n" +
+        "**계산·근거**\n" +
         "- `평가규정 v3.1` 등급 비율 규칙 · 강제배분 상한 30%\n" +
-        "- `talenx` 목표 정렬·가중치 합 검증 `rule.weight.sum`\n" +
+        "- `talenx` 목표 정렬·가중치 합 검증 `가중치 합 규칙`\n" +
         "- `ERP` 실적 대조 → 등급 상승폭 설명력 점검\n\n" +
         "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 전사\n\n" +
-        "**What-if** · 특정 본부에 강제배분 적용 시 전사 분포 변화를 재계산할 수 있습니다.\n\n" +
+        "**가정** · 특정 본부에 강제배분 적용 시 전사 분포 변화를 재계산할 수 있습니다.\n\n" +
         "> 민감 이슈(관대화·편향)는 재검토만 제안하며 자동 수정하지 않습니다.";
     } else if (p === "executive") {
       md =
         "**기준 시점** · " + asof + "\n\n" +
         "전사 성과 조망입니다. 목표 정렬 상태와 등급 분포 리스크를 요약합니다.\n\n" +
-        "**계산·근거 트레이스**\n" +
-        "- `talenx` 전사 OKR 트리 정렬 상태\n" +
+        "**계산·근거**\n" +
+        "- `talenx` 전사 목표 트리 정렬 상태\n" +
         "- `ERP` 전사 매출 달성률 대비 진척\n" +
         "- `통계·분포` 본부 간 등급 분포 편차\n\n" +
         "**감사** · 감사 로그 기록됨 · 탐색 범위: 전사\n\n" +
-        "**What-if** · 목표 미연결 항목 정렬 시 전사 정렬률 지표 재계산.";
+        "**가정** · 목표 미연결 항목 정렬 시 전사 정렬률 지표 재계산.";
     } else {
       md =
         "**기준 시점** · " + asof + "\n\n" +
         subjName + "님 상반기 등급 초안은 **" + grade + "** (종합 " + score + "/100)입니다. 목표 달성률과 피어리뷰가 안정적입니다.\n\n" +
-        "**계산·근거 트레이스**\n" +
-        "- `ERP` 목표 달성률 집계 → 종합 " + score + "/100 `eval.FY2026." + subjId + "`\n" +
+        "**계산·근거**\n" +
+        "- `ERP` 목표 달성률 집계 → 종합 " + score + "/100 `평가기록 FY2026`\n" +
         "- `평가규정 v3.1` 등급 매핑 (초과달성 120%↑) · §12\n" +
         "- `talenx` 중간 1:1 기록 대조\n\n" +
         "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 본인\n\n" +
-        "**What-if** · 달성률 -10%p 가정 시 등급이 한 단계 하향될 수 있습니다(재계산 가능).\n\n" +
+        "**가정** · 달성률 -10%p 가정 시 등급이 한 단계 하향될 수 있습니다(재계산 가능).\n\n" +
         "현재 담당 목표 " + objCount + "건 기준입니다.";
       owned.slice(0, 2).forEach(function (o) {
         recos.push({
@@ -937,7 +937,7 @@
       } else {
         aiMsg.streaming = false;
         if (built.recos && built.recos.length) aiMsg.recos = built.recos;
-        aiMsg.note = "오프라인 목업 응답 · 백엔드 미연결 (실시간 AI는 demo-app/run.sh 필요)";
+        aiMsg.note = "오프라인 예시 응답 · 실시간 AI 미연결";
         finishStreaming();
         renderMessages();
       }
@@ -1017,7 +1017,7 @@
       completeWork(aiMsg);
       aiMsg.streaming = false;
       aiMsg.text = msg.response || aiMsg.text || "";
-      aiMsg.note = "AI 키 미설정 — 기본 응답";
+      aiMsg.note = "AI 미연결 — 기본 응답";
       renderMessages();
     } else if (msg.type === "error") {
       aiMsg.role = "err";
@@ -1069,7 +1069,7 @@
     var m = aiMode();
     var dot = rdy ? '<span style="color:#15803D">● Claude</span>'
       : m === "offline" ? '<span style="color:#98A2B3">○ 오프라인</span>'
-      : '<span style="color:#B45309">◐ 키 미설정</span>';
+      : '<span style="color:#B45309">◐ 연결 전</span>';
     el.sub.innerHTML = "AI 성과관리 코치 · " + dot;
   }
 

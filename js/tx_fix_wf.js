@@ -128,7 +128,15 @@
   var FUNNEL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>';
 
   /* ---------------- derivations ------------------------------------------- */
+  // 부하 없는 조직원(member)은 결재자가 아니다 → '받은 문서'(결재 대기함) 게이팅.
+  // 렌더 시점에 평가하여 역할 전환(reload) 후에도 정합. leader/hr/exec는 불변.
+  function isMember() {
+    var r = (F.CU && F.CU._role) ||
+      (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
+    return r === 'member';
+  }
   function baseFor(key, pill) {
+    if (key === 'received' && isMember()) return [];
     var arr = DATA[key];
     if (key === 'sign') return arr.filter(function (d) { return pill === 'wait' ? !d.signDate : !!d.signDate; });
     if (pill === 'important') return arr.filter(function (d) { return d.imp; });
@@ -165,7 +173,8 @@
   function rowsHtml(key, vis, st) {
     if (!vis.length) {
       var span = key === 'received' ? 7 : 5;
-      return '<tr data-txf-empty="1"><td colspan="' + span + '" class="txf-empty">No rows</td></tr>';
+      var msg = key === 'received' ? '결재할 문서가 없습니다.' : '문서가 없습니다.';
+      return '<tr data-txf-empty="1"><td colspan="' + span + '" class="txf-empty">' + msg + '</td></tr>';
     }
     return vis.map(function (d) {
       if (key === 'received') {
@@ -184,7 +193,7 @@
           + '<td>' + esc(d.type) + '</td>'
           + '<td><span class="txf-form">' + esc(d.form)
           + (d.badge ? ' <span class="txf-badge ' + badgeCls(d.badge) + '">' + esc(d.badge) + '</span>' : '')
-          + (d.isNew ? ' <span class="txf-new">• new</span>' : '') + '</span></td>'
+          + (d.isNew ? ' <span class="txf-new">• 신규</span>' : '') + '</span></td>'
           + '<td class="txf-sum">' + esc(d.sum) + '</td>'
           + '<td class="txf-date">' + esc(d.date) + ' ' + starHtml(d.id, !!d.imp) + '</td>'
           + '</tr>';
@@ -266,7 +275,7 @@
     // footer
     var n = vis.length;
     var range = n ? ('1–' + n + ' of ' + n) : '0–0 of 0';
-    h += '<div class="txf-foot"><span class="txf-rpp">Rows per page: <b>' + cfg.rpp + '</b> ⌄</span>'
+    h += '<div class="txf-foot"><span class="txf-rpp">페이지당 <b>' + cfg.rpp + '</b>개 ⌄</span>'
       + '<span>' + range + '</span><span class="txf-pg"><span>‹</span><span>›</span></span></div>';
 
     h += '</div>';

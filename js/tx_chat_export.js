@@ -218,7 +218,7 @@
     } catch (e) { /* ignore */ }
 
     var body =
-      '<div class="ezcx-exp-sub">세션 “' + esc(title) + '” · 메시지 ' + count + '건</div>' +
+      '<div class="ezcx-exp-sub">대화 “' + esc(title) + '” · 메시지 ' + count + '건</div>' +
       '<div class="ezcx-exp-opts">' +
         '<button type="button" class="ezcx-exp-opt" data-exp="md">' +
           '<span class="ezcx-exp-ic">⬇</span>' +

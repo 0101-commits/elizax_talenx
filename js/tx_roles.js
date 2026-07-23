@@ -109,11 +109,11 @@
       '<span class="txr-as">보는 사람 <b>' + esc(cu.name || "-") + "</b> · " +
         esc(cu.jobTitle || "") + " · " + esc(cu.orgName || "") + "</span>" +
       '<span class="txr-scope">범위 · ' + esc(r.scope) + "</span>" +
-      '<span class="txr-note">9개 화면 전체가 이 역할 기준으로 재구성됨 <span class="k">reload</span></span>';
+      '<span class="txr-note">9개 화면 전체가 이 역할 기준으로 재구성됨 <span class="k">새로고침</span></span>';
     gnb.insertAdjacentElement("afterend", bar);
   }
 
-  /* ---------- verifiable-answer receipt (성과관리 · 목표 페이지) ---------- */
+  /* ---------- verifiable-answer receipt (평가관리 · 평가 현황) ---------- */
   function sb(kind, label) { return '<span class="txr-sb ' + kind + '">' + esc(label) + "</span>"; }
 
   function receiptModel() {
@@ -173,15 +173,15 @@
       audit = "탐색 범위 · 권한 내 전사";
     } else if (role === "exec") {
       title = "전사 성과 조망 · 목표 정렬";
-      verdict = "전사 OKR 정렬 상태와 등급 분포 리스크를 요약합니다. 전사 매출 목표 대비 진척과 <b>미정렬 목표</b>를 짚었습니다.";
+      verdict = "전사 목표 정렬 상태와 등급 분포 리스크를 요약합니다. 전사 매출 목표 대비 진척과 <b>미정렬 목표</b>를 짚었습니다.";
       metrics = [["전사 목표 진척", "61%"], ["미정렬 목표", "3건"], ["분포 리스크", "중"]];
       steps = [
-        ["정렬 현황 조회", "전사 OKR 트리 정렬 상태 집계 " + sb("talenx", "talenx") + ' <span class="txr-rid">okr.tree.FY2026</span>'],
+        ["정렬 현황 조회", "전사 목표 트리 정렬 상태 집계 " + sb("talenx", "talenx") + ' <span class="txr-rid">okr.tree.FY2026</span>'],
         ["실적 대조", "전사 매출 달성률 61% · 목표 대비 진척 " + sb("erp", "ERP")],
-        ["분포 점검", "본부 간 등급 분포 편차 → 캘리브레이션 우선순위 제안"]
+        ["분포 점검", "본부 간 등급 분포 편차 → 등급 조정 우선순위 제안"]
       ];
       wfTitle = "미정렬 목표 정렬 시 정렬률 지표 재계산";
-      wfRows = [["정렬률 82% → ", "94%", "pos"], ["미정렬 3 → ", "0", "pos"], ["전사 롤업 반영 ", "즉시", "pos"]];
+      wfRows = [["정렬률 82% → ", "94%", "pos"], ["미정렬 3 → ", "0", "pos"], ["전사 집계 반영 ", "즉시", "pos"]];
       wfNote = "전사 정렬률 재산출. rule-exec.exe3";
       audit = "탐색 범위 · 전사";
     } else {
@@ -224,7 +224,7 @@
         '<p class="txr-verdict">' + verdict + "</p>" +
         '<div class="txr-metrics">' + metricsHtml + "</div>" +
         '<div class="txr-trace open" data-trace>' +
-          '<div class="txr-trace-head" data-tracehead><span class="txr-anno">2</span><b>계산·근거 트레이스</b><span class="cnt">' + steps.length + "단계</span><span class=\"tgl\">▾</span></div>" +
+          '<div class="txr-trace-head" data-tracehead><span class="txr-anno">2</span><b>계산·근거 과정</b><span class="cnt">' + steps.length + "단계</span><span class=\"tgl\">▾</span></div>" +
           '<div class="txr-trace-steps">' + stepsHtml + "</div>" +
         "</div>" +
         '<div class="txr-actions"><span class="txr-anno">4</span>' +
@@ -279,7 +279,7 @@
     toast(act + " 처리 완료 — 감사 로그에 기록되었습니다.", act === "승인" ? "ok" : "");
   }
   function rerenderReceipt() {
-    var rc = document.querySelector("#s-perf .txr-receipt");
+    var rc = document.querySelector("#s-appr .txr-receipt");
     if (rc) { rc.innerHTML = receiptHTML(); }
   }
 
@@ -339,11 +339,13 @@
   }
 
   function injectReceipt() {
-    var perf = document.getElementById("s-perf");
-    if (!perf) return false;
-    var head = perf.querySelector(".perf-head");
+    // 검증 가능한 답변(등급·평가 근거) 영수증 = 평가관리(#s-appr)에 귀속.
+    // 목표 현황(#s-perf)이 아니라 평가 현황 헤더(.ap-head) 뒤에 주입.
+    var appr = document.getElementById("s-appr");
+    if (!appr) return false;
+    var head = appr.querySelector(".ap-head");
     if (!head) return false;
-    if (perf.querySelector(".txr-receipt")) return true;
+    if (appr.querySelector(".txr-receipt")) return true;
     var rc = el("div", "txr-receipt");
     rc.innerHTML = receiptHTML();
     head.insertAdjacentElement("afterend", rc);
@@ -356,10 +358,10 @@
       tries++;
       if (injectReceipt() || tries > 40) clearInterval(t);
     }, 150);
-    // re-check when user opens 성과관리
+    // re-check when user opens 평가관리
     var gnb = document.getElementById("gnb");
     if (gnb) gnb.addEventListener("click", function (e) {
-      var b = e.target.closest('button[data-s="perf"]');
+      var b = e.target.closest('button[data-s="appr"]');
       if (b) setTimeout(injectReceipt, 120);
     });
   }

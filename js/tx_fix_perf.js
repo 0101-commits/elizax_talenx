@@ -531,13 +531,13 @@
           comments: i === 0 ? 1 : 0,
           agenda: [
             '2분기 목표 진행 상황 리뷰 — ' + ((myObjectives()[0] || {}).title || '서비스 기획 품질 향상'),
-            '핵심 성과 KR 체크인 및 리스크 점검',
+            '핵심 성과 체크인 및 리스크 점검',
             i === 0 ? '커리어 개발 및 다음 분기 우선순위' : '협업 프로세스 개선 논의'
           ],
           notes: c.comment || '2분기 신규 기획 3건 사용자 검증 통과, 잔여 2건 진행 중. 리드타임 개선세 유지.',
           actions: [
-            (c.blocker ? '블로커 해소: ' + c.blocker : '리뷰 단계 병목 개선안 정리') + ' — ' + esc(cuEmp.name || '본인'),
-            '다음 1:1 전까지 KR 진행률 업데이트'
+            (c.blocker ? '막힌 부분 해소: ' + c.blocker : '리뷰 단계 병목 개선안 정리') + ' — ' + esc(cuEmp.name || '본인'),
+            '다음 1:1 전까지 핵심 성과 진행률 업데이트'
           ]
         });
       });
@@ -578,11 +578,11 @@
         emp: e, date: date, flags: seed % 3, comments: (seed + 1) % 2,
         agenda: [
           '2분기 목표 진행 상황 리뷰 — ' + (eobj ? eobj.title : '분기 핵심 과제'),
-          '핵심 성과 KR 체크인 및 리스크 점검',
+          '핵심 성과 체크인 및 리스크 점검',
           '협업 프로세스 및 커뮤니케이션 개선 논의'
         ],
         notes: c.comment || '분기 목표 진행 상황을 공유하고 우선순위를 재정렬했습니다. 특이 리스크 없음.',
-        actions: ['논의 안건 후속 정리 — ' + e.name, '다음 1:1 전까지 KR 진행률 업데이트']
+        actions: ['논의 안건 후속 정리 — ' + e.name, '다음 1:1 전까지 핵심 성과 진행률 업데이트']
       };
     }
     function tabMeetings(idx) {
@@ -645,24 +645,22 @@
         + '</div></div>'
         + '<button class="rv-act' + (act === '확인' ? ' ghost' : '') + '" data-txf="rv-open">' + act + '</button></div>';
     }
-    function rvRowsHTML(tab) {   // fix 15: 리뷰 segtabs — tab별 리스트
-      if (tab === 1) {           // 내가 관리자인 리뷰
+    function rvRowsHTML(tab) {   // fix 15: 리뷰 segtabs — tab별 리스트 (role-aware)
+      var ROLE = (CU && CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
+      if (tab === 1) {           // 내가 관리자인 리뷰 — 실제 부하만, fallback 없음
         var subs = emps.filter(function (e) { return e.manager_id === CU.emp_id; }).slice(0, 3);
-        if (!subs.length) subs = (empByOrg[cuEmp.org_id] || []).filter(function (e) { return e.emp_id !== CU.emp_id; }).slice(0, 3);
         return subs.map(function (e, i) { return rvRowHTML(e, cuEmp, i === 0 ? '완료' : '시작 이전', i === 0 ? '확인' : '작성'); }).join('')
           || '<div class="nogoal">내가 관리자인 리뷰가 없습니다.</div>';
       }
-      if (tab === 2) {           // 내가 열람할 수 있는 리뷰
+      if (tab === 2) {           // 내가 열람할 수 있는 리뷰 — member는 열람 대상 없음
+        if (ROLE === 'member') return '<div class="nogoal">열람 가능한 리뷰가 없습니다.</div>';
         var peers = (empByOrg[cuEmp.org_id] || []).filter(function (e) { return e.emp_id !== CU.emp_id; }).slice(0, 2);
         return peers.map(function (e, i) { return rvRowHTML(e, rvMgrs[i % rvMgrs.length], '완료', '확인'); }).join('')
           || '<div class="nogoal">열람 가능한 리뷰가 없습니다.</div>';
       }
-      var rows = '';             // 나의 리뷰 (기본)
-      for (var i = 0; i < 6; i++) {
-        var doneRow = i === 5;
-        rows += rvRowHTML(cuEmp, rvMgrs[i % rvMgrs.length], doneRow ? '완료' : '시작 이전', doneRow ? '확인' : '작성');
-      }
-      return rows;
+      // 나의 리뷰 (기본) — 한 사이클 본인 리뷰 1건, 관리자=본인 상위자
+      var myMgr = empById[cuEmp.manager_id] || rvMgrs[0] || cuEmp;
+      return rvRowHTML(cuEmp, myMgr, '작성 중', '작성');
     }
     function renderReviewTab(idx) {
       var page = sec.querySelector('.subpage[data-p="3"]');
@@ -779,7 +777,7 @@
         + '</select>'
         + '<input class="txf-inp txf-krdiffwhy" placeholder="난이도 근거 수치·설명 — 예: 전년 실적 대비 +30% 상향" value="' + esc(data.diffwhy || '') + '"></div>'
         + '<div class="txf-diffwhy">ⓘ 무엇과 비교해 어려운지(작년 실적·동료 수준) 남겨야 평가 시점의 난이도 반영이 가능합니다.</div>'
-        + (data.why ? '<div class="txf-krwhy">✦ 이 KR의 근거 — ' + data.why + '</div>' : '')
+        + (data.why ? '<div class="txf-krwhy">✦ 이 핵심 성과의 근거 — ' + data.why + '</div>' : '')
         + '</div>';
     }
     function renumberKR() {
@@ -826,7 +824,7 @@
         '<div style="font-weight:700;margin-bottom:9px">이 표현은 평가 시점에 측정할 수 없습니다</div>'
         + issues.map(function (it) {
             return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:7px;font-size:12.5px">'
-              + '<b>KR ' + it.idx + '</b> · ' + esc(it.name)
+              + '<b>핵심 성과 ' + it.idx + '</b> · ' + esc(it.name)
               + '<div style="margin-top:4px">'
               + it.hits.map(function (h) {
                   return '<div style="color:var(--red)">· [' + esc(h.tag) + ']'
@@ -834,7 +832,7 @@
                 }).join('')
               + '</div></div>';
           }).join('')
-        + '<div style="font-size:12px;color:var(--ink-3);margin:10px 0 5px">그대로 저장하려면 사유가 필요합니다 — 사유는 맥락 원장에 기록되어 평가 시점에 함께 조회됩니다.</div>'
+        + '<div style="font-size:12px;color:var(--ink-3);margin:10px 0 5px">그대로 저장하려면 사유가 필요합니다 — 사유는 성과 히스토리에 기록되어 평가 시점에 함께 조회됩니다.</div>'
         + '<textarea class="txf-inp" data-gate-reason placeholder="그대로 저장하는 사유 (필수)" style="width:100%;min-height:58px;resize:vertical"></textarea>';
       TX.modal({
         title: '저장 전 확인 — 측정 가능성', body: body,
@@ -851,7 +849,7 @@
               var reason = ta ? ta.value.trim() : '';
               if (!reason) { TX.toast && TX.toast('사유를 입력해야 저장할 수 있습니다.', 'warn'); return false; }
               finishNewSave(reason + ' (지적 항목: ' + issues.map(function (it) {
-                return 'KR' + it.idx + ' ' + it.hits.map(function (h) { return h.tag; }).join('·');
+                return '핵심성과' + it.idx + ' ' + it.hits.map(function (h) { return h.tag; }).join('·');
               }).join(' / ') + ')');
             } }
         ]
@@ -891,7 +889,7 @@
           + '<div class="cvs">출처' + srcChip(prevEval.evaluation_id) + '</div></div>';
         var und = undoneKRs();
         if (und.length) {
-          h += '<div class="txf-cv"><div class="cvt">미완 KR ' + und.length + '건</div>'
+          h += '<div class="txf-cv"><div class="cvt">미완 핵심 성과 ' + und.length + '건</div>'
             + und.map(function (k, i) {
                 return '<div class="cvk"><span class="nm">' + esc(k.name) + '</span><span class="ach">' + k.achievement_pct + '%</span>'
                   + '<button class="cvbtn" data-txf="carry-kr" data-ci="' + i + '">그대로 이월</button></div>';
@@ -1054,7 +1052,7 @@
       TX.modal({
         title: '체크인 — ' + o.title,
         wide: true,
-        body: (aiDraft ? '<div style="font-size:12px;color:#356CB5;background:rgba(31,122,240,.07);border:1px solid rgba(31,122,240,.25);border-radius:8px;padding:8px 11px;margin-bottom:10px">✦ <b>suggest</b> · elizax가 1:1 노트·업무보드에서 감지한 진척 신호로 초안을 채웠습니다. 값은 언제든 고칠 수 있고, 반영은 관리자 승인 후입니다.</div>' : '')
+        body: (aiDraft ? '<div style="font-size:12px;color:#356CB5;background:rgba(31,122,240,.07);border:1px solid rgba(31,122,240,.25);border-radius:8px;padding:8px 11px;margin-bottom:10px">✦ <b>제안만</b> · elizax가 1:1 노트·업무보드에서 감지한 진척 신호로 초안을 채웠습니다. 값은 언제든 고칠 수 있고, 반영은 관리자 승인 후입니다.</div>' : '')
           + rows
           + '<div style="margin-top:11px"><div style="font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:5px">코멘트 <span style="color:var(--ink-4);font-weight:500">— 요청 사유를 남기면 관리자가 빠르게 판단할 수 있습니다</span></div>'
           + '<textarea data-ck-cm style="width:100%;min-height:76px;border:1px solid #D0D5DD;border-radius:8px;padding:9px;font:inherit;font-size:13px" placeholder="이번 체크인에서 반영한 변경 사항을 적어주세요.">' + esc(draftNote) + '</textarea></div>',
@@ -1164,7 +1162,7 @@
         + '<span style="font-size:12px;color:var(--ink-3)">핵심 성과 ' + ks.length + '개 · 체크인 ' + (chkByObj[o.objective_id] || []).length + '건</span></div></div>'
         + aiCard
         + '<div class="txf-fcard"><h3>핵심 성과</h3><table class="txf-krt"><thead><tr>'
-        + '<th>KR명</th><th>목표값</th><th>현재값</th><th>가중치</th><th>진행률</th><th>난이도</th></tr></thead><tbody>' + krRows + '</tbody></table></div>'
+        + '<th>핵심 성과명</th><th>목표값</th><th>현재값</th><th>가중치</th><th>진행률</th><th>난이도</th></tr></thead><tbody>' + krRows + '</tbody></table></div>'
         + goalLinksHTML(o, ks)
         + '<div class="txf-fcard"><h3>체크인 타임라인</h3><div class="txf-tl">' + tl + '</div></div>'
         + '<div class="txf-fcard"><h3>코멘트 · 활동</h3>' + cmHTML + '</div>'
@@ -1286,7 +1284,7 @@
       var tgt = tgtEl ? tgtEl.textContent.trim() : (F.nameTeam ? F.nameTeam(cuEmp) : cuEmp.name);
       var o0 = myObjectives()[0];
       var draft = '[2025 기본 리뷰 초안]\n\n1. 주요 성과\n- ' + (o0 ? o0.title : '핵심 목표') + ' 진행률 ' + pct(o0 ? objProgress(o0) : 0)
-        + ' 달성\n- 체크인 기반 리스크 조기 공유로 일정 지연 최소화\n\n2. 보완할 점\n- KR 측정 주기를 격주 단위로 단축하여 편차 조기 감지\n\n3. 다음 기간 목표\n- 하반기 핵심 과제 우선순위 재정렬 및 협업 프로세스 개선';
+        + ' 달성\n- 체크인 기반 리스크 조기 공유로 일정 지연 최소화\n\n2. 보완할 점\n- 핵심 성과 측정 주기를 격주 단위로 단축하여 편차 조기 감지\n\n3. 다음 기간 목표\n- 하반기 핵심 과제 우선순위 재정렬 및 협업 프로세스 개선';
       var body = document.createElement('div');
       body.innerHTML =
         '<div style="display:flex;gap:18px;font-size:13px;margin-bottom:12px;flex-wrap:wrap">'
@@ -1349,7 +1347,7 @@
           if (k === 'gd-ckcancel') {
             ckSave(gdo.objective_id, null);
             openGoalDetail(gdo.objective_id);
-            TX.toast && TX.toast('체크인 요청을 취소했습니다. 취소 이력도 감사 로그에 남습니다.');
+            TX.toast && TX.toast('체크인 요청을 취소했습니다. 취소 이력도 감사 기록에 남습니다.');
             return;
           }
           var aic = tag.closest('.txf-fcard');
@@ -1385,12 +1383,12 @@
           list3.insertAdjacentHTML('beforeend', krRowHTML({
             name: ck.name, weight: '', diff: 'A', difftype: 'yoy',
             diffwhy: '작년 달성률 ' + ck.achievement_pct + '% — 미완 과제 이월',
-            why: '작년 미완 KR 이월 (달성률 ' + ck.achievement_pct + '%)' + srcChip(prevEval.evaluation_id)
+            why: '작년 미완 핵심 성과 이월 (달성률 ' + ck.achievement_pct + '%)' + srcChip(prevEval.evaluation_id)
           }));
           renumberKR();
-          emitGoalCtx('goal.carryover', '작년 미완 KR 이월 — ' + ck.name,
+          emitGoalCtx('goal.carryover', '작년 미완 핵심 성과 이월 — ' + ck.name,
             '출처 ' + prevEval.evaluation_id + ' · 작년 달성률 ' + ck.achievement_pct + '%');
-          TX.toast && TX.toast('작년 미완 KR을 이월했습니다. 출처가 함께 기록됩니다.', 'ok');
+          TX.toast && TX.toast('작년 미완 핵심 성과를 이월했습니다. 출처가 함께 기록됩니다.', 'ok');
           return;
         }
         if (k === 'ai') {
@@ -1442,13 +1440,13 @@
                 emitGoalCtx('goal.ai.draft', '작년 기록 반영 AI 목표 초안 ' + items.length + '건 삽입',
                   '출처 ' + [prevEval && prevEval.evaluation_id, prevFbs[0] && prevFbs[0].fb_id, jobChg && '직무 전환'].filter(Boolean).join(' · '));
               }
-              TX.toast && TX.toast(live ? 'elizax가 직무 프로파일·상위목표·작년 기록을 근거로 KR 3건을 추천했습니다.'
-                                        : 'AI가 직무 과업·상위목표·작년 기록을 근거로 핵심 성과 3건을 추천했습니다.', 'ok');
+              TX.toast && TX.toast(live ? 'elizax가 직무 정보·상위 목표·작년 기록을 근거로 핵심 성과 3건을 추천했습니다.'
+                                        : 'AI가 직무 과업·상위 목표·작년 기록을 근거로 핵심 성과 3건을 추천했습니다.', 'ok');
             };
             /* Claude 연결 시: 직무·기존 목표 실데이터 기반 실제 추천 */
             var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
             if (live) {
-              TX.toast && TX.toast('elizax가 실데이터를 조회해 추천 중…');
+              TX.toast && TX.toast('elizax가 실제 데이터를 확인해 추천 중…');
               window.EZAI.agent({
                 maxTurns: 3, maxTokens: 640,
                 messages: [{ role: 'user', content:

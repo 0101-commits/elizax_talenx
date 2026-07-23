@@ -313,7 +313,7 @@
       title: "AI 관여 고지",
       body: '<div class="ezup-aiog-body">' +
         '<div class="sec"><b>이 화면의 AI 관여 범위</b>평가 코멘트·등급 <u>초안 작성</u>과 근거 수집에 elizax가 관여했습니다. 최종 판단·확정은 담당 리더와 HR이 수행하며, AI는 어떤 결정도 자동 확정하지 않습니다.</div>' +
-        '<div class="sec"><b>인간 검토 기록</b>초안 생성 → 조직장 수정 2회 → 캘리브레이션 심의 → HR 승인. 전 과정이 감사 로그에 기록되어 있습니다.</div>' +
+        '<div class="sec"><b>인간 검토 기록</b>초안 생성 → 조직장 수정 2회 → 등급 조정 심의 → HR 승인. 전 과정이 감사 기록에 남아 있습니다.</div>' +
         '<div class="sec reg">근거 규정: EU AI Act Annex III(고용·근로자 관리 = 고위험, 2026.8 전면 시행) · 개인정보보호법 §37조의2(자동화된 결정에 대한 설명 요구·거부권)</div>' +
         '<button type="button" class="ezup-aiog-policy">🔒 기록 보관·열람 규칙 보기</button>' +
         "</div>",

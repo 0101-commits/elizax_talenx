@@ -516,7 +516,7 @@
     /* ================= 업무관리 (work) ================= */
     if(scr==='s-work'){
       el = t.closest('.sc-write');
-      if(el){ stop(e); simpleFormModal('스크럼 작성',[['오늘 예정 업무','<textarea placeholder="오늘 할 일"></textarea>'],['이슈/블로커','<textarea></textarea>']],'등록','스크럼을 등록했습니다.'); return; }
+      if(el){ stop(e); simpleFormModal('스크럼 작성',[['오늘 예정 업무','<textarea placeholder="오늘 할 일"></textarea>'],['이슈/막힌 부분','<textarea></textarea>']],'등록','스크럼을 등록했습니다.'); return; }
       el = t.closest('.sc-add');
       if(el){ stop(e); simpleFormModal('스크럼보드 추가',[['보드 이름','<input type="text" placeholder="보드 이름">']],'추가','스크럼보드를 추가했습니다.'); return; }
       el = t.closest('.sc-sel');

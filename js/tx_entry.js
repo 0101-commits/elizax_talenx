@@ -212,11 +212,26 @@
     "s-appr": {
       ctxType: "eval",
       text: function (rk) {
-        if (rk === "member") return "평가 코멘트에 쓸 근거초안 준비돼 있어요";
+        if (rk === "member") return "내 평가 근거·이의 준비 자료 정리해 둘까요?";
         return "평가 코멘트 근거초안 준비돼 있어요 — 열어볼까요?";
       },
       need: function () { return !!(window.TXAgent && typeof window.TXAgent.openHub === "function"); },
-      run: function () { window.TXAgent.openHub("qw3"); }
+      /* qw3=평가자(코멘트 근거초안) 시나리오 — 부하직원 등급 노출. member(피평가자)는
+         평가자 화면 금지, 인자없는 openHub()로 역할 기본화면(member=qw2) 착지 */
+      run: function (rk) { window.TXAgent.openHub(rk === "member" ? undefined : "qw3"); }
+    },
+    "s-perf:3": {
+      ctxType: "review",
+      text: function (rk) {
+        if (rk === "leader") return "팀 성과 리뷰 초안 정리해 드릴까요?";
+        return "성과 리뷰 초안 정리해 드릴까요?";
+      },
+      need: function () { return !!(window.Elizax && typeof window.Elizax.sendRaw === "function"); },
+      run: function (rk) {
+        openChatAndSend(rk === "leader"
+          ? "팀원 성과 리뷰 초안 정리해줘"
+          : "내 성과 리뷰 초안 정리해줘");
+      }
     }
   };
 

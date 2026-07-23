@@ -202,7 +202,7 @@
     var ckEv = cks.slice(-3).reverse().map(function (c) {
       return {
         t: "checkin", title: "주간 체크인 · " + mdOf(c.checkin_date),
-        ex: (c.comment || "진행률 업데이트") + (c.blocker ? " · 블로커: " + c.blocker : ""),
+        ex: (c.comment || "진행률 업데이트") + (c.blocker ? " · 장애 요인: " + c.blocker : ""),
         src: "chk." + (c.checkin_id || "CHK")
       };
     });
@@ -381,13 +381,13 @@
             evidence: e1Ev, ledgerType: "eval"
           },
           {
-            id: "e2", title: "캘리브레이션 조정",
+            id: "e2", title: "등급 조정",
             meta: "인재 리뷰 세션에서 심의",
             state: "plan", stateLabel: "예정", ai: false,
             date: "7월 말", decider: "인재 리뷰 참여자 (심의)",
             evidence: [
               {
-                t: "rule", title: "캘리브레이션 게이트",
+                t: "rule", title: "등급 조정 승인 단계",
                 ex: "조정은 인재 리뷰 심의 통과 후 확정 · 승인 전에는 반영되지 않음",
                 src: "rule.calibration.gate"
               },
@@ -419,7 +419,7 @@
           },
           {
             id: "f2", title: "최종 등급 통보",
-            meta: "캘리브레이션 확정 후 개별 통보",
+            meta: "등급 조정 확정 후 개별 통보",
             state: "plan", stateLabel: "예정", ai: false,
             date: "8월 중", decider: "HR 운영 (통보 절차)",
             evidence: [

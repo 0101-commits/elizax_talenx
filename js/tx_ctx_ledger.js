@@ -286,7 +286,7 @@
       out.push(mkSeed(slot.mon, slot.day, slot.hh, slot.mm, "checkin",
         "perf.checkin." + z2(slot.mon) + z2(slot.day),
         "주간 체크인 (" + slot.mon + "/" + slot.day + ")",
-        c ? c.comment + (c.confidence ? " · 확신도 " + c.confidence : "") : "진행률 업데이트 · 블로커 없음",
+        c ? c.comment + (c.confidence ? " · 확신도 " + c.confidence : "") : "진행률 업데이트 · 장애 요인 없음",
         2, i === 0 ? 3 : 1));
     }
 
@@ -315,14 +315,14 @@
     /* leader/hr/exec — 팀/전사 관점 1~2건 */
     if (role === "leader") {
       out.push(mkSeed(7, 7, 9, 10, "org", "org.team.checkin.wk27",
-        "팀 체크인 커버리지 주간 집계", "팀원 체크인 제출률 · 부진 2인 식별 · 진척 델타 요약", 2, 2));
+        "팀 체크인 현황 주간 집계", "팀원 체크인 제출률 · 부진 2인 식별 · 진척 변화 요약", 2, 2));
       out.push(mkSeed(7, 14, 10, 0, "org", "org.align.map." + (CU.org_id || "ORG"),
         (CU.orgName || "우리 조직") + " 목표 정렬 맵", "팀 목표-개인 목표 정렬 상태 · 미정렬 1건", 2, 1));
     } else if (role === "hr" || role === "exec") {
       out.push(mkSeed(7, 7, 9, 10, "org", "org.dist.FY2026H1",
         "전사 평가 분포 기준선", "등급 분포 가이드 · 관대화/중심화 편향 모니터링 지표", 3, 2));
       out.push(mkSeed(7, 14, 10, 0, "rule", "rule.calibration.gate",
-        "rule.calibration.gate — 캘리브레이션 게이트", "조정은 심의 게이트 통과 후 확정 · 승인 전에는 반영되지 않음", 3, 1));
+        "rule.calibration.gate — 등급 조정 승인 단계", "조정은 심의 게이트 통과 후 확정 · 승인 전에는 반영되지 않음", 3, 1));
     }
 
     return out;
@@ -596,7 +596,7 @@
       + "<span>총 <b>" + arr.length + "</b>건 기록</span></div></div>"
       + '<div class="ezl-strip">' + chips + "</div>"
       + '<div class="ezl-body">' + list + "</div>"
-      + '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 임시 맥락만 80건 롤링, 평가 인용 기록은 보존 '
+      + '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 임시 기록만 80건까지 보관, 평가에 인용된 기록은 계속 보존 '
       + '<button type="button" class="ezl-foot-policy" data-ezl-policy="1">🔒 보관·열람 규칙</button>'
       + (window.EZJourney && EZJourney.open
         ? '<button type="button" class="ezl-foot-policy" data-ezl-journey="1" title="이 기록들을 시간순이 아니라 프로세스 단계 순서로 봅니다">&#9672; 프로세스 순서로 보기</button>'

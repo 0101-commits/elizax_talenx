@@ -58,8 +58,8 @@
   }
   function modeLabel() {
     var m = mode();
-    if (m === "proxy") return backend.keySet ? "로컬 프록시 연결됨" : "프록시 연결됨 · 서버 AI 키 미설정";
-    return { direct: "브라우저 직접 연결 (Claude API)", offline: "오프라인 목업" }[m];
+    if (m === "proxy") return backend.keySet ? "AI 연결됨" : "AI 서버 연결됨 · AI 키 미설정";
+    return { direct: "브라우저에서 Claude 직접 연결", offline: "오프라인 예시 응답" }[m];
   }
   /* 실제 AI 응답 가능 여부 (프록시가 떠 있어도 키 없으면 false) */
   function ready() {
@@ -324,13 +324,13 @@
         title: "elizax AI 연결 설정",
         body: body,
         actions: [
-          { label: "키 삭제", kind: "ghost", onClick: function () { setKey(""); if (TX.toast) TX.toast("API 키 삭제됨 — 오프라인 목업 모드", "ok"); if (onChange) onChange(); } },
+          { label: "키 삭제", kind: "ghost", onClick: function () { setKey(""); if (TX.toast) TX.toast("API 키 삭제됨 — 오프라인 예시 응답 모드", "ok"); if (onChange) onChange(); } },
           {
             label: "저장", kind: "primary", onClick: function (box) {
               var k = box.querySelector("[data-ezai-key]").value.trim();
               var m = box.querySelector("[data-ezai-model]").value.trim();
               setKey(k); if (m) setModel(m);
-              if (TX.toast) TX.toast(k ? "저장됨 — " + modeLabel() : "키 없음 — 오프라인 목업 모드", "ok");
+              if (TX.toast) TX.toast(k ? "저장됨 — " + modeLabel() : "키 없음 — 오프라인 예시 응답 모드", "ok");
               if (onChange) onChange();
             }
           }

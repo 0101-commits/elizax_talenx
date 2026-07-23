@@ -52,6 +52,9 @@
   var email = String(CU.emp_id || 'emp').toLowerCase().replace(/[^a-z0-9]/g, '') + '@hcg.co.kr';
   var UNREAD = 69;
 
+  /* 현재 관점 롤키 (member일 때만 조직원 스코프 게이팅; 나머지 롤은 기존 유지) */
+  function curRole() { return (F.CU && F.CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member'; }
+
   /* ================================================================
    *  CSS (self-contained; selectors prefixed .txf- / #s-home)
    * ================================================================ */
@@ -310,7 +313,10 @@
         '<span style="font-size:12.5px;color:var(--ink-3);flex:none">' + k + '</span>' +
         '<span style="font-size:13px;font-weight:700;color:var(--ink);text-align:right">' + v + '</span></div>';
     }
-    var objHtml = objs.slice(0, 3).map(function (o) {
+    /* member 관점: 본인이 아닌 타인의 연락처·이메일·목표는 노출하지 않음(디렉터리 수준만) */
+    var isSelf = emp.emp_id === CU.emp_id;
+    var minimal = curRole() === 'member' && !isSelf;
+    var objHtml = minimal ? '' : objs.slice(0, 3).map(function (o) {
       return row(esc(o.title), (o.progress != null ? o.progress : 0) + '%');
     }).join('');
     var body =
@@ -322,9 +328,10 @@
       row('직급', esc(emp.level_kr || '-') + (emp.level ? ' / ' + esc(emp.level) : '')) +
       row('직책', emp.is_leader ? '조직장' : '팀원') +
       row('입사일', esc(emp.join_date || '-')) +
-      row('연락처', phone) +
-      row('이메일', mail) +
-      row('보유 목표', objs.length + '개') +
+      (minimal ? '' :
+        row('연락처', phone) +
+        row('이메일', mail) +
+        row('보유 목표', objs.length + '개')) +
       (objHtml ? '<div style="font-size:12.5px;font-weight:800;color:var(--ink-2);margin:16px 0 4px">주요 목표</div>' + objHtml : '');
     TX.drawer({
       title: esc(emp.name),
@@ -392,8 +399,8 @@
   function openReleaseNotes() {
     if (!TX || !TX.modal) { toast('새로운 기능'); return; }
     var notes = [
-      ['v0.191.0', '2026.07.10', '홈 대시보드 위젯 순서가 개편되고 근태 통계 위젯이 추가되었습니다. 기본/성과 프리셋 전환을 지원합니다.'],
-      ['v0.190.0', '2026.06.26', '평가관리에 2차 등급 조정 입력과 결과 확인(영수증형) 뷰가 추가되었습니다.'],
+      ['v0.191.0', '2026.07.10', '홈 대시보드 위젯 순서가 개편되고 근태 통계 위젯이 추가되었습니다. 기본/성과 화면 구성 전환을 지원합니다.'],
+      ['v0.190.0', '2026.06.26', '평가관리에 2차 등급 조정 입력과 결과 확인(영수증형) 화면이 추가되었습니다.'],
       ['v0.189.2', '2026.06.12', '알림 센터가 승인 필요/읽지 않음 탭으로 개편되고 구성원 검색 성능이 개선되었습니다.']
     ];
     var body = notes.map(function (r) {
@@ -405,7 +412,7 @@
     if (!TX || !TX.modal) { toast('사용자 매뉴얼'); return; }
     var toc = [
       '1. 시작하기 — 로그인과 워크스페이스',
-      '2. 홈 — 대시보드 위젯 구성과 프리셋',
+      '2. 홈 — 대시보드 위젯 구성과 화면 전환',
       '3. 인사관리 — 내 정보·구성원 정보·인재검색',
       '4. 근무관리 — 출퇴근 기록과 휴가 신청',
       '5. 성과관리 — 목표(OKR) 수립과 체크인',
@@ -438,15 +445,15 @@
   function openWorkspaceModal() {
     if (!TX || !TX.modal) { toast('워크스페이스 전환'); return; }
     var body =
-      '<div class="txf-wsrow" data-ws="HCG 프로덕션"><div><div class="wn">HCG 프로덕션</div><div class="wm">people.talenx.com · 구성원 221명</div></div><span class="cur">현재</span></div>' +
-      '<div class="txf-wsrow" data-ws="HCG 테스트"><div><div class="wn">HCG 테스트</div><div class="wm">test.talenx.com · 샌드박스</div></div></div>';
+      '<div class="txf-wsrow" data-ws="HCG 운영"><div><div class="wn">HCG 운영</div><div class="wm">people.talenx.com · 구성원 221명</div></div><span class="cur">현재</span></div>' +
+      '<div class="txf-wsrow" data-ws="HCG 테스트"><div><div class="wn">HCG 테스트</div><div class="wm">test.talenx.com · 테스트 환경</div></div></div>';
     var m = TX.modal({ title: '워크스페이스 전환', body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
     m.body.addEventListener('click', function (e) {
       var r = e.target.closest('.txf-wsrow');
       if (!r) return;
       var w = r.getAttribute('data-ws');
       m.close();
-      toast(w === 'HCG 프로덕션' ? '이미 HCG 프로덕션 워크스페이스입니다.' : '워크스페이스를 전환했습니다: ' + w, 'ok');
+      toast(w === 'HCG 운영' ? '이미 HCG 운영 워크스페이스입니다.' : '워크스페이스를 전환했습니다: ' + w, 'ok');
     });
   }
 
@@ -470,6 +477,8 @@
     var input = p.querySelector('input'), res = p.querySelector('.txf-sd-res');
     function draw(qv) {
       var list = (D.employees || []);
+      /* member 관점: 전 직원 노출 대신 같은 조직(본인+팀) 범위로 스코프 */
+      if (curRole() === 'member') list = list.filter(function (e) { return e.org_id === CU.org_id; });
       if (qv) {
         var s = qv.toLowerCase();
         list = list.filter(function (e) {
@@ -645,16 +654,18 @@
     var teamRows = teamObjs.slice(0, 3).map(function (o) {
       return '<div class="txh-row"><div class="tt">' + esc(o.title) + '</div>' + bar(o.progress) + '<b>' + (o.progress != null ? o.progress : 0) + '%</b></div>';
     }).join('');
+    var isMember = curRole() === 'member';
     var checks = [
       ['중간점검 1:1 — ' + (CU.managerName || '홍예준'), '2026.07.21 (화) 14:00'],
       ['분기 목표 리뷰 (' + (CU.orgName || 'Package BG') + ')', '2026.07.28 (화) 10:00'],
+      /* '상반기 평가 대상자 확정'은 관리자 업무 → member 제외 */
       ['상반기 평가 대상자 확정', '2026.08.04 (화) 09:00']
-    ];
+    ].filter(function (c) { return !isMember || c[0].indexOf('평가 대상자 확정') < 0; });
     var checkRows = checks.map(function (c) {
       return '<div class="txh-row"><div class="tt">' + esc(c[0]) + '</div><span class="dt">' + esc(c[1]) + '</span></div>';
     }).join('');
     var fbs = [
-      [teamPick(0), '꼼꼼한 일정 관리 덕분에 릴리스가 순조로웠어요. 감사합니다!', '7월 8일'],
+      [teamPick(0), '꼼꼼한 일정 관리 덕분에 출시가 순조로웠어요. 감사합니다!', '7월 8일'],
       [teamPick(3), '기획서 검토 코멘트가 큰 도움이 되었습니다.', '6월 30일'],
       [teamPick(1), '협업 배지와 함께 피드백을 보냈습니다.', '6월 24일']
     ];
@@ -668,7 +679,8 @@
       return c;
     }
     wrap.appendChild(card('내 목표 진행률', goalRows || '<div class="empty">목표가 없습니다.</div>', 'perf', 0));
-    wrap.appendChild(card('팀 평균 달성률',
+    /* '팀 평균 달성률'은 관리자 톤 카드 → leader/hr/exec만 노출 */
+    if (!isMember) wrap.appendChild(card('팀 평균 달성률',
       '<div class="txh-big">' + avg + '%</div><div class="txh-sub">' + esc(CU.orgName || '') + ' · 목표 ' + teamObjs.length + '건 평균</div>' + teamRows, 'perf', 0));
     wrap.appendChild(card('다가오는 중간점검', checkRows, 'perf', 1));
     wrap.appendChild(card('최근 피드백', fbRows, 'perf', 1));
@@ -797,7 +809,8 @@
     if (wcard) {
       var mine = (D.employees || []).filter(function (e) { return e.org_id === CU.org_id; });
       var others = (D.employees || []).filter(function (e) { return e.org_id !== CU.org_id; });
-      var members = mine.concat(others).slice(0, 17);
+      /* member 관점: 타 조직원 근무상태는 제외하고 같은 조직만 표시 */
+      var members = (curRole() === 'member' ? mine : mine.concat(others)).slice(0, 17);
       var selBar = wcard.querySelector('.selectbar .sp');
       if (selBar) selBar.textContent = '전체 (' + members.length + ') ⌄';
       wcard.querySelectorAll('.mrow').forEach(function (r) { r.remove(); });

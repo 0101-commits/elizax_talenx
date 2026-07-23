@@ -46,6 +46,15 @@
   ];
   function boardById(id) { for (var i = 0; i < BOARDS.length; i++) if (BOARDS[i].id === id) return BOARDS[i]; return null; }
 
+  // locked 보드 접근 게이트: 멤버면 허용, 아니면 hr/exec만 허용(member/leader 차단)
+  function canOpen(b) {
+    if (!b.locked) return true;
+    var ROLE = (F.CU && F.CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
+    var myId = F.CU && F.CU.emp_id;
+    if (myId && b.members.indexOf(myId) !== -1) return true; // 실제 멤버십
+    return ROLE === 'hr' || ROLE === 'exec';                 // 롤 기반 폴백
+  }
+
   var LOCK_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--ink-3);flex:none"><rect x="4" y="10.5" width="16" height="10.5" rx="2"/><path d="M8 10.5V7a4 4 0 018 0v3.5"/></svg>';
 
   /* ---------- renderers ---------- */
@@ -114,7 +123,7 @@
   var TASK_POOL = [
     '요구사항 정의서 검토', '주간 진행현황 정리', '고객 미팅 후속 조치', '리스크 항목 점검',
     'UI 시안 피드백 반영', '테스트 시나리오 작성', '결과 보고서 초안 작성', '일정 재조정 협의',
-    '데이터 정합성 확인', '운영 이관 체크리스트 점검'
+    '데이터 정확성 확인', '운영 이관 체크리스트 점검'
   ];
   var TASK_ST = [
     { label: '할 일',   fg: 'var(--ink-2)', bg: 'rgba(16,24,40,.06)' },
@@ -156,6 +165,7 @@
 
   function openBoardDetail(bid) {
     var b = boardById(bid); if (!b) return;
+    if (!canOpen(b)) { TX.toast('접근 권한이 없는 보드입니다.'); return; }
     if (!TX.drawer) { TX.toast('보드 상세를 불러왔습니다.'); return; }
     var h = hashBid(bid);
     var tasks = boardTasks(b);

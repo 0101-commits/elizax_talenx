@@ -231,7 +231,7 @@
     var ez = chat();
     if (!ez) return "";
     var ss = ez.sessions().slice(0, NAV_MAX);
-    var html = '<div class="agh-ngroup">세션</div>';
+    var html = '<div class="agh-ngroup">지난 대화</div>';
     for (var i = 0; i < ss.length; i++) {
       var s = ss[i];
       html += '<button class="agh-nitem' + (s.current ? " on" : "") + '" data-ezcs-sid="' + esc(s.id) + '" title="' + esc(s.title) + '">' +

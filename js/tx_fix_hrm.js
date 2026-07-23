@@ -96,6 +96,34 @@
     root.appendChild(st);
 
     /* ================================================================
+       ROLE GATING — talenx 원본 권한
+       조직원(member): 인재검색·인원현황 메뉴 없음 / 구성원정보는 본인 조직만.
+       조직장(leader): 본인 조직 범위(구성원·인재검색), 전사 통계(인원현황)는 차단.
+       HR·경영진(hr/exec): 전사 열람 유지.
+    ================================================================ */
+    var ROLE = (F.CU && F.CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
+    var FULL = (ROLE === 'hr' || ROLE === 'exec');
+    var selfOrg = CU.org_id || 'ORG-010';
+    function inScope(orgId) {
+      if (FULL) return true;
+      if (orgId === selfOrg) return true;
+      if (ROLE !== 'leader') return false;          // member: 본인 조직만 (하위 미포함)
+      var o = orgById[orgId];                        // leader: 본인 조직 + 하위 전체
+      while (o) { if (o.org_id === selfOrg) return true; o = o.parent_id ? orgById[o.parent_id] : null; }
+      return false;
+    }
+    function gateSubpage(navIdx, title) {
+      var link = root.querySelector('.subnav a[data-nav="' + navIdx + '"]');
+      if (link) link.style.display = 'none';
+      var pg = root.querySelector('.subpage[data-p="' + navIdx + '"]');
+      if (pg) pg.innerHTML = '<div class="hpage-title">' + title + '</div>' +
+        '<div class="hcard"><div class="txf-empty">이 메뉴에 대한 접근 권한이 없습니다.<br>' +
+        '전사 인재 검색·인원 현황은 HR·경영진에게만 제공됩니다.</div></div>';
+    }
+    if (ROLE === 'member') gateSubpage(2, '인재 검색');   // 조직원: 인재검색 메뉴 없음
+    if (!FULL) gateSubpage(3, '인원 현황');               // 조직장까지: 전사 통계 차단
+
+    /* ================================================================
        사용자 정보 — profile header
     ================================================================ */
     var p0 = root.querySelector('.subpage[data-p="0"]');
@@ -312,7 +340,7 @@
       return '<div class="hcard">' +
         '<h3 class="hcard-t">' + title + ' <span class="r"><button class="txf-issue" data-msg="' + kind + '을(를) 발급합니다.">' + btnLabel + '</button></span></h3>' +
         '<table class="txf-tbl"><thead><tr><th>발급 용도</th><th>발급 일자</th></tr></thead><tbody>' + body + '</tbody></table>' +
-        '<div class="txf-mini-pg"><span>Rows per page: 10</span><span>1–' + rows.length + ' of ' + rows.length + '</span><span><button>‹</button><button>›</button></span></div>' +
+        '<div class="txf-mini-pg"><span>페이지당 10개</span><span>1–' + rows.length + ' of ' + rows.length + '</span><span><button>‹</button><button>›</button></span></div>' +
       '</div>';
     }
     function tab_제증명() {
@@ -359,21 +387,28 @@
 
     function hasKids(id) { return !!(kidsOf[id] && kidsOf[id].length); }
     function nodeVisible(o) {
+      if (!FULL && o.org_id === selfOrg) return true;   // scoped 트리의 루트는 항상 표시
       var p = o.parent_id;
-      while (p) { if (!expanded[p]) return false; p = orgById[p] ? orgById[p].parent_id : null; }
+      while (p) {
+        if (!expanded[p]) return false;
+        if (!FULL && p === selfOrg) break;
+        p = orgById[p] ? orgById[p].parent_id : null;
+      }
       return true;
     }
     function buildTree() {
       if (!treeEl) return;
       var html = '';
+      var baseLv = FULL ? 1 : ((orgById[selfOrg] && orgById[selfOrg].level) || 1);
       function rec(o) {
-        var pad = ((o.level || 1) - 1) * 18;
+        var pad = ((o.level || 1) - baseLv) * 18;
         html += '<div class="org-node txf-onode" data-org="' + o.org_id + '" style="padding-left:' + pad + 'px">' +
           '<span class="tw"></span><span class="nm">' + esc(o.name) + '</span> ' +
           '<span class="cnt">(' + (o.headcount != null ? o.headcount : (o.headcount_direct || 0)) + ')</span></div>';
-        (kidsOf[o.org_id] || []).forEach(rec);
+        (kidsOf[o.org_id] || []).forEach(function (c) { if (inScope(c.org_id)) rec(c); });
       }
-      (kidsOf['__root'] || []).forEach(rec);
+      var roots = FULL ? (kidsOf['__root'] || []) : (orgById[selfOrg] ? [orgById[selfOrg]] : []);
+      roots.forEach(rec);
       treeEl.innerHTML = html;
     }
     function refreshTree() {
@@ -392,6 +427,13 @@
     }
     function renderRoster(orgId) {
       if (!mmBody) return;
+      if (!inScope(orgId)) {                          // 타 조직 로스터 열람 차단
+        mmBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ink-3);padding:40px">해당 조직을 열람할 권한이 없습니다.</td></tr>';
+        if (mmCount) mmCount.innerHTML = '전체 <b>0</b>';
+        if (mmPath) mmPath.textContent = orgName(orgId);
+        if (mmPager) mmPager.textContent = '0–0 of 0';
+        return;
+      }
       var list = (directMembers[orgId] || []).slice().sort(function (a, b) {
         if (a.is_leader !== b.is_leader) return a.is_leader ? -1 : 1;
         var r = (GRADE_RANK[b.level_kr] || 0) - (GRADE_RANK[a.level_kr] || 0);
@@ -416,11 +458,11 @@
     }
     if (treeEl) {
       buildTree();
-      setDepth(3);               // show levels 1–3 (ORG-010 is lvl3), deeper via ⊕
+      setDepth(FULL ? 3 : 99);   // 전사: 1–3레벨 / scoped: 본인 조직 하위 전체 펼침
       renderRoster(selOrg);
       // reflect default depth on the segment control (DOM ships with '1' active)
       var dsegs = root.querySelectorAll('.depth-seg button');
-      dsegs.forEach(function (b) { b.classList.toggle('on', b.textContent.trim() === '3'); });
+      dsegs.forEach(function (b) { b.classList.toggle('on', FULL && b.textContent.trim() === '3'); });
     }
 
     /* depth segment (existing handler toggles .on; we add depth logic) */
@@ -458,6 +500,7 @@
       if (!resBody) return;
       var q = (resInput && resInput.value || '').trim();
       var list = (D.employees || []).filter(function (e) {
+        if (!FULL && !inScope(e.org_id)) return false;   // leader: 본인 조직 범위로 한정
         if (!q) return true;
         return (e.name && e.name.indexOf(q) >= 0) || empNo(e.emp_id).indexOf(q) >= 0;
       });
@@ -536,12 +579,12 @@
       if (pivot) {
         pivot.innerHTML =
           '<thead>' +
-            '<tr><th rowspan="2" style="text-align:left;vertical-align:middle">Group</th><th>임원</th><th>정규직</th><th>계약직</th></tr>' +
+            '<tr><th rowspan="2" style="text-align:left;vertical-align:middle">구분</th><th>임원</th><th>정규직</th><th>계약직</th></tr>' +
             '<tr><th>인원</th><th>인원</th><th>인원</th></tr>' +
           '</thead>' +
           '<tbody>' +
             '<tr><td class="grp-cell">HCG (' + EMP_TOTAL + ')</td><td class="num">' + EMP.임원 + '</td><td class="num">' + EMP.정규직 + '</td><td class="num">' + EMP.계약직 + '</td></tr>' +
-            '<tr><td class="grp-cell">Total</td><td class="num">' + EMP.임원 + '</td><td class="num">' + EMP.정규직 + '</td><td class="num">' + EMP.계약직 + '</td></tr>' +
+            '<tr><td class="grp-cell">합계</td><td class="num">' + EMP.임원 + '</td><td class="num">' + EMP.정규직 + '</td><td class="num">' + EMP.계약직 + '</td></tr>' +
           '</tbody>';
       }
 

@@ -93,10 +93,10 @@
       { who: "mgr", name: MGR, t: "00:04", text: "지난 체크인 이후 상황부터 볼까요? '" + OBJ + "' 목표의 KR2 진행이 궁금하네요." },
       { who: "mem", name: MEM, t: "00:16", text: "KR2는 신규 기획 3건이 사용자 검증을 통과했고, 잔여 2건은 검증 설계 중입니다. 진행률은 68% 수준이에요." },
       { who: "mgr", name: MGR, t: "00:31", text: "좋네요. 일정 쪽에 리스크는 없나요?" },
-      { who: "mem", name: MEM, t: "00:42", text: "하나 있습니다. 외부 API 파트너 응답이 2주째 지연되고 있어서, 이대로면 잔여 2건 검증 일정이 다음 달로 밀릴 수 있어요." },
+      { who: "mem", name: MEM, t: "00:42", text: "하나 있습니다. 외부 연동 파트너 응답이 2주째 지연되고 있어서, 이대로면 잔여 2건 검증 일정이 다음 달로 밀릴 수 있어요." },
       { who: "mgr", name: MGR, t: "00:58", text: "그 건은 제가 파트너십 팀에 에스컬레이션할게요. 그 외에 필요한 지원이 있을까요?" },
       { who: "mem", name: MEM, t: "01:10", text: "검증 리뷰어가 한 명 더 붙으면 리드타임을 확실히 줄일 수 있을 것 같습니다." },
-      { who: "mem", name: MEM, t: "01:24", text: "그리고 다음 분기에는 추천 로직 쪽 업무를 맡아보고 싶은데, ML 기초 교육을 들을 수 있을까요?" },
+      { who: "mem", name: MEM, t: "01:24", text: "그리고 다음 분기에는 추천 로직 쪽 업무를 맡아보고 싶은데, 머신러닝 기초 교육을 들을 수 있을까요?" },
       { who: "mgr", name: MGR, t: "01:37", text: "좋은 방향이에요. 교육 예산 승인을 올려볼 테니 HR 교육 카탈로그에서 과정을 골라 공유해 주세요." },
       { who: "mgr", name: MGR, t: "01:49", text: "그럼 다음 체크인은 다음 주 화요일로 하고, 그때 KR2 잔여 2건 일정을 다시 봅시다." }
     ];
@@ -218,9 +218,9 @@
     return '<div class="ez1o-bar" data-ez1o-bar>'
       + '<button class="ez1o-btn" data-ez1o="start">&#9210; elizax 녹음·요약</button>'
       + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
-      + '<span class="ez1o-note">녹음→전사→요약은 자동, 기록 확정은 사람</span>'
+      + '<span class="ez1o-note">녹음→받아쓰기→요약은 자동, 기록 확정은 사람</span>'
       + (confirmed ? '<span class="ez1o-donetag">&#10003; 7/16 요약 확정됨 · 히스토리 기록</span>' : '')
-      + '<button class="ez1o-linkbtn" data-ez1o="map">&#128506; 전주기 커버리지 맵</button>'
+      + '<button class="ez1o-linkbtn" data-ez1o="map">&#128506; 전주기 지원 범위 맵</button>'
       + '</div>'
       + '<div class="ez1o-panel" data-ez1o-panel></div>';
   }
@@ -261,7 +261,7 @@
       + '<div class="ez1o-rechead">'
       + '<span class="ez1o-dot"></span><span class="ez1o-timer" data-ez1o-timer>00:00</span>'
       + '<span class="ez1o-wave"><i></i><i></i><i></i><i></i><i></i><i></i></span>'
-      + '<span class="ez1o-reclab">녹음 중 · 라이브 전사 (' + esc(REC_ID) + ')</span>'
+      + '<span class="ez1o-reclab">녹음 중 · 실시간 받아쓰기 (' + esc(REC_ID) + ')</span>'
       + '<button class="ez1o-stop" data-ez1o="stop">&#9632; 종료·요약 생성</button>'
       + '</div>'
       + '<div class="ez1o-tr" data-ez1o-tr></div>'
@@ -307,7 +307,7 @@
     var panel = sess.panel;
     sess.finished = true;
     panel.innerHTML = '<div class="ez1o-rec"><div class="ez1o-gen"><span class="ez1o-spin"></span>'
-      + '요약 생성 중 — 전사 ' + sess.idx + '줄 분석 · 주제/액션/신호 추출…</div></div>';
+      + '요약 생성 중 — 받아쓰기 ' + sess.idx + '줄 분석 · 주제/액션/신호 추출…</div></div>';
     setTimeout(function () {
       if (!document.body.contains(panel)) { killSession(); return; }
       panel.innerHTML = summaryHTML();
@@ -329,14 +329,14 @@
       + '<div class="ez1o-body">'
       + '<div class="ez1o-h4">논의 주제 3</div>'
       + '<div class="ez1o-topic"><span class="no">1</span><span>KR2 진척 — 신규 기획 3건 사용자 검증 통과, 잔여 2건 설계 중 (진행률 68%)' + chip("00:16") + '</span></div>'
-      + '<div class="ez1o-topic"><span class="no">2</span><span>일정 리스크 — 외부 API 파트너 응답 2주 지연, 잔여 검증 일정 순연 가능성' + chip("00:42") + '</span></div>'
-      + '<div class="ez1o-topic"><span class="no">3</span><span>성장 니즈 — 추천 로직 업무 희망, ML 기초 교육 수강 요청' + chip("01:24") + '</span></div>'
+      + '<div class="ez1o-topic"><span class="no">2</span><span>일정 리스크 — 외부 연동 파트너 응답 2주 지연, 잔여 검증 일정 순연 가능성' + chip("00:42") + '</span></div>'
+      + '<div class="ez1o-topic"><span class="no">3</span><span>성장 니즈 — 추천 로직 업무 희망, 머신러닝 기초 교육 수강 요청' + chip("01:24") + '</span></div>'
       + '<div class="ez1o-h4">액션 아이템 2</div>'
-      + '<div class="ez1o-act"><span class="bx"></span><span>외부 API 지연 건 파트너십 팀 에스컬레이션 <span class="own">— 담당 ' + esc(MGR) + ' · 기한 7/18</span></span></div>'
-      + '<div class="ez1o-act"><span class="bx"></span><span>ML 기초 교육 과정 선정·예산 신청 <span class="own">— 담당 ' + esc(MEM) + ' · 기한 7/22</span></span></div>'
+      + '<div class="ez1o-act"><span class="bx"></span><span>외부 연동 지연 건 파트너십 팀 에스컬레이션 <span class="own">— 담당 ' + esc(MGR) + ' · 기한 7/18</span></span></div>'
+      + '<div class="ez1o-act"><span class="bx"></span><span>머신러닝 기초 교육 과정 선정·예산 신청 <span class="own">— 담당 ' + esc(MEM) + ' · 기한 7/22</span></span></div>'
       + '<div class="ez1o-h4">감지 신호 2</div>'
-      + '<div class="ez1o-sig risk"><span class="ic">&#9888;</span><span><b>리스크</b> · 일정 지연(외부 API) — 이번 주 체크인 초안에 리스크 항목 반영을 제안합니다' + chip("00:42") + '</span></div>'
-      + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · ML 교육 수요 감지 — 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>'
+      + '<div class="ez1o-sig risk"><span class="ic">&#9888;</span><span><b>리스크</b> · 일정 지연(외부 연동) — 이번 주 체크인 초안에 리스크 항목 반영을 제안합니다' + chip("00:42") + '</span></div>'
+      + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · 머신러닝 교육 수요 감지 — 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>'
       + '</div>'
       + '<div class="ez1o-gate" data-ez1o-gate>'
       + '<span class="lab">결정 게이트 · 사람이 확정 (승인 전에는 아무것도 반영되지 않음)</span>'
@@ -379,7 +379,7 @@
           type: "oneonone",
           source: "1on1.rec.0716",
           title: "1:1 미팅 요약 · 7/16",
-          summary: "KR2 진척·API 지연 리스크·ML 교육 니즈·다음 체크인 합의",
+          summary: "KR2 진척·외부 연동 지연 리스크·머신러닝 교육 니즈·다음 체크인 합의",
           weight: 3
         }
       }));
@@ -396,7 +396,7 @@
         var link = bar.querySelector(".ez1o-linkbtn");
         bar.insertBefore(tag, link || null);
       }
-      toast("기록 확정 — 성과 히스토리에 기록되었습니다 (감사 로그 기록).", "ok");
+      toast("기록 확정 — 성과 히스토리에 기록되었습니다 (감사 기록 남김).", "ok");
     } else { /* drop */
       card.classList.add("ez1o-collapsed");
       var note = document.createElement("div");
@@ -416,7 +416,7 @@
     { col: "목표수립", items: [
       { name: "개인맥락 목표 초안 + 정렬 검증", st: "live", f: 2, c: 2 },
       { name: "목표 정렬·중복 점검", st: "live", f: 1, c: 2 },
-      { name: "목표 리밸런싱 제안", st: "cand", f: 1, c: 3 }
+      { name: "목표 재조정 제안", st: "cand", f: 1, c: 3 }
     ]},
     { col: "실행·중간점검", items: [
       { name: "주간 체크인 · 진척 요약", st: "live", f: 3, c: 2 },
@@ -427,11 +427,11 @@
     { col: "평가", items: [
       { name: "평가 코멘트 근거초안", st: "live", f: 1, c: 2 },
       { name: "평가 편향 점검", st: "live", f: 1, c: 2 },
-      { name: "등급 Calibration 심의", st: "live", f: 1, c: 3 }
+      { name: "등급 조정 심의", st: "live", f: 1, c: 3 }
     ]},
     { col: "피드백·리뷰", items: [
-      { name: "피드백 문장 정제 (SBI)", st: "live", f: 2, c: 2 },
-      { name: "리뷰 초안 co-writing", st: "live", f: 1, c: 2 },
+      { name: "피드백 문장 정제", st: "live", f: 2, c: 2 },
+      { name: "리뷰 초안 함께 작성", st: "live", f: 1, c: 2 },
       { name: "승계·이동 시사점", st: "cand", f: 1, c: 3 },
       { name: "보상 리뷰 시사점", st: "cand", f: 1, c: 2 }
     ]}

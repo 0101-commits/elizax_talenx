@@ -169,7 +169,7 @@
     ov = document.createElement("div");
     ov.className = "ezcx-search-ov";
     ov.setAttribute("role", "dialog");
-    ov.setAttribute("aria-label", "전 세션 대화 검색");
+    ov.setAttribute("aria-label", "지난 대화 검색");
 
     var card = document.createElement("div");
     card.className = "ezcx-search-card";
@@ -182,8 +182,8 @@
     inEl = document.createElement("input");
     inEl.className = "ezcx-search-in";
     inEl.type = "text";
-    inEl.placeholder = "전 세션 대화 검색";
-    inEl.setAttribute("aria-label", "전 세션 대화 검색어 입력");
+    inEl.placeholder = "지난 대화 검색";
+    inEl.setAttribute("aria-label", "지난 대화 검색어 입력");
     var xbtn = document.createElement("button");
     xbtn.className = "ezcx-search-x";
     xbtn.setAttribute("aria-label", "검색 닫기");
@@ -243,7 +243,7 @@
     if (!listEl) return;
     var r = search(qRaw);
     if (!r.q) {
-      listEl.innerHTML = '<div class="ezcx-search-empty">전 세션의 대화 내용을 검색합니다</div>';
+      listEl.innerHTML = '<div class="ezcx-search-empty">지난 대화 내용을 검색합니다</div>';
       return;
     }
     if (!r.rows.length) {
@@ -309,8 +309,8 @@
 
     var btn = document.createElement("button");
     btn.className = "ezx-x ezcx-search-btn";
-    btn.setAttribute("aria-label", "전 세션 대화 검색");
-    btn.setAttribute("title", "전 세션 대화 검색");
+    btn.setAttribute("aria-label", "지난 대화 검색");
+    btn.setAttribute("title", "지난 대화 검색");
     btn.textContent = "🔍";
     btn.addEventListener("click", function () {
       if (!window.EZChat) return;

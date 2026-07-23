@@ -136,11 +136,11 @@
     qw4:     { title: "상시 근거 수집 타임라인",     nav: "상시 근거 수집",     mode: "suggest",       group: "성과관리" },
     qw6:     { title: "피드백 문장 정제 (SBI)",     nav: "피드백 정제",        mode: "suggest",       group: "성과관리" },
     qw3:     { title: "평가 코멘트 근거초안",       nav: "평가 코멘트 초안",    mode: "human_approve", group: "평가관리" },
-    hold:    { title: "HOLD · 근거 부족 시 정지",   nav: "HOLD 데모",          mode: "suggest",       group: "평가관리" },
+    hold:    { title: "근거 부족 시 정지",         nav: "정지 데모",          mode: "suggest",       group: "평가관리" },
     qw5:     { title: "평가 편향 점검",            nav: "편향 점검",          mode: "suggest",       group: "평가관리" },
-    calib:   { title: "등급 Calibration 라운드테이블", nav: "Calibration 심의", mode: "human_approve", group: "평가관리" },
-    review:  { title: "리뷰 초안 co-writing",      nav: "리뷰 초안 작성",      mode: "human_approve", group: "평가관리" },
-    assets:  { title: "산출물 · 프로세스 자산",     nav: "산출물",             mode: null,            group: "자산" },
+    calib:   { title: "등급 조정 심의 회의", nav: "등급 조정 심의", mode: "human_approve", group: "평가관리" },
+    review:  { title: "리뷰 초안 함께 쓰기",       nav: "리뷰 초안 작성",      mode: "human_approve", group: "평가관리" },
+    assets:  { title: "산출물 · 기록 보관함",       nav: "산출물",             mode: null,            group: "자산" },
     audit:   { title: "감사 로그",                nav: "감사 로그",           mode: null,            group: "자산" }
   };
   var NAV_ORDER = ["home", "chat", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "assets", "audit"];
@@ -159,7 +159,7 @@
     { key: "qw3",    chip: "평가 코멘트 초안 써줘",             desc: "ERP 실적·직무군 분포·평가규정을 대조해 문장별 출처가 붙은 코멘트 초안을 만듭니다.",                          roles: ["leader"],        heavy: false, mode: "human_approve" },
     { key: "hold",   chip: "박지훈 등급 초안 만들어줘",          desc: "근거가 부족하면 추정하지 않고 정지 후 질문합니다. 보강 경로를 고르면 재개됩니다.",                            roles: ["leader"],        heavy: false, mode: "suggest" },
     { key: "qw5",    chip: "평가 편향 점검해줘",                desc: "본부별 등급 분포·근거량을 대조해 관대화·중심화 의심을 플래그와 근거로만 제시합니다.",                        roles: ["hr", "exec"],    heavy: true,  mode: "suggest" },
-    { key: "calib",  chip: "등급 캘리브레이션 심의 열어줘",       desc: "4개 관점 에이전트가 조정 논거를 교차 심의하고, What-if 슬라이더로 상한을 즉시 재산출합니다.",                 roles: ["hr"],            heavy: true,  mode: "human_approve" },
+    { key: "calib",  chip: "등급 조정 심의 열어줘",       desc: "4개 관점 에이전트가 조정 논거를 교차 심의하고, 가정 슬라이더로 상한을 즉시 재산출합니다.",                 roles: ["hr"],            heavy: true,  mode: "human_approve" },
     { key: "review", chip: "리뷰 초안 같이 쓰자",               desc: "AI가 근거를 인용해 초안 문장을 제안하고, 사용자가 문장 단위로 반영·무시합니다.",                             roles: ["leader", "hr"],  heavy: true,  mode: "human_approve" }
   ];
   function scenarioOf(key) {
@@ -265,8 +265,8 @@
       '<span class="agh-rolechip" data-agh-role></span></div>' +
       '<div class="agh-gr">' +
       '<button class="agh-gitem" data-agh-alerts>🔔 알림 <b data-agh-alertcnt>3</b></button>' +
-      '<button class="agh-gitem" data-agh-ctxtoggle title="판단 근거·Human-in-the-loop 패널 열기/닫기">☰ 근거</button>' +
-      '<span class="agh-gitem" data-agh-ai title="Claude API 연결 상태">◐ AI 상태 확인 중</span>' +
+      '<button class="agh-gitem" data-agh-ctxtoggle title="판단 근거·사람 확인 패널 열기/닫기">☰ 근거</button>' +
+      '<span class="agh-gitem" data-agh-ai title="AI 연결 상태">◐ AI 상태 확인 중</span>' +
       '<button class="agh-gitem" data-agh-dock title="도킹 대화창으로 전환">◱ 도킹으로</button>' +
       '<button class="agh-gitem" data-agh-close>닫기 ✕</button></div>';
 
@@ -326,7 +326,7 @@
       if (e.target.closest("[data-agh-newchat]")) {
         if (window.EZChat) EZChat.newSession();
         showScreen("chat");
-        logAudit("새 채팅", "세션 생성", "chat.new");
+        logAudit("새 채팅", "대화 생성", "chat.new");
         return;
       }
     });
@@ -375,7 +375,7 @@
 
   /* ---------------- 컨텍스트 패널 공통 (허브 캔버스 렌더 시에만) ---------------- */
   function ctxPanel(items, chatNote) {
-    var html = '<div class="agh-ctx-h">컨텍스트 패널 <small>판단 근거 · Human-in-the-loop</small></div>';
+    var html = '<div class="agh-ctx-h">맥락 패널 <small>판단 근거 · 사람 확인</small></div>';
     items.forEach(function (it) {
       html += '<div class="agh-ctxcard ' + (it.kind || "") + '">' +
         (it.tag ? '<span class="tag">' + esc(it.tag) + "</span>" : "") +
@@ -399,6 +399,14 @@
   /* ---------------- 화면 전환 ---------------- */
   function showScreen(key) {
     if (!SCREENS[key]) key = "home";
+    /* 롤 가드 — 딥링크(openHub)로 상위 롤 전용 화면 우회 진입 차단. renderNav와 동일한 sc.roles/role().key 사용 */
+    var sc = scenarioOf(key);
+    if (sc && sc.roles.indexOf(role().key) < 0) {
+      var R = (window.TXRoles && TXRoles.ROLES) || {};
+      var names = sc.roles.map(function (k) { return (R[k] && R[k].label) || k; }).join("/");
+      toast("이 기능은 " + names + " 권한에서 열람할 수 있습니다.");
+      key = defaultScreen();
+    }
     clearTimers();
     /* 대화 스크린을 떠나면 렌더 서피스를 FAB로 반납 */
     if (state.screen === "chat" && key !== "chat" && window.Elizax && Elizax.detachSurface) Elizax.detachSurface();
@@ -438,7 +446,7 @@
       "호출 없이 에이전트가 먼저 포착했습니다. 아래 과제 카드에서 확인하세요.</div></div>" +
       '<div class="agh-qwgrid">' + cards + "</div>";
     ctxPanelIf(host, [
-      { tag: "챗봇 vs 에이전트", title: "이 허브가 다른 점 (9축)", body: "촉발=선제 · 산출물=편집 가능한 객체 · 과정=노드 표출 · 근거=원천 인용 · 통제권=단계·문장 단위 승인 게이트 · 동시성=Sub-agent 병렬 실행" },
+      { tag: "챗봇 vs 에이전트", title: "이 워크스페이스가 다른 점 (9축)", body: "촉발=선제 · 산출물=편집 가능한 결과물 · 과정=진행 단계 표시 · 근거=원천 인용 · 통제권=단계·문장 단위 승인 게이트 · 동시성=여러 에이전트 동시 실행" },
       { tag: "실행 규율", title: "읽기는 자율, 확정은 게이트", body: "읽기·계획·산출은 자율, 발송·확정·삭제는 제안→승인→실행 순서로만 진행됩니다. 승인 전에는 아무것도 반영되지 않습니다." }
     ], "");
   };
@@ -448,7 +456,7 @@
     host = host || el.canvas;
     host.innerHTML =
       '<div class="agh-shead"><div><h2>elizax 대화</h2>' +
-      '<span class="agh-exp">도킹 대화창(FAB)과 같은 대화가 이어집니다 · 세션 <b data-agh-chattitle></b></span></div>' +
+      '<span class="agh-exp">도킹 대화창과 같은 대화가 이어집니다 · 제목 <b data-agh-chattitle></b></span></div>' +
       '<span class="agh-asof2">기준 시점 · ' + esc(AS_OF) + " ▾</span></div>" +
       '<div class="agh-chatwrap">' +
       '<div class="ezx-list agh-chatlist" data-agh-chatlist role="log" aria-live="polite"></div>' +
@@ -481,7 +489,7 @@
       EZChat.on("messages", onSwitch);
     }
     ctxPanelIf(host, [
-      { tag: "연동", title: "하나의 대화, 두 개의 화면", body: "도킹 대화창과 전체화면이 <b>같은 세션</b>을 읽고 씁니다. 어디서 묻든 기록·근거·감사가 성과 히스토리 하나에 남습니다. " + srcChip("talenx", "EZChat 공유 스토어") },
+      { tag: "연동", title: "하나의 대화, 두 개의 화면", body: "도킹 대화창과 전체화면이 <b>같은 세션</b>을 읽고 씁니다. 어디서 묻든 기록·근거·감사가 성과 히스토리 하나에 남습니다. " + srcChip("talenx", "공유 대화 저장소") },
       { tag: "전환", title: "◱ 도킹으로 / ⛶ 전체화면으로", body: "우상단 버튼으로 언제든 형태를 바꿔도 대화가 끊기지 않습니다." }
     ], "");
   };
@@ -589,8 +597,8 @@
       '<div class="agh-verdict" data-agh-verdict style="display:none"></div>' +
       gateHTML("qw2");
     ctxPanelIf(host, [
-      { tag: "선제 감지", title: "가중치 합계 105%", kind: "warn", body: "전체 목표 가중치 합이 100%보다 <b>5%p</b> 높습니다. 목표3 가중치 15%→10% 조정안을 준비했습니다. " + srcChip("rule", "rule.weight.sum") },
-      { tag: "선제 감지", title: "전사목표 미연결", kind: "warn", body: "목표 3이 전사 목표 '매출 3조 8,000억'과 연결되지 않았습니다. KR4 연결을 제안합니다. " + srcChip("talenx", "okr.tree.FY2026") }
+      { tag: "선제 감지", title: "가중치 합계 105%", kind: "warn", body: "전체 목표 가중치 합이 100%보다 <b>5%p</b> 높습니다. 목표3 가중치 15%→10% 조정안을 준비했습니다. " + srcChip("rule", "가중치 합계 규칙") },
+      { tag: "선제 감지", title: "전사목표 미연결", kind: "warn", body: "목표 3이 전사 목표 '매출 3조 8,000억'과 연결되지 않았습니다. KR4 연결을 제안합니다. " + srcChip("talenx", "전사 목표체계 FY2026") }
     ], "");
     simQw2(names, host, carry);
   };
@@ -610,7 +618,7 @@
     node(0, "완료", 100);
     var taskChip = carry.taskArea ? "직무 과업 · " + carry.taskArea : "직무 R&R";
     T(function () { node(1, "진행중", 40); ctxAppendIf(host, '<div class="agh-live">작년 기록 로드 완료 — FY2025 평가 ' + esc(carry.grade ? carry.grade + "등급" : "기록 없음") + " · 피드백 요지 확보. 직무 R&R 대조 시작</div>"); }, 700);
-    T(function () { node(1, "완료", 100); node(2, "진행중", 30); node(3, "진행중 62%", 62); ctxAppendIf(host, '<div class="agh-live">수행 — 작년 평가·피드백 ' + srcChip("talenx", "talenx") + ' · 직무 R&R·타산업 벤치마크 ' + srcChip("web", "web") + " 병렬 대조</div>"); }, 1600);
+    T(function () { node(1, "완료", 100); node(2, "진행중", 30); node(3, "진행중 62%", 62); ctxAppendIf(host, '<div class="agh-live">수행 — 작년 평가·피드백 ' + srcChip("talenx", "talenx") + ' · 직무 R&R·타산업 벤치마크 ' + srcChip("web", "웹") + " 병렬 대조</div>"); }, 1600);
     T(function () {
       node(2, "완료", 100); node(3, "완료", 100); node(4, "이상치 2건", 100);
       var gs = host.querySelectorAll(".agh-goal");
@@ -645,7 +653,7 @@
       var pendNote = (carry.pendKrs && carry.pendKrs.length)
         ? " 미완 KR " + carry.pendKrs.length + "건은 이월 후보로 표시했습니다."
         : "";
-      v.innerHTML = '<span class="conf">confidence 0.86</span> ' + esc(lastYear) + "와 피드백을 이어받아 백지가 아닌 <b>초안 3안</b>을 구성했습니다. " +
+      v.innerHTML = '<span class="conf">신뢰도 0.86</span> ' + esc(lastYear) + "와 피드백을 이어받아 백지가 아닌 <b>초안 3안</b>을 구성했습니다. " +
         fbAxis + "을 <b>KR2</b>로 반영했고, " + esc(jobBase) + "을 근거로 <b>KR1</b>을 구성했습니다." + pendNote + " " +
         "가중치 합 105%·목표3 미연결이 확인돼 <b>15%→10% 하향 또는 KR4 연결</b> 중 택일을 제안합니다. " +
         srcChip("rule", "원칙 · 전사 정렬") + srcChip("talenx", "맥락 · H1 조직개편") + '<span class="agh-auditchip">⛨ 감사 기록됨</span>';
@@ -756,11 +764,11 @@
       gateHTML("qw7", ["병합·연결 승인", "수정", "보류"]);
     ctxPanelIf(host, [
       { tag: "두 개의 질문", title: "문장 품질 ≠ 운영 신호", body: "'목표 문장이 모호하다'와 '체크인이 두 달째 없다'는 다른 문제입니다. 앞은 <b>수정·병합 제안</b>으로, 뒤는 <b>리마인드·1:1</b>로 — 처방이 달라 섹션을 나눠 제시합니다." },
-      { tag: "확인 내역", title: "talenx OKR 트리·체크인 대조", body: "김서연·박도윤 목표 문구·지표(KR2) <b>90% 일치</b> — 사실상 같은 일 " + srcChip("talenx", "okr.diff") + " 체크인 공백은 목표별 최근 체크인 기록으로 계산했습니다 " + srcChip("talenx", "checkins") }
+      { tag: "확인 내역", title: "talenx 목표 트리·체크인 대조", body: "김서연·박도윤 목표 문구·지표(KR2) <b>90% 일치</b> — 사실상 같은 일 " + srcChip("talenx", "목표 대조") + " 체크인 공백은 목표별 최근 체크인 기록으로 계산했습니다 " + srcChip("talenx", "체크인 기록") }
     ], "");
     T(function () {
       var tbl = host.querySelector("[data-agh-tbl]"); tbl.style.opacity = "1";
-      host.querySelector("[data-agh-scan]").innerHTML = "팀 목표 8건 스캔 — <b>문장 품질 3건 · 운영 신호 " + opsCount + "건</b> · 0.9s · " + srcChip("talenx", "OKR 트리·체크인 대조") + ' <span class="agh-flag">▲ 중복 2쌍</span><span class="agh-flag">▲ 미연계 1건</span><span class="agh-flag">▲ 체크인 공백 최장 ' + ops.gaps[0].gap + "일</span>";
+      host.querySelector("[data-agh-scan]").innerHTML = "팀 목표 8건 스캔 — <b>문장 품질 3건 · 운영 신호 " + opsCount + "건</b> · 0.9s · " + srcChip("talenx", "목표 트리·체크인 대조") + ' <span class="agh-flag">▲ 중복 2쌍</span><span class="agh-flag">▲ 미연계 1건</span><span class="agh-flag">▲ 체크인 공백 최장 ' + ops.gaps[0].gap + "일</span>";
       Array.prototype.forEach.call(tbl.querySelectorAll("[data-res]"), function (c, i) {
         T(function () { c.innerHTML = esc(rows[i].res) + lintChips(i); }, 150 * i);
       });
@@ -807,7 +815,7 @@
       gateHTML("qw1", ["승인·발송", "수정", "보류"]);
     ctxPanelIf(host, [
       { tag: "자동 처리 배지", title: "집계는 바로, 발송은 게이트", body: "데이터 스캔·요약은 에이전트가 상시 자동 처리하지만, 사람에게 닿는 메시지는 <b>승인 필요</b> — 승인 없이는 발송되지 않습니다." },
-      { tag: "선제 감지", title: "이번 주 감지 계기", body: "월요일 06:00 정기 스캔에서 지연 신호 포착 → 리더에게 선제 팝업으로 먼저 말 걸었습니다. " + srcChip("rule", "cron.weekly.checkin") }
+      { tag: "선제 감지", title: "이번 주 감지 계기", body: "월요일 06:00 정기 스캔에서 지연 신호 포착 → 리더에게 선제 팝업으로 먼저 말 걸었습니다. " + srcChip("rule", "매주 정기 스캔") }
     ], "");
     var outs = ["7일 무변동 3명", "진척 지연 1명", "14일+ 미실시 2명"];
     Array.prototype.forEach.call(host.querySelectorAll("[data-sr]"), function (r, i) {
@@ -935,7 +943,7 @@
         return '<div class="wl" data-wl="' + i + '"><span class="ck">○</span><span>' + esc(l[0]) + ' <b data-wlb></b></span></div>';
       }).join("") + "</div></div>" +
       '<div class="agh-holdcard" data-agh-hold style="display:none">' +
-      '<div class="hd">⛔ 근거가 부족해 판단을 멈췄습니다 <span class="tag">HOLD</span></div>' +
+      '<div class="hd">⛔ 근거가 부족해 판단을 멈췄습니다 <span class="tag">정지</span></div>' +
       "<p>KR 3개 중 <b>1개만 기록</b>이 있습니다. KR2·KR3은 체크인·실적 근거가 없어 <b>판단 불가</b> — 임의로 추정하지 않습니다.</p>" +
       '<p class="q">나머지 2개 KR 실적을 어디서 볼까요?</p>' +
       '<div class="opts">' +
@@ -947,7 +955,7 @@
       '<div class="agh-gradecard"><span class="g">B0</span><div><b>등급 초안 · B0 제안</b><small>KR1 112% · KR2 96% · KR3 88% (보강된 근거 기준)</small></div></div></div>' +
       gateHTML("hold");
     ctxPanelIf(host, [
-      { tag: "HOLD 원칙", title: "확신이 없으면 진행하지 않는다", kind: "warn", body: "근거 부족 시 스피너 대신 <b>정지 + 질문</b>. 추정으로 채워 넣은 판단은 감사도 재현도 불가능하므로, 부족분은 사용자에게 되묻습니다. 정지·재개도 감사 로그에 남습니다. " + srcChip("rule", "invariant.no-guess") }
+      { tag: "정지 원칙", title: "확신이 없으면 진행하지 않는다", kind: "warn", body: "근거 부족 시 로딩만 돌리지 않고 <b>정지 + 질문</b>. 추정으로 채워 넣은 판단은 감사도 재현도 불가능하므로, 부족분은 사용자에게 되묻습니다. 정지·재개도 감사 로그에 남습니다. " + srcChip("rule", "원칙 · 추정하지 않음") }
     ], "");
     var wl = host.querySelectorAll("[data-wl]");
     T(function () {
@@ -962,7 +970,7 @@
     });
     T(function () {
       host.querySelector("[data-agh-hold]").style.display = "";
-      logAudit("HOLD 정지", "박지훈 등급 초안 — KR2·KR3 근거 부족", "hold.no-evidence");
+      logAudit("판단 정지", "박지훈 등급 초안 — KR2·KR3 근거 부족", "hold.no-evidence");
       ctxAppendIf(host, '<div class="agh-live warn">수행 중 정지 — 근거 2건 부족. 사용자 응답 대기.</div>');
     }, 2700);
     host.addEventListener("click", function (e) {
@@ -971,7 +979,7 @@
       var opt = b.getAttribute("data-hold-opt");
       var label = opt === "talenx" ? "talenx 체크인 기록 연결" : opt === "erp" ? "ERP 실적 재조회" : "직접 입력";
       host.querySelector("[data-agh-hold]").style.display = "none";
-      logAudit("HOLD 재개", "근거 보강 경로 · " + label, "hold.resume");
+      logAudit("판단 재개", "근거 보강 경로 · " + label, "hold.resume");
       [1, 2].forEach(function (i, j) {
         T(function () {
           wl[i].classList.remove("hold"); wl[i].classList.add("done");
@@ -1003,9 +1011,9 @@
         return '<div class="agh-bias ' + b[3] + '"><b>' + esc(b[0]) + '</b><span class="tag">' + esc(b[1]) + "</span><p>" + esc(b[2]) + "</p></div>";
       }).join("") + "</div>" +
       '<div class="agh-verdict" data-agh-verdict style="display:none">개발본부는 실적 대비 등급 상승폭 설명력이 낮은 인원이 <b>3명</b>, 마케팅본부는 등급 변별 근거가 부족합니다. ' +
-      "편향 <b>플래그+근거</b>만 제시하며, 등급 수정은 하지 않습니다 — 검토 승인 시 캘리브레이션 회의 안건으로 전달됩니다." +
+      "편향 <b>플래그+근거</b>만 제시하며, 등급 수정은 하지 않습니다 — 검토 승인 시 등급 조정 회의 안건으로 전달됩니다." +
       '<span class="agh-auditchip">⛨ 감사 기록됨</span></div>' +
-      '<div class="agh-linkrow"><button class="agh-btn" data-agh-nav="calib">→ Calibration 라운드테이블에서 심의</button></div>' +
+      '<div class="agh-linkrow"><button class="agh-btn" data-agh-nav="calib">→ 등급 조정 심의 회의에서 검토</button></div>' +
       gateHTML("qw5", ["검토 승인", "수정", "보류"]);
     ctxPanelIf(host, [
       { tag: "정치 배제", title: "민감 이슈 처리 원칙", body: "관대화·편향은 <b>재검토 제안</b>만 하며 자동 수정하지 않습니다. 플래그의 모든 판단에는 분포·근거량 원천이 인용됩니다. " + srcChip("rule", "관대화·강제배분 감사") + srcChip("erp", "실적 대조") }
@@ -1017,7 +1025,7 @@
     T(function () { host.querySelector("[data-agh-verdict]").style.display = ""; }, 2400);
   };
 
-  /* ---------- Calibration 라운드테이블 + What-if 슬라이더 ---------- */
+  /* ---------- Calibration 라운드테이블 + 가정 슬라이더 ---------- */
   /* 난이도 보정 데모 — 합의 상수(계약): 원본 weighted_score는 불변, 화면 계산으로만 병기 */
   var DIFF_COEF = { S: 1.15, A: 1.0, B: 0.9 };
   function calibDiffData() {
@@ -1067,7 +1075,7 @@
     return '<div class="agh-brief" style="margin-top:14px"><span class="ic">⚖</span><div><b>난이도 보정 — 보정 전 → 후 병기 (데모 계수)</b><br>' +
       "수립 시점에 기록된 KR 난이도(S/A/B)를 가중치 평균해 개인 보정계수를 만들고, 종합 점수에 곱해 봅니다. " +
       "계수는 <b>데모 계수</b>(S 1.15 · A 1.00 · B 0.90)이며 <b>원본 점수는 바꾸지 않습니다</b> — 화면 계산으로만 병기합니다. " +
-      srcChip("talenx", "keyResults 난이도·가중치") + srcChip("erp", "evaluations 종합점수") + "</div></div>" +
+      srcChip("talenx", "KR 난이도·가중치") + srcChip("erp", "평가 종합점수") + "</div></div>" +
       '<table class="agh-table" style="margin-top:8px"><thead><tr><th>평가 대상</th><th>KR 난이도 구성</th><th>보정계수</th><th>보정 전</th><th></th><th>보정 후</th></tr></thead><tbody>' +
       dd.rows.map(function (r) {
         var diffTxt = ["S", "A", "B"].filter(function (g) { return r.mix[g]; }).map(function (g) { return g + " " + r.mix[g]; }).join(" · ");
@@ -1076,8 +1084,8 @@
       }).join("") + "</tbody></table>" +
       '<div class="agh-rows" style="margin-top:8px">' +
       '<div class="agh-prow">난이도 분포 · S <b>' + pctOf(dd.dist.S) + "%</b> · A <b>" + pctOf(dd.dist.A) + "%</b> · B <b>" + pctOf(dd.dist.B) + "%</b> <small>(표시 대상 " + dd.rows.length + "명 · KR " + distTot + "건)</small></div>" +
-      '<div class="agh-prow">난이도 근거 기록률 · <b>' + basisRate + "%</b> — 수립 시점에 남긴 difficulty_basis 기준</div>" +
-      '<div class="agh-prow ' + (dd.sNoBasis ? "bad" : "") + '">근거 없는 S 난이도 · <b>' + dd.sNoBasis + "건</b> — 근거 없는 S는 캘리브레이션 리스크입니다" + (dd.sNoBasis ? "" : " (현재 전 건 근거 확인됨)") + "</div></div>";
+      '<div class="agh-prow">난이도 근거 기록률 · <b>' + basisRate + "%</b> — 수립 시점에 남긴 난이도 근거 기준</div>" +
+      '<div class="agh-prow ' + (dd.sNoBasis ? "bad" : "") + '">근거 없는 S 난이도 · <b>' + dd.sNoBasis + "건</b> — 근거 없는 S는 등급 조정 리스크입니다" + (dd.sNoBasis ? "" : " (현재 전 건 근거 확인됨)") + "</div></div>";
   }
   RENDER.calib = function (host) {
     host = host || el.canvas;
@@ -1091,9 +1099,9 @@
       }).join("") + "</div>" +
       '<div class="agh-rlog" data-agh-rlog></div></div>' +
       '<div class="agh-calside"><div class="lab">등급 분포 · 조정 전 → 후</div><div data-agh-dist></div>' +
-      '<div class="agh-whatif"><div class="lab">What-if · 강제배분 상한 <b data-agh-cap>30%</b></div>' +
+      '<div class="agh-whatif"><div class="lab">가정 · 강제배분 상한 <b data-agh-cap>30%</b></div>' +
       '<input type="range" min="20" max="40" step="5" value="30" data-agh-capslider>' +
-      "<small>같은 계산 규칙에서 상한만 바꿔 즉시 재산출 · rule-exec.cal7</small></div>" +
+      "<small>같은 계산 규칙에서 상한만 바꿔 즉시 재산출 · 계산 규칙 재적용</small></div>" +
       '<div class="agh-sumbox" data-agh-calsum style="display:none"><b>심의 결과 요약</b><ul><li>강제배분 상한 준수 → A 25%</li><li>이상치 3건 → 0건으로 해소</li></ul></div></div></div>' +
       calibDiffHTML() +
       gateHTML("calib", ["조정안 승인", "수정", "보류"]);
@@ -1107,7 +1115,7 @@
       var cap = +slider.value;
       host.querySelector("[data-agh-cap]").textContent = cap + "%";
       renderDist(host, cap, true);
-      logAudit("What-if 재계산", "강제배분 상한 " + cap + "%", "rule-exec.cal7");
+      logAudit("가정 재계산", "강제배분 상한 " + cap + "%", "rule-exec.cal7");
     });
     var seq = [
       [0, "발의", "S 2명 하향 조정 발의 — 실적 대조 결과 설명력 부족"],
@@ -1166,7 +1174,7 @@
       gateHTML("review", ["섹션 승인", "수정", "보류"]);
     ctxPanelIf(host, [
       { tag: "문장 단위 통제권", title: "단계·문장 단위 승인", body: "AI가 ERP 실적·자기평가서를 근거로 초안을 실시간 생성하고 삽입 문장을 하이라이트로 표시 — 사용자는 문장 단위로 반영/무시합니다." },
-      { tag: "민감 이슈", title: "인라인 Assist", body: "저성과·민감 문구는 Agent가 병렬로 감지해 인라인에서 대안을 제시하고 변경 근거를 기록합니다." }
+      { tag: "민감 이슈", title: "인라인 도우미", body: "저성과·민감 문구는 에이전트가 동시에 감지해 문장 옆에서 대안을 제시하고 변경 근거를 기록합니다." }
     ], "");
     T(function () { host.querySelector("[data-agh-prop]").style.display = ""; ctxAppendIf(host, '<div class="agh-live">talenx, Slack, ERP 데이터를 인용해 \'핵심 성과\' 문단에 2문장을 제안했습니다.</div>'); }, 1300);
     host.addEventListener("click", function (e) {
@@ -1213,10 +1221,10 @@
     var rows = state.audit.length ? state.audit.map(function (a) {
       return '<tr><td>' + esc(a.at) + "</td><td>" + esc(a.actor) + "</td><td>" + esc(a.act) + "</td><td>" + esc(a.target) + '</td><td class="ref">' + esc(a.ref) + "</td></tr>";
     }).join("") : '<tr><td colspan="5" class="agh-emptycell">기록된 행위가 없습니다. 모든 결정·재계산·문장 반영이 여기에 남습니다.</td></tr>';
-    host.innerHTML = '<div class="agh-shead"><div><h2>감사 로그</h2><span class="agh-exp">전 행위 추적 가능한 기록 — 승인·정책·감사는 요청 계약 계층에 결합</span></div></div>' +
+    host.innerHTML = '<div class="agh-shead"><div><h2>감사 로그</h2><span class="agh-exp">모든 행위를 추적할 수 있는 기록 — 승인·정책·감사가 모든 요청에 함께 남습니다</span></div></div>' +
       '<table class="agh-table"><thead><tr><th>시각</th><th>행위자</th><th>행위</th><th>대상</th><th>참조</th></tr></thead><tbody>' + rows + "</tbody></table>";
     ctxPanelIf(host, [
-      { tag: "환각 통제", title: "감사가 신뢰를 만든다", body: "결과가 아니라 <b>보여준 과정</b>이 신뢰를 만듭니다. What-if 재계산·게이트 결정·문장 반영까지 전부 기록됩니다." }
+      { tag: "환각 통제", title: "감사가 신뢰를 만든다", body: "결과가 아니라 <b>보여준 과정</b>이 신뢰를 만듭니다. 가정 재계산·게이트 결정·문장 반영까지 전부 기록됩니다." }
     ], "");
   };
 
@@ -1254,7 +1262,7 @@
   var ALERTS = [
     { title: "가중치 합계 105%", body: "목표 가중치 합이 상한을 5%p 초과 — 조정안 준비됨", screen: "qw2" },
     { title: "체크인 지연 3명", body: "7일+ 무변동 3명 · 진척 지연 1명 — 초안 발송 대기", screen: "qw1" },
-    { title: "캘리브레이션 D-3", body: "개발본부 관대화 의심 — 심의 안건 검토 필요", screen: "calib" }
+    { title: "등급 조정 D-3", body: "개발본부 관대화 의심 — 심의 안건 검토 필요", screen: "calib" }
   ];
   function showAlerts() {
     if (!(window.TX && TX.menu)) return;
@@ -1272,9 +1280,9 @@
       popupShown = true;
       var a = ALERTS[role().key === "leader" ? 1 : role().key === "hr" ? 2 : 0];
       var card = h("div", "agh-popup");
-      card.innerHTML = '<div class="hd"><span class="dot"></span>Agent 알림 · 선제 감지</div>' +
+      card.innerHTML = '<div class="hd"><span class="dot"></span>에이전트 알림 · 선제 감지</div>' +
         "<b>" + esc(a.title) + "</b><p>" + esc(a.body) + "</p>" +
-        '<div class="acts"><button class="agh-btn primary" data-pgo>열어서 확인</button><button class="agh-btn" data-pdis>나중에</button></div><small>스누즈 1일 · 승인 후 승격</small>';
+        '<div class="acts"><button class="agh-btn primary" data-pgo>열어서 확인</button><button class="agh-btn" data-pdis>나중에</button></div><small>1일 뒤 다시 알림 · 승인하면 반영</small>';
       document.body.appendChild(card);
       requestAnimationFrame(function () { card.classList.add("show"); });
       card.addEventListener("click", function (e) {
@@ -1305,7 +1313,7 @@
     if (ai && window.EZAI) {
       var rdy = EZAI.ready && EZAI.ready();
       var md = EZAI.mode ? EZAI.mode() : "offline";
-      ai.textContent = rdy ? "● Claude 연결됨" : md === "offline" ? "○ 오프라인 목업" : "◐ 프록시 · 키 미설정";
+      ai.textContent = rdy ? "● Claude 연결됨" : md === "offline" ? "○ 오프라인 예시 응답" : "◐ AI 연결 전";
       ai.style.color = rdy ? "#15803D" : md === "offline" ? "" : "#B45309";
     }
     document.body.style.overflow = "hidden";

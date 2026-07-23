@@ -65,7 +65,7 @@
   }
   /* 시나리오 칩 문구 전송 (스트리밍 중이면 차단) */
   function sendScenario(key, fallback) {
-    if (!(window.Elizax && Elizax.sendRaw)) { toast("elizax 모듈을 찾을 수 없습니다", "warn"); return; }
+    if (!(window.Elizax && Elizax.sendRaw)) { toast("elizax를 불러오지 못했습니다", "warn"); return; }
     if (isStreaming()) { toast("응답 생성 중에는 전송할 수 없습니다", "warn"); return; }
     Elizax.sendRaw(chipOf(key, fallback));
   }
@@ -73,37 +73,37 @@
   /* ---------- 명령 정의 ---------- */
   /* type:"action"=즉시 실행 / type:"scn"=시나리오 칩 문구 전송 */
   var COMMANDS = [
-    { name: "새대화",       type: "action", desc: "현재 대화를 보관하고 새 세션을 시작합니다",
+    { name: "새대화",       type: "action", desc: "현재 대화를 보관하고 새 대화를 시작합니다",
       run: function () {
-        if (!(window.EZChat && EZChat.newSession)) { toast("대화 스토어를 찾을 수 없습니다", "warn"); return; }
+        if (!(window.EZChat && EZChat.newSession)) { toast("대화 기록을 불러오지 못했습니다", "warn"); return; }
         EZChat.newSession();
         toast("새 대화를 시작했습니다", "ok");
       } },
     { name: "초기화",       type: "action", desc: "현재 대화 내용을 초기화합니다",
       run: function () {
-        if (!(window.Elizax && Elizax.reset)) { toast("elizax 모듈을 찾을 수 없습니다", "warn"); return; }
+        if (!(window.Elizax && Elizax.reset)) { toast("elizax를 불러오지 못했습니다", "warn"); return; }
         Elizax.reset();
       } },
     { name: "중지",         type: "action", desc: "생성 중인 응답을 중지합니다",
       run: function () {
-        if (!(window.Elizax && Elizax.stopStreaming)) { toast("elizax 모듈을 찾을 수 없습니다", "warn"); return; }
+        if (!(window.Elizax && Elizax.stopStreaming)) { toast("elizax를 불러오지 못했습니다", "warn"); return; }
         if (!isStreaming()) { toast("진행 중인 생성이 없습니다", ""); return; }
         Elizax.stopStreaming();
       } },
     { name: "재생성",       type: "action", desc: "마지막 질문을 다시 전송해 응답을 재생성합니다",
       run: function () {
-        if (!(window.Elizax && Elizax.regenerate)) { toast("elizax 모듈을 찾을 수 없습니다", "warn"); return; }
+        if (!(window.Elizax && Elizax.regenerate)) { toast("elizax를 불러오지 못했습니다", "warn"); return; }
         if (isStreaming()) { toast("응답 생성 중에는 재생성할 수 없습니다", "warn"); return; }
         Elizax.regenerate();
       } },
-    { name: "전체화면",     type: "action", desc: "전체화면 허브(공유 대화)를 엽니다",
+    { name: "전체화면",     type: "action", desc: "전체화면 워크스페이스(공유 대화)를 엽니다",
       run: function () {
-        if (!(window.TXAgent && TXAgent.openHub)) { toast("허브 모듈을 찾을 수 없습니다", "warn"); return; }
+        if (!(window.TXAgent && TXAgent.openHub)) { toast("워크스페이스를 열 수 없습니다", "warn"); return; }
         TXAgent.openHub("chat");
       } },
     { name: "프로세스맵",   type: "action", desc: "성과 사이클의 과정과 근거를 한 장으로 봅니다",
       run: function () {
-        if (!(window.EZJourney && EZJourney.open)) { toast("프로세스 맵 모듈을 찾을 수 없습니다", "warn"); return; }
+        if (!(window.EZJourney && EZJourney.open)) { toast("프로세스 맵을 불러오지 못했습니다", "warn"); return; }
         EZJourney.open();
       } },
     { name: "체크인",       type: "scn", key: "qw1",    fb: "주간 체크인 브리핑 만들어줘" },
@@ -113,7 +113,7 @@
     { name: "피드백정제",   type: "scn", key: "qw6",    fb: "피드백 문장 다듬어줘" },
     { name: "코멘트",       type: "scn", key: "qw3",    fb: "평가 코멘트 초안 써줘" },
     { name: "편향",         type: "scn", key: "qw5",    fb: "평가 편향 점검해줘" },
-    { name: "캘리브레이션", type: "scn", key: "calib",  fb: "등급 캘리브레이션 심의 열어줘" },
+    { name: "등급 조정", type: "scn", key: "calib",  fb: "등급 조정 심의 열어줘" },
     { name: "리뷰",         type: "scn", key: "review", fb: "리뷰 초안 같이 쓰자" }
   ];
   /* 시나리오형 설명 = 실제 전송될 칩 문구(런타임 조회) */
@@ -158,7 +158,7 @@
     var el = document.createElement("div");
     el.className = "ezcx-slash-pop";
     el.setAttribute("role", "listbox");
-    el.innerHTML = '<div class="ezcx-slash-cap">슬래시 명령</div><div class="ezcx-slash-list"></div>';
+    el.innerHTML = '<div class="ezcx-slash-cap">빠른 명령</div><div class="ezcx-slash-list"></div>';
     /* mousedown: 입력창 포커스 이탈(=팝업 닫힘) 전에 확정 처리 */
     el.addEventListener("mousedown", function (e) {
       var it = e.target && e.target.closest ? e.target.closest(".ezcx-slash-item") : null;
@@ -192,7 +192,7 @@
       html += '<div class="ezcx-slash-item' + (i === pop.sel ? " sel" : "") + '" data-idx="' + i + '" role="option">' +
         '<span class="ezcx-slash-name">/' + esc(c.name) + "</span>" +
         '<span class="ezcx-slash-desc">' + esc(descOf(c)) + "</span>" +
-        '<span class="ezcx-slash-tag">' + (c.type === "scn" ? "시나리오" : "액션") + "</span></div>";
+        '<span class="ezcx-slash-tag">' + (c.type === "scn" ? "시나리오" : "실행") + "</span></div>";
     }
     listEl.innerHTML = html;
     var selEl = listEl.querySelector(".ezcx-slash-item.sel");
