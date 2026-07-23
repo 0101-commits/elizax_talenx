@@ -1382,6 +1382,22 @@
     var ev = evalByEmp[owner.emp_id] || {};
     var tasks = prof && prof.tasks ? Object.keys(prof.tasks) : [];
     var skills = prof && prof.skills ? prof.skills.slice(0, 4) : [];
+    /* 스킬↔역량 크로스워크(큐레이션 매핑표) — 7축 컬럼 + free-text 키워드 → 역량 D1–D5.
+       세 어휘(직무기술서 skills·7축 skills.columns·역량 D1–D5)에 FK가 없어, 매핑표로 연결을 실체화. */
+    var XW = { "분석적 사고": "D3", "스크립팅·자동화": "D3", "협업": "D2", "의사소통": "D2", "적극성": "D4", "문제해결력": "D4", "리더십": "D1" };
+    function xwalk(s) {
+      if (XW[s]) return XW[s];
+      if (/리더|leadership|이끌|주도|경영|전략 기획/i.test(s)) return "D1";
+      if (/협업|소통|커뮤니|관계|조율|고객/i.test(s)) return "D2";
+      if (/분석|데이터|기술|전문|설계|개발|스크립|시장|회계|재무|보안|엔지니어/i.test(s)) return "D3";
+      if (/실행|추진|관리|문제 ?해결|운영|프로젝트|기획/i.test(s)) return "D4";
+      if (/학습|성장|개선|혁신|변화|육성/i.test(s)) return "D5";
+      return "D3";
+    }
+    var compName = {}; comps.forEach(function (c) { compName[c.dimension_id] = c.name; });
+    var skillLinks = skills.map(function (s) { var dd = xwalk(s); return { s: s, d: dd, dn: compName[dd] || dd }; });
+    var mappedD = {}; skillLinks.forEach(function (l) { mappedD[l.d] = true; });
+    var covPct = skills.length ? Math.round(skillLinks.filter(function (l) { return l.d; }).length / skills.length * 100) : 0;
 
     function colN(kind, label, inner, inferred) {
       return '<div class="agh-cmcol"><div class="agh-cmh ' + kind + '">' + esc(label) + '</div>' +
@@ -1399,9 +1415,9 @@
         ? colN("s4", "직무 (R&R)", '<b>' + esc(prof.title) + '</b><span>' + esc(tasks[0] || "") + (tasks[1] ? " 외 " + (tasks.length - 1) : "") + '</span>', true)
         : colN("s4", "직무 (R&R)", '<b>직무 프로파일 미연결</b><span>' + esc(owner.jobTitle || owner.name || "") + ' — 프로파일 없음</span>', true)) +
       '<div class="agh-cmarrow inf">┈</div>' +
-      colN("s5", "스킬", skills.length ? skills.map(function (s) { return '<span>· ' + esc(s) + '</span>'; }).join("") : '<span>직무 미연결로 스킬 근거 없음</span>', true) +
-      '<div class="agh-cmarrow inf">┈</div>' +
-      colN("s6", "역량 (D1–D5)", comps.slice(0, 5).map(function (c) { return '<span>· ' + esc(c.dimension_id) + ' ' + esc(c.name) + '</span>'; }).join("") || '<span>역량 사전</span>', true) +
+      colN("s5", "스킬", skills.length ? skillLinks.map(function (l) { return '<span>· ' + esc(l.s) + ' <em class="xd">' + l.d + '</em></span>'; }).join("") : '<span>직무 미연결로 스킬 근거 없음</span>', !prof) +
+      '<div class="agh-cmarrow xw" title="직무역량 매핑표(큐레이션)">⇢</div>' +
+      colN("s6", "역량 (D1–D5)", comps.slice(0, 5).map(function (c) { var on = mappedD[c.dimension_id]; return '<span' + (on ? ' class="xon"' : '') + '>· ' + esc(c.dimension_id) + ' ' + esc(c.name) + (on ? ' ✓' : '') + '</span>'; }).join("") || '<span>역량 사전</span>') +
       '<div class="agh-cmarrow">→</div>' +
       colN("s7", "평가", '<b>' + esc(ev.grade || "-") + '등급</b><span>종합 ' + (ev.weighted_score != null ? ev.weighted_score : "-") + '</span>');
 
@@ -1411,10 +1427,11 @@
         '<span class="agh-auditchip">⛨ 감사 기록됨 · 권한 내 전사 조회</span>' +
         '<span class="agh-cmstat">직무 프로파일 연결 <b>' + withProf + '/' + n + ' (' + rate + '%)</b></span>' +
         '<span class="agh-cmstat">직무 근거 있는 목표 <b>' + goalRate + '%</b></span>' +
+        '<span class="agh-cmstat">스킬–역량 매핑 <b>' + covPct + '%</b></span>' +
       '</div>' +
       '<div class="agh-cmwrap">' + chain + '</div>' +
-      '<div class="agh-cmlegend"><span class="sol">— 실제 데이터 연결(FK)</span><span class="dsh">┈ AI 추론 연결(데이터에 FK 부재 · 근거 필요)</span></div>' +
-      '<div class="agh-verdict"><b>조직목표→개인목표→평가</b>는 실제 연결(FK)이지만, <b>전략→목표·목표→직무·스킬→역량</b>은 데이터에 연결 고리가 없어 AI가 근거로 이어야 함(점선). 전사 <b>' + (n - withProf) + '명</b>이 직무 프로파일 미연결 — 직무 없이 세운 목표는 평가 단계에서 흔들립니다. ' + srcChip("talenx", "objectives.fk") + srcChip("rule", "직무기술서 " + Object.keys(profs).length + "종") + '</div>' +
+      '<div class="agh-cmlegend"><span class="sol">— 실제 데이터 연결(FK)</span><span class="cur">⇢ 큐레이션 매핑(직무역량 매핑표)</span><span class="dsh">┈ AI 추론(FK 부재 · 근거 필요)</span></div>' +
+      '<div class="agh-verdict"><b>조직목표→개인목표→평가</b>는 실제 연결(FK), <b>스킬→역량</b>은 직무역량 <b>매핑표(큐레이션)</b>로 실체화(✓ 표시된 ' + Object.keys(mappedD).length + '개 역량 연결). 남은 점선은 <b>전략→목표·목표→직무</b> — 전사 <b>' + (n - withProf) + '명</b> 직무 프로파일 미연결이 근본 원인이라, 목표가 직무에 정박하지 못하면 평가 단계에서 흔들립니다. ' + srcChip("talenx", "objectives.fk") + srcChip("rule", "직무역량 매핑표") + '</div>' +
       '<div class="agh-linkrow"><button class="agh-btn" data-cm-wf>What-if · 직무 프로파일 100% 연결 가정</button><span data-cm-wfout class="agh-cmwfout"></span></div>' +
       gateHTML("connmap", ["AI 추론 연결 승인", "직무 매핑 요청", "보류"]);
     ctxPanelIf(host, [

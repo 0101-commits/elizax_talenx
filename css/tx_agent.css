@@ -523,3 +523,8 @@ button.agh-gitem:active { transform: scale(.95); }
 .agh-pmnode.open .agh-pmwarn { display: block; }
 .agh-pmnode .agh-auditchip { margin-top: 7px; }
 .agh-pmnode:not(.open) .agh-pmev { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* 스킬↔역량 크로스워크 */
+.agh-cmn em.xd { display: inline; color: #fff; background: #3E8E8B; font-style: normal; font-weight: 800; font-size: 8.5px; border-radius: 4px; padding: 0 4px; margin-left: 3px; }
+.agh-cmn .xon { color: #0E7C86; font-weight: 700; }
+.agh-cmarrow.xw { color: #0E7C86; }
+.agh-cmlegend .cur { color: #0E7C86; font-weight: 700; }
