@@ -43,6 +43,10 @@
       setTimeout(function () {
         try {
           var a = document.querySelector('#s-' + key + ' .subnav a[data-p="' + subP + '"]');
+          if (!a) { /* s-att 등 data-p 없는 subnav — 순번 폴백 */
+            var as = document.querySelectorAll('#s-' + key + ' .subnav a');
+            a = as[subP] || null;
+          }
           if (a) a.click();
         } catch (e) {}
       }, 40);
@@ -569,21 +573,30 @@
   }
 
   function buildAttCard() {
+    /* 우측 '월 근무통계' 카드(statgrid)에서 수치를 읽어 동일 원천으로 정합.
+       소스 없는 항목(평균 출퇴근·지각 등 하드코딩)은 제거. */
+    var sg = {};
+    document.querySelectorAll('#s-home .wcard .statcell').forEach(function (c) {
+      var k = c.querySelector('.k'), v = c.querySelector('.v');
+      if (k && v) sg[(k.textContent || '').replace(/\s*i\s*$/, '').trim()] = (v.textContent || '').trim();
+    });
+    function g(k) { return sg[k] || '-'; }
+    var bigEl = document.querySelector('#s-home .wcard .statbig');
+    var big = (bigEl && bigEl.childNodes[0] && String(bigEl.childNodes[0].nodeValue || '').trim()) || '0시간 0분';
     var card = el('div', 'card txf-attcard');
     card.innerHTML =
       '<div class="ct"><h3>근태 통계 <span class="chev">›</span></h3></div>' +
       '<div class="body">' +
         '<div class="txf-att-avg">' +
-          '<div class="txf-att-a"><b>8시간 2분</b><span>평균 근무시간</span></div>' +
-          '<div class="txf-att-a"><b>09:02</b><span>평균 출근시간</span></div>' +
-          '<div class="txf-att-a"><b>18:24</b><span>평균 퇴근시간</span></div>' +
+          '<div class="txf-att-a"><b>' + esc(big) + '</b><span>이번 달 실근무</span></div>' +
+          '<div class="txf-att-a"><b>' + esc(g('근무일')) + '</b><span>근무일</span></div>' +
+          '<div class="txf-att-a"><b>' + esc(g('인정 근무시간')) + '</b><span>인정 근무시간</span></div>' +
         '</div>' +
         '<div class="txf-att-cells">' +
-          '<div class="txf-att-c"><b>3</b><span>휴가 사용일</span></div>' +
-          '<div class="txf-att-c"><b>1</b><span>휴일 근무일</span></div>' +
-          '<div class="txf-att-c hl"><b>2</b><span>근무기록 누락일</span></div>' +
-          '<div class="txf-att-c"><b>1</b><span>지각 횟수</span></div>' +
-          '<div class="txf-att-c"><b>0</b><span>조퇴 횟수</span></div>' +
+          [['휴가사용', '휴가 사용'], ['휴일 근무시간', '휴일 근무'], ['연장 근무시간', '연장 근무'],
+           ['야간 근무시간', '야간 근무'], ['기타 근무시간', '기타 근무']].map(function (p) {
+            return '<div class="txf-att-c"><b>' + esc(g(p[0])) + '</b><span>' + p[1] + '</span></div>';
+          }).join('') +
         '</div>' +
       '</div>';
     cap(card.querySelector('.ct'), function () { nav('att'); });
@@ -683,7 +696,7 @@
     /* '팀 평균 달성률'은 관리자 톤 카드 → leader/hr/exec만 노출 */
     if (!isMember) wrap.appendChild(card('팀 평균 달성률',
       '<div class="txh-big">' + avg + '%</div><div class="txh-sub">' + esc(CU.orgName || '') + ' · 목표 ' + teamObjs.length + '건 평균</div>' + teamRows, 'perf', 0));
-    wrap.appendChild(card('다가오는 중간점검', checkRows, 'perf', 1));
+    wrap.appendChild(card('다가오는 중간점검', checkRows, 'perf', 2)); /* p=2 = 1:1 미팅 탭 */
     wrap.appendChild(card('최근 피드백', fbRows, 'perf', 1));
     return wrap;
   }
@@ -763,6 +776,46 @@
       if (curRole()==='member'){ var _dc=cardByTitle(home,'처리할 문서'); if(_dc)_dc.style.display='none'; }
     }
 
+    /* ---- 나의 목표: TALENX_DATA objectives(owner=본인) 실계산으로 카운트·목록 정합 ---- */
+    var goalCard = cardByTitle(home, '나의 목표');
+    if (goalCard) {
+      var myObjs = (D.objectives || []).filter(function (o) { return o.owner_emp_id === CU.emp_id; });
+      var orgObjs = myObjs.filter(function (o) { return o.level !== 'individual'; });
+      var gr = goalCard.querySelector('.ct .r');
+      if (gr) gr.innerHTML =
+        '<span class="ck">✓ 전체 <b>' + myObjs.length + '</b></span>' +
+        '<span class="ck">· 조직 ' + orgObjs.length + '</span>' +
+        '<span class="ck">· 개인 ' + (myObjs.length - orgObjs.length) + '</span>';
+      var gBody = goalCard.querySelector('.body');
+      if (gBody) {
+        if (!myObjs.length) gBody.innerHTML = '<div class="empty">목표가 없습니다.</div>';
+        else {
+          var gAvg = Math.round(myObjs.reduce(function (a, o) { return a + (o.progress || 0); }, 0) / myObjs.length);
+          gBody.innerHTML =
+            '<div class="goalhead"><span></span><div class="a"><span>전체 진행률</span>' +
+            '<span class="gbar" style="width:90px"><i style="width:' + gAvg + '%"></i></span>' +
+            '<b style="color:var(--ink)">' + gAvg + '%</b></div></div>' +
+            myObjs.map(function (o) {
+              var pr = Math.round(o.progress || 0);
+              return '<div class="goal"><div class="g1"><span class="gname">' + esc(o.title) + '</span>' +
+                '<span class="gs"><span class="chip-prog">' + esc(o.status || '진행중') + '</span></span>' +
+                '<span class="gbarwrap"><span class="gbar"><i style="width:' + pr + '%"></i></span></span>' +
+                '<span class="gp">' + pr + '%</span></div>' +
+                '<div class="g2"><span class="badge b-org">' + (o.level === 'individual' ? '개인' : '조직') + '</span></div></div>';
+            }).join('');
+        }
+      }
+    }
+
+    /* ---- 처리할 문서: 결재함(받은 문서) 승인필요 실건수와 정합 ---- */
+    var wfHead = cardByTitle(home, '처리할 문서');
+    if (wfHead) {
+      /* ponytail: tx_fix_wf.js DATA.received(need·진행중) 4건과 수동 동기 — 모듈 비공개라 직접 참조 불가, wf 픽스처 변경 시 함께 갱신 */
+      var needN = curRole() === 'member' ? 0 : 4;
+      var needB = wfHead.querySelector('.ct .r .ck b');
+      if (needB) needB.textContent = String(needN);
+    }
+
     /* ---- widget navigation (chevrons + rows) ---- */
     function wireCard(title, key, subP) {
       var parts = title.split('|');
@@ -776,7 +829,7 @@
       return c;
     }
     wireCard('나의 목표', 'perf', 0);
-    wireCard('예정 휴가', 'att', null); /* chevron+rows → 근무관리 (was dead tx_revive fallback) */
+    wireCard('예정 휴가', 'att', 1); /* p=1 = 내 휴가 탭 */
     var wfCard = wireCard('처리할 문서', 'wf', null);
     var fbC = wireCard('피드백|360', 'perf', 1);
     wireCard('360 피드백', 'msf', null);

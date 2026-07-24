@@ -857,6 +857,39 @@
   };
 
   /* ---------- QW6 · 피드백 문장 정제 ---------- */
+  /* 실AI 패턴(tx_fix_msf.js 검증): 오프라인 대본을 먼저 그리고,
+     AI 연결 시(EZAI.ready) 원문을 실제로 정제해 교체한다. 오프라인이면 대본 유지. */
+  var QW6_SRC = "문서 정리가 계속 늦어요. 여러 번 얘기했는데 개선이 안 보이네요. 좀 더 신경 써 주세요.";
+  function aiLive() { return !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready()); }
+  function qw6Refine(host, tone) {
+    if (!aiLive()) return false;
+    var p = host.querySelector("[data-agh-refined]");
+    if (!p) return false;
+    var old = p.querySelector("[data-agh-aiload]");
+    if (old) old.remove();
+    p.insertAdjacentHTML("beforeend",
+      ' <em data-agh-aiload style="color:#98A2B3;font-style:normal"><i class="agh-spin"></i> elizax가 원문을 다시 정제하는 중…</em>');
+    EZAI.agent({
+      maxTurns: 2, maxTokens: 500,
+      system: "당신은 elizax — 피드백 문장 정제 도우미입니다. 매니저의 피드백 원문을 SBI(상황→행동→영향) 구조로 정제합니다. " +
+        "성과 인정을 먼저 넣고, 단정·비교 표현을 걸러 사실·행동 중심의 제안형 문장으로 끝냅니다. " +
+        "확인된 사실: 공유 문서 3건이 마감 하루 뒤 제출됨(스프린트 보드) · 릴리스 노트는 팀 내 참고도가 가장 높음. " +
+        "요청된 톤을 반영하되 의도는 유지합니다. 정제문 한 단락만 출력 — 머리말·설명 금지. 도구 호출 불필요.",
+      messages: [{ role: "user", content: "톤: " + (tone || "직설") + "\n원문: " + QW6_SRC }],
+      onDone: function (text) {
+        var em = p.querySelector("[data-agh-aiload]");
+        if (em) em.remove();
+        if (text && text.trim()) {
+          p.setAttribute("data-ai-final", "1");
+          p.innerHTML = esc(text.trim()).replace(/\n+/g, "<br>") +
+            ' <em style="color:#98A2B3;font-style:normal">· elizax 실시간 정제</em>';
+          logAudit("초안 생성됨", "피드백 정제 · 톤 " + (tone || "직설"), "qw6.ai");
+        }
+      },
+      onError: function () { var em = p.querySelector("[data-agh-aiload]"); if (em) em.remove(); }
+    });
+    return true;
+  }
   RENDER.qw6 = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
@@ -878,21 +911,75 @@
       { tag: "무엇을 왜 바꿨나", title: "구조·사실·톤", body: "<b>구조</b> 개선점 나열 → 인정→SBI→제안 순서 재배열<br><b>사실</b> '계속·여러 번' 대신 보드에서 확인된 <b>지연 3건</b>으로 특정<br><b>톤</b> 지시형 명령을 <b>제안형 질문</b>으로(따뜻 유지). 감정·의도는 그대로 — 문장의 주인은 매니저입니다." }
     ], "");
     T(function () {
-      host.querySelector("[data-agh-refined]").innerHTML =
+      var p = host.querySelector("[data-agh-refined]");
+      /* 실AI 결과가 이미 도착했으면 오프라인 대본으로 덮지 않는다 */
+      if (p && !p.getAttribute("data-ai-final")) p.innerHTML =
         "지난 스프린트 릴리스 노트는 팀에서 가장 참고가 많이 됐어요<b>(인정)</b>. 다만 공유 문서 3건이 마감 하루 뒤 올라와<b>(상황·행동)</b> 후속 리뷰가 밀렸습니다<b>(영향)</b>. 다음엔 마감 반나절 전 초안 공유부터 같이 잡아볼까요?";
       var rc = host.querySelector("[data-agh-refchips]");
       rc.style.display = ""; rc.innerHTML = '<span class="agh-flag ok">S·B·I 구조 채움</span>' + srcChip("talenx", "근거 · 스프린트 보드 3건");
       host.querySelector("[data-agh-safety]").style.display = "";
+      /* AI 연결 시 원문을 실제로 정제해 교체 — 오프라인이면 no-op */
+      if (p && !p.getAttribute("data-ai-final")) qw6Refine(host, "직설");
     }, 1400);
     host.addEventListener("click", function (e) {
       var t = e.target.closest("[data-tone]");
       if (!t) return;
       Array.prototype.forEach.call(host.querySelectorAll("[data-tone]"), function (b) { b.classList.toggle("on", b === t); });
-      toast("톤 '" + t.getAttribute("data-tone") + "' 기준으로 재정제했습니다. 전달 방식만 바뀌고 의도는 유지됩니다.");
+      var tone = t.getAttribute("data-tone");
+      /* AI 연결 시 선택 톤으로 실제 재정제, 오프라인이면 기존 안내만 */
+      if (qw6Refine(host, tone)) toast("톤 '" + tone + "' 기준으로 다시 정제하는 중 — 전달 방식만 바뀌고 의도는 유지됩니다.");
+      else toast("톤 '" + tone + "' 기준으로 재정제했습니다. 전달 방식만 바뀌고 의도는 유지됩니다.");
     });
   };
 
   /* ---------- QW3 · 평가 코멘트 근거초안 ---------- */
+  /* 실AI: 도구(get_objectives·get_checkins)로 실데이터를 조회한 뒤
+     문장별 출처 마커 {{src:talenx|라벨}} 가 붙은 코멘트 초안을 생성해
+     오프라인 대본의 서술 초안을 교체한다. 오프라인·오류 시 대본 유지. */
+  function qw3Draft(host) {
+    if (!aiLive() || !(window.EZTools && EZTools.schemas)) return;
+    var tgt = team()[0] || CU();
+    var who = host.querySelector(".agh-workpanel .who");
+    if (who) who.textContent = tgt.name + " · 실행력";
+    var wlBox = host.querySelector("[data-agh-wl]");
+    if (wlBox) wlBox.insertAdjacentHTML("beforeend",
+      '<div class="wl" data-agh-qw3live><span class="ck">◐</span><span>elizax 실AI — 실제 데이터 조회 중… <b data-agh-qw3tool></b></span></div>');
+    function toolB() { return host.querySelector("[data-agh-qw3tool]"); }
+    EZAI.agent({
+      maxTurns: 6, maxTokens: 900,
+      system: "당신은 elizax — 평가 코멘트 근거초안 작성자입니다. 반드시 도구(get_objectives, get_checkins, 필요 시 get_employee_profile)로 대상자의 실데이터를 먼저 조회하고, " +
+        "조회 결과에 있는 수치·사실만 인용해 평가 코멘트 초안 2~4문장을 작성합니다. " +
+        "각 문장 끝에 출처 마커를 하나 붙입니다 — 형식: {{src:talenx|근거 라벨}} 또는 {{src:erp|근거 라벨}} 또는 {{src:rule|평가규정 라벨}}. " +
+        "근거가 조회되지 않으면 추정하지 말고 '기록이 없어 판단을 멈췄습니다'라고 씁니다(정지 원칙). " +
+        "등급 확정 표현 금지 — 제안 어조 유지. 문장과 마커 외 머리말·설명 금지.",
+      messages: [{ role: "user", content: "대상자: " + tgt.name + " (" + tgt.emp_id + ") · 평가 항목: 실행력. 목표·체크인 기록을 조회해 근거 인용 코멘트 초안을 작성해줘." }],
+      onTool: function (name) {
+        var b = toolB();
+        if (b) b.textContent = (EZTools.labelOf ? EZTools.labelOf(name) : name) + "…";
+      },
+      onToolResult: function (name, r, summary) {
+        var b = toolB();
+        if (b) b.textContent = summary || "";
+      },
+      onDone: function (text) {
+        var row = host.querySelector("[data-agh-qw3live]");
+        if (text && text.trim()) {
+          var html = esc(text.trim())
+            .replace(/\{\{src:(talenx|erp|rule)\|([^}]{1,60})\}\}/g, function (m0, k, lab) { return srcChip(k, lab); })
+            .replace(/\n+/g, "<br>");
+          var sent = host.querySelector(".agh-sent");
+          if (sent) sent.innerHTML = "서술 초안 — " + html + " — 문장별 출처 부착 · elizax 실시간 생성";
+          if (row) { row.classList.add("done"); row.querySelector(".ck").textContent = "✓"; }
+          logAudit("초안 생성됨", tgt.name + " 평가 코멘트 · 실데이터 근거", "qw3.ai");
+          ctxAppendIf(host, '<div class="agh-live ok">elizax가 실제 목표·체크인 기록을 조회해 코멘트 초안을 다시 썼습니다. 확정은 결정 게이트에서.</div>');
+        } else if (row) row.remove();
+      },
+      onError: function () {
+        var row = host.querySelector("[data-agh-qw3live]");
+        if (row) row.remove(); /* 오프라인 대본 그대로 유지 */
+      }
+    });
+  }
   RENDER.qw3 = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
@@ -930,6 +1017,7 @@
       }, 700 + i * 800);
     });
     T(function () { host.querySelector("[data-agh-done]").style.display = ""; ctxAppendIf(host, '<div class="agh-live ok">초안 생성됨 — 문장 단위 출처가 붙은 편집 가능한 초안입니다. 승인·수정·보류로 확정.</div>'); }, 3400);
+    qw3Draft(host); /* AI 연결 시 실데이터 기반 초안으로 교체 — 오프라인이면 no-op */
   };
 
   /* ---------- HOLD · 근거 부족 시 정지+질문 (확신 없으면 진행하지 않는다) ---------- */
@@ -1113,6 +1201,7 @@
     var slider = host.querySelector("[data-agh-capslider]");
     slider.addEventListener("input", function () {
       var cap = +slider.value;
+      state.whatifCap = cap; /* EZCalc.simulate() 기본값이 현재 슬라이더를 따르도록 동기화 */
       host.querySelector("[data-agh-cap]").textContent = cap + "%";
       renderDist(host, cap, true);
       logAudit("가정 재계산", "강제배분 상한 " + cap + "%", "rule-exec.cal7");
@@ -1138,15 +1227,51 @@
       renderDist(host, +slider.value, true);
     }, 4500);
   };
+  /* ---------------- EZCalc — 등급 조정 실계산 공개 계약 (순수 함수 · DOM 비접촉) ----------------
+     다른 모듈(AI 도구 연결 등)이 호출하는 가정 계산(what-if) 엔진.
+     원본 weighted_score·데이터는 불변 — 모든 결과는 화면·도구용 계산값.
+
+     EZCalc.simulate(params) → 재산출 결과
+       params: {
+         cap_pct?:           number  강제배분 상한 % (20~40 권장 · 기본 = 현재 슬라이더 값)
+         achievement_delta?: number  달성 가정치 %p — 개인 종합점수에 더해 볼 델타 (기본 0)
+       }
+       returns: {
+         cap_pct, achievement_delta,
+         before:      { S,A,B,C,D },   // 조정 전 등급 분포 (%)
+         after:       { S,A,B,C,D },   // 상한 적용 후 분포 (%)
+         gradeChange: [ { grade, before_pct, after_pct, delta_pp } ],
+         people:      [ { name, coef, before, after } ]  // 난이도 보정계수(coef) × (원점수+델타)
+       }
+     EZCalc.calibDiff() → 난이도 보정 원자료 { rows, dist, basisTot, basisHas, sNoBasis } */
+  function simulateCalib(params) {
+    params = params || {};
+    var cap = (params.cap_pct == null) ? state.whatifCap : +params.cap_pct;
+    var delta = +(params.achievement_delta || 0) || 0;
+    var base = { S: 8, A: 32, B: 44, C: 12, D: 4 };
+    var adjS = Math.min(base.S, Math.round(cap * 0.2));
+    var adj = { S: adjS, A: Math.min(base.A, cap - adjS) };
+    adj.B = base.B + (base.S - adj.S) + (base.A - adj.A) - 2;
+    adj.C = base.C + 2;
+    adj.D = base.D;
+    var gradeChange = ["S", "A", "B", "C", "D"].map(function (g) {
+      return { grade: g, before_pct: base[g], after_pct: adj[g], delta_pp: adj[g] - base[g] };
+    });
+    var people = calibDiffData().rows.map(function (r) {
+      var b = Math.round((r.before + delta) * 10) / 10;
+      return { name: r.name, coef: r.coef, before: b, after: Math.round(b * r.coef * 10) / 10 };
+    });
+    return { cap_pct: cap, achievement_delta: delta, before: base, after: adj, gradeChange: gradeChange, people: people };
+  }
+  window.EZCalc = { simulate: simulateCalib, calibDiff: calibDiffData };
+
   function renderDist(root, cap, after) {
     var host = root.querySelector("[data-agh-dist]");
     if (!host) return;
-    var base = { S: 8, A: 32, B: 44, C: 12, D: 4 };
-    var adj = { S: Math.min(base.S, Math.round(cap * 0.2)), A: Math.min(base.A, cap - Math.min(base.S, Math.round(cap * 0.2))) };
-    adj.B = base.B + (base.S - adj.S) + (base.A - adj.A) - 2; adj.C = base.C + 2; adj.D = base.D;
-    host.innerHTML = Object.keys(base).map(function (g) {
-      var b = base[g], a2 = after ? adj[g] : b, d = a2 - b;
-      return '<div class="agh-drow"><b>' + g + '</b><div class="tr"><i style="width:' + b * 2 + 'px"></i></div><span>' + b + "%</span><em>→</em>" +
+    var sim = simulateCalib({ cap_pct: cap });
+    host.innerHTML = sim.gradeChange.map(function (gc) {
+      var b = gc.before_pct, a2 = after ? gc.after_pct : b, d = a2 - b;
+      return '<div class="agh-drow"><b>' + gc.grade + '</b><div class="tr"><i style="width:' + b * 2 + 'px"></i></div><span>' + b + "%</span><em>→</em>" +
         '<div class="tr af"><i style="width:' + a2 * 2 + 'px"></i></div><span>' + a2 + "%</span>" +
         '<small class="' + (d < 0 ? "neg" : d > 0 ? "pos" : "") + '">' + (d > 0 ? "+" : "") + d + "%p</small></div>";
     }).join("");
@@ -1259,15 +1384,20 @@
   /* ============================================================
      선제 알림 (형태② — 에이전트가 먼저 말 건다)
      ============================================================ */
-  var ALERTS = [
-    { title: "가중치 합계 105%", body: "목표 가중치 합이 상한을 5%p 초과 — 조정안 준비됨", screen: "qw2" },
-    { title: "체크인 지연 3명", body: "7일+ 무변동 3명 · 진척 지연 1명 — 초안 발송 대기", screen: "qw1" },
-    { title: "등급 조정 D-3", body: "개발본부 관대화 의심 — 심의 안건 검토 필요", screen: "calib" }
-  ];
+  /* 알림 문구를 하드코딩 대신 qw7OpsRows() 실계산(체크인 공백·드리프트)으로 생성 */
+  function alertsNow() {
+    var ops = qw7OpsRows();
+    var g = ops.gaps[0], dr = ops.drifts[0];
+    return [
+      { title: "가중치 합계 105%", body: "목표 가중치 합이 상한을 5%p 초과 — 조정안 준비됨", screen: "qw2" },
+      { title: "체크인 공백 " + ops.gaps.length + "건", body: "「" + g.title + "」 " + g.gap + "일 무체크인 · 진척 드리프트 −" + dr.drift + "%p — 초안 발송 대기", screen: "qw1" },
+      { title: "등급 조정 D-3", body: "개발본부 관대화 의심 — 심의 안건 검토 필요", screen: "calib" }
+    ];
+  }
   function showAlerts() {
     if (!(window.TX && TX.menu)) return;
     var btn = el.root.querySelector("[data-agh-alerts]");
-    TX.menu(btn, ALERTS.map(function (a) {
+    TX.menu(btn, alertsNow().map(function (a) {
       return { label: "▲ " + a.title + " — " + a.body, onClick: function () { showScreen(a.screen); } };
     }));
   }
@@ -1278,7 +1408,7 @@
     setTimeout(function () {
       if (popupShown || state.open) return;
       popupShown = true;
-      var a = ALERTS[role().key === "leader" ? 1 : role().key === "hr" ? 2 : 0];
+      var a = alertsNow()[role().key === "leader" ? 1 : role().key === "hr" ? 2 : 0];
       var card = h("div", "agh-popup");
       card.innerHTML = '<div class="hd"><span class="dot"></span>에이전트 알림 · 선제 감지</div>' +
         "<b>" + esc(a.title) + "</b><p>" + esc(a.body) + "</p>" +
@@ -1310,7 +1440,7 @@
     if (rc) rc.textContent = role().label + " 관점 · " + CU().name;
     /* AI 연결 상태 칩 — 실제 EZAI 모드 반영 */
     var ac = el.root.querySelector("[data-agh-alertcnt]");
-    if (ac) ac.textContent = ALERTS.length;
+    if (ac) ac.textContent = alertsNow().length;
     var ai = el.root.querySelector("[data-agh-ai]");
     if (ai && window.EZAI) {
       var rdy = EZAI.ready && EZAI.ready();

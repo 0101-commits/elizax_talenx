@@ -20,6 +20,46 @@
   function evalOf(id) { return evalIx[id] || (D.evalByEmp && D.evalByEmp[id]) || null; }
   function mgrOf(e) { return (e && F.emp(e.manager_id)) || CU; }
 
+  /* ---------- 제출 상태 (실데이터) ----------
+     1) sessionStorage 제출 기록(이 세션에서 실제 제출한 것) 우선
+     2) 체크인 이력 존재 = 착수·제출로 간주 (ponytail: 체크인 프록시 — 실제 제출 API 생기면 교체)
+     3) 체크인 데이터 자체가 없으면 evaluations 존재 여부 폴백 */
+  var ckByEmp = {};
+  (D.checkins || []).forEach(function (c) { ckByEmp[c.emp_id] = 1; });
+  function ssGet(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return (window.__txfSS || {})[k] || null; } }
+  function ssSet(k, v) { try { window.sessionStorage.setItem(k, v); } catch (e) { (window.__txfSS = window.__txfSS || {})[k] = v; } }
+  function selfDone(id) {
+    if (ssGet('txf_selfeval_done:' + id)) return true;
+    if ((D.checkins || []).length) return !!ckByEmp[id];
+    return !!evalOf(id);
+  }
+
+  /* ---------- 독려(리마인드) 액션 ---------- */
+  function chatSend(text) {
+    if (window.Elizax && typeof window.Elizax.sendRaw === 'function') {
+      try {
+        if (typeof window.Elizax.open === 'function') window.Elizax.open();
+        window.Elizax.sendRaw(text);
+      } catch (e) { /* 무해화 */ }
+    } else { TX.toast && TX.toast('AI 도우미를 사용할 수 없습니다.', 'warn'); }
+  }
+  function sendRemind(name) { chatSend(name + '님께 보낼 평가 제출 리마인드 메시지 초안 작성해줘'); }
+  function remindAll(n) {
+    var go = function () { chatSend('평가 미제출 인원 ' + n + '명 전원에게 보낼 평가 제출 리마인드 메시지 초안 작성해줘'); };
+    if (TX.confirm) {
+      TX.confirm('전체 리마인드 초안', '미제출 ' + n + '명 전원에게 보낼 리마인드 메시지 초안을 준비할까요?<br>초안은 검토 후 발송을 확정합니다.', go, '초안 준비');
+    } else { go(); }
+  }
+  /* 대시보드 모달(#tx-overlay-root)은 root 밖 — 모달 body 에 같은 핸들러를 단다 */
+  function remindDelegate(ev) {
+    var el = ev.target.closest('[data-txf="remind"],[data-txf="remind-all"]');
+    if (!el) return false;
+    ev.preventDefault();
+    if (el.getAttribute('data-txf') === 'remind') sendRemind(el.getAttribute('data-name') || '');
+    else remindAll(parseInt(el.getAttribute('data-n'), 10) || 0);
+    return true;
+  }
+
   var GC = { S: '#C2410C', A: '#1F7AF0', B: '#4B5563', C: '#E23B3B' };
 
   /* ---------- F3: 난이도 판단 재료 + 보정 데모 (표시 계산만 — 원본 불변) ---------- */
@@ -117,7 +157,15 @@
       '.txf-diffb.nob{background:var(--soft);color:var(--ink-3);border:1px dashed var(--line)}' +
       '.txf-coefbox{margin-top:12px;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:10px 13px;font-size:12.5px;color:var(--ink-2);line-height:1.6}' +
       '.txf-coefbox .c{color:var(--ink-3);font-size:11.5px}' +
-      '.txfd-dpill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:14px;padding:3px 11px;font-size:12px;font-weight:700;color:var(--ink-2);margin:0 6px 6px 0}';
+      '.txfd-dpill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:14px;padding:3px 11px;font-size:12px;font-weight:700;color:var(--ink-2);margin:0 6px 6px 0}' +
+      /* 운영 현황 탭 · 결과 확인 탭 */
+      '#s-appr .txf-ops{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px}' +
+      '#s-appr .txf-rescard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;max-width:560px}' +
+      '.txf-linkbtn{border:1px solid var(--line);background:var(--card);color:var(--ink-2);border-radius:7px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}' +
+      '.txfd-row .txf-linkbtn{margin-left:8px;flex:none}' +
+      '.txfd-sech{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 10px}' +
+      '.txfd-sech .txfd-sec{margin:0}' +
+      '.txfd-bar .go{width:150px;font-size:12px;font-weight:700;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
     document.head.appendChild(s);
   }
 
@@ -154,9 +202,10 @@
      mode 'self'  : 대상자=본인(CU). 본인 평가 셀에 '작성'(자기평가). 1·2차·확정은 열람.
      mode 'first' : 대상자=팀원. 1차 상위자 셀(=CU)에 '작성'(1차 평가). 2차·확정 열람.
      mode 'hr'    : 대상자=전사. 2차 등급 조정/결과 확정 셀이 CU(HR). 기존 동작.        */
-  function rowCells(t, mode, i) {
+  function rowCells(t, mode) {
     var tn = F.teamName(t), mgr = mgrOf(t), mgrTeam = F.teamName(mgr);
-    var done = (i % 3 !== 2);                 // vary: last row of trio still in review
+    var done = selfDone(t.emp_id);            // 실데이터: 제출 기록 → 체크인 → evaluations
+    var written = !!ssGet('txf_eval_done:' + t.emp_id);   // 이 세션에서 평가자가 작성 제출
     var writeBtn = { cls: 'ap-btn', label: '작성', attr: 'data-txf="write"' };
     var resultBtn = done ? { cls: 'ap-btn-o', label: '응답 확인', attr: 'data-txf="result" data-emp="' + t.emp_id + '"' } : null;
     var selfC, firstC, secondC, resultC;
@@ -167,7 +216,7 @@
       resultC = cell(t.name, tn, { status: done ? 'done' : null, btn: resultBtn });
     } else if (mode === 'first') {
       selfC = cell(t.name, tn, { status: done ? 'done' : 'delay' });            // 팀원 자기평가 — 리더는 열람만
-      firstC = cell(CU.name, F.teamName(CU), { status: done ? 'done' : 'info', btn: done ? null : writeBtn });
+      firstC = cell(CU.name, F.teamName(CU), { status: written ? 'done' : 'info', btn: written ? null : writeBtn });
       secondC = cell((mgrOf(CU) || hrRep()).name, F.teamName(mgrOf(CU) || hrRep()), { status: 'info' });
       resultC = cell(t.name, tn, { status: done ? 'done' : null, btn: resultBtn });
     } else {                                   // hr / exec
@@ -185,7 +234,7 @@
       '</tr>';
   }
   function group(g) {
-    var rows = (g.members || []).map(function (t, i) { return rowCells(t, g.mode, i); }).join('');
+    var rows = (g.members || []).map(function (t) { return rowCells(t, g.mode); }).join('');
     if (!rows) rows = '<tr><td colspan="5" style="padding:22px;text-align:center;color:var(--ink-3);font-size:13px">대상자가 없습니다.</td></tr>';
     var adjBtn = g.canAdjust ? '<button class="hbtn" data-txf="adjust">조정 등급 입력</button>' : '';
     return '<div class="ap-group">' + esc(g.label) + '</div>' +
@@ -250,12 +299,18 @@
       ? '<button class="ghost-btn" data-txf="dash" style="padding:9px 16px;font-size:13px">대시보드</button>' : '';
     var moreBtn = plan.canMore
       ? '<div class="ap-more"><a data-txf="more">더 보기 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a></div>' : '';
+    var rk = roleKey();
     // 조직원: 본인 평가만 — '평가 검토'(타인 리뷰) 탭 숨김
-    var reviewTab = roleKey() === 'member' ? '' : '<button data-txf="tab" data-tab="2">평가 검토</button>';
+    var reviewTab = rk === 'member' ? '' : '<button data-txf="tab" data-tab="2">평가 검토</button>';
+    // HR·경영진: 사이클 운영은 상주 화면 — '운영 현황' 탭 (모달 대시보드 내용 승격)
+    var canOps = (rk === 'hr' || rk === 'exec');
+    var opsTab = canOps ? '<button data-txf="tab" data-tab="3">운영 현황</button>' : '';
     // 조직원(피평가자): 평가자용 대상자 매트릭스 대신 '본인 평가 작성' 폼으로 바로 진입
     var isSelf = plan.mode === 'self';
+    var doneBadge = (isSelf && ssGet('txf_selfeval_done:' + ((CU && CU.emp_id) || '')))
+      ? ' <span class="txfw-done">제출 완료</span>' : '';
     var pane0 = isSelf
-      ? '<div class="txf-selfnote">아래는 <b>' + esc((CU && CU.name) || '본인') + '</b>님 본인 평가 작성입니다. 확정 등급·근거는 위 <b>검증 가능한 답변</b> 카드에서 확인하세요.</div>' +
+      ? '<div class="txf-selfnote">아래는 <b>' + esc((CU && CU.name) || '본인') + '</b>님 본인 평가 작성입니다. 확정 등급·근거는 위 <b>검증 가능한 답변</b> 카드에서 확인하세요.' + doneBadge + '</div>' +
         writeFormBody((CU && CU.emp_id) || '') +
         '<div class="txf-selfbar"><button class="ghost-btn" data-txf="self-save">임시저장</button><button class="hbtn" data-txf="self-submit">제출</button></div>'
       : (planProjects + moreBtn);
@@ -269,14 +324,40 @@
       '<div class="ap-tabs">' +
       '<button class="on" data-txf="tab" data-tab="0">평가 작성</button>' +
       '<button data-txf="tab" data-tab="1">결과 확인</button>' +
-      reviewTab + '</div>' +
+      reviewTab + opsTab + '</div>' +
       '<div data-pane="0">' + pane0 +
       '</div>' +
-      '<div data-pane="1" style="display:none"><div class="ap-empty2">평가 현황이 없습니다.</div></div>' +
+      '<div data-pane="1" style="display:none">' + resultPane() + '</div>' +
       '<div data-pane="2" style="display:none"><div class="ap-empty2">검색 결과가 없습니다.' +
       '<div><button class="rb" data-txf="filter-reset"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg> 필터 초기화</button></div>' +
       '</div></div>' +
+      (canOps ? '<div data-pane="3" style="display:none"><div class="txf-ops">' + dashBody() + '</div></div>' : '') +
       '</div>';
+  }
+
+  /* ---------- 결과 확인 탭 (pane 1) — 역할별 인라인 ---------- */
+  function resultPane() {
+    var rk = roleKey();
+    if (rk === 'member') {
+      return '<div class="txf-rescard">' + rcptBody((CU && CU.emp_id) || '') + '</div>';
+    }
+    if (rk === 'leader') {
+      var rows = reportsOf(CU).slice(0, 8).map(function (e) {
+        var ev = evalOf(e.emp_id), g = ev ? ev.grade : '-';
+        return '<tr><td>' + esc(e.name) + '</td><td style="color:var(--ink-3)">' + esc(F.teamName(e)) + '</td>' +
+          '<td><b style="color:' + (GC[g] || 'var(--ink-2)') + '">' + g + '</b></td>' +
+          '<td>' + (ev && ev.weighted_score != null ? ev.weighted_score + '점' : '-') + '</td>' +
+          '<td style="text-align:right"><button class="txf-linkbtn" data-txf="result" data-emp="' + e.emp_id + '">응답 확인</button></td></tr>';
+      }).join('');
+      if (!rows) return '<div class="ap-empty2">확정된 팀 평가 결과가 없습니다.</div>';
+      return '<div class="txf-ops"><div class="txfd-sec first">팀 평가 결과 요약 — ' + esc(F.teamName(CU)) + '</div>' +
+        '<table class="txf-adj"><thead><tr><th>이름</th><th>소속</th><th>등급</th><th>종합 점수</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+    // hr / exec — 전사는 운영 현황 탭에서
+    var total = (D.employees || []).length, evN = (D.evaluations || []).length;
+    return '<div class="txf-ops"><div class="txfd-sec first">전사 평가 결과</div>' +
+      '<div style="font-size:13px;color:var(--ink-2);line-height:1.7">확정 ' + evN + '명 / 전체 ' + total + '명 — 전사 제출 현황·등급 분포·지연자는 <b>운영 현황</b> 탭에서 확인합니다.</div>' +
+      '<div style="margin-top:14px"><button class="txf-linkbtn" data-txf="goto-ops">운영 현황 열기</button></div></div>';
   }
 
   /* ---------- 탈렌트 세션 (session cards) ---------- */
@@ -319,25 +400,24 @@
   }
 
   /* ---------- modals / drawers ---------- */
+  function rcptBody(empId) {
+    var e = F.emp(empId), ev = evalOf(empId);
+    if (!ev) return '<div style="padding:24px 4px;text-align:center;color:var(--ink-3);font-size:13px">확정된 평가 결과가 없습니다.</div>';
+    var g = ev.grade, c = ev.components || {}, col = GC[g] || 'var(--ink-2)';
+    var r = function (k, v) { return '<div class="txf-rrow"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>'; };
+    return '<div class="txf-rcpt">' +
+      '<div class="rc-top"><span class="txf-gpill" style="background:' + col + '">' + g + '</span>' +
+      '<div><div class="rc-score">종합 ' + (ev.weighted_score != null ? ev.weighted_score : '-') + '점</div>' +
+      '<div class="rc-sub">' + esc((e && e.name) || '') + ' · ' + esc(F.teamName(e)) + ' · ' + (ev.period || '') + '</div></div></div>' +
+      r('목표 달성', (c.achievement_norm != null ? c.achievement_norm : '-') + ' / 100') +
+      r('동료 평가', (c.peer_strength_norm != null ? c.peer_strength_norm : '-') + ' / 100') +
+      r('실행 일관성', (c.exec_consistency_norm != null ? c.exec_consistency_norm : '-') + ' / 100') +
+      (ev.rationale_summary ? '<div class="txf-rat">' + esc(ev.rationale_summary) + '</div>' : '') +
+      '</div>';
+  }
   function openResult(empId) {
     if (!TX.modal) return;
-    var e = F.emp(empId), ev = evalOf(empId);
-    var body;
-    if (!ev) { body = '<div style="padding:24px 4px;text-align:center;color:var(--ink-3);font-size:13px">확정된 평가 결과가 없습니다.</div>'; }
-    else {
-      var g = ev.grade, c = ev.components || {}, col = GC[g] || 'var(--ink-2)';
-      var r = function (k, v) { return '<div class="txf-rrow"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>'; };
-      body = '<div class="txf-rcpt">' +
-        '<div class="rc-top"><span class="txf-gpill" style="background:' + col + '">' + g + '</span>' +
-        '<div><div class="rc-score">종합 ' + (ev.weighted_score != null ? ev.weighted_score : '-') + '점</div>' +
-        '<div class="rc-sub">' + esc((e && e.name) || '') + ' · ' + esc(F.teamName(e)) + ' · ' + (ev.period || '') + '</div></div></div>' +
-        r('목표 달성', (c.achievement_norm != null ? c.achievement_norm : '-') + ' / 100') +
-        r('동료 평가', (c.peer_strength_norm != null ? c.peer_strength_norm : '-') + ' / 100') +
-        r('실행 일관성', (c.exec_consistency_norm != null ? c.exec_consistency_norm : '-') + ' / 100') +
-        (ev.rationale_summary ? '<div class="txf-rat">' + esc(ev.rationale_summary) + '</div>' : '') +
-        '</div>';
-    }
-    TX.modal({ title: '결과 확인', body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
+    TX.modal({ title: '결과 확인', body: rcptBody(empId), actions: [{ label: '닫기', kind: 'ghost' }] });
   }
 
   /* ---------- 평가 작성 (write) modal ---------- */
@@ -354,9 +434,18 @@
     return objs.slice(0, 3);
   }
   function radioRow(name) {
+    // 기본 미선택 — 앵커링 방지, 제출 시 미입력 검증
     return ['A', 'B', 'C', 'D'].map(function (g) {
-      return '<label class="txfw-rad"><input type="radio" name="' + name + '" value="' + g + '"' + (g === 'B' ? ' checked' : '') + '>' + g + '</label>';
+      return '<label class="txfw-rad"><input type="radio" name="' + name + '" value="' + g + '">' + g + '</label>';
     }).join('');
+  }
+  /* 라디오 그룹 중 미선택 개수 */
+  function missingRadios(scope) {
+    var need = {}, got = {};
+    [].forEach.call(scope.querySelectorAll('input[type="radio"]'), function (r) {
+      need[r.name] = 1; if (r.checked) got[r.name] = 1;
+    });
+    return Object.keys(need).length - Object.keys(got).length;
   }
   function writeFormBody(empId) {
     var e = F.emp(empId) || {};
@@ -409,6 +498,7 @@
         { label: '임시저장', kind: 'ghost', onClick: function () { TX.toast && TX.toast('임시 저장되었습니다.', 'ok'); return false; } },
         { label: '제출', kind: 'primary', onClick: function () {
           TX.toast && TX.toast('평가를 제출했습니다.', 'ok');
+          if (empId) ssSet('txf_eval_done:' + empId, '1');   // 재렌더에서도 완료 유지
           if (tr && tr.children[1]) {
             var td = tr.children[1];
             var dot = td.querySelector('.sdot');
@@ -428,35 +518,51 @@
     });
   }
 
-  /* ---------- 평가 대시보드 modal ---------- */
-  function openDash() {
-    if (!TX.modal) return;
-    var emps = D.employees || [], evs = D.evaluations || [];
-    var total = emps.length || 221;
-    var delayed = emps.filter(function (x, i) { return i % 13 === 4; });
+  /* ---------- 평가 대시보드 — 운영 현황 탭(본진) + 모달 공용 본문 ---------- */
+  function dashBody() {
+    var rk = roleKey();
+    var emps = (rk === 'leader') ? reportsOf(CU) : (D.employees || []);   // 조직장=팀 범위
+    var evs = D.evaluations || [];
+    var total = emps.length;
+    var delayed = emps.filter(function (x) { return !selfDone(x.emp_id); });
     var done = Math.max(0, total - delayed.length);
     var pct = total ? Math.round(done / total * 100) : 0;
     var dist = { S: 0, A: 0, B: 0, C: 0 };
     if (evs.length) { evs.forEach(function (v) { if (dist[v.grade] != null) dist[v.grade]++; }); }
     else { dist = { S: 11, A: 44, B: 133, C: 33 }; }
+    var evTotal = evs.length || total;
     var maxN = 1;
     ['S', 'A', 'B', 'C'].forEach(function (g) { if (dist[g] > maxN) maxN = dist[g]; });
     var bars = ['S', 'A', 'B', 'C'].map(function (g) {
       var n = dist[g], w = Math.max(2, Math.round(n / maxN * 100));
       return '<div class="txfd-bar"><span class="g">' + g + '</span>' +
         '<span class="tr"><span class="fl" style="width:' + w + '%;background:' + (GC[g] || 'var(--ink-3)') + '"></span></span>' +
-        '<span class="n">' + n + '명 (' + (total ? Math.round(n / total * 100) : 0) + '%)</span></div>';
+        '<span class="n">' + n + '명 (' + (evTotal ? Math.round(n / evTotal * 100) : 0) + '%)</span></div>';
     }).join('');
-    var lateRows = delayed.slice(0, 6).map(function (x) {
+    var lateRows = delayed.slice(0, 8).map(function (x) {
       return '<div class="txfd-row">' + F.avatar(x.name, 30) +
         '<div><div class="nm">' + esc(x.name) + '</div><div class="tm">' + esc(F.teamName(x)) + '</div></div>' +
-        '<span class="txfd-pill">본인 평가 지연</span></div>';
+        '<span class="txfd-pill">본인 평가 지연</span>' +
+        '<button class="txf-linkbtn" data-txf="remind" data-name="' + esc(x.name) + '">✦ 리마인드 초안</button></div>';
     }).join('');
+    if (delayed.length > 8) lateRows += '<div style="padding:10px 0;font-size:12.5px;color:var(--ink-3)">외 ' + (delayed.length - 8) + '명</div>';
+    if (!delayed.length) lateRows = '<div style="padding:14px 0;font-size:13px;color:var(--ink-3)">지연 인원이 없습니다.</div>';
     var body =
       '<div class="txfd-sec first">진행률 요약 — 2026 상반기 평가</div>' +
       '<div class="txfd-big">작성 완료 ' + done + ' <span style="color:var(--ink-3);font-weight:600">/ 전체 ' + total + ' (' + pct + '%)</span></div>' +
-      '<div class="txfd-prog"><i style="width:' + pct + '%"></i></div>' +
-      '<div class="txfd-sec">등급 분포</div>' + bars;
+      '<div class="txfd-prog"><i style="width:' + pct + '%"></i></div>';
+    /* 본부별 제출 현황 — 전사 관점(hr/exec)만 */
+    if (rk !== 'leader') {
+      var orgBars = Object.keys(byOrg).sort().map(function (o) {
+        var t = byOrg[o], d = t.filter(function (e) { return selfDone(e.emp_id); }).length;
+        var w = t.length ? Math.max(2, Math.round(d / t.length * 100)) : 0;
+        return '<div class="txfd-bar"><span class="go" title="' + esc(o) + '">' + esc(o) + '</span>' +
+          '<span class="tr"><span class="fl" style="width:' + w + '%;background:var(--blue)"></span></span>' +
+          '<span class="n">' + d + '/' + t.length + '</span></div>';
+      }).join('');
+      body += '<div class="txfd-sec">본부별 제출 현황</div>' + orgBars;
+    }
+    body += '<div class="txfd-sec">등급 분포</div>' + bars;
     /* F3: 난이도 분포 미니 표기 — 수립된 KR 기준 */
     var krAll = D.keyResults || [];
     if (krAll.length) {
@@ -471,8 +577,15 @@
         }).join('') +
         '<span class="txfd-dpill">근거 기재 ' + Math.round(basisN / krAll.length * 100) + '%</span></div>';
     }
-    body += '<div class="txfd-sec">지연자 (' + delayed.length + '명)</div>' + lateRows;
-    TX.modal({ title: '평가 대시보드', wide: true, body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
+    body += '<div class="txfd-sech"><span class="txfd-sec">지연자 (' + delayed.length + '명)</span>' +
+      (delayed.length ? '<button class="txf-linkbtn" data-txf="remind-all" data-n="' + delayed.length + '">✦ 전체 발송 초안</button>' : '') +
+      '</div>' + lateRows;
+    return body;
+  }
+  function openDash() {
+    if (!TX.modal) return;
+    var m = TX.modal({ title: '평가 대시보드', wide: true, body: dashBody(), actions: [{ label: '닫기', kind: 'ghost' }] });
+    m.body.addEventListener('click', remindDelegate);   // 모달은 #s-appr 밖 — 별도 위임
   }
 
   function openAdjust(btn) {
@@ -547,7 +660,24 @@
          tx_revive document-level delegate — stop the event so only one UI opens */
       if (act === 'write' || act === 'result' || act === 'join' || act === 'filter') ev.stopPropagation();
       if (act === 'self-save') { ev.preventDefault(); TX.toast && TX.toast('임시 저장되었습니다.', 'ok'); }
-      else if (act === 'self-submit') { ev.preventDefault(); TX.toast && TX.toast('본인 평가를 제출했습니다.', 'ok'); }
+      else if (act === 'self-submit') {
+        ev.preventDefault();
+        var sform = root.querySelector('[data-pane="0"] .txfw-form');
+        var miss = sform ? missingRadios(sform) : 0;
+        if (miss > 0) { TX.toast && TX.toast('성과·역량 등급을 모두 선택해 주세요. (미선택 ' + miss + '건)', 'warn'); return; }
+        var sid = (CU && CU.emp_id) || '';
+        ssSet('txf_selfeval_done:' + sid, '1');
+        /* 계약: tx_roles.js 가 영수증 블러 해제에 사용 */
+        try { document.dispatchEvent(new CustomEvent('txf:selfeval-submitted', { detail: { empId: sid } })); } catch (e3) { /* 구형 브라우저 무시 */ }
+        TX.toast && TX.toast('본인 평가를 제출했습니다.', 'ok');
+        el.disabled = true; el.textContent = '제출 완료';
+      }
+      else if (act === 'remind') { ev.preventDefault(); sendRemind(el.getAttribute('data-name') || ''); }
+      else if (act === 'remind-all') { ev.preventDefault(); remindAll(parseInt(el.getAttribute('data-n'), 10) || 0); }
+      else if (act === 'goto-ops') {
+        ev.preventDefault();
+        var ob = root.querySelector('.ap-tabs button[data-tab="3"]'); if (ob) ob.click();
+      }
       else if (act === 'result') { openResult(el.getAttribute('data-emp')); }
       else if (act === 'write') { openWrite(el); }
       else if (act === 'adjust') { ev.preventDefault(); openAdjust(el); }
@@ -579,8 +709,10 @@
         var t = el.getAttribute('data-tab');
         [].forEach.call(root.querySelectorAll('.ap-tabs button'), function (b) { b.classList.toggle('on', b === el); });
         [].forEach.call(root.querySelectorAll('[data-pane]'), function (p) { p.style.display = (p.getAttribute('data-pane') === t) ? '' : 'none'; });
-        // real: 결과 확인 tab shows no filter badge
-        var fb = root.querySelector('.ap-filter .fb'); if (fb) fb.style.display = (t === '1') ? 'none' : '';
+        // 운영 현황: 진입할 때마다 제출 상태 재계산
+        if (t === '3') { var p3 = root.querySelector('[data-pane="3"] .txf-ops'); if (p3) p3.innerHTML = dashBody(); }
+        // real: 결과 확인·운영 현황 tab shows no filter badge
+        var fb = root.querySelector('.ap-filter .fb'); if (fb) fb.style.display = (t === '1' || t === '3') ? 'none' : '';
       }
       else if (act === 'filter-reset') {
         [].forEach.call(root.querySelectorAll('.ap-tabs button'), function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === '0'); });

@@ -109,9 +109,19 @@
         ]
       }
     ];
-    // member: only 360s the current user is subject or rater of (본인 관련만 노출)
+    // member: 본인이 대상자/평가자인 건만 / leader: 본인 관련 + 대상자가 본인 팀원인 건만 / hr·exec: 전사
+    var mineOnly = function (c) { return c.subj === CU || (c.raters && c.raters.indexOf(CU) >= 0); };
     if (ROLE === 'member') {
-      cards = cards.filter(function (c) { return c.subj === CU || (c.raters && c.raters.indexOf(CU) >= 0); });
+      cards = cards.filter(mineOnly);
+    } else if (ROLE === 'leader') {
+      var inTeam = function (e) {
+        if (!e || !e.emp_id || !CU.emp_id) return false;
+        if (e.manager_id === CU.emp_id) return true;          // 직속 부하
+        var o = TXFIX.org(e.org_id), g = 0;                    // 본인 조직 하위 체인
+        while (o && g++ < 12) { if (o.org_id === CU.org_id) return true; o = o.parent_id ? TXFIX.org(o.parent_id) : null; }
+        return false;
+      };
+      cards = cards.filter(function (c) { return mineOnly(c) || inTeam(c.subj); });
     }
     cards.forEach(function (c, i) { c.order = i; c.title = c.type; c.qs = Q(nt(c.subj)); });
 
@@ -149,6 +159,29 @@
       var k = t.getAttribute('data-tab'), b = t.querySelector('b');
       if (b && counts[k] != null) b.textContent = counts[k];
     });
+
+    /* 홈(#s-home) 360 위젯을 이 실데이터와 동기화 — 목록이 비면 카운트도 0.
+       (home 패치는 먼저 실행되므로 여기서 덮어써도 안전) */
+    (function syncHome360() {
+      var hc = null;
+      document.querySelectorAll('#s-home .card .ct h3').forEach(function (h) {
+        if (!hc && (h.textContent || '').indexOf('360 피드백') === 0) hc = h.closest('.card');
+      });
+      if (!hc) return;
+      var r = hc.querySelector('.ct .r');
+      if (r) r.innerHTML =
+        '<span class="ck">✓ 응답 필요 <b>' + counts.need + '</b></span>' +
+        '<span class="ck">· 결과 확인 ' + counts.done + '</span>' +
+        '<span class="ck">· 생성중 ' + counts.prog + '</span>';
+      var body = hc.querySelector('.body');
+      if (body) body.innerHTML = cards.length
+        ? cards.map(function (c) {
+            return '<div class="frow"><div class="tx">' + esc(c.type) + ' — 대상자 ' + esc(nt(c.subj)) +
+              '<small>응답 ' + c.resp + ' / ' + c.total + ' · ' + c.pct + '%</small></div>' +
+              '<div class="dt">종료</div></div>';
+          }).join('')
+        : '<div class="empty">360 피드백이 없습니다.</div>';
+    })();
 
     /* ================= SORT (actually reorder DOM) ================= */
     function reclone(el) { if (!el) return null; var n = el.cloneNode(true); el.parentNode.replaceChild(n, el); return n; }

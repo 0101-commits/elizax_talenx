@@ -743,7 +743,25 @@
     var anchor = lastAiNode(list);
     if (!anchor) return;
 
-    /* 근거 선택 — 기왕 배정된 ctxRefs 재사용, 없으면 규칙 매칭 후 기록 */
+    /* 실인용 마커 [[ctx:ID1,ID2]] — tx_elizax가 못 걷어낸 경로 대비 폴백 파싱 (표시 전 제거) */
+    var i;
+    if ((!msg.meta || !msg.meta.ctxRefs) && /\[\[ctx:([^\]]+)\]\]/.test(String(msg.text || ""))) {
+      var mk = /\[\[ctx:([^\]]+)\]\]/.exec(String(msg.text || ""));
+      msg.text = String(msg.text).replace(/\s*\[\[ctx:[^\]]*\]\]/g, "").replace(/\s+$/, "");
+      var parts = mk[1].split(",");
+      var mids = [];
+      for (i = 0; i < parts.length; i++) {
+        var mv = norm(parts[i]);
+        if (mv) mids.push(mv);
+      }
+      if (mids.length) {
+        if (!msg.meta) msg.meta = {};
+        msg.meta.ctxRefs = mids;
+        msg.meta.ctxCited = true;
+      }
+    }
+
+    /* 근거 선택 — 마커 실인용(ctxRefs) 우선, 없으면 규칙 매칭 폴백 */
     var refs = (msg.meta && Object.prototype.toString.call(msg.meta.ctxRefs) === "[object Array]")
       ? msg.meta.ctxRefs.slice() : null;
     var fresh = false;
@@ -755,14 +773,28 @@
       fresh = true;
     }
     var picked = [];
-    for (var i = 0; i < refs.length; i++) {
+    for (i = 0; i < refs.length; i++) {
       var it = byId(refs[i]);
       if (it) picked.push(it);
     }
+    /* 마커 id가 전부 무효(원장에 없음)면 키워드 매칭 폴백으로 재선정 */
+    if (!picked.length && msg.meta && msg.meta.ctxCited) {
+      refs = pickRefs(String(msg.text || ""));
+      msg.meta.ctxRefs = refs.slice();
+      delete msg.meta.ctxCited;
+      fresh = true;
+      for (i = 0; i < refs.length; i++) {
+        var it2f = byId(refs[i]);
+        if (it2f) picked.push(it2f);
+      }
+    }
     if (!picked.length) return;
 
-    if (fresh) {
+    /* usedCount 연동 — 규칙 배정 최초 1회 + 모델 실인용(ctxCited) 최초 1회 */
+    var needCount = fresh || (msg.meta && msg.meta.ctxCited && !msg.meta.ctxCounted);
+    if (needCount) {
       for (i = 0; i < picked.length; i++) picked[i].usedCount = (picked[i].usedCount || 0) + 1;
+      if (msg.meta && msg.meta.ctxCited) msg.meta.ctxCounted = true;
       saveStore();
       updateBadge();
       try { if (window.EZChat && EZChat.persist) EZChat.persist(); } catch (e) { /* 무시 */ }

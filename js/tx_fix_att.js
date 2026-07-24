@@ -330,6 +330,29 @@
     }
   }
 
+  /* ================= 3. 구성원 휴가 ================= */
+  function patchLeaveMember(root) {
+    var p = q(root, '.subpage[data-p="3"]');
+    if (!p || !once(p)) return;
+    /* 구성원 근무(p=2)와 동일 스코프: member=차단, leader=본인 팀, hr/exec=전사 */
+    var ROLE = (F.CU && F.CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
+    if (ROLE === 'member') {
+      var b = q(p, '.bluebtn'); if (b) b.style.display = 'none';
+      var s = q(p, '.segtabs'); if (s) s.style.display = 'none';
+      var c = q(p, '.card');
+      if (c) c.innerHTML =
+        '<div class="txf-emptybox"><div class="ic">i</div>' +
+        '구성원 휴가 현황은 조직장·HR에게만 제공됩니다.<br>' +
+        '나의 휴가는 ‘내 휴가’ 탭에서 확인하세요.</div>';
+      return;
+    }
+    if (ROLE === 'leader') {
+      /* 본인 팀 범위 명시 (현재 데이터 0건 — 전사와 동일하므로 스코프 문구만 조정) */
+      var er = q(p, '.emptyrow');
+      if (er) er.textContent = ((F.teamName && F.CU) ? F.teamName(F.CU) + ' ' : '') + '구성원의 휴가 내역이 없습니다.';
+    }
+  }
+
   /* ================= 4. 근무스케줄 ================= */
   function patchSchedule(root) {
     var p = q(root, '.subpage[data-p="4"]');
@@ -414,6 +437,7 @@
     try { patchWork(root); } catch (e) { console.error('[txfix att work]', e); }
     try { patchLeave(root); } catch (e) { console.error('[txfix att leave]', e); }
     try { patchMember(root); } catch (e) { console.error('[txfix att member]', e); }
+    try { patchLeaveMember(root); } catch (e) { console.error('[txfix att mleave]', e); }
     try { patchSchedule(root); } catch (e) { console.error('[txfix att schedule]', e); }
     try { patchLocation(root); } catch (e) { console.error('[txfix att location]', e); }
     try { patchAnnual(root); } catch (e) { console.error('[txfix att annual]', e); }

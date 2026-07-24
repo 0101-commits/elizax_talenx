@@ -70,6 +70,60 @@
     }
     return "서비스 기획 품질 및 사용자 만족도 향상";
   }
+  /* ---------------- 롤/팀/원장 헬퍼 ---------------- */
+  function roleKey() {
+    var cu = CU();
+    if (cu && cu._role) return cu._role;
+    try { if (window.TXRoles && TXRoles.current) return TXRoles.current().key || "member"; } catch (e) { /* ignore */ }
+    return "member";
+  }
+  function teamMembers() {
+    var my = CU().emp_id, list = D().employees || [], out = [];
+    for (var i = 0; i < list.length; i++) if (list[i].manager_id === my) out.push(list[i]);
+    return out;
+  }
+  var selMemId = null; /* leader가 드롭다운에서 고른 팀원 */
+  function selMember() {
+    var tm = teamMembers();
+    if (!tm.length) return null;
+    for (var i = 0; i < tm.length; i++) if (tm[i].emp_id === selMemId) return tm[i];
+    return tm[0];
+  }
+  function objTitleFor(empId) {
+    var objs = D().objectives || [];
+    for (var i = 0; i < objs.length; i++) if (objs[i].owner_emp_id === empId && objs[i].title) return objs[i].title;
+    return "담당 업무 품질 및 협업 만족도 향상";
+  }
+  /* 대화 화자 짝 — member: 상사(관리자)↔본인 / leader: 본인(주관)↔선택 팀원 */
+  function pair() {
+    if (roleKey() === "leader") {
+      var m = selMember();
+      if (m) return { mgr: CU().name || "조직장", mem: m.name || "팀원", obj: objTitleFor(m.emp_id), memId: m.emp_id };
+    }
+    return { mgr: managerName(), mem: memberName(), obj: myObjectiveTitle(), memId: null };
+  }
+  function cut(s, n) { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+  function ledgerList() {
+    try { if (window.EZLedger && EZLedger.list) return EZLedger.list() || []; } catch (e) { /* 미로드 */ }
+    return [];
+  }
+  /* leader — 팀원별 최근 1:1(확정 원장 기준, source에 emp_id 명시) */
+  function lastOneOnOneAt(empId) {
+    var L = ledgerList();
+    for (var i = 0; i < L.length; i++) {
+      var it = L[i];
+      if (it.type === "oneonone" && it.source && String(it.source).indexOf("." + empId) >= 0) {
+        return String(it.at || "").split(" ")[0];
+      }
+    }
+    return "";
+  }
+  function lastOneOnOneEntry() {
+    var L = ledgerList();
+    for (var i = 0; i < L.length; i++) if (L[i].type === "oneonone") return L[i];
+    return null;
+  }
+
   function lsKey() { return LS_PREFIX + CU().emp_id; }
   function loadState() {
     try { return JSON.parse(localStorage.getItem(lsKey()) || "{}"); } catch (e) { return {}; }
@@ -88,7 +142,7 @@
 
   /* ---------------- 대본 (오프라인 시뮬 · 이름은 데이터에서) ---------------- */
   function buildScript() {
-    var MGR = managerName(), MEM = memberName(), OBJ = myObjectiveTitle();
+    var p = pair(), MGR = p.mgr, MEM = p.mem, OBJ = p.obj;
     return [
       { who: "mgr", name: MGR, t: "00:04", text: "지난 체크인 이후 상황부터 볼까요? '" + OBJ + "' 목표의 KR2 진행이 궁금하네요." },
       { who: "mem", name: MEM, t: "00:16", text: "KR2는 신규 기획 3건이 사용자 검증을 통과했고, 잔여 2건은 검증 설계 중입니다. 진행률은 68% 수준이에요." },
@@ -205,7 +259,20 @@
       ".ez1o-st.new{color:#C2410C;background:rgba(194,65,12,.08);border:1px solid rgba(194,65,12,.35);}",
       ".ez1o-st.cand{color:var(--ink-3,#6B7280);background:var(--soft,#F8FAFC);border:1px solid var(--line-2,#CBD5E1);}",
       ".ez1o-stars{display:flex;gap:10px;font-size:10.5px;color:var(--ink-3,#6B7280);margin-top:6px;}",
-      ".ez1o-stars b{color:#B45309;font-weight:700;letter-spacing:1px;}"
+      ".ez1o-stars b{color:#B45309;font-weight:700;letter-spacing:1px;}",
+      /* 아젠다·팀원 선택 */
+      ".ez1o-chip{cursor:pointer;border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:5px 12px;font-size:11.5px;",
+      "font-weight:600;color:var(--ink,#1D2433);background:var(--card,#fff);}",
+      ".ez1o-chip.on{color:#fff;background:var(--blue,#1F7AF0);border-color:var(--blue,#1F7AF0);}",
+      ".ez1o-agenda{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}",
+      ".ez1o-agrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}",
+      ".ez1o-agin{flex:1;min-width:180px;border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:6px 12px;font-size:12px;font-family:inherit;}",
+      ".ez1o-prom{display:flex;align-items:center;gap:8px;font-size:12px;padding:8px 10px;border:1px dashed var(--line-2,#CBD5E1);",
+      "border-radius:10px;color:var(--ink-2,#374151);}",
+      ".ez1o-prom .tg{cursor:pointer;border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:3px 10px;font-size:11px;",
+      "font-weight:600;background:var(--card,#fff);flex:none;margin-left:auto;}",
+      ".ez1o-prom .tg.done{color:#15803D;border-color:#15803D;background:rgba(21,128,61,.06);}",
+      ".ez1o-sel{border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:6px 10px;font-size:12px;font-family:inherit;background:var(--card,#fff);}"
     ].join("");
     document.head.appendChild(st);
   }
@@ -213,19 +280,53 @@
   /* ============================================================
      1) 주입 — .mt-main 상단 바 (MutationObserver + 초기 폴링, 멱등)
      ============================================================ */
+  function memSelectHTML() {
+    var tm = teamMembers(), cur = selMember(), opts = "";
+    for (var i = 0; i < tm.length; i++) {
+      var m = tm[i], last = lastOneOnOneAt(m.emp_id);
+      opts += '<option value="' + esc(m.emp_id) + '"' + (cur && m.emp_id === cur.emp_id ? " selected" : "") + '>'
+        + esc(m.name) + " · " + (last ? "최근 1:1 " + esc(last) : "1:1 기록 없음") + "</option>";
+    }
+    return '<select class="ez1o-sel" data-ez1o-mem title="1:1 대상 팀원 선택">' + opts + "</select>";
+  }
+
   function barHTML() {
+    var rk = roleKey();
+    var mapBtn = '<button class="ez1o-linkbtn" data-ez1o="map">&#128506; 전주기 지원 범위 맵</button>';
+    if (rk === "hr") {
+      /* HR — 녹음 바 대신 실시율 요약 칩. ponytail: 실시율=시드 수치, 부서별 집계는 후속 */
+      var n = 0, L = ledgerList();
+      for (var i = 0; i < L.length; i++) if (L[i].type === "oneonone") n++;
+      return '<div class="ez1o-bar" data-ez1o-bar>'
+        + '<span class="ez1o-badge">1:1 실시 현황</span>'
+        + '<span class="ez1o-note"><b>받아쓰기 기록 ' + n + '건</b> · 최근 30일 실시율 62% (예시 수치)</span>'
+        + '<span class="ez1o-note">부서별 상세는 준비 중입니다</span>'
+        + mapBtn + '</div>'
+        + '<div class="ez1o-panel" data-ez1o-panel></div>';
+    }
+    if (rk === "leader") {
+      var tm = teamMembers();
+      return '<div class="ez1o-bar" data-ez1o-bar>'
+        + '<button class="ez1o-btn" data-ez1o="start">&#9210; elizax 녹음·요약</button>'
+        + (tm.length ? memSelectHTML() : '<span class="ez1o-note">1:1 대상 팀원이 없습니다</span>')
+        + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
+        + '<span class="ez1o-note">팀원을 선택해 1:1을 주관하세요 · 기록 확정은 사람</span>'
+        + mapBtn + '</div>'
+        + '<div class="ez1o-panel" data-ez1o-panel></div>';
+    }
     var confirmed = !!loadState().confirmedAt;
     return '<div class="ez1o-bar" data-ez1o-bar>'
       + '<button class="ez1o-btn" data-ez1o="start">&#9210; elizax 녹음·요약</button>'
       + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
       + '<span class="ez1o-note">녹음→받아쓰기→요약은 자동, 기록 확정은 사람</span>'
       + (confirmed ? '<span class="ez1o-donetag">&#10003; 7/16 요약 확정됨 · 히스토리 기록</span>' : '')
-      + '<button class="ez1o-linkbtn" data-ez1o="map">&#128506; 전주기 지원 범위 맵</button>'
+      + mapBtn
       + '</div>'
       + '<div class="ez1o-panel" data-ez1o-panel></div>';
   }
 
   function tryInject() {
+    if (roleKey() === "exec") return; /* 경영진 — 1:1 실무 도구 미주입 */
     var sec = document.getElementById("s-perf");
     if (!sec) return;
     var main = sec.querySelector('.subpage[data-p="2"] .mt-main');
@@ -247,14 +348,71 @@
   function killSession() { stopTimers(); sess = null; }
   function alive() { return !!(sess && sess.panel && document.body.contains(sess.panel)); }
 
+  var lastRun = null; /* {agenda:[], memId, memName, aiText} — 마지막 녹음 회차 정보(게이트·AI 요약에서 참조) */
+
+  /* ---------------- 아젠다 준비 단계 (Pain T19) ---------------- */
+  function agendaSuggestions() {
+    var out = [], L = ledgerList(), lastCk = null, lastFb = null, lastOne = lastOneOnOneEntry(), i;
+    for (i = 0; i < L.length; i++) {
+      if (!lastCk && L[i].type === "checkin") lastCk = L[i];
+      if (!lastFb && L[i].type === "feedback") lastFb = L[i];
+    }
+    if (lastOne) out.push("지난 1:1 약속 점검 — " + cut(lastOne.summary || lastOne.title, 28));
+    if (lastCk) out.push("최근 체크인 — " + cut(lastCk.title, 28));
+    if (lastFb) out.push("피드백 — " + cut(lastFb.title, 28));
+    var fill = ["다음 분기 목표 방향", "협업·지원 요청", "성장·교육 계획"];
+    for (i = 0; out.length < 3 && i < fill.length; i++) out.push(fill[i]);
+    return out.slice(0, 3);
+  }
+
+  function renderAgenda(panel) {
+    var sugg = agendaSuggestions(), chips = "", i;
+    for (i = 0; i < sugg.length; i++) {
+      chips += '<button class="ez1o-chip' + (i === 0 ? " on" : "") + '" data-ez1o-chip>' + esc(sugg[i]) + "</button>";
+    }
+    /* 지난 약속 이행 체크 — 직전 1:1 원장 항목 + 완료 토글 */
+    var prom = lastOneOnOneEntry(), promHTML = "";
+    if (prom) {
+      var done = !!(loadState().promiseDone || {})[prom.id];
+      promHTML = '<div class="ez1o-prom" data-ez1o-prom="' + esc(prom.id) + '">'
+        + '<span>&#128203; 지난 약속 (' + esc(String(prom.at || "").split(" ")[0]) + ' 1:1) — ' + esc(cut(prom.summary || prom.title, 56)) + "</span>"
+        + '<button class="tg' + (done ? " done" : "") + '" data-ez1o="promise">' + (done ? "&#10003; 이행 완료" : "이행 확인") + "</button></div>";
+    }
+    var who = "";
+    if (roleKey() === "leader") {
+      var m = selMember();
+      if (m) who = '<span class="ez1o-reclab">대상 팀원: <b>' + esc(m.name) + "</b></span>";
+    }
+    panel.innerHTML =
+      '<div class="ez1o-rec"><div class="ez1o-rechead">'
+      + '<b style="font-size:12.5px">1:1 준비 · 아젠다 선택</b>' + who
+      + '<button class="ez1o-stop" data-ez1o="cancel" style="border-color:var(--line,#E4E7EC);color:var(--ink-3,#6B7280)">닫기</button>'
+      + "</div>"
+      + '<div class="ez1o-agenda">'
+      + '<div class="ez1o-agrow">' + chips + "</div>"
+      + '<div class="ez1o-agrow"><input class="ez1o-agin" data-ez1o-agin type="text" maxlength="60" placeholder="아젠다 직접 입력 (선택)">'
+      + '<button class="ez1o-btn" data-ez1o="rec">&#9210; 녹음 시작</button></div>'
+      + promHTML
+      + "</div></div>";
+  }
+
   function start(panel) {
     if (sess && !sess.finished) { toast("이미 녹음이 진행 중입니다.", ""); return; }
+    var rk = roleKey();
+    if (rk === "hr" || rk === "exec") { toast("이 관점에서는 1:1 녹음을 시작할 수 없습니다.", ""); return; }
     if (!panel) {
       tryInject();
       panel = document.querySelector("[data-ez1o-panel]");
       if (!panel) { toast("성과관리 › 1:1 미팅 화면에서 실행할 수 있습니다.", ""); return; }
     }
+    renderAgenda(panel);
+  }
+
+  function beginRec(panel, agenda) {
+    if (sess && !sess.finished) { toast("이미 녹음이 진행 중입니다.", ""); return; }
     killSession();
+    var p = pair();
+    lastRun = { agenda: agenda || [], memId: p.memId, memName: p.memId ? p.mem : null, aiText: "" };
     sess = { panel: panel, lineTimer: null, secTimer: null, idx: 0, sec: 0, script: buildScript(), finished: false };
     panel.innerHTML =
       '<div class="ez1o-rec">'
@@ -306,27 +464,73 @@
     if (!alive()) { killSession(); return; }
     var panel = sess.panel;
     sess.finished = true;
+    /* AI 요약용 받아쓰기 원문 — 세션 종료 전에 캡처 */
+    var lines = sess.script.slice(0, sess.idx), transcript = "";
+    for (var i = 0; i < lines.length; i++) transcript += lines[i].t + " " + lines[i].name + ": " + lines[i].text + "\n";
     panel.innerHTML = '<div class="ez1o-rec"><div class="ez1o-gen"><span class="ez1o-spin"></span>'
       + '요약 생성 중 — 받아쓰기 ' + sess.idx + '줄 분석 · 주제/액션/신호 추출…</div></div>';
     setTimeout(function () {
       if (!document.body.contains(panel)) { killSession(); return; }
       panel.innerHTML = summaryHTML();
       killSession();
+      liveSummary(panel, transcript); /* AI 연결 시 고정 요약을 실시간 요약으로 교체 (msf 패턴) */
     }, 1200);
+  }
+
+  /* ---------------- 요약 실AI화 — 먼저 고정 요약 렌더 후, 연결돼 있으면 교체 ---------------- */
+  function liveSummary(panel, transcript) {
+    var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready());
+    var body = panel.querySelector(".ez1o-body");
+    if (!live || !body || !transcript) return;
+    var ag = (lastRun && lastRun.agenda && lastRun.agenda.length) ? "아젠다: " + lastRun.agenda.join(" / ") + "\n" : "";
+    body.insertAdjacentHTML("afterbegin",
+      '<div class="ez1o-note" data-ez1o-live style="margin-bottom:8px"><span class="ez1o-spin" style="display:inline-block;vertical-align:middle;margin-right:6px"></span>elizax가 받아쓰기 원문을 다시 요약하는 중…</div>');
+    function clearNote() {
+      var n = body.querySelector("[data-ez1o-live]");
+      if (n && n.parentNode) n.parentNode.removeChild(n);
+    }
+    EZAI.agent({
+      maxTurns: 2, maxTokens: 700,
+      system: "당신은 elizax — 1:1 미팅 요약가입니다. 주어진 받아쓰기 원문만 근거로 한국어 요약을 씁니다. "
+        + "형식: '논의 주제' 최대 3줄 / '액션 아이템' 2~3줄(담당·기한 포함) / '감지 신호' 1~2줄. "
+        + "각 줄 끝에 (" + REC_ID + " · MM:SS) 형태로 근거 시각을 인용하세요. "
+        + "아젠다가 주어지면 해당 항목을 우선 반영하세요. 머리말·다른 텍스트 금지. 도구 호출 불필요.",
+      messages: [{ role: "user", content: ag + "받아쓰기 원문:\n" + transcript }],
+      onDone: function (text) {
+        if (!document.body.contains(body)) return;
+        clearNote();
+        if (text && text.trim()) {
+          if (lastRun) lastRun.aiText = text.trim();
+          body.innerHTML = '<div class="ez1o-h4">elizax 실시간 요약</div>'
+            + '<div style="font-size:12.5px;line-height:1.75">' + esc(text.trim()).replace(/\n+/g, "<br>") + "</div>"
+            + agendaSectionHTML();
+        }
+      },
+      onError: function () { clearNote(); } /* 오프라인·오류 → 고정 요약 유지(폴백) */
+    });
   }
 
   /* ---------------- 요약 카드 ---------------- */
   function chip(t) { return '<span class="ez1o-src">' + esc(REC_ID) + ' · ' + esc(t) + '</span>'; }
 
+  function agendaSectionHTML() {
+    if (!lastRun || !lastRun.agenda || !lastRun.agenda.length) return "";
+    var h = '<div class="ez1o-h4">이번 1:1 아젠다</div><div class="ez1o-agrow" style="margin:4px 0">';
+    for (var i = 0; i < lastRun.agenda.length; i++) h += '<span class="ez1o-chip on" style="cursor:default">' + esc(lastRun.agenda[i]) + "</span>";
+    return h + "</div>";
+  }
+
   function summaryHTML() {
-    var MGR = managerName(), MEM = memberName();
+    var p = pair(), MGR = p.mgr, MEM = p.mem;
+    var title = "1:1 미팅 요약 · 7/16" + (lastRun && lastRun.memName ? " — " + lastRun.memName : "");
     return '<div class="ez1o-sum" data-ez1o-sum>'
       + '<div class="ez1o-sumhead">'
-      + '<span class="tt">1:1 미팅 요약 · 7/16</span>'
+      + '<span class="tt">' + esc(title) + '</span>'
       + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
       + '<span class="ez1o-asof">기준 시점 ' + esc(AS_OF) + '</span>'
       + '</div>'
       + '<div class="ez1o-body">'
+      + agendaSectionHTML()
       + '<div class="ez1o-h4">논의 주제 3</div>'
       + '<div class="ez1o-topic"><span class="no">1</span><span>KR2 진척 — 신규 기획 3건 사용자 검증 통과, 잔여 2건 설계 중 (진행률 68%)' + chip("00:16") + '</span></div>'
       + '<div class="ez1o-topic"><span class="no">2</span><span>일정 리스크 — 외부 연동 파트너 응답 2주 지연, 잔여 검증 일정 순연 가능성' + chip("00:42") + '</span></div>'
@@ -374,12 +578,17 @@
     if (body2) { body2.removeAttribute("contenteditable"); body2.style.outline = ""; }
 
     if (act === "confirm") {
+      var isLead = !!(lastRun && lastRun.memId);
+      var agTxt = (lastRun && lastRun.agenda && lastRun.agenda.length) ? "아젠다: " + lastRun.agenda.join(", ") + " · " : "";
+      var sumTxt = (lastRun && lastRun.aiText)
+        ? cut(lastRun.aiText.replace(/\n+/g, " "), 90)
+        : "KR2 진척·외부 연동 지연 리스크·머신러닝 교육 니즈·다음 체크인 합의";
       document.dispatchEvent(new CustomEvent("ez:ctx", {
         detail: {
           type: "oneonone",
-          source: "1on1.rec.0716",
-          title: "1:1 미팅 요약 · 7/16",
-          summary: "KR2 진척·외부 연동 지연 리스크·머신러닝 교육 니즈·다음 체크인 합의",
+          source: "1on1.rec.0716" + (isLead ? "." + lastRun.memId : ""),
+          title: (isLead ? lastRun.memName + " 1:1 " : "1:1 ") + "미팅 요약 · 7/16",
+          summary: agTxt + sumTxt,
           weight: 3
         }
       }));
@@ -387,14 +596,20 @@
       dec.className = "ez1o-dec";
       dec.innerHTML = "&#10003; 확정 · 감사 기록됨";
       gate.appendChild(dec);
-      var st = loadState(); st.confirmedAt = "2026-07-16"; saveState(st);
-      var bar = document.querySelector("[data-ez1o-bar]");
-      if (bar && !bar.querySelector(".ez1o-donetag")) {
-        var tag = document.createElement("span");
-        tag.className = "ez1o-donetag";
-        tag.innerHTML = "&#10003; 7/16 요약 확정됨 · 히스토리 기록";
-        var link = bar.querySelector(".ez1o-linkbtn");
-        bar.insertBefore(tag, link || null);
+      if (isLead) {
+        /* leader — 드롭다운의 팀원별 최근 1:1 라벨 갱신(원장 재조회) */
+        var selEl = document.querySelector("[data-ez1o-mem]");
+        if (selEl) selEl.outerHTML = memSelectHTML();
+      } else {
+        var st = loadState(); st.confirmedAt = "2026-07-16"; saveState(st);
+        var bar = document.querySelector("[data-ez1o-bar]");
+        if (bar && !bar.querySelector(".ez1o-donetag")) {
+          var tag = document.createElement("span");
+          tag.className = "ez1o-donetag";
+          tag.innerHTML = "&#10003; 7/16 요약 확정됨 · 히스토리 기록";
+          var link = bar.querySelector(".ez1o-linkbtn");
+          bar.insertBefore(tag, link || null);
+        }
       }
       toast("기록 확정 — 성과 히스토리에 기록되었습니다 (감사 기록 남김).", "ok");
     } else { /* drop */
@@ -490,6 +705,14 @@
     /* 맵 배경 클릭 → 닫기 */
     if (t && t.getAttribute && t.getAttribute("data-ez1o-mapov")) { closeMap(); return; }
 
+    /* 아젠다 칩 토글 */
+    var chipEl = t && t.closest ? t.closest("[data-ez1o-chip]") : null;
+    if (chipEl) {
+      if (chipEl.className.indexOf("on") >= 0) chipEl.className = chipEl.className.replace(/\s*\bon\b/, "");
+      else chipEl.className += " on";
+      return;
+    }
+
     var act = t && t.closest ? t.closest("[data-ez1o]") : null;
     if (act) {
       var kind = act.getAttribute("data-ez1o");
@@ -499,6 +722,31 @@
           ? bar.nextElementSibling
           : document.querySelector("[data-ez1o-panel]");
         start(panel);
+      }
+      else if (kind === "rec") {
+        var pnl = act.closest("[data-ez1o-panel]");
+        if (pnl) {
+          var ag = [], ons = pnl.querySelectorAll(".ez1o-chip.on"), ci;
+          for (ci = 0; ci < ons.length; ci++) ag.push(ons[ci].textContent);
+          var inp = pnl.querySelector("[data-ez1o-agin]");
+          if (inp && inp.value && inp.value.replace(/\s/g, "")) ag.push(inp.value.trim());
+          beginRec(pnl, ag);
+        }
+      }
+      else if (kind === "cancel") {
+        var pnl2 = act.closest("[data-ez1o-panel]");
+        if (pnl2) pnl2.innerHTML = "";
+      }
+      else if (kind === "promise") {
+        var row = act.closest("[data-ez1o-prom]");
+        if (row) {
+          var pid = row.getAttribute("data-ez1o-prom");
+          var st2 = loadState(); st2.promiseDone = st2.promiseDone || {};
+          st2.promiseDone[pid] = !st2.promiseDone[pid]; saveState(st2);
+          if (st2.promiseDone[pid]) { act.className = "tg done"; act.innerHTML = "&#10003; 이행 완료"; }
+          else { act.className = "tg"; act.innerHTML = "이행 확인"; }
+          toast(st2.promiseDone[pid] ? "지난 약속을 이행 완료로 표시했습니다." : "이행 확인을 취소했습니다.", "");
+        }
       }
       else if (kind === "stop") finish();
       else if (kind === "map") openMap();
@@ -515,6 +763,12 @@
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") closeMap();
+  });
+
+  /* leader — 팀원 드롭다운 선택 */
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t && t.getAttribute && t.hasAttribute && t.hasAttribute("data-ez1o-mem")) selMemId = t.value;
   });
 
   function boot() {

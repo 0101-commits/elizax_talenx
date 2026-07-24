@@ -216,6 +216,84 @@
       return { leader: empBrief(target), count: items.length, items: items };
     },
 
+    get_context_ledger: function (input) {
+      /* 성과 히스토리 원장(EZLedger) 조회 — 타인 원장은 열람 규칙(history)대로 차단/집계 */
+      var e = findEmp(input.emp_id || input.name) || CU();
+      var self = e.emp_id === CU().emp_id;
+      var lv = gate("history", e.emp_id);
+      if (lv === "no") return { blocked: true, policy: BLOCK_NOTE };
+      var list = [];
+      if (self && window.EZLedger && EZLedger.list) {
+        try { list = EZLedger.list() || []; } catch (e1) { list = []; }
+      } else {
+        /* 원장 모듈 미로드 또는 타인 원장 — localStorage 직접 읽기 (읽기 전용) */
+        try {
+          var raw = localStorage.getItem("elizax_ctx_v1:" + e.emp_id);
+          var obj = raw ? JSON.parse(raw) : null;
+          list = (obj && Object.prototype.toString.call(obj.items) === "[object Array]") ? obj.items.slice() : [];
+          list.sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+        } catch (e2) { list = []; }
+      }
+      var type = String(input.type || "").trim();
+      if (type) list = list.filter(function (it) { return it && it.type === type; });
+      if (lv === "anon") return { owner: { orgName: e.orgName }, count: list.length, policy: POLICY_NOTE };
+      var limit = Math.min(Number(input.limit) || 8, 20);
+      var out = list.slice(0, limit).map(function (it) {
+        var row = { id: it.id, at: it.at, type: it.type, title: it.title, summary: it.summary, weight: it.weight, used_count: it.usedCount || 0 };
+        if (lv === "full") row.source = it.source; /* summ은 출처 비노출 */
+        return row;
+      });
+      return {
+        owner: empBrief(e), total: list.length, count: out.length, level: lv, items: out,
+        note: "근거로 실제 사용한 항목은 답변 끝에 [[ctx:ID1,ID2]] 마커로 인용하세요."
+      };
+    },
+
+    simulate_whatif: function (input) {
+      /* 읽기 전용 what-if — 정식 엔진(EZCalc.simulate) 우선, 없으면 evaluations 분포로 간단 계산 */
+      var e = findEmp(input.emp_id || input.name) || CU();
+      var lv = gate("eval_draft", e.emp_id);
+      if (lv === "no" || lv === "anon") return { blocked: true, policy: lv === "anon" ? POLICY_NOTE : BLOCK_NOTE };
+      var delta = Number(input.achievement_delta) || 0;
+      var cap = (input.cap_pct == null || input.cap_pct === "") ? null : Number(input.cap_pct);
+      if (window.EZCalc && EZCalc.simulate) {
+        try {
+          var p = { achievement_delta: delta };
+          if (cap != null) p.cap_pct = cap;
+          if (input.emp_id || input.name) p.emp_id = e.emp_id;
+          var r = EZCalc.simulate(p);
+          if (r && !r.error) { if (!r.engine) r.engine = "EZCalc"; return r; }
+        } catch (e3) { /* 엔진 오류 → 폴백 */ }
+      }
+      var evs = arr("evaluations");
+      var ev = evs.filter(function (v) { return v.emp_id === e.emp_id; })[0];
+      if (!ev) return { error: "평가 데이터가 없습니다: " + (e.name || e.emp_id) };
+      /* ponytail: 달성도 가중 40%·등급컷 S85/A75/B60 가정 — EZCalc.simulate 정식 엔진이 뜨면 그쪽이 우선 */
+      var ACH_W = 0.4;
+      function gradeOf(s) { return s >= 85 ? "S" : s >= 75 ? "A" : s >= 60 ? "B" : "C"; }
+      var afterScore = Math.max(0, Math.min(100, Math.round((ev.weighted_score + delta * ACH_W) * 10) / 10));
+      var dist = {}, top = 0;
+      evs.forEach(function (v) { dist[v.grade] = (dist[v.grade] || 0) + 1; if (v.grade === "S" || v.grade === "A") top++; });
+      var topPct = evs.length ? Math.round(top * 1000 / evs.length) / 10 : 0;
+      var res = {
+        engine: "fallback",
+        target: { emp_id: e.emp_id, name: e.name },
+        params: { achievement_delta: delta, cap_pct: cap },
+        before: { weighted_score: ev.weighted_score, grade: ev.grade },
+        after: { weighted_score: afterScore, grade: gradeOf(afterScore) },
+        grade_changed: ev.grade !== gradeOf(afterScore),
+        grade_distribution: dist,
+        top_grade_pct: topPct,
+        assumptions: "달성도 가중 40% · 등급 컷 S≥85/A≥75/B≥60 가정 · 읽기 전용 시뮬레이션 — 실제 데이터는 변경되지 않습니다"
+      };
+      if (cap != null) {
+        res.cap_note = topPct > cap
+          ? "현재 상위등급(S+A) 비율 " + topPct + "%가 상한 " + cap + "%를 초과 — 강제배분 시 상위등급 일부가 하향 조정될 수 있습니다"
+          : "현재 상위등급(S+A) 비율 " + topPct + "%는 상한 " + cap + "% 이내입니다";
+      }
+      return res;
+    },
+
     get_screen_context: function () {
       var label = "홈";
       try {
@@ -262,6 +340,10 @@
       input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" } } } },
     { name: "get_upward_feedback", description: "조직장에 대한 상향 피드백(구성원→조직장)을 조회한다. 응답자 보호: 조직장 본인은 익명 집계(themes)만, 응답 3명 미만은 집계도 비공개. leader_emp_id 생략 시 현재 사용자.",
       input_schema: { type: "object", properties: { leader_emp_id: { type: "string" }, name: { type: "string" } } } },
+    { name: "get_context_ledger", description: "성과 히스토리 원장(맥락 원장) 항목을 조회한다. 목표·체크인·1on1·피드백·평가이력·조직/직무 기준·규칙 등 사용자가 기능을 쓰며 축적한 맥락. 반환된 항목 id는 답변 끝 [[ctx:ID1,ID2]] 인용 마커에 사용. emp_id 생략 시 현재 사용자 — 타인 원장은 열람 규칙에 따라 요약/집계만.",
+      input_schema: { type: "object", properties: { emp_id: { type: "string" }, type: { type: "string", description: "유형 필터: goal/checkin/oneonone/feedback/eval/org/job/rule" }, limit: { type: "number", description: "최근 N건 (기본 8, 최대 20)" } } } },
+    { name: "simulate_whatif", description: "읽기 전용 what-if 시뮬레이션: 달성률 변화(achievement_delta, %p)나 강제배분 상한(cap_pct, %)을 가정했을 때 등급·종합점수·분포 변화를 실계산한다. 실제 데이터는 변경하지 않는다. 예: '달성률이 -10%p면 등급이 어떻게 되나'.",
+      input_schema: { type: "object", properties: { achievement_delta: { type: "number", description: "달성률 변화 가정 (%p, 예: -10)" }, cap_pct: { type: "number", description: "상위등급(S+A) 강제배분 상한 % (예: 30)" }, emp_id: { type: "string", description: "대상 직원 (생략 시 현재 사용자)" } } } },
     { name: "get_screen_context", description: "사용자가 지금 보고 있는 talenx 화면·역할·현재 사용자 정보.",
       input_schema: { type: "object", properties: {} } },
     { name: "navigate", description: "talenx 화면을 전환한다. section: home/work/perf/msf/appr/pay/att/hrm/wf. tab은 서브탭 인덱스(없으면 null). perf: 0목표 1피드백 2미팅 3리뷰 · appr: 0매트릭스 1인재리뷰 · work: 0업무 1스크럼 · pay: 0급여 1연말정산 · att: 0내근무 1내휴가 2구성원근무 3구성원휴가 4스케줄 5위치 6연차촉진 · hrm: 0사용자 1구성원 2인재검색 3인원현황 · wf: 0받은 1보낸 2서명",
@@ -282,6 +364,8 @@
         case "get_team_status": return "팀원 " + result.team_size + "명 요약";
         case "get_org_overview": return "전사 " + result.employees + "명 · 등급분포 산출";
         case "get_job_profile": return "직무 프로파일 · " + result.profile.title;
+        case "get_context_ledger": return result.items ? "성과 히스토리 " + result.count + "건 조회" : "성과 히스토리 " + result.count + "건 · 집계만";
+        case "simulate_whatif": return result.after ? "시뮬 " + result.before.grade + " → " + result.after.grade + " (" + result.after.weighted_score + "점)" : "시뮬레이션 완료";
         case "get_screen_context": return result.screen;
         case "navigate": return result.ok ? result.moved_to + " 이동" : "이동 실패";
       }
@@ -293,13 +377,14 @@
     search_employee: "talenx", get_employee_profile: "talenx", get_objectives: "talenx",
     get_checkins: "ERP", get_team_status: "talenx", get_org_overview: "통계",
     get_screen_context: "맥락", navigate: "화면", get_job_profile: "talenx",
-    get_upward_feedback: "talenx"
+    get_upward_feedback: "talenx", get_context_ledger: "원장", simulate_whatif: "시뮬"
   };
   var LABEL_OF = {
     search_employee: "직원 검색", get_employee_profile: "프로필·평가 조회", get_objectives: "목표·KR 조회",
     get_checkins: "체크인 기록 대조", get_team_status: "팀 현황 요약", get_org_overview: "전사 분포 스캔",
     get_screen_context: "현재 화면 확인", navigate: "화면 전환", get_job_profile: "직무 프로파일 조회",
-    get_upward_feedback: "상향 피드백 조회 (익명 보호)"
+    get_upward_feedback: "상향 피드백 조회 (익명 보호)",
+    get_context_ledger: "성과 히스토리 원장 조회", simulate_whatif: "What-if 시뮬레이션 (읽기 전용)"
   };
 
   window.EZTools = {

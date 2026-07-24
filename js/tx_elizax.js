@@ -552,7 +552,7 @@
     var node = h("div", "ezx-msg " + (m.role === "user" ? "user" : m.role === "err" ? "err" : "ai"));
     var bubble = h("div", "ezx-bubble");
     if (m.role === "user") bubble.textContent = m.text;
-    else bubble.innerHTML = mdToHtml(m.text || "");
+    else bubble.innerHTML = mdToHtml(stripCtxMarker(m.text || ""));
     if (m.streaming) bubble.appendChild(h("span", "ezx-caret"));
     node.appendChild(bubble);
     if (m.note) node.appendChild(h("div", "ezx-note" + (m.noteWarn ? " warn" : ""), { text: m.note }));
@@ -595,6 +595,26 @@
     sendMessage(v);
   }
 
+  /* 성과 히스토리 원장(EZLedger) 요약 — 최근 8건을 시스템 컨텍스트로 주입 */
+  function buildLedgerContext() {
+    if (!window.EZLedger || !EZLedger.list) return "";
+    var list;
+    try { list = EZLedger.list() || []; } catch (e) { return ""; }
+    if (!list.length) return "";
+    var lines = [];
+    for (var i = 0; i < list.length && lines.length < 8; i++) {
+      var it = list[i];
+      if (!it || !it.id || !it.title) continue;
+      var one = String(it.title).replace(/\s+/g, " ");
+      var sum = String(it.summary || "").replace(/\s+/g, " ");
+      if (sum) one += " — " + (sum.length > 60 ? sum.slice(0, 59) + "…" : sum);
+      lines.push("- " + it.id + " (" + it.type + ") " + one);
+    }
+    if (!lines.length) return "";
+    return "[성과 히스토리 원장 — 이 사용자의 축적 맥락]\n" + lines.join("\n")
+      + "\n(근거로 실제 사용한 원장 항목이 있으면 답변 맨 끝에 [[ctx:ID1,ID2]] 마커를 정확히 한 번 표기하세요. 사용한 항목이 없으면 마커를 생략하세요.)";
+  }
+
   function buildPayloadMessage(userText) {
     if (!state.attachContext) return userText;
     var label = activeScreenLabel();
@@ -602,7 +622,34 @@
     if (needsSubject(state.perspective) && state.subject) {
       line = "[현재 화면: " + label + " / 대상: " + state.subject.name + "·" + (state.subject.jobTitle || "") + " / 요청자: " + CURRENT.name + "]";
     }
+    var ledger = buildLedgerContext();
+    if (ledger) line += "\n" + ledger;
     return line + "\n" + userText;
+  }
+
+  /* ---- 실인용 근거 마커 [[ctx:ID1,ID2]] ---- */
+  function stripCtxMarker(text) {
+    /* 표시용 제거 — 스트리밍 중 꼬리의 미완성 마커도 감춘다 */
+    return String(text || "")
+      .replace(/\s*\[\[ctx:[^\]]*\]\]/g, "")
+      .replace(/\s*\[\[ctx:[^\]]*$/, "");
+  }
+  function extractCtxRefs(aiMsg) {
+    /* 스트림 종료 시 마커를 meta.ctxRefs로 옮기고 본문에서 제거 (원장 근거칩이 우선 사용) */
+    if (!aiMsg || !aiMsg.text) return;
+    var m = /\[\[ctx:([^\]]+)\]\]/.exec(aiMsg.text);
+    if (!m) return;
+    aiMsg.text = stripCtxMarker(aiMsg.text).replace(/\s+$/, "");
+    var ids = [], parts = m[1].split(",");
+    for (var i = 0; i < parts.length; i++) {
+      var v = parts[i].replace(/^\s+|\s+$/g, "");
+      if (v) ids.push(v);
+    }
+    if (ids.length) {
+      if (!aiMsg.meta) aiMsg.meta = {};
+      aiMsg.meta.ctxRefs = ids;
+      aiMsg.meta.ctxCited = true; /* 모델 실인용 표시 — 원장에서 usedCount 연동 */
+    }
   }
 
   /* 시나리오 실행을 대화 안에 자연스럽게: 사용자 발화 → 인라인 작업 카드 */
@@ -760,6 +807,7 @@
       onDone: function () {
         if (work) { work.done = true; work.steps.forEach(function (s) { s.st = 2; }); refreshWork(work); }
         aiMsg.streaming = false;
+        extractCtxRefs(aiMsg); /* 실인용 근거 마커 → meta.ctxRefs */
         /* 모델이 마커를 낸 경우의 폴백 (navigate 도구가 기본) */
         if (window.EZNav && window.EZNav.extractMarker) {
           try {
@@ -814,6 +862,7 @@
           completeWork(aiMsg);
           aiMsg.streaming = false;
           aiMsg.text = j.response || j.message || "(빈 응답)";
+          extractCtxRefs(aiMsg);
           if (j.recommendations && j.recommendations.length) aiMsg.recos = j.recommendations;
           if (j.type === "fallback" || j.source === "fallback") { aiMsg.note = "AI 미연결 — 기본 응답"; }
           finishStreaming();
@@ -986,6 +1035,7 @@
     } else if (msg.type === "done") {
       completeWork(aiMsg);
       aiMsg.streaming = false;
+      extractCtxRefs(aiMsg); /* 실인용 근거 마커 → meta.ctxRefs */
       /* LLM이 화면 이동을 지시했으면 마커 제거 후 실행 */
       if (window.EZNav && window.EZNav.extractMarker) {
         try {
@@ -1022,7 +1072,7 @@
   /* fast in-place update of the streaming bubble (avoids full re-render) */
   function refreshBubble(aiMsg) {
     if (!aiMsg._bubble) { renderMessages(); return; }
-    aiMsg._bubble.innerHTML = mdToHtml(aiMsg.text || "");
+    aiMsg._bubble.innerHTML = mdToHtml(stripCtxMarker(aiMsg.text || ""));
     if (aiMsg.streaming) aiMsg._bubble.appendChild(h("span", "ezx-caret"));
     scrollToBottom();
   }

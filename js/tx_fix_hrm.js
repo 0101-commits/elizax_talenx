@@ -135,9 +135,9 @@
           '<div class="pline1"><span class="pname">' + esc(CU.name || '최정남') + '</span>' +
           '<span class="pnum">' + empNo(CU.emp_id) + '</span><span class="pstat">재직</span></div>' +
           '<div class="pmeta">' +
-            '<span class="pm"><span class="pk">직급/직책</span><span class="pv">' + esc(CU.level_kr || '사원') + ' / ' + jikchaek(CU) + '</span></span>' +
-            '<span class="pm"><span class="pk">입사일</span><span class="pv">' + (CU.join_date || '2016-04-30').replace(/-/g, '.') + '</span></span>' +
-            '<span class="pm"><span class="pk">관리자</span><span class="pv">' + esc(CU.managerName || '홍예준') + '</span></span>' +
+            '<span class="pm"><span class="pk">직급/직책</span><span class="pv">' + esc(CU.level_kr || '-') + ' / ' + jikchaek(CU) + '</span></span>' +
+            '<span class="pm"><span class="pk">입사일</span><span class="pv">' + (CU.join_date ? CU.join_date.replace(/-/g, '.') : '-') + '</span></span>' +
+            '<span class="pm"><span class="pk">관리자</span><span class="pv">' + esc(CU.managerName || '-') + '</span></span>' +
           '</div></div>' +
         '<div class="porg">' + esc(orgPathStr(CU.org_id || 'ORG-010')) + '</div></div>';
     }
@@ -152,18 +152,19 @@
     var CAR = ' <span class="car">⌄</span>';
 
     function tab_인사정보() {
-      var join = (CU.join_date || '2016-04-30').replace(/-/g, '.');
-      var email = 'jn.choi@e-hcg.com';
+      /* currentUser 실데이터 기준 — 데이터 없는 필드는 '-' */
+      var join = CU.join_date ? CU.join_date.replace(/-/g, '.') : '-';
+      var email = CU.email || '-';
       var apt = [
-        ['2016.04.30', '입사', 'HCG 입사 · CPO / Package BG 서비스기획담당 배치',
-          '입사구분: 신입 · 최초 배치 조직: Package BG · 직급: 사원 · 고용형태: 정규직'],
-        ['2018.07.01', '직무이동', 'Package BG 내 서비스기획담당 직무 확정',
-          '직무: 서비스기획담당 · 사유: 직무 재배치 · 조직 변동 없음'],
-        ['2021.07.01', '조직개편', 'CPO 산하 Package BG 재편제',
-          '개편 유형: 상위 조직 개편 · 소속 조직(Package BG) 유지 · 보고라인 변경'],
-        ['2024.01.01', '처우조정', '연간 처우 조정 반영',
-          '유형: 연봉 조정 · 직급/조직 변동 없음']
+        [join, '입사', 'HCG 입사 · ' + esc(CU.orgName || '-') +
+          (CU.jobTitle ? ' ' + esc(CU.jobTitle) : '') + ' 배치',
+          '최초 배치 조직: ' + esc(CU.orgName || '-') + ' · 직급: ' + esc(CU.level_kr || '-') + ' · 고용형태: 정규직']
       ];
+      (CU.jobHistory || []).forEach(function (j) {
+        apt.push([j.period || '-', '직무이동',
+          esc(j.prev_label || '-') + ' → ' + esc(j.new_label || '-'),
+          esc(j.note || '-')]);
+      });
       var aptHtml = apt.map(function (a) {
         return '<div class="apt txf-acc"><div class="adate">' + a[0] + '</div>' +
           '<div class="abody"><div class="atitle">' + a[1] + '</div>' +
@@ -181,10 +182,10 @@
         '</div>' +
         '<div class="hcard">' + head('발령정보') +
           kv('회사', 'HCG') +
-          kv('조직', esc(CU.orgName || 'Package BG')) +
-          kv('직무', esc(CU.jobTitle || '서비스기획담당')) +
+          kv('조직', esc(CU.orgName || '-')) +
+          kv('직무', esc(CU.jobTitle || '-')) +
           kv('직책', jikchaek(CU)) +
-          kv('직급', esc(CU.level_kr || '사원')) +
+          kv('직급', esc(CU.level_kr || '-')) +
           kv('직위', jikwi(CU.level_kr)) +
           kv('직원 구분', '사무직') +
           kv('고용 형태', '정규직') +
@@ -685,7 +686,7 @@
       var title = cardTitleOf(trigger) || '정보';
       var body =
         fld('연락처', '<input type="text" value="010-4827-3391">') +
-        fld('이메일', '<input type="text" value="jn.choi@e-hcg.com">') +
+        fld('이메일', '<input type="text" value="' + esc(CU.email || '') + '" placeholder="회사 이메일">') +
         fld('주소', '<input type="text" value="서울특별시 강남구 테헤란로 12, 101동 802호">') +
         fld('비상연락망', '<input type="text" value="010-2210-8845 (배우자)">') +
         '<div class="txfh-note">인사 기본정보 항목의 변경은 관리자 승인 후 시스템에 반영됩니다.</div>';

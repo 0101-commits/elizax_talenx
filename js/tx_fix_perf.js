@@ -835,7 +835,34 @@
           } }));
         } catch (e) { /* 원장 부재 — 무해화 */ }
       }
-      TX.toast && TX.toast('목표를 생성했습니다.', 'ok'); closeNew();
+      /* 생성 즉시 목록 반영 — 세션 메모리(원본 talenx_data.js 불변, 새로고침 시 초기화) */
+      try {
+        var nmInp = newOv && newOv.querySelector('[data-txf="new-name"]');
+        var title = nmInp ? nmInp.value.trim() : '';
+        if (title) {
+          var oid = 'OBJ-NEW-' + Date.now();
+          var no = { objective_id: oid, title: title, owner_emp_id: CU.emp_id,
+                     org_id: cuEmp.org_id, progress: 0, status: '진행중', _session: true };
+          objs.push(no); objById[oid] = no;
+          (objByOwner[CU.emp_id] = objByOwner[CU.emp_id] || []).push(no);
+          (objByOrg[no.org_id] = objByOrg[no.org_id] || []).push(no);
+          var rows = newOv.querySelectorAll('.txf-kr');
+          Array.prototype.forEach.call(rows, function (row, i) {
+            var kr = window.EZLint ? EZLint.krFromRow(row) : { name: '' };
+            if (!String(kr.name || '').trim()) return;
+            var wInp = row.querySelector('.txf-krw');
+            var nk = { kr_id: oid + '-KR' + (i + 1), objective_id: oid, name: kr.name,
+                       weight: (wInp ? (parseFloat(wInp.value) || 0) : 0) + '%',
+                       progress: 0, current_value: 0, difficulty: kr.diff || 'A',
+                       difficulty_basis: kr.basisVal || '' };
+            krs.push(nk);
+            (krByObj[oid] = krByObj[oid] || []).push(nk);
+          });
+        }
+      } catch (e) { /* 반영 실패해도 저장 흐름은 유지 */ }
+      TX.toast && TX.toast('목표를 생성했습니다. 목록에 반영되었습니다. (데모 — 새로고침 시 초기화)', 'ok');
+      closeNew();
+      renderGoalBody();
     }
     function openSaveGate(issues) {
       if (!TX.modal) { finishNewSave(); return; }
@@ -1013,6 +1040,16 @@
         title: '목표 가중치 설정', body: body,
         actions: [
           { label: '취소', kind: 'ghost' },
+          { label: '균등 배분', kind: 'ghost', onClick: function () {
+              var inps = body.querySelectorAll('.txf-we');
+              var n = inps.length;
+              if (!n) return false;
+              var base = Math.floor(100 / n), rem = 100 - base * n;
+              inps.forEach(function (inp, i) { inp.value = base + (i < rem ? 1 : 0); });
+              recalc();
+              TX.toast && TX.toast('가중치를 균등 배분했습니다. (' + n + '개 항목 · 합계 100%)', 'ok');
+              return false;
+            } },
           { label: '저장', kind: 'primary', onClick: function () {
               var s = 0; body.querySelectorAll('.txf-we').forEach(function (i) { s += parseFloat(i.value) || 0; });
               if (s !== 100) { TX.toast && TX.toast('가중치 합계가 100%가 되어야 합니다. (현재 ' + s + '%)', 'warn'); return false; }
@@ -1161,10 +1198,16 @@
           + '<div style="margin-top:3px">' + esc(c.t) + '</div></div></div>';
       }).join('');
       var isOwner = o.owner_emp_id === CU.emp_id;
-      var pendPill = pend
-        ? '<span style="display:inline-block;font-size:11px;font-weight:800;color:#5A6472;background:#EDF1F7;border:1px solid #D9E0EB;border-radius:999px;padding:3px 10px;margin-bottom:7px">⏳ 체크인 승인 요청 중' + (pend.ai ? ' · ✦ AI 초안' : '') + '</span><br>'
-        : '';
-      var ckBtns = pend
+      var pendPill = '';
+      if (pend && pend.status === 'approved') {
+        pendPill = '<span style="display:inline-block;font-size:11px;font-weight:800;color:#067647;background:#ECFDF3;border:1px solid #ABEFC6;border-radius:999px;padding:3px 10px;margin-bottom:7px">✓ 체크인 승인됨 · 진행률 반영' + (pend.decided_at ? ' · ' + esc(pend.decided_at) : '') + '</span><br>';
+      } else if (pend && pend.status === 'rejected') {
+        pendPill = '<span style="display:inline-block;font-size:11px;font-weight:800;color:#B42318;background:#FEF3F2;border:1px solid #FECDCA;border-radius:999px;padding:3px 10px;margin-bottom:7px">체크인 반려됨 — 근거를 보완해 다시 요청할 수 있습니다</span><br>';
+      } else if (pend) {
+        pendPill = '<span style="display:inline-block;font-size:11px;font-weight:800;color:#5A6472;background:#EDF1F7;border:1px solid #D9E0EB;border-radius:999px;padding:3px 10px;margin-bottom:7px">⏳ 체크인 승인 요청 중' + (pend.ai ? ' · ✦ AI 초안' : '') + '</span><br>';
+      }
+      var ckDecided = pend && (pend.status === 'approved' || pend.status === 'rejected');
+      var ckBtns = (pend && !ckDecided)
         ? '<button class="ghost-btn" data-txf="gd-ckcancel" style="color:#B42318;border-color:rgba(180,35,24,.35)">요청 취소</button>'
         : (isOwner ? '<button class="btn-blue" data-txf="gd-checkin">체크인</button>' : '');
       var aiCard = (!pend && isOwner)
