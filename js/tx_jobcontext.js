@@ -248,7 +248,7 @@
       + (h25 ? '<div class="cg">FY2025 등급 <b>' + esc(h25.grade) + '</b>'
           + (h25.score != null ? ' · ' + esc(h25.score) + '점' : '') + '</div>' : '')
       + (ev && ev.rationale_summary ? '<div class="cr">' + esc(ev.rationale_summary) + '</div>' : '')
-      + '<div class="cn">작년 기록과 직무 기준을 AI 추천의 근거로 사용합니다</div></div>';
+      + '<div class="cn">✦ 작년 기록과 직무 기준을 AI 추천의 근거로 사용합니다</div></div>';
   }
 
   /* ============================================================
@@ -263,7 +263,7 @@
       + '<div class="jt">' + esc(emp.jobTitle || '직무 미지정') + '</div></div></div>';
     if (!jp) {
       h += '<div class="ezjc-missing">⚠ 직무 프로파일 미연결 — HR에 연결을 요청하세요</div>'
-        + '<div class="ezjc-note">직무 기준이 연결되면 과업·기대 스킬을 근거로 AI가 KR을 추천합니다.</div>';
+        + '<div class="ezjc-note">✦ 직무 기준이 연결되면 과업·기대 스킬을 근거로 AI가 KR을 추천합니다.</div>';
     } else {
       var longMission = (jp.mission || '').length > 80;
       h += '<div class="ezjc-ptitle">' + esc(jp.title || '') + '</div>'
@@ -512,7 +512,7 @@
       + (ev && ev.rationale_summary ? '<div class="sm">' + esc(ev.rationale_summary) + '</div>' : '')
       + '<div class="sm" style="color:#15803D">확정 근거로 연결</div></div>'
       + ((h24 || h25)
-          ? '<div class="ezjc-item"><div class="sm" style="margin:0">성과 히스토리</div>'
+          ? '<div class="ezjc-item"><div class="sm" style="margin:0">성과 기록</div>'
             + (h24 ? 'FY2024 ' + esc(h24.grade) : '') + (h24 && h25 ? ' → ' : '')
             + (h25 ? 'FY2025 ' + esc(h25.grade) : '') + '</div>'
           : '');

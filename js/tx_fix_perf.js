@@ -124,6 +124,10 @@
       '#s-perf .mg.txf-exp:hover{background:var(--soft)}',
       '#s-perf .txf-detail{margin:0 0 6px}',
       '#s-perf .txf-ai{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--purple);color:var(--purple);background:var(--card);font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:8px;cursor:pointer}',
+      /* --- v2 §6: 은닉 기능 상시 ✦ 앵커 스트립 --- */
+      '#s-perf .txf-aistrip{display:flex;gap:8px;margin:10px 0 2px;flex-wrap:wrap}',
+      '#s-perf .txf-anchor{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--color-accent-muted,rgba(31,122,240,.28));color:var(--color-accent,#1F7AF0);background:var(--color-background-card,#fff);font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:var(--radius-full,999px);cursor:pointer;transition:background var(--duration-fast,175ms)}',
+      '#s-perf .txf-anchor:hover{background:var(--color-accent-muted,rgba(31,122,240,.08))}',
       '#s-perf .txf-ai:hover{background:var(--blue-soft)}',
       '#s-perf .txf-ck{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);cursor:pointer;user-select:none}',
       '#s-perf .txf-ck input{width:15px;height:15px;accent-color:var(--blue)}',
@@ -452,6 +456,11 @@
         + '<button data-txf-pill="1" class="on">소속 기준</button>'
         + '<button data-txf-pill="2">역할 기준</button>'
         + '<button data-txf-pill="3">나의 전체 목표</button></div>'
+        /* v2 §6·§11: 은닉 기능(overlay/모달 내부)의 상시 진입 앵커 — 화면당 최대 3개 */
+        + '<div class="txf-aistrip" data-astryx-theme="talenx">'
+        + '<button class="txf-anchor" data-txf="anchor-airec">✦ AI 목표 추천</button>'
+        + '<button class="txf-anchor" data-txf="anchor-refine">✦ 초안 정제</button>'
+        + '<button class="txf-anchor" data-txf="anchor-aick">✦ 체크인 초안</button></div>'
         + '<div class="txf-goal-body"></div>';
       renderGoalBody();
     }
@@ -880,7 +889,7 @@
                 }).join('')
               + '</div></div>';
           }).join('')
-        + '<div style="font-size:12px;color:var(--ink-3);margin:10px 0 5px">그대로 저장하려면 사유가 필요합니다 — 사유는 성과 히스토리에 기록되어 평가 시점에 함께 조회됩니다.</div>'
+        + '<div style="font-size:12px;color:var(--ink-3);margin:10px 0 5px">그대로 저장하려면 사유가 필요합니다 — 사유는 성과 기록에 기록되어 평가 시점에 함께 조회됩니다.</div>'
         + '<textarea class="txf-inp" data-gate-reason placeholder="그대로 저장하는 사유 (필수)" style="width:100%;min-height:58px;resize:vertical"></textarea>';
       TX.modal({
         title: '저장 전 확인 — 측정 가능성', body: body,
@@ -1359,6 +1368,8 @@
       body.innerHTML =
         '<div style="display:flex;gap:18px;font-size:13px;margin-bottom:12px;flex-wrap:wrap">'
         + '<span>대상 <b>' + esc(tgt) + '</b></span><span>기간 <b>2025</b></span><span>양식 <b>기본 리뷰 양식</b></span></div>'
+        /* v2 §6: AI 산출물 무표기 0건 — 프리필 초안 마커 의무 */
+        + (done ? '' : '<div style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#356CB5;background:rgba(31,122,240,.07);border:1px solid rgba(31,122,240,.25);border-radius:999px;padding:4px 12px;margin-bottom:8px">✦ AI 초안 — 수정·확정은 내가</div>')
         + '<textarea style="width:100%;min-height:190px;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:13.5px;font-family:inherit;resize:vertical;color:var(--ink);background:var(--card)"'
         + (done ? ' readonly' : '') + '>' + esc(draft) + '</textarea>';
       var acts;
@@ -1397,6 +1408,27 @@
         if (k === 'map' || k === 'new-map') { ev.preventDefault(); openMap(); return; }
         if (k === 'map-close') { ev.preventDefault(); closeMap(); return; }
         if (k === 'new') { ev.preventDefault(); openNew(); return; }
+        /* v2 §6: ✦ 상시 앵커 — 기존 오픈 함수 재사용, 해당 기능 활성 상태로 진입 */
+        if (k === 'anchor-airec') {
+          ev.preventDefault(); openNew();
+          setTimeout(function () { var b = newOv && newOv.querySelector('.txf-ai[data-txf="ai"]'); if (b) b.click(); }, 80);
+          return;
+        }
+        if (k === 'anchor-refine') {
+          ev.preventDefault(); openNew();
+          setTimeout(function () {
+            var ta = newOv && newOv.querySelector('.txf-rte textarea');
+            if (ta) { ta.scrollIntoView({ block: 'center' }); ta.focus(); }
+          }, 80);
+          return;
+        }
+        if (k === 'anchor-aick') {
+          ev.preventDefault();
+          var o0a = myObjectives()[0];
+          if (!o0a) { TX.toast && TX.toast('먼저 목표를 생성하세요.', 'warn'); return; }
+          openCheckinModal(o0a, true);
+          return;
+        }
         if (k === 'new-close') { ev.preventDefault(); closeNew(); return; }
         if (k === 'new-temp') { TX.toast && TX.toast('임시저장했습니다.', 'ok'); return; }
         if (k === 'new-save') {

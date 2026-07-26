@@ -491,6 +491,24 @@
         r2.insertBefore(chip, rr);
       }
     }
+    /* v2 §11: 인사관리 ✦ 앵커 1개 — hr/exec 한정 인재검색 질의 (워크스페이스 연결 지도 연동) */
+    if (p2 && FULL && !p2.querySelector('.txf-anchor-talent')) {
+      var searchBtnHost = p2.querySelector('.btn-search');
+      if (searchBtnHost && searchBtnHost.parentNode) {
+        var tq = document.createElement('button');
+        tq.className = 'txf-anchor-talent';
+        tq.setAttribute('data-astryx-theme', 'talenx');
+        tq.style.cssText = 'display:inline-flex;align-items:center;gap:6px;border:1px solid var(--color-accent-muted,rgba(31,122,240,.28));color:var(--color-accent,#1F7AF0);background:var(--color-background-card,#fff);font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:var(--radius-full,999px);cursor:pointer;margin-left:8px';
+        tq.textContent = '✦ 질의';
+        searchBtnHost.parentNode.insertBefore(tq, searchBtnHost.nextSibling);
+        tq.addEventListener('click', function (e) {
+          e.preventDefault(); e.stopPropagation();
+          var q = p2.querySelector('.fsearch input');
+          var kw = q && q.value.trim() ? ' — 키워드: ' + q.value.trim() : '';
+          if (window.Elizax && Elizax.send) Elizax.send('인재검색을 도와줘. 직무·스킬·역량 연결 지도 기준으로 후보를 추천해줘' + kw);
+        });
+      }
+    }
     var resBody = p2 && p2.querySelector('table.tx2 tbody');
     var resCount = p2 && p2.querySelector('.res-head .c');
     var resInput = p2 && p2.querySelector('.fsearch input');

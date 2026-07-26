@@ -79,12 +79,12 @@
     st.id = "ezcx-fu-style";
     st.textContent = [
       "." + CHIP_WRAP_CLASS + "{display:flex;flex-wrap:wrap;gap:6px;padding:2px 4px 6px;align-items:center;}",
-      "." + CHIP_WRAP_CLASS + " .ezcx-fu-cap{font-size:11px;color:var(--ink,#1D2433);opacity:.55;margin-right:2px;}",
-      "." + CHIP_CLASS + "{cursor:pointer;font-size:12px;line-height:1.4;padding:5px 11px;border-radius:999px;",
-      "border:1px solid var(--line,#E4E7EC);background:var(--card,#fff);color:var(--blue,#1F7AF0);",
-      "transition:background .12s,border-color .12s;user-select:none;max-width:100%;",
+      "." + CHIP_WRAP_CLASS + " .ezcx-fu-cap{font-size:11px;color:var(--color-text-primary);opacity:.55;margin-right:2px;}",
+      "." + CHIP_CLASS + "{cursor:pointer;font-size:12px;line-height:1.4;padding:5px 11px;border-radius:var(--radius-full);",
+      "border:1px solid var(--color-border);background:var(--color-background-card);color:var(--color-accent);",
+      "transition:background var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard);user-select:none;max-width:100%;",
       "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
-      "." + CHIP_CLASS + ":hover{background:var(--soft,#F8FAFC);border-color:var(--blue,#1F7AF0);}"
+      "." + CHIP_CLASS + ":hover{background:var(--color-background-muted);border-color:var(--color-accent);}"
     ].join("");
     document.head.appendChild(st);
   }

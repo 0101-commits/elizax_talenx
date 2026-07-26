@@ -14,6 +14,15 @@
   --rcpt-warn-bg: #FEF3C7;
   --rcpt-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
 }
+/* AI 레이어(.txr-receipt는 data-astryx-theme 스탬프 대상) 안에서는
+   영수증 자체 팔레트를 astryx 단일 토큰으로 승격 — :root 값은 스코프 밖(.txr-bar) 폴백 */
+[data-astryx-theme="talenx"] {
+  --rcpt-navy: var(--color-trust);
+  --rcpt-anno: var(--color-trust-warm);
+  --rcpt-ok: var(--color-success);
+  --rcpt-warn: var(--color-warning);
+  --rcpt-mono: var(--font-family-code);
+}
 
 /* ---------- role switcher in GNB ---------- */
 .txr-switch {
@@ -58,7 +67,8 @@
 /* ---------- verifiable-answer receipt (perf 목표 page) ---------- */
 .txr-receipt {
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; margin: 14px 0 4px; overflow: hidden;
+  border-left: 3px solid var(--rcpt-navy);
+  border-radius: var(--radius-container, 12px); margin: 14px 0 4px; overflow: hidden;
   box-shadow: 0 1px 2px rgba(20,24,32,.04), 0 6px 18px rgba(20,24,32,.05);
 }
 .txr-rc-meta {
@@ -70,7 +80,7 @@
 .txr-anno {
   display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 50%; background: var(--rcpt-anno-bg);
-  color: var(--rcpt-anno); font-size: 11px; font-weight: 700; border: 1px solid #F0C9AE;
+  color: var(--rcpt-anno); font-size: 11px; font-weight: 700; border: 1px solid color-mix(in srgb, var(--rcpt-anno) 35%, white);
   flex-shrink: 0;
 }
 .txr-chip {
@@ -78,7 +88,7 @@
   padding: 3px 10px; border-radius: 999px;
 }
 .txr-chip.asof { background: var(--rcpt-navy-bg); color: var(--rcpt-navy); cursor: pointer; user-select: none; }
-.txr-chip.asof:hover { background: #DEE7FA; }
+.txr-chip.asof:hover { background: color-mix(in srgb, var(--rcpt-navy) 12%, white); }
 .txr-chip.audit { color: var(--ink-2); }
 .txr-chip.audit svg { width: 13px; height: 13px; }
 
@@ -86,7 +96,7 @@
 .txr-verdict { font-size: 13.5px; line-height: 1.6; margin-bottom: 12px; color: var(--ink); }
 .txr-verdict b { font-weight: 700; }
 .txr-verdict .g { color: var(--rcpt-navy); font-weight: 800; }
-.txr-verdict mark { background: #FBF0D0; color: inherit; padding: 0 3px; border-radius: 3px; font-weight: 600; }
+.txr-verdict mark { background: color-mix(in srgb, var(--rcpt-warn) 18%, white); color: inherit; padding: 0 3px; border-radius: 3px; font-weight: 600; }
 .txr-verdict .warn { color: var(--rcpt-anno); font-weight: 600; }
 
 .txr-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px,1fr)); gap: 8px; margin-bottom: 12px; }
@@ -98,7 +108,7 @@
 .txr-trace-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--soft); cursor: pointer; user-select: none; }
 .txr-trace-head b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .txr-trace-head .cnt { font-size: 11px; color: var(--ink-3); }
-.txr-trace-head .tgl { margin-left: auto; color: var(--ink-3); transition: transform .18s; }
+.txr-trace-head .tgl { margin-left: auto; color: var(--ink-3); transition: transform var(--duration-fast, .18s); }
 .txr-trace.open .tgl { transform: rotate(180deg); }
 .txr-trace-steps { display: none; }
 .txr-trace.open .txr-trace-steps { display: block; }
@@ -111,23 +121,24 @@
 .txr-badge.ref { background: var(--soft); color: var(--ink-2); font-weight: 500; }
 .txr-rid { font-family: var(--rcpt-mono); font-size: 10.5px; background: var(--soft); padding: 1px 6px; border-radius: 5px; color: var(--ink-2); }
 .txr-sb { font-family: var(--rcpt-mono); font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 5px; }
-.txr-sb.talenx { background: var(--blue-soft); color: var(--blue-2); }
-.txr-sb.erp { background: var(--rcpt-ok-bg); color: var(--rcpt-ok); }
-.txr-sb.rule { background: #F1EBFB; color: #6D28D9; }
+/* 출처 단일 색 확정(§7): talenx=blue · ERP=보라 · rule=초록 (기존 ERP초록/rule보라 충돌 해소) */
+.txr-sb.talenx { background: var(--color-background-blue, var(--blue-soft)); color: var(--color-text-blue, var(--blue-2)); }
+.txr-sb.erp { background: var(--color-background-purple, #F1EBFB); color: var(--color-text-purple, #6D28D9); }
+.txr-sb.rule { background: var(--color-background-green, var(--rcpt-ok-bg)); color: var(--color-text-green, var(--rcpt-ok)); }
 .txr-sb.slack { background: var(--rcpt-warn-bg); color: var(--rcpt-warn); }
 
 .txr-actions { display: flex; gap: 7px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
 .txr-btn { font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 13px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); }
 .txr-btn:hover { background: var(--soft); }
-.txr-btn.primary { background: var(--rcpt-navy); border-color: var(--rcpt-navy); color: #fff; }
-.txr-btn.primary:hover { background: #1B3373; }
+.txr-btn.primary { background: var(--rcpt-navy); border-color: var(--rcpt-navy); color: var(--color-on-accent, #fff); }
+.txr-btn.primary:hover { background: color-mix(in srgb, var(--rcpt-navy) 85%, black); }
 .txr-btn:focus-visible { outline: 2px solid var(--rcpt-navy); outline-offset: 2px; }
 
-.txr-whatif { display: none; margin-top: 12px; border: 1px solid #D8E2F5; background: #F6F9FE; border-radius: 9px; padding: 13px 14px; }
+.txr-whatif { display: none; margin-top: 12px; border: 1px solid color-mix(in srgb, var(--rcpt-navy) 18%, white); background: color-mix(in srgb, var(--rcpt-navy) 4%, white); border-radius: 9px; padding: 13px 14px; }
 .txr-whatif.show { display: block; }
 .txr-whatif h5 { font-size: 12.5px; font-weight: 700; color: var(--rcpt-navy); margin: 0 0 9px; }
 .txr-wf-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 5px 0; }
-.txr-wf-row + .txr-wf-row { border-top: 1px dashed #D8E2F5; }
+.txr-wf-row + .txr-wf-row { border-top: 1px dashed color-mix(in srgb, var(--rcpt-navy) 18%, white); }
 .txr-wf-row span { color: var(--ink-2); }
 .txr-wf-row b { font-family: var(--rcpt-mono); font-size: 12px; }
 .txr-wf-row b.neg { color: var(--red); }
@@ -141,12 +152,12 @@
 .txr-btn.ghost { border-style: dashed; color: var(--ink-3); }
 .txr-decision { display: flex; gap: 9px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--soft); align-items: flex-start; }
 .txr-decision .ic { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex: none; background: var(--rcpt-navy); color: #fff; }
-.txr-decision.ok { border-color: rgba(21,128,61,.4); background: rgba(21,128,61,.07); }
-.txr-decision.ok .ic { background: #15803D; }
-.txr-decision.hold { border-color: rgba(180,83,9,.4); background: rgba(180,83,9,.07); }
-.txr-decision.hold .ic { background: #B45309; }
-.txr-decision.edit { border-color: rgba(194,65,12,.35); background: rgba(194,65,12,.06); }
-.txr-decision.edit .ic { background: #C2410C; }
+.txr-decision.ok { border-color: color-mix(in srgb, var(--rcpt-ok) 40%, transparent); background: color-mix(in srgb, var(--rcpt-ok) 7%, transparent); }
+.txr-decision.ok .ic { background: var(--rcpt-ok); }
+.txr-decision.hold { border-color: color-mix(in srgb, var(--rcpt-warn) 40%, transparent); background: color-mix(in srgb, var(--rcpt-warn) 7%, transparent); }
+.txr-decision.hold .ic { background: var(--rcpt-warn); }
+.txr-decision.edit { border-color: color-mix(in srgb, var(--rcpt-anno) 35%, transparent); background: color-mix(in srgb, var(--rcpt-anno) 6%, transparent); }
+.txr-decision.edit .ic { background: var(--rcpt-anno); }
 .txr-decision b { font-size: 12.5px; }
 .txr-decision .note { margin: 3px 0 0; font-size: 12px; color: var(--ink-2); }
 .txr-decision .meta { margin: 3px 0 0; font-size: 11px; color: var(--ink-3); }

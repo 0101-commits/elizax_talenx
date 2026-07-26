@@ -1,0 +1,166 @@
+/* ez_kit.css — 신뢰 컴포넌트 6종 + 모션/z 토큰 단일 정의 (v2 기획안 §7·§8.4)
+   규칙: astryx 토큰 var()만 사용, hex 금지. talenx 화면(.tx-*/#s-*) 무영향 — 스코프 한정. */
+
+[data-astryx-theme="talenx"] {
+  --ease-standard: cubic-bezier(0.24, 1, 0.4, 1);
+  --z-badge: 900;
+  --z-panel: 4000;
+  --z-overlay: 4100;
+  --z-modal: 5000;
+  --z-top: 9000;
+}
+
+/* ---- keyframes 5종 단일 정의 (aghSpin/ez1oSpin/ezxPulse/ezpmIn/ez1oIn/aghIns/ezlFlash 흡수 대상) ---- */
+@keyframes ezkSpin   { to { transform: rotate(360deg); } }
+@keyframes ezkPulse  { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+@keyframes ezkBlink  { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes ezkInsert { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes ezkFlash  { from { background: var(--color-accent-muted); } to { background: transparent; } }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-astryx-theme="talenx"] *,
+  [data-astryx-theme="talenx"] *::before,
+  [data-astryx-theme="talenx"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- EZReceipt — 답변 영수증 ---- */
+[data-astryx-theme="talenx"] .ezk-receipt {
+  position: relative;
+  background: var(--color-background-card);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-trust);
+  border-radius: var(--radius-container);
+  padding: var(--spacing-3, 12px) var(--spacing-4, 16px);
+  font-family: var(--font-family-body);
+  color: var(--color-text-primary);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-leading);
+}
+[data-astryx-theme="talenx"] .ezk-receipt .ezk-receipt-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1, 4px);
+  align-items: center;
+  margin-bottom: var(--spacing-2, 8px);
+}
+[data-astryx-theme="talenx"] .ezk-receipt .ezk-receipt-title {
+  font-weight: var(--text-label-weight, 600);
+  font-size: var(--text-label-size);
+  margin-right: auto;
+}
+
+/* ---- 칩 공통 그래머 ---- */
+[data-astryx-theme="talenx"] .ezk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-supporting-size);
+  line-height: var(--text-supporting-leading);
+  font-family: var(--font-family-body);
+  border: 1px solid var(--color-border);
+  background: var(--color-background-muted);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* ---- EZAsOf — 기준 시점 (EZClock 단일 발급) ---- */
+[data-astryx-theme="talenx"] .ezk-asof {
+  color: var(--color-trust);
+  border-color: color-mix(in srgb, var(--color-trust) 30%, transparent);
+  background: color-mix(in srgb, var(--color-trust) 8%, transparent);
+}
+
+/* ---- EZSource — 출처 칩 (색 충돌 해소표: talenx=blue, erp=purple, rule=green, web=orange) ---- */
+[data-astryx-theme="talenx"] .ezk-src { cursor: pointer; }
+[data-astryx-theme="talenx"] .ezk-src[data-src="talenx"] {
+  background: var(--color-background-blue); color: var(--color-text-blue); border-color: var(--color-border-blue, var(--color-border));
+}
+[data-astryx-theme="talenx"] .ezk-src[data-src="erp"] {
+  background: var(--color-background-purple); color: var(--color-text-purple); border-color: var(--color-border-purple, var(--color-border));
+}
+[data-astryx-theme="talenx"] .ezk-src[data-src="rule"] {
+  background: var(--color-background-green); color: var(--color-text-green); border-color: var(--color-border-green, var(--color-border));
+}
+[data-astryx-theme="talenx"] .ezk-src[data-src="web"] {
+  background: var(--color-background-orange); color: var(--color-text-orange); border-color: var(--color-border-orange, var(--color-border));
+}
+[data-astryx-theme="talenx"] .ezk-src[data-locked] { cursor: not-allowed; opacity: .7; }
+
+/* ---- EZGate — 결정 게이트 (라벨 고정: "결정 게이트 · 사람이 확정") ---- */
+[data-astryx-theme="talenx"] .ezk-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-2, 8px);
+  background: color-mix(in srgb, var(--color-trust) 6%, var(--color-background-card));
+  border: 1px solid color-mix(in srgb, var(--color-trust) 25%, transparent);
+  border-radius: var(--radius-element);
+  padding: var(--spacing-2, 8px) var(--spacing-3, 12px);
+  font-size: var(--text-label-size);
+  color: var(--color-text-primary);
+}
+[data-astryx-theme="talenx"] .ezk-gate .ezk-gate-label {
+  font-weight: 600;
+  color: var(--color-trust);
+  margin-right: auto;
+}
+[data-astryx-theme="talenx"] .ezk-gate button {
+  font: inherit;
+  border-radius: var(--radius-element);
+  padding: 4px 12px;
+  cursor: pointer;
+  border: 1px solid var(--color-border-emphasized);
+  background: var(--color-background-card);
+  color: var(--color-text-primary);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+[data-astryx-theme="talenx"] .ezk-gate button:hover { background: var(--color-overlay-hover); }
+[data-astryx-theme="talenx"] .ezk-gate button.ezk-gate-primary {
+  background: var(--color-trust);
+  border-color: var(--color-trust);
+  color: var(--color-on-accent);
+}
+[data-astryx-theme="talenx"] .ezk-gate button.ezk-gate-primary:hover {
+  background: color-mix(in srgb, var(--color-trust) 88%, var(--color-tint-hover));
+}
+[data-astryx-theme="talenx"] .ezk-gate[data-decided] { opacity: .85; }
+[data-astryx-theme="talenx"] .ezk-gate .ezk-gate-decision { font-size: var(--text-supporting-size); color: var(--color-text-secondary); }
+
+/* ---- EZAudit — 감사 칩 ---- */
+[data-astryx-theme="talenx"] .ezk-audit {
+  font-family: var(--font-family-code);
+  font-size: var(--text-supporting-size);
+  cursor: pointer;
+}
+
+/* ---- EZStatus — 자율성 3단 ---- */
+[data-astryx-theme="talenx"] .ezk-status::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+  flex: none;
+}
+[data-astryx-theme="talenx"] .ezk-status[data-mode="auto"]::before    { background: var(--color-success); }
+[data-astryx-theme="talenx"] .ezk-status[data-mode="suggest"]::before { background: var(--color-warning); }
+[data-astryx-theme="talenx"] .ezk-status[data-mode="approve"]::before { background: var(--color-trust); }
+
+/* ---- EZLock — 잠금 카드 (blur/숨김/빈칸 3방식 → 1) ---- */
+[data-astryx-theme="talenx"] .ezk-lock {
+  display: flex;
+  gap: var(--spacing-2, 8px);
+  align-items: baseline;
+  background: var(--color-background-muted);
+  border: 1px dashed var(--color-border-emphasized);
+  border-radius: var(--radius-element);
+  padding: var(--spacing-2, 8px) var(--spacing-3, 12px);
+  color: var(--color-text-secondary);
+  font-size: var(--text-supporting-size);
+}
+[data-astryx-theme="talenx"] .ezk-lock .ezk-lock-until { color: var(--color-text-disabled); margin-left: auto; }

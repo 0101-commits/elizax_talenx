@@ -70,13 +70,13 @@
     st.textContent =
       "." + WRAP_CLS + "{display:flex;justify-content:center;padding:4px 10px 6px;}" +
       "." + BTN_CLS + "{display:inline-flex;align-items:center;gap:6px;" +
-        "padding:6px 16px;border-radius:999px;cursor:pointer;" +
+        "padding:6px 16px;border-radius:var(--radius-full);cursor:pointer;" +
         "font-size:12px;font-weight:600;line-height:1;" +
-        "color:var(--ink,#1D2433);background:var(--card,#fff);" +
-        "border:1px solid var(--line,#E4E7EC);" +
-        "box-shadow:0 2px 8px rgba(0,0,0,.08);}" +
-      "." + BTN_CLS + ":hover{border-color:var(--blue,#1F7AF0);" +
-        "color:var(--blue,#1F7AF0);background:var(--soft,#F8FAFC);}";
+        "color:var(--color-text-primary);background:var(--color-background-card);" +
+        "border:1px solid var(--color-border);" +
+        "box-shadow:var(--shadow-low, 0 2px 8px rgba(0,0,0,.08));}" +
+      "." + BTN_CLS + ":hover{border-color:var(--color-accent);" +
+        "color:var(--color-accent);background:var(--color-background-muted);}";
     (document.head || document.documentElement).appendChild(st);
   }
 

@@ -23,35 +23,35 @@
   function injectStyle() {
     if (document.getElementById("ezpo-css")) return;
     var css = [
-      ".ezpo-body{ font-family:var(--sans); font-size:13px; line-height:1.65; color:var(--ink,#1d1d1f); }",
+      ".ezpo-body{ font-family:var(--font-family-body); font-size:13px; line-height:1.65; color:var(--color-text-primary); }",
       ".ezpo-sec{ margin-bottom:15px; }",
       ".ezpo-sec > b{ display:block; margin-bottom:6px; font-size:13.5px; font-weight:700; letter-spacing:-.02em; }",
       ".ezpo-sec ul{ margin:0; padding-left:18px; }",
       ".ezpo-sec li{ margin-bottom:4px; }",
       /* ---- 데모 한계 고지 (amber callout) ---- */
-      ".ezpo-demo{ font-size:12px; line-height:1.6; color:#8a5a06; background:rgba(180,83,9,.07);",
-      "  border:1px solid rgba(180,83,9,.32); border-radius:10px; padding:10px 13px; margin-bottom:15px; }",
-      ".ezpo-demo b{ display:block; margin-bottom:3px; color:#B45309; font-weight:700; }",
+      ".ezpo-demo{ font-size:12px; line-height:1.6; color:var(--color-warning); background:color-mix(in srgb, var(--color-warning) 7%, transparent);",
+      "  border:1px solid color-mix(in srgb, var(--color-warning) 32%, transparent); border-radius:var(--radius-container); padding:10px 13px; margin-bottom:15px; }",
+      ".ezpo-demo b{ display:block; margin-bottom:3px; color:var(--color-warning); font-weight:700; }",
       /* ---- 열람 매트릭스 ---- */
-      ".ezpo-tblwrap{ overflow-x:auto; border:1px solid var(--line,#e8e8ed); border-radius:10px; }",
+      ".ezpo-tblwrap{ overflow-x:auto; border:1px solid var(--color-border); border-radius:var(--radius-container); }",
       ".ezpo-tbl{ width:100%; min-width:560px; border-collapse:collapse; font-size:11.5px; }",
-      ".ezpo-tbl th,.ezpo-tbl td{ padding:8px 10px; border-bottom:1px solid var(--line-2,#f1f2f5); text-align:left; vertical-align:top; }",
-      ".ezpo-tbl thead th{ font-size:11px; font-weight:700; color:var(--ink-2,#5c6474); background:var(--soft,#f5f6f8); white-space:nowrap; }",
+      ".ezpo-tbl th,.ezpo-tbl td{ padding:8px 10px; border-bottom:1px solid var(--color-border); text-align:left; vertical-align:top; }",
+      ".ezpo-tbl thead th{ font-size:11px; font-weight:700; color:var(--color-text-secondary); background:var(--color-background-muted); white-space:nowrap; }",
       ".ezpo-tbl tbody tr:last-child th,.ezpo-tbl tbody tr:last-child td{ border-bottom:none; }",
-      ".ezpo-tbl tbody th{ font-weight:700; color:var(--ink,#2a2e39); white-space:nowrap; }",
-      ".ezpo-tbl tbody th small{ display:block; font-size:10px; font-weight:600; color:#B45309; margin-top:2px; }",
-      ".ezpo-row-hl th,.ezpo-row-hl td{ background:rgba(180,83,9,.06); }",
-      ".ezpo-row-hl th{ box-shadow:inset 3px 0 0 #B45309; }",
+      ".ezpo-tbl tbody th{ font-weight:700; color:var(--color-text-primary); white-space:nowrap; }",
+      ".ezpo-tbl tbody th small{ display:block; font-size:10px; font-weight:600; color:var(--color-warning); margin-top:2px; }",
+      ".ezpo-row-hl th,.ezpo-row-hl td{ background:color-mix(in srgb, var(--color-warning) 6%, transparent); }",
+      ".ezpo-row-hl th{ box-shadow:inset 3px 0 0 var(--color-warning); }",
       /* ---- 셀 칩 (원문/요약/익명·집계/열람 불가) ---- */
-      ".ezpo-cell{ display:inline-block; border-radius:999px; padding:2px 9px; font-weight:600; font-size:10.5px; border:1px solid; white-space:normal; }",
-      ".ezpo-full{ color:#15803D; background:rgba(21,128,61,.07); border-color:rgba(21,128,61,.3); }",
-      ".ezpo-summ{ color:var(--blue-2,#0E63D6); background:rgba(31,122,240,.07); border-color:rgba(31,122,240,.3); }",
-      ".ezpo-anon{ color:var(--ink-2,#5c6474); background:var(--soft,#f5f6f8); border-color:var(--line,#e0e0e0); }",
-      ".ezpo-no{ color:#B42318; background:rgba(180,35,24,.06); border-color:rgba(180,35,24,.3); }",
-      ".ezpo-legend{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; font-size:10.5px; color:var(--ink-3,#9096a3); }",
+      ".ezpo-cell{ display:inline-block; border-radius:var(--radius-full); padding:2px 9px; font-weight:600; font-size:10.5px; border:1px solid; white-space:normal; }",
+      ".ezpo-full{ color:var(--color-success); background:color-mix(in srgb, var(--color-success) 7%, transparent); border-color:color-mix(in srgb, var(--color-success) 30%, transparent); }",
+      ".ezpo-summ{ color:var(--color-accent); background:color-mix(in srgb, var(--color-accent) 7%, transparent); border-color:color-mix(in srgb, var(--color-accent) 30%, transparent); }",
+      ".ezpo-anon{ color:var(--color-text-secondary); background:var(--color-background-muted); border-color:var(--color-border); }",
+      ".ezpo-no{ color:var(--color-error); background:color-mix(in srgb, var(--color-error) 6%, transparent); border-color:color-mix(in srgb, var(--color-error) 30%, transparent); }",
+      ".ezpo-legend{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:8px; font-size:10.5px; color:var(--color-text-secondary); }",
       ".ezpo-legend .lab{ font-weight:700; }",
       /* ---- 규정 정렬 각주 ---- */
-      ".ezpo-reg{ font-size:11px; color:var(--ink-3,#7a7a7a); background:var(--soft,#f5f5f7); border-radius:8px; padding:8px 11px; margin-top:4px; }"
+      ".ezpo-reg{ font-size:11px; color:var(--color-text-secondary); background:var(--color-background-muted); border-radius:var(--radius-element); padding:8px 11px; margin-top:4px; }"
     ].join("\n");
     var st = document.createElement("style");
     st.id = "ezpo-css";
@@ -73,7 +73,7 @@
       cells: [["full", "원문"], ["anon", "⚠ 익명·집계만 — 작성자 식별 불가 형태"], ["full", "원문 · 조사 목적 한정"], ["anon", "집계"]] },
     { key: "eval_draft", name: "평가 근거·등급 초안",
       cells: [["summ", "확정 후 공개"], ["full", "원문"], ["full", "원문"], ["anon", "분포만"]] },
-    { key: "history", name: "성과 히스토리",
+    { key: "history", name: "성과 기록",
       cells: [["full", "본인 전체"], ["summ", "팀 범위"], ["summ", "권한 범위"], ["anon", "집계"]] }
   ];
   var ROW_BY_KEY = {};
@@ -135,18 +135,18 @@
   }
 
   function bodyHtml() {
-    return '<div class="ezpo-body">'
+    return '<div class="ezpo-body" data-astryx-theme="talenx">'
       /* ---- ① 보존 규칙 (3등급) ---- */
       + '<div class="ezpo-sec"><b>무엇을 얼마나 보관하나 — 보존 3등급</b>'
       + retentionHtml()
       + '<ul style="margin-top:8px">'
-      + "<li><b>승인·확정된 기록만</b> 판단 근거로 보관합니다. 확정 전 초안은 폐기할 수 있고, 폐기된 요약은 성과 히스토리에 남지 않습니다 — 맥락 오염 방지.</li>"
+      + "<li><b>승인·확정된 기록만</b> 판단 근거로 보관합니다. 확정 전 초안은 폐기할 수 있고, 폐기된 요약은 성과 기록에 남지 않습니다 — 맥락 오염 방지.</li>"
       + "<li>평가에 인용된 기록은 <b>삭제 대상에서 제외(핀 고정)</b>되며, 위·변조 탐지를 위해 기록 체인으로 이어집니다.</li>"
       + "<li>모든 확정·수정·취소는 <b>감사 기록과 함께</b> 남습니다.</li>"
       + "</ul></div>"
       /* ---- 데모 한계 고지 ---- */
       + '<div class="ezpo-demo"><b>데모 한계 고지</b>'
-      + "이 목업의 성과 히스토리는 브라우저(localStorage)에만 저장됩니다. 위 3등급 중 불변 보존·사이클 보존 등급은 삭제에서 제외되고, 임시 맥락만 80건 롤링됩니다. "
+      + "이 목업의 성과 기록는 브라우저(localStorage)에만 저장됩니다. 위 3등급 중 불변 보존·사이클 보존 등급은 삭제에서 제외되고, 임시 맥락만 80건 롤링됩니다. "
       + "실서비스에서는 서버 측 보존 저장소(보존 정책·권한·감사 포함)가 다음 단계 과제입니다.</div>"
       /* ---- ② 열람 매트릭스 ---- */
       + '<div class="ezpo-sec"><b>누가 어디까지 보나</b>' + matrixHtml() + "</div>"

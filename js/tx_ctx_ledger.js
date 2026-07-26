@@ -66,15 +66,16 @@
   var seq = 0;
 
   /* ---------------- type 메타 ---------------- */
+  /* 타입색 = astryx 카테고리컬 토큰 (§8.3 — 원장 TYPES 8색 흡수) */
   var TYPES = {
-    goal:     { label: "목표",     color: "#1F7AF0" },
-    checkin:  { label: "체크인",   color: "#15803D" },
-    oneonone: { label: "1on1",     color: "#6D28D9" },
-    feedback: { label: "피드백",   color: "#B45309" },
-    eval:     { label: "평가 이력", color: "#B42318" },
-    org:      { label: "조직 기준", color: "#0E7490" },
-    job:      { label: "직무 기준", color: "#334155" },
-    rule:     { label: "규칙",     color: "#166534" }
+    goal:     { label: "목표",     color: "var(--color-text-blue)" },
+    checkin:  { label: "체크인",   color: "var(--color-text-teal)" },
+    oneonone: { label: "1on1",     color: "var(--color-text-purple)" },
+    feedback: { label: "피드백",   color: "var(--color-text-orange)" },
+    eval:     { label: "평가 이력", color: "var(--color-text-red)" },
+    org:      { label: "조직 기준", color: "var(--color-text-cyan)" },
+    job:      { label: "직무 기준", color: "var(--color-text-secondary)" },
+    rule:     { label: "규칙",     color: "var(--color-text-green)" }
   };
   var TYPE_ORDER = ["goal", "checkin", "oneonone", "feedback", "eval", "org", "job", "rule"];
 
@@ -192,7 +193,8 @@
         }
       }
     } catch (e) { items = []; }
-    if (!items.length) {
+    /* 시드는 데모 플래그로 격리 — "미스터리 숫자" 해소 (Phase 1 ⑥) */
+    if (!items.length && window.EZX_DEMO === true) {
       items = buildSeeds();
       saveStore();
     }
@@ -358,105 +360,92 @@
   function injectStyle() {
     if (document.getElementById("ezl-style")) return;
     var css = [
-      /* ---- 배지 pill ---- */
-      ".ezl-badge{position:fixed;right:18px;bottom:86px;z-index:898;cursor:pointer;",
-      "display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;",
-      "color:#1F7AF0;background:#fff;border:1px solid rgba(31,122,240,.35);border-radius:999px;",
-      "padding:4px 11px;box-shadow:0 4px 14px rgba(0,0,0,.12);user-select:none;",
-      "transition:transform .15s cubic-bezier(.32,.72,.24,1),box-shadow .15s;}",
-      ".ezl-badge:hover{box-shadow:0 6px 18px rgba(31,122,240,.25);}",
-      ".ezl-badge:active{transform:scale(.95);}",
-      ".ezl-badge .dot{width:6px;height:6px;border-radius:50%;background:#1F7AF0;}",
-      ".ezl-badge.bump{animation:ezlBump .4s cubic-bezier(.32,.72,.24,1);}",
-      "@keyframes ezlBump{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}",
-      ".ezx-root.ezx-open .ezl-badge{display:none;}",
-      /* ---- 패널 ---- */
-      ".ezl-scrim{position:fixed;inset:0;z-index:" + (Z_PANEL - 1) + ";background:rgba(20,24,32,.34);",
-      "opacity:0;transition:opacity .22s;pointer-events:none;}",
+      /* ---- 패널 (독립 배지는 폐지 — [기록] 탭이 집, §5.2) ---- */
+      ".ezl-scrim{position:fixed;inset:0;z-index:" + (Z_PANEL - 1) + ";background:var(--color-overlay,rgba(20,24,32,.34));",
+      "opacity:0;transition:opacity var(--duration-fast,175ms);pointer-events:none;}",
       ".ezl-scrim.on{opacity:1;pointer-events:auto;}",
       ".ezl-panel{position:fixed;top:0;right:0;bottom:0;z-index:" + Z_PANEL + ";width:430px;max-width:94vw;",
-      "background:#fff;color:#1d1d1f;display:flex;flex-direction:column;color-scheme:light;",
-      "box-shadow:-18px 0 48px rgba(0,0,0,.2);transform:translateX(103%);",
-      "transition:transform .26s cubic-bezier(.32,.72,.24,1);font-size:13px;letter-spacing:-.01em;}",
+      "background:var(--color-background-surface);color:var(--color-text-primary);display:flex;flex-direction:column;",
+      "box-shadow:-18px 0 48px var(--color-shadow);transform:translateX(103%);",
+      "transition:transform var(--duration-medium-min,310ms) var(--ease-standard);font-size:13px;letter-spacing:-.01em;}",
       ".ezl-panel.on{transform:translateX(0);}",
-      ".ezl-head{flex:none;padding:16px 18px 12px;border-bottom:1px solid #e8e8ed;}",
+      ".ezl-head{flex:none;padding:16px 18px 12px;border-bottom:1px solid var(--color-border);}",
       ".ezl-head-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}",
       ".ezl-title{font-size:15.5px;font-weight:700;letter-spacing:-.02em;}",
-      ".ezl-title small{font-size:11px;font-weight:600;color:#7a7a7a;margin-left:6px;}",
-      ".ezl-x{flex:none;font:inherit;font-size:15px;line-height:1;color:#424245;background:#f5f5f7;",
-      "border:none;border-radius:999px;width:26px;height:26px;cursor:pointer;}",
-      ".ezl-x:hover{background:#e8e8ed;}",
-      ".ezl-sub{margin-top:6px;display:flex;align-items:center;gap:8px;font-size:11px;color:#7a7a7a;}",
-      ".ezl-asof{color:#1F7AF0;background:#fff;border:1px solid #d2d2d7;border-radius:999px;padding:2px 9px;font-weight:600;}",
+      ".ezl-title small{display:block;font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-top:2px;}",
+      ".ezl-x{flex:none;font:inherit;font-size:15px;line-height:1;color:var(--color-text-secondary);background:var(--color-background-muted);",
+      "border:none;border-radius:var(--radius-full);width:26px;height:26px;cursor:pointer;}",
+      ".ezl-x:hover{background:var(--color-overlay-hover);}",
+      ".ezl-sub{margin-top:6px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--color-text-secondary);}",
+      ".ezl-asof{color:var(--color-trust);background:var(--color-background-surface);border:1px solid var(--color-border-emphasized);border-radius:var(--radius-full);padding:2px 9px;font-weight:600;}",
       /* ---- 요약 스트립 ---- */
-      ".ezl-strip{flex:none;display:flex;flex-wrap:wrap;gap:5px;padding:10px 18px;border-bottom:1px solid #e8e8ed;background:#f5f5f7;}",
-      ".ezl-tchip{font:inherit;font-size:10.5px;font-weight:600;cursor:pointer;border-radius:999px;padding:3px 9px;",
-      "background:#fff;border:1px solid #d2d2d7;color:#424245;transition:background .12s,border-color .12s;}",
+      ".ezl-strip{flex:none;display:flex;flex-wrap:wrap;gap:5px;padding:10px 18px;border-bottom:1px solid var(--color-border);background:var(--color-background-muted);}",
+      ".ezl-tchip{font:inherit;font-size:10.5px;font-weight:600;cursor:pointer;border-radius:var(--radius-full);padding:3px 9px;",
+      "background:var(--color-background-surface);border:1px solid var(--color-border-emphasized);color:var(--color-text-secondary);transition:background var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard);}",
       ".ezl-tchip b{font-weight:800;margin-left:3px;}",
-      ".ezl-tchip.on{color:#fff !important;border-color:transparent;}",
-      /* ---- 타임라인 ---- */
+      ".ezl-tchip.on{color:var(--color-on-accent) !important;border-color:transparent;}",
+      /* ---- 타임라인 (rows) ---- */
       ".ezl-body{flex:1;min-height:0;overflow-y:auto;padding:12px 18px 16px;}",
-      ".ezl-item{position:relative;padding:9px 10px 9px 14px;border:1px solid #e8e8ed;border-radius:11px;margin-bottom:8px;background:#fff;}",
-      ".ezl-item::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--ezl-c,#1F7AF0);}",
+      ".ezl-item{position:relative;padding:9px 10px 9px 14px;border:1px solid var(--color-border);border-radius:var(--radius-container);margin-bottom:8px;background:var(--color-background-card);}",
+      ".ezl-item::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--ezl-c,var(--color-accent));}",
       ".ezl-row1{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}",
-      ".ezl-tb{font-size:9.5px;font-weight:700;border-radius:5px;padding:1.5px 6px;color:#fff;background:var(--ezl-c,#1F7AF0);}",
-      ".ezl-at{font-size:10.5px;color:#7a7a7a;}",
-      ".ezl-w{margin-left:auto;font-size:9px;letter-spacing:2px;color:var(--ezl-c,#1F7AF0);white-space:nowrap;}",
+      ".ezl-tb{font-size:9.5px;font-weight:700;border-radius:var(--radius-inner);padding:1.5px 6px;color:var(--color-on-accent);background:var(--ezl-c,var(--color-accent));}",
+      ".ezl-at{font-size:10.5px;color:var(--color-text-secondary);}",
+      ".ezl-w{margin-left:auto;font-size:9px;letter-spacing:2px;color:var(--ezl-c,var(--color-accent));white-space:nowrap;}",
       ".ezl-it-title{font-size:12.5px;font-weight:600;margin:5px 0 2px;line-height:1.45;}",
-      ".ezl-it-sum{font-size:11.5px;color:#424245;line-height:1.5;}",
+      ".ezl-it-sum{font-size:11.5px;color:var(--color-text-secondary);line-height:1.5;}",
       ".ezl-row2{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;}",
-      ".ezl-src{font-family:ui-monospace,'SFMono-Regular',Consolas,monospace;font-size:9.5px;color:#6D28D9;",
-      "background:rgba(109,40,217,.07);border:1px solid rgba(109,40,217,.28);border-radius:5px;padding:1.5px 6px;}",
-      ".ezl-used{font-size:10px;color:#7a7a7a;}",
-      ".ezl-used.hot{color:#15803D;font-weight:700;}",
-      ".ezl-item.ezl-hl{animation:ezlFlash 1.8s ease-out 2;}",
-      "@keyframes ezlFlash{0%{background:rgba(31,122,240,.14);border-color:#1F7AF0;}100%{background:#fff;border-color:#e8e8ed;}}",
-      ".ezl-empty{padding:30px 8px;text-align:center;color:#7a7a7a;font-size:12px;}",
-      ".ezl-foot{flex:none;padding:11px 18px;border-top:1px solid #e8e8ed;background:#f5f5f7;",
-      "font-size:11px;line-height:1.55;color:#424245;}",
-      ".ezl-foot b{color:#1F7AF0;}",
+      ".ezl-src{font-family:var(--font-family-code);font-size:9.5px;color:var(--color-text-purple);",
+      "background:var(--color-background-purple);border:1px solid var(--color-border-purple);border-radius:var(--radius-inner);padding:1.5px 6px;}",
+      ".ezl-used{font-size:10px;color:var(--color-text-secondary);}",
+      ".ezl-used.hot{color:var(--color-success);font-weight:700;}",
+      ".ezl-item.ezl-hl{animation:ezkFlash 1.8s ease-out 2;}",
+      ".ezl-empty{padding:30px 8px;text-align:center;color:var(--color-text-secondary);font-size:12px;}",
+      ".ezl-foot{flex:none;padding:11px 18px;border-top:1px solid var(--color-border);background:var(--color-background-muted);",
+      "font-size:11px;line-height:1.55;color:var(--color-text-secondary);}",
+      ".ezl-foot b{color:var(--color-accent);}",
       ".ezl-foot-policy{display:inline-flex;align-items:center;gap:4px;margin-left:6px;font:inherit;",
-      "font-size:10.5px;font-weight:700;color:#1F7AF0;background:#fff;border:1px solid rgba(31,122,240,.35);",
-      "border-radius:999px;padding:2px 9px;cursor:pointer;vertical-align:1px;transition:background .12s;}",
-      ".ezl-foot-policy:hover{background:rgba(31,122,240,.08);}",
-      ".ezl-foot-row2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed #e0e0e0;}",
+      "font-size:10.5px;font-weight:700;color:var(--color-accent);background:var(--color-background-surface);border:1px solid var(--color-border-emphasized);",
+      "border-radius:var(--radius-full);padding:2px 9px;cursor:pointer;vertical-align:1px;transition:background var(--duration-fast) var(--ease-standard);}",
+      ".ezl-foot-policy:hover{background:var(--color-overlay-hover);}",
+      ".ezl-foot-row2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed var(--color-border);}",
       ".ezl-chain{font-size:10.5px;font-weight:700;}",
-      ".ezl-chain.ok{color:#15803D;}",
-      ".ezl-chain.bad{color:#B42318;}",
-      ".ezl-pin{font-size:9.5px;font-weight:700;color:#B45309;background:rgba(180,83,9,.08);",
-      "border:1px solid rgba(180,83,9,.32);border-radius:5px;padding:1.5px 6px;}",
-      ".ezl-lvchip{font-size:9.5px;font-weight:700;color:#0E63D6;background:rgba(31,122,240,.07);",
-      "border:1px solid rgba(31,122,240,.3);border-radius:5px;padding:1.5px 6px;}",
+      ".ezl-chain.ok{color:var(--color-success);}",
+      ".ezl-chain.bad{color:var(--color-error);}",
+      ".ezl-pin{font-size:9.5px;font-weight:700;color:var(--color-text-orange);background:var(--color-background-orange);",
+      "border:1px solid var(--color-border-orange);border-radius:var(--radius-inner);padding:1.5px 6px;}",
+      ".ezl-lvchip{font-size:9.5px;font-weight:700;color:var(--color-text-blue);background:var(--color-background-blue);",
+      "border:1px solid var(--color-border-blue);border-radius:var(--radius-inner);padding:1.5px 6px;}",
       /* ---- 답변 근거 스트립 ---- */
       ".ezl-ev-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:3px 4px 7px;}",
-      ".ezl-ev-cap{font-size:10.5px;font-weight:700;color:#424245;background:#f5f5f7;",
-      "border:1px solid #e0e0e0;border-radius:999px;padding:3px 9px;white-space:nowrap;}",
+      ".ezl-ev-cap{font-size:10.5px;font-weight:700;color:var(--color-text-secondary);background:var(--color-background-muted);",
+      "border:1px solid var(--color-border);border-radius:var(--radius-full);padding:3px 9px;white-space:nowrap;}",
       ".ezl-ev-chip{display:inline-flex;align-items:center;gap:4px;max-width:100%;font-size:10.5px;line-height:1.4;",
-      "border-radius:999px;padding:3px 9px;border:1px solid rgba(31,122,240,.3);background:rgba(31,122,240,.06);",
-      "color:#1d2433;user-select:none;}",
-      ".ezl-ev-chip .tb{font-size:9px;font-weight:800;color:var(--ezl-c,#1F7AF0);}",
-      ".ezl-ev-chip .sr{font-family:ui-monospace,Consolas,monospace;font-size:9px;color:#7a7a7a;}",
+      "border-radius:var(--radius-full);padding:3px 9px;border:1px solid var(--color-border-blue);background:var(--color-background-blue);",
+      "color:var(--color-text-primary);user-select:none;}",
+      ".ezl-ev-chip .tb{font-size:9px;font-weight:800;color:var(--ezl-c,var(--color-accent));}",
+      ".ezl-ev-chip .sr{font-family:var(--font-family-code);font-size:9px;color:var(--color-text-secondary);}",
       ".ezl-ev-chip.click{cursor:pointer;}",
-      ".ezl-ev-chip.click:hover{background:rgba(31,122,240,.13);border-color:#1F7AF0;}",
-      ".ezl-ev-link,.ezl-ev-logic{font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;border-radius:999px;",
-      "padding:3px 10px;border:1px solid #d2d2d7;background:#fff;color:#1F7AF0;transition:background .12s;}",
-      ".ezl-ev-link:hover,.ezl-ev-logic:hover{background:#f5f5f7;border-color:#1F7AF0;}",
-      ".ezl-ev-logic{color:#6D28D9;border-color:rgba(109,40,217,.35);}",
+      ".ezl-ev-chip.click:hover{background:var(--color-accent-muted);border-color:var(--color-accent);}",
+      ".ezl-ev-link,.ezl-ev-logic{font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;border-radius:var(--radius-full);",
+      "padding:3px 10px;border:1px solid var(--color-border-emphasized);background:var(--color-background-surface);color:var(--color-accent);transition:background var(--duration-fast) var(--ease-standard);}",
+      ".ezl-ev-link:hover,.ezl-ev-logic:hover{background:var(--color-overlay-hover);border-color:var(--color-accent);}",
+      ".ezl-ev-logic{color:var(--color-text-purple);border-color:var(--color-border-purple);}",
       /* ---- 산출 로직 팝오버 ---- */
-      ".ezl-pop{position:fixed;z-index:" + (Z_PANEL + 10) + ";width:330px;max-width:92vw;background:#fff;color:#1d1d1f;",
-      "border:1px solid #e0e0e0;border-radius:13px;box-shadow:0 18px 50px rgba(0,0,0,.24);padding:13px 14px;",
-      "font-size:11.5px;line-height:1.55;color-scheme:light;}",
+      ".ezl-pop{position:fixed;z-index:" + (Z_PANEL + 10) + ";width:330px;max-width:92vw;background:var(--color-background-popover);color:var(--color-text-primary);",
+      "border:1px solid var(--color-border);border-radius:var(--radius-container);box-shadow:var(--shadow-high,0 18px 50px var(--color-shadow));padding:13px 14px;",
+      "font-size:11.5px;line-height:1.55;}",
       ".ezl-pop h4{margin:0 0 8px;font-size:12.5px;font-weight:700;letter-spacing:-.02em;}",
       ".ezl-step{display:flex;gap:8px;margin-bottom:7px;}",
-      ".ezl-step .n{flex:none;width:17px;height:17px;border-radius:50%;background:#1F7AF0;color:#fff;",
+      ".ezl-step .n{flex:none;width:17px;height:17px;border-radius:var(--radius-full);background:var(--color-trust);color:var(--color-on-accent);",
       "font-size:9.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-top:1px;}",
       ".ezl-step .t b{display:block;font-size:11px;}",
-      ".ezl-step .t span{color:#424245;font-size:10.5px;}",
-      ".ezl-step .t code{font-family:ui-monospace,Consolas,monospace;font-size:9.5px;color:#166534;",
-      "background:rgba(21,128,61,.07);border:1px solid rgba(21,128,61,.3);border-radius:4px;padding:0 4px;}",
-      ".ezl-pop-ga{margin-top:9px;padding-top:8px;border-top:1px dashed #e0e0e0;font-size:10px;color:#7a7a7a;}",
-      ".ezl-pop-ga b{color:#B45309;font-family:ui-monospace,Consolas,monospace;}",
-      "@media (prefers-reduced-motion:reduce){.ezl-panel,.ezl-scrim,.ezl-badge{transition:none !important;animation:none !important;}}"
+      ".ezl-step .t span{color:var(--color-text-secondary);font-size:10.5px;}",
+      ".ezl-step .t code{font-family:var(--font-family-code);font-size:9.5px;color:var(--color-text-green);",
+      "background:var(--color-background-green);border:1px solid var(--color-border-green);border-radius:var(--radius-inner);padding:0 4px;}",
+      ".ezl-pop-ga{margin-top:9px;padding-top:8px;border-top:1px dashed var(--color-border);font-size:10px;color:var(--color-text-secondary);}",
+      ".ezl-pop-ga b{color:var(--color-trust);font-family:var(--font-family-code);}",
+      "@media (prefers-reduced-motion:reduce){.ezl-panel,.ezl-scrim{transition:none !important;animation:none !important;}}"
     ].join("");
     var st = document.createElement("style");
     st.id = "ezl-style";
@@ -464,27 +453,29 @@
     document.head.appendChild(st);
   }
 
-  /* ================= 배지 ================= */
-  function ensureBadge() {
-    var b = document.getElementById("ezl-badge");
-    if (b) return b;
-    b = document.createElement("button");
-    b.type = "button";
-    b.id = "ezl-badge";
-    b.className = "ezl-badge";
-    b.title = "성과 히스토리 열기";
-    var host = document.querySelector(".ezx-root") || document.body;
-    host.appendChild(b);
-    return b;
+  /* ================= 변경 통지 (독립 배지 폐지 — [기록] 탭 도트가 대체, §5.2) ================= */
+  function updateBadge() {
+    try { document.dispatchEvent(new CustomEvent("ezl:changed")); } catch (e) { /* 구형 브라우저 무시 */ }
   }
-  function updateBadge(bump) {
-    var b = ensureBadge();
-    b.innerHTML = '<span class="dot"></span>히스토리 ' + loadStore().length;
-    if (bump) {
-      b.classList.remove("bump");
-      void b.offsetWidth; /* reflow로 애니 재시작 */
-      b.classList.add("bump");
+
+  /* [기록] 탭 행 렌더 — rows, not Cards (astryx 원칙). 클릭=기존 슬라이드 패널 딥점프 */
+  function renderRows(container) {
+    if (!container) return;
+    var all = sorted(), rows = "", shown = 0, i;
+    for (i = 0; i < all.length; i++) {
+      var lv = polCheck(all[i]);
+      if (lv === "no") continue;
+      var meta = TYPES[all[i].type] || TYPES.org;
+      var title = lv === "anon" ? "익명 집계" : all[i].title;
+      rows += '<div class="ezx-rec-row" data-ezl-open="' + esc(all[i].id) + '" style="--ezl-c:' + meta.color + '">'
+        + '<span class="dot"></span><div class="tt">' + esc(title)
+        + "<small>" + esc(meta.label) + " · " + esc(all[i].at || "") + "</small></div></div>";
+      shown++;
     }
+    var asof = window.EZKit && EZKit.clock ? EZKit.clock.asOf() : nowStamp();
+    container.innerHTML = shown
+      ? '<div class="ezx-rec-head"><span>📌 기준 ' + esc(asof) + "</span><span>총 " + shown + "건</span></div>" + rows
+      : '<div class="ezx-pane-empty">목표·체크인·1:1이 확정될 때마다 여기에 쌓입니다.</div>';
   }
 
   /* ================= 원장 패널 ================= */
@@ -507,7 +498,10 @@
     p.id = "ezl-panel";
     p.className = "ezl-panel";
     p.setAttribute("role", "dialog");
-    p.setAttribute("aria-label", "성과 히스토리");
+    p.setAttribute("aria-label", "성과 기록");
+    /* body 직속 — astryx 토큰 스코프 명시 부여 */
+    p.setAttribute("data-astryx-theme", "talenx");
+    scrim.setAttribute("data-astryx-theme", "talenx");
     document.body.appendChild(p);
     return p;
   }
@@ -531,7 +525,7 @@
     lv = lv || "full";
     if (lv === "anon") {
       /* 익명 집계 치환 카드 — 원문·출처 비노출 */
-      return '<div class="ezl-item' + (hl ? " ezl-hl" : "") + '" data-ezl-id="' + esc(it.id) + '" style="--ezl-c:#7a7a7a">'
+      return '<div class="ezl-item' + (hl ? " ezl-hl" : "") + '" data-ezl-id="' + esc(it.id) + '" style="--ezl-c:var(--color-text-secondary)">'
         + '<div class="ezl-row1"><span class="ezl-tb">' + esc(meta.label) + "</span>"
         + '<span class="ezl-at">' + esc(it.at || "") + "</span></div>"
         + '<div class="ezl-it-title">익명 집계</div>'
@@ -568,7 +562,7 @@
     for (i = 0; i < arr.length; i++) counts[arr[i].type] = (counts[arr[i].type] || 0) + 1;
 
     var chips = '<button type="button" class="ezl-tchip' + (filterType ? "" : " on") + '" data-ezl-filter=""'
-      + (filterType ? "" : ' style="background:#1d1d1f;border-color:#1d1d1f"') + ">전체<b>" + arr.length + "</b></button>";
+      + (filterType ? "" : ' style="background:var(--color-background-inverted);border-color:var(--color-background-inverted)"') + ">전체<b>" + arr.length + "</b></button>";
     for (i = 0; i < TYPE_ORDER.length; i++) {
       var t = TYPE_ORDER[i];
       if (counts[t]) chips += typeChipHtml(t, counts[t], filterType === t);
@@ -588,11 +582,12 @@
       ? '<span class="ezl-chain ok">기록 체인 검증 ✓ (' + vc.count + "건 이상 없음)</span>"
       : '<span class="ezl-chain bad">⚠ 기록 체인 불일치 — 위·변조 또는 유실 의심 (' + vc.count + "건 대조)</span>";
 
+    var asofStr = window.EZKit && EZKit.clock ? EZKit.clock.asOf() : nowStamp();
     p.innerHTML =
       '<div class="ezl-head"><div class="ezl-head-top">'
-      + '<div class="ezl-title">성과 히스토리<small>Performance History</small></div>'
+      + '<div class="ezl-title">성과 기록<small>확정된 목표·체크인·1:1·평가가 자동으로 쌓이는 원장입니다</small></div>'
       + '<button type="button" class="ezl-x" data-ezl-close="1" aria-label="닫기">×</button></div>'
-      + '<div class="ezl-sub"><span class="ezl-asof">기준 시점 2026 상반기 · ' + esc(nowStamp()) + " 기준</span>"
+      + '<div class="ezl-sub"><span class="ezl-asof">📌 기준 ' + esc(asofStr) + "</span>"
       + "<span>총 <b>" + arr.length + "</b>건 기록</span></div></div>"
       + '<div class="ezl-strip">' + chips + "</div>"
       + '<div class="ezl-body">' + list + "</div>"
@@ -602,7 +597,7 @@
         ? '<button type="button" class="ezl-foot-policy" data-ezl-journey="1" title="이 기록들을 시간순이 아니라 프로세스 단계 순서로 봅니다">&#9672; 프로세스 순서로 보기</button>'
         : "")
       + '<div class="ezl-foot-row2">' + chainLine
-      + '<button type="button" class="ezl-foot-policy" data-ezl-export="1" title="성과 히스토리를 JSON 파일로 내려받습니다">⬇ 내보내기</button>'
+      + '<button type="button" class="ezl-foot-policy" data-ezl-export="1" title="성과 기록을 JSON 파일로 내려받습니다">⬇ 내보내기</button>'
       + '<button type="button" class="ezl-foot-policy" data-ezl-import="1" title="내보낸 JSON을 불러와 병합합니다 (중복 기록은 건너뜀)">⬆ 가져오기</button>'
       + "</div></div>";
 
@@ -729,8 +724,10 @@
     return null;
   }
 
+  /* 감사 ID — EZKit 단일 생성기(GA-2026-NNNNN), 미로드 시 동일 포맷 폴백 */
   function gaId(text) {
-    return "GA-26" + String(100 + (hashNum(text) % 900));
+    if (window.EZKit && EZKit.gaId) return EZKit.gaId(text);
+    return "GA-2026-" + ("00000" + (hashNum(text) % 100000)).slice(-5);
   }
 
   function renderStrip() {
@@ -816,20 +813,20 @@
       var lv2 = gated[i].lv;
       var meta = TYPES[it2.type] || TYPES.org;
       if (lv2 === "anon") {
-        html += '<span class="ezl-ev-chip" style="--ezl-c:#7a7a7a" title="응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)">'
+        html += '<span class="ezl-ev-chip" style="--ezl-c:var(--color-text-secondary)" title="응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)">'
           + '<span class="tb">' + esc(meta.label) + "</span>익명 집계</span>";
         continue;
       }
       var clickable = level !== "core";
       html += '<span class="ezl-ev-chip' + (clickable ? " click" : "") + '" style="--ezl-c:' + meta.color + '"'
-        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="히스토리에서 보기"' : ' title="' + esc(it2.title) + '"') + ">"
+        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 보기"' : ' title="' + esc(it2.title) + '"') + ">"
         + '<span class="tb">' + esc(meta.label) + "</span>" + esc(shorten(it2.title, 14))
         + (level !== "core" && lv2 === "full" ? '<span class="sr">' + esc(it2.source || "") + "</span>" : "")
         + "</span>";
     }
     picked = gated.map(function (g) { return g.it; });
     if (level !== "core") {
-      html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">히스토리에서 보기</button>';
+      html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">성과 기록에서 보기</button>';
       html += '<button type="button" class="ezl-ev-link" data-ezl-journey="1" title="이 근거들이 성과 사이클 어느 단계의 결정으로 이어지는지 봅니다">&#9672; 프로세스 맵</button>';
     }
     if (level === "logic") {
@@ -860,7 +857,7 @@
   function openLogicPop(btn) {
     closeLogicPop();
     var ids = (btn.getAttribute("data-ezl-refs") || "").split(",");
-    var ga = btn.getAttribute("data-ezl-ga") || "GA-26000";
+    var ga = btn.getAttribute("data-ezl-ga") || "GA-2026-00000";
     var cited = [], ruleSrcs = [], i, it;
     for (i = 0; i < ids.length; i++) {
       it = byId(ids[i]);
@@ -911,7 +908,7 @@
       a.click();
       document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-      toast("성과 히스토리 " + loadStore().length + "건 내보냄");
+      toast("성과 기록 " + loadStore().length + "건 내보냄");
     } catch (e) { toast("내보내기 실패"); }
   }
   function importFile() {
@@ -960,13 +957,6 @@
     var pop = document.getElementById("ezl-pop");
     if (pop && !pop.contains(t) && !closestAttr(t, "data-ezl-logic")) closeLogicPop();
 
-    /* 배지 → 패널 열기 (배지 내부 span 클릭 포함, 부모 체인 탐색) */
-    var n = t;
-    while (n && n !== document) {
-      if (n.id === "ezl-badge") { ev.preventDefault(); openPanel(); return; }
-      n = n.parentNode;
-    }
-
     /* 닫기 (X·스크림) */
     if (closestAttr(t, "data-ezl-close")) { ev.preventDefault(); closePanel(); return; }
 
@@ -1002,7 +992,7 @@
     if (closestAttr(t, "data-ezl-export")) { ev.preventDefault(); exportJson(); return; }
     if (closestAttr(t, "data-ezl-import")) { ev.preventDefault(); importFile(); return; }
 
-    /* 근거칩·"히스토리에서 보기" → 패널 열고 해당 항목 하이라이트 */
+    /* 근거칩·"성과 기록에서 보기" → 패널 열고 해당 항목 하이라이트 */
     var op = closestAttr(t, "data-ezl-open");
     if (op) { ev.preventDefault(); openPanel(op.getAttribute("data-ezl-open") || null); return; }
 
@@ -1028,7 +1018,7 @@
     var e = addEntry(d);
     if (e) {
       updateBadge(true);
-      toast("성과 히스토리에 기록됨 · " + shorten(e.title, 22));
+      toast("성과 기록에 저장됨 · " + shorten(e.title, 22));
     }
   }
 
@@ -1062,14 +1052,6 @@
     document.addEventListener("keydown", onKeydown, true);
     document.addEventListener("ez:ctx", onCtxEvent, false);
 
-    /* 배지 — .ezx-root(FAB 루트)가 늦게 뜰 수 있어 폴링, 실패 시 body 폴백 pill */
-    var tries = 0;
-    (function pollFab() {
-      if (document.querySelector(".ezx-root")) { updateBadge(); return; }
-      if (++tries >= 20) { updateBadge(); return; }  /* 폴백: body에 자체 pill */
-      setTimeout(pollFab, 300);
-    })();
-
     /* EZChat 폴링 결선 (300ms × 20회) */
     var ct = 0;
     (function pollChat() {
@@ -1085,6 +1067,7 @@
     list: function () { return sorted(); },
     openPanel: openPanel,
     closePanel: closePanel,
+    renderRows: renderRows,
     count: function () { return loadStore().length; },
     verifyChain: verifyChain,
     isPinned: isPinned

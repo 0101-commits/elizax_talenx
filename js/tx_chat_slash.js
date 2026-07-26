@@ -126,24 +126,24 @@
   function injectStyle() {
     if (document.getElementById("ezcx-slash-style")) return;
     var css = "" +
-      ".ezcx-slash-pop{position:fixed;z-index:100000;min-width:260px;max-width:420px;" +
-        "background:var(--card,#fff);border:1px solid var(--line,#E4E7EC);border-radius:12px;" +
-        "box-shadow:0 12px 32px rgba(15,23,42,.18);overflow:hidden;font-size:13px;" +
-        "color:var(--ink,#1D2433);display:none;}" +
+      ".ezcx-slash-pop{position:fixed;z-index:var(--z-top);min-width:260px;max-width:420px;" +
+        "background:var(--color-background-popover);border:1px solid var(--color-border);border-radius:var(--radius-container);" +
+        "box-shadow:var(--shadow-high, 0 12px 32px rgba(15,23,42,.18));overflow:hidden;font-size:13px;" +
+        "color:var(--color-text-primary);display:none;}" +
       ".ezcx-slash-pop.on{display:block;}" +
       ".ezcx-slash-cap{padding:7px 12px 5px;font-size:11px;font-weight:700;letter-spacing:.02em;" +
-        "color:var(--blue,#1F7AF0);background:var(--soft,#F8FAFC);" +
-        "border-bottom:1px solid var(--line,#E4E7EC);}" +
+        "color:var(--color-accent);background:var(--color-background-muted);" +
+        "border-bottom:1px solid var(--color-border);}" +
       ".ezcx-slash-list{max-height:264px;overflow-y:auto;padding:4px;}" +
-      ".ezcx-slash-item{display:flex;align-items:baseline;gap:8px;padding:7px 9px;border-radius:8px;" +
+      ".ezcx-slash-item{display:flex;align-items:baseline;gap:8px;padding:7px 9px;border-radius:var(--radius-element);" +
         "cursor:pointer;line-height:1.4;}" +
-      ".ezcx-slash-item.sel{background:var(--soft,#F8FAFC);" +
-        "box-shadow:inset 0 0 0 1px var(--blue,#1F7AF0);}" +
-      ".ezcx-slash-name{flex:0 0 auto;font-weight:700;color:var(--blue,#1F7AF0);white-space:nowrap;}" +
-      ".ezcx-slash-desc{flex:1 1 auto;min-width:0;color:var(--ink,#1D2433);opacity:.62;" +
+      ".ezcx-slash-item.sel{background:var(--color-background-muted);" +
+        "box-shadow:inset 0 0 0 1px var(--color-accent);}" +
+      ".ezcx-slash-name{flex:0 0 auto;font-weight:700;color:var(--color-accent);white-space:nowrap;}" +
+      ".ezcx-slash-desc{flex:1 1 auto;min-width:0;color:var(--color-text-primary);opacity:.62;" +
         "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
-      ".ezcx-slash-tag{flex:0 0 auto;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;" +
-        "border:1px solid var(--line,#E4E7EC);color:var(--ink,#1D2433);opacity:.55;}";
+      ".ezcx-slash-tag{flex:0 0 auto;font-size:10px;font-weight:700;padding:1px 6px;border-radius:var(--radius-full);" +
+        "border:1px solid var(--color-border);color:var(--color-text-primary);opacity:.55;}";
     var st = document.createElement("style");
     st.id = "ezcx-slash-style";
     st.appendChild(document.createTextNode(css));
@@ -158,6 +158,8 @@
     var el = document.createElement("div");
     el.className = "ezcx-slash-pop";
     el.setAttribute("role", "listbox");
+    /* body 직속 부착 — astryx 토큰 스코프 루트 필요 */
+    el.setAttribute("data-astryx-theme", "talenx");
     el.innerHTML = '<div class="ezcx-slash-cap">빠른 명령</div><div class="ezcx-slash-list"></div>';
     /* mousedown: 입력창 포커스 이탈(=팝업 닫힘) 전에 확정 처리 */
     el.addEventListener("mousedown", function (e) {

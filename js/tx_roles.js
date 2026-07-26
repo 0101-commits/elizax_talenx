@@ -346,9 +346,9 @@
     var name = m.cu.name || "사용자";
     var grade = m.ev ? m.ev.grade : "B+";
     var score = m.ev ? m.ev.weighted_score : "-";
-    var asof = "2026 상반기 · 6/30 마감 실적";
+    var asofVal = window.EZKit ? EZKit.clock.asOf() : "2026-07-16 06:00";
 
-    var title, verdict, metrics, steps, wfTitle, audit;
+    var title, verdict, metrics, steps, wfTitle, wfRows, wfNote, audit, srcs;
 
     if (role === "leader") {
       var tc = capTop(teamEvals(m.cu), 0.3);
@@ -363,6 +363,7 @@
       ];
       wfTitle = "강제배분(상위 ≤30%) 적용 시 재계산";
       audit = "탐색 범위 · 권한 내 우리 팀";
+      srcs = ["rule", "erp"];
     } else if (role === "hr") {
       /* 연결·규칙 지표는 실데이터 전수 계산 (하드코딩 금지) */
       var dd = D();
@@ -391,6 +392,7 @@
       ];
       wfTitle = "관대화 의심 본부 정상화 가정 시 전사 분포 재계산";
       audit = "탐색 범위 · 권한 내 전사";
+      srcs = ["rule", "talenx", "erp"];
     } else if (role === "exec") {
       /* 진척·정렬·본부별 요약 = objectives·strategyThemes·orgs 실계산 */
       var xs = execStats();
@@ -414,6 +416,7 @@
       ];
       wfTitle = "전사 달성률 -10%p 가정 시 재계산";
       audit = "탐색 범위 · 전사";
+      srcs = ["talenx", "erp"];
     } else {
       title = "내 목표 · 평가 근거";
       verdict = name + "님 상반기 등급 초안은 <span class=\"g\">" + esc(grade) + "</span>입니다. 담당 목표 " + m.owned.length + "건, 평균 진행률 " + (m.avg != null ? m.avg + "%" : "-") + ". 목표 달성률과 피어리뷰가 안정적입니다.";
@@ -425,6 +428,7 @@
       ];
       wfTitle = "달성률 -10%p 가정 시 재계산";
       audit = "탐색 범위 · 권한 내 본인";
+      srcs = ["erp", "rule", "talenx"];
     }
 
     var metricsHtml = metrics.map(function (x) {
@@ -475,30 +479,26 @@
           '<span class="txr-rc-title">검증 가능한 답변 · ' + esc(title) + "</span>" +
         "</div>" +
         '<div class="txr-rc-left">' +
-          '<span class="txr-chip asof" data-asof><span class="txr-anno">1</span>' + esc(asof) + " ▾</span>" +
-          '<span class="txr-chip audit"><span class="txr-anno">3</span>감사 기록됨 · ' + esc(audit) + "</span>" +
+          '<span class="txr-chip asof" data-asof><span class="txr-anno">1</span>📌 기준 ' + esc(asofVal) + " ▾</span>" +
+          (window.EZKit && srcs ? srcs.map(function (k) { return EZKit.src(k); }).join("") : "") +
+          '<span class="txr-chip audit"><span class="txr-anno">3</span>⛨ ' +
+            esc(window.EZKit ? EZKit.gaId(gateKey() + "receipt") : "") + " · " + esc(audit) + "</span>" +
         "</div>" +
       "</div>" +
       '<div class="txr-rc-body">' + bodyHtml + "</div>";
   }
 
-  /* ---------- gate decision state (역할별 · 세션 지속) ---------- */
-  function gateKey() { return "txr_gate_" + savedKey(); }
+  /* ---------- gate decision state — EZKit.gates 단일 스토어 (P6) ---------- */
+  function gateKey() { return "txr_" + savedKey(); }
   function getDecision() {
-    try { var v = sessionStorage.getItem(gateKey()); return v ? JSON.parse(v) : null; }
-    catch (e) { return null; }
+    var r = window.EZKit ? EZKit.gates.get(gateKey()) : null;
+    if (!r || !r.decision) return null;
+    return { act: r.decision, note: r.reason, at: r.at, by: r.by, audit: EZKit.gaId(gateKey() + r.decision) };
   }
   function saveDecision(d) {
-    try {
-      if (d) sessionStorage.setItem(gateKey(), JSON.stringify(d));
-      else sessionStorage.removeItem(gateKey());
-    } catch (e) { /* ignore */ }
-  }
-  function auditId(act) {
-    var base = savedKey() + act;
-    var hsum = 0;
-    for (var i = 0; i < base.length; i++) hsum = (hsum * 31 + base.charCodeAt(i)) % 100000;
-    return "GA-2026-" + String(10000 + hsum).slice(0, 5);
+    if (!window.EZKit) return;
+    if (d) EZKit.gates.set(gateKey(), { decision: d.act, reason: d.note, by: d.by, at: d.at });
+    else EZKit.gates.set(gateKey(), { decision: "", reason: "", by: "", at: "" });
   }
   function decisionStampHTML(d) {
     var kindCls = (d.act === "승인" || d.act === "확인했습니다") ? "ok"
@@ -516,7 +516,7 @@
   }
   function applyDecision(act, note) {
     var cu = (D().meta && D().meta.currentUser) || {};
-    saveDecision({ act: act, note: note || "", at: nowLabel(), audit: auditId(act), by: cu.name || "-" });
+    saveDecision({ act: act, note: note || "", at: nowLabel(), by: cu.name || "-" });
     rerenderReceipt();
     toast("'" + act + "' 결정이 감사 로그에 기록되었습니다.", (act === "승인" || act === "확인했습니다") ? "ok" : "");
   }
@@ -530,10 +530,13 @@
       var t = e.target;
       var asof = t.closest("[data-asof]");
       if (asof) {
-        var snaps = ["2026 상반기 · 6/30 마감 실적", "2026 상반기 · 5/31 시점", "2025 하반기 · 확정 기준"];
-        var cur = asof.childNodes[asof.childNodes.length - 1].nodeValue.replace(" ▾", "").trim();
-        var i = snaps.indexOf(cur); i = (i + 1) % snaps.length;
-        asof.childNodes[asof.childNodes.length - 1].nodeValue = " " + snaps[i] + " ▾";
+        /* 스냅샷 전환은 EZClock 단일 발급 경유 — 전 표면 동일 값 (P6) */
+        if (window.EZKit) {
+          var snaps = ["2026-07-16 06:00", "2026-05-31 18:00", "2025-12-31 확정"];
+          var i = snaps.indexOf(EZKit.clock.asOf());
+          EZKit.clock.setSnapshot(snaps[(i + 1) % snaps.length]);
+          rerenderReceipt();
+        }
         return;
       }
       var th = t.closest("[data-tracehead]");
@@ -568,23 +571,6 @@
       var g = t.closest("[data-gate]");
       if (g && !g.disabled) {
         var act = g.getAttribute("data-gate");
-        var defs = gateDefs(curRole().key), def = null;
-        for (var di = 0; di < defs.length; di++) { if (defs[di].act === act) def = defs[di]; }
-        /* 사유 입력이 필요 없는 결정(승인·확인했습니다)은 즉시 스탬프 */
-        if (!def || !def.modal || !(window.TX && TX.modal)) { applyDecision(act); return; }
-        var mo = TX.modal({
-          title: def.modal.title,
-          body: '<p style="font-size:12.5px;color:#667085;margin:0 0 8px">' + esc(def.modal.desc) + "</p>" +
-            '<textarea data-gate-note style="width:100%;min-height:84px;border:1px solid #D0D5DD;border-radius:8px;padding:9px;font:inherit;font-size:13px" placeholder="' + esc(def.modal.ph) + '"></textarea>',
-          actions: [
-            { label: "취소", onClick: function () { mo.close(); } },
-            { label: def.modal.ok, kind: "primary", onClick: function () {
-                var ta2 = mo.box.querySelector("[data-gate-note]");
-                applyDecision(act, ta2 ? ta2.value.trim() : "");
-                mo.close();
-              } }
-          ]
-        });
         return;
       }
     });

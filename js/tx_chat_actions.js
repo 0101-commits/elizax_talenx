@@ -58,13 +58,13 @@
     st.id = "ezcx-act-style";
     st.textContent =
       ".ezcx-act-bar{display:flex;gap:4px;justify-content:flex-end;align-items:center;" +
-        "margin-top:3px;font-size:11px;line-height:1;opacity:.72;transition:opacity .12s ease;}" +
+        "margin-top:3px;font-size:11px;line-height:1;opacity:.72;transition:opacity var(--duration-fast) var(--ease-standard);}" +
       ".ezcx-act-bar:hover{opacity:1;}" +
       ".ezx-msg.user .ezcx-act-bar{justify-content:flex-end;}" +
-      ".ezcx-act-btn{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line,#E4E7EC);" +
-        "background:var(--card,#fff);color:var(--ink,#1D2433);border-radius:6px;" +
+      ".ezcx-act-btn{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--color-border);" +
+        "background:var(--color-background-card);color:var(--color-text-primary);border-radius:var(--radius-element);" +
         "padding:2px 7px;font-size:11px;cursor:pointer;user-select:none;}" +
-      ".ezcx-act-btn:hover{border-color:var(--blue,#1F7AF0);color:var(--blue,#1F7AF0);background:var(--soft,#F8FAFC);}" +
+      ".ezcx-act-btn:hover{border-color:var(--color-accent);color:var(--color-accent);background:var(--color-background-muted);}" +
       ".ezcx-act-btn[disabled]{opacity:.45;cursor:default;pointer-events:none;}";
     document.head.appendChild(st);
   }

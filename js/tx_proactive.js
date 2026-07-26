@@ -1,38 +1,61 @@
 /* ============================================================================
- * tx_proactive.js — 선제(proactive) 알림 단일 코디네이터
+ * tx_proactive.js — 선제(proactive) 알림 단일 코디네이터 (§6 2슬롯 프레임)
  * ----------------------------------------------------------------------------
- * 문제: 화면 우하단 FAB 주변에 선제 팝업이 서로를 모르는 채 3곳에서 뜬다.
- *   - tx_agent.js   .agh-popup      선제 감지 카드(열어서 확인/나중에)  right:24 bottom:96
- *   - tx_entry.js   .eze-pill       화면 문맥 제안 pill                 right:24 bottom:94  ← agh-popup과 같은 자리, 겹침
- *   - tx_upgrade.js .ezup-ctxchip   FAB 왼쪽 컨텍스트 칩                right:88 bottom:32
- * eze-pill·ezup-ctxchip는 둘 다 GNB/탭 클릭에 반응하고, agh-popup은 로드 9초 타이머라
- * 조작·타이밍이 겹치면 두 팝업이 동시에 떠 겹쳐 보인다.
+ * 슬롯 1(pill/토스트)을 세 표면이 시간 공유한다:
+ *   - tx_agent.js   .agh-popup      선제 감지 카드        prio 3 (최상)
+ *   - tx_entry.js   .eze-pill       화면 문맥 제안 pill    prio 2
+ *   - tx_upgrade.js .ezup-ctxchip   컨텍스트 칩/온보딩     prio 1
+ * 규칙: 새 claim의 prio ≥ active prio → 교체(밀린 쪽 [알림] 적재).
+ *       새 claim의 prio <  active prio → 새 쪽을 즉시 닫고 [알림]으로만 적재.
+ * 슬롯 2는 FAB 자체(카운트) — 여기서 관리하지 않는다.
  *
- * 해결: 전역 단일 슬롯. 새 팝업이 뜰 때 앞선 팝업을 닫고(replace) 자기를 active로 등록.
- *       → 어느 순간에도 선제 팝업은 하나만 보인다. 실제 기능(열어서 확인/나중에/제안
- *       수락/자동소멸)은 각 모듈이 그대로 수행한다.
+ * 증발 금지: 교체·소멸된 항목은 EZNotif(도킹 패널 [알림] 탭 스토어)에 적재.
+ *   release(id, acted) — acted=true면 사용자가 실행한 것이므로 적재 생략.
+ *   ponytail: tx_agent/tx_entry는 acted 플래그를 아직 안 넘김 — 실행된 항목도
+ *   적재되는 소음 있음. 해당 파일 소유 작업에서 release(id, true) 전달이 업그레이드 경로.
  *
- * 계약: window.EZProactive.claim(id, dismissFn) / release(id).
- *   claim: 다른 id가 active면 그 dismissFn을 호출해 닫고, 자기를 active로 교체.
- *   release: 자기가 active일 때만 슬롯 비움(dismissFn 안에서 호출해도 안전).
- * 소비 모듈에서는 항상 `window.EZProactive &&` 로 가드해 로드 순서와 무관하게 동작.
- *
- * ponytail: 단일 전역 슬롯 — 우선순위/큐 없음(가장 최근 것이 이긴다). 특정 알림을
- *           반드시 살려야 하면 claim에 우선도 인자를 추가하는 것이 업그레이드 경로.
+ * 계약(하위호환): window.EZProactive.claim(id, dismissFn) / release(id[, acted]).
  * ========================================================================== */
 (function () {
   "use strict";
-  if (window.EZProactive) return;
+  if (window.EZProactive && window.EZProactive.__v2) return;
+  var PRIO = { "agh-popup": 3, "eze-pill": 2, "ezup-ctxchip": 1, "ezup-onboard": 1 };
+  var SEL = { "agh-popup": ".agh-popup", "eze-pill": ".eze-pill", "ezup-ctxchip": ".ezup-ctxchip", "ezup-onboard": ".ezup-ctxchip" };
+  var LABEL = { "agh-popup": "선제 감지", "eze-pill": "화면 제안", "ezup-ctxchip": "문맥 제안", "ezup-onboard": "안내" };
   var active = null; // { id, dismiss }
+
+  function snapshot(id) {
+    var el = SEL[id] ? document.querySelector(SEL[id]) : null;
+    var t = el ? (el.textContent || "").replace(/\s+/g, " ").trim() : "";
+    return t || LABEL[id] || id;
+  }
+  function archive(id, body) {
+    if (!(window.EZNotif && typeof window.EZNotif.push === "function")) return;
+    try { window.EZNotif.push({ kind: "proactive", src: id, title: LABEL[id] || id, body: body }); } catch (e) { /* 스토어 미로드 등 — 무해화 */ }
+  }
   window.EZProactive = {
+    __v2: true,
     claim: function (id, dismiss) {
-      if (active && active.id !== id && typeof active.dismiss === "function") {
-        try { active.dismiss(); } catch (e) { /* 무해화 */ }
+      var p = PRIO[id] != null ? PRIO[id] : 2;
+      if (active && active.id !== id) {
+        var ap = PRIO[active.id] != null ? PRIO[active.id] : 2;
+        if (p < ap) { // 상위가 점유 중 — 새 항목은 표시 없이 알림 적재 후 닫기
+          archive(id, snapshot(id));
+          if (typeof dismiss === "function") { try { dismiss(); } catch (e) {} }
+          return false;
+        }
+        var old = active;
+        active = null; // dismiss 안의 release() 재진입 시 이중 적재 방지
+        archive(old.id, snapshot(old.id)); // 밀린 쪽 적재 (DOM 제거 전 스냅샷)
+        if (typeof old.dismiss === "function") { try { old.dismiss(); } catch (e) {} }
       }
       active = { id: id, dismiss: (typeof dismiss === "function" ? dismiss : null) };
+      return true;
     },
-    release: function (id) {
-      if (active && active.id === id) active = null;
+    release: function (id, acted) {
+      if (!active || active.id !== id) return;
+      if (!acted) archive(id, snapshot(id)); // 자연 소멸·"나중에" — 잔존
+      active = null;
     }
   };
 })();
