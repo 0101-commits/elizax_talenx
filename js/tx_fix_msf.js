@@ -132,7 +132,10 @@
       return '<div class="mcard txf-mcard" data-ci="' + i + '" data-name="' + esc(c.subj.name) + '" data-type="' + esc(c.type) + '" data-order="' + c.order + '">' +
         ringSVG(c.pct) +
         '<div class="mbody">' +
-        '<div class="mtitle">' + esc(c.type) + ' <span class="badge b-org">종료</span></div>' +
+        '<div class="mtitle">' + esc(c.type) + ' <span class="badge b-org">종료</span>' +
+        /* v2 §11: 발견성 — 결과에 감정분석이 있음을 목록에서 표기 */
+        (c.answers && c.answers.length ? ' <span style="font-size:11px;font-weight:700;color:#356CB5;background:rgba(31,122,240,.08);border-radius:999px;padding:2px 9px">✦ 감정분석 제공</span>' : '') +
+        '</div>' +
         '<div class="msub">' + esc(c.reason) + '</div>' +
         '<div class="mppl">' +
         '<div class="grp tgt"><span class="lab">대상자</span><span class="txf-who">' + ava(c.subj.name, 24) + esc(nt(c.subj)) + '</span></div>' +
@@ -337,9 +340,15 @@
       c.answers.forEach(function (a) { if (a.s === 'pos') pos++; else if (a.s === 'neg') neg++; else neu++; });
       var tot = c.answers.length || 1;
       var score = Math.round((pos + neu * 0.5) / tot * 100);
+      /* v2 §7 커버리지 의무 첫 적용: AI 산출물 표면은 최소 EZAsOf+EZSource. 마커 "AI"배지→✦ */
+      var K = window.EZKit;
+      var sentTrust = K
+        ? '<span class="txf-sent-trust" data-astryx-theme="talenx" style="display:inline-flex;gap:6px;margin-left:auto;font-weight:500">' +
+          K.asof() + K.src('talenx', '360 응답 ' + c.answers.length + '건') + '</span>'
+        : '<span style="margin-left:auto;font-size:11px;color:var(--ink-3);font-weight:600">기준 2026-07-16 06:00 · 360 응답 ' + c.answers.length + '건</span>';
       var sentHTML = c.answers.length ?
         ('<div class="txf-card txf-sent">' +
-          '<div class="txf-sent-h"><span class="txf-ai">AI</span> 감정분석</div>' +
+          '<div class="txf-sent-h" style="display:flex;align-items:center;gap:6px"><span class="txf-ai" style="background:transparent;color:var(--blue,#1F7AF0)">✦</span> 감정분석' + sentTrust + '</div>' +
           '<div class="txf-sent-bars">' +
           sentBar('긍정', pos, tot, 'var(--blue)') + sentBar('중립', neu, tot, 'var(--ink-4)') + sentBar('부정', neg, tot, 'var(--red)') +
           '</div>' +
@@ -348,7 +357,7 @@
           '개선 제안은 “진행 상황 중간 공유”와 “우선순위 명확화”에 집중되어 있습니다. ' +
           '종합 감정 점수는 <b>' + score + '점(긍정 우세)</b>이며, 즉각적인 리스크 신호는 확인되지 않았습니다.</p>' +
           '</div>') :
-        ('<div class="txf-card txf-sent"><div class="txf-sent-h"><span class="txf-ai">AI</span> 감정분석</div>' +
+        ('<div class="txf-card txf-sent"><div class="txf-sent-h"><span class="txf-ai" style="background:transparent;color:var(--blue,#1F7AF0)">✦</span> 감정분석</div>' +
           '<p class="txf-sent-txt txf-muted">아직 응답이 없어 감정분석 결과를 제공할 수 없습니다. 평가자 응답이 접수되면 자동으로 분석됩니다.</p></div>');
 
       // question cards

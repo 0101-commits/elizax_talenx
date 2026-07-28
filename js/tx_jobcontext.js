@@ -254,7 +254,7 @@
       + '<div class="jt">' + esc(emp.jobTitle || '직무 미지정') + '</div></div></div>';
     if (!jp) {
       h += '<div class="ezjc-missing">⚠ 직무 프로파일 미연결 — HR에 연결을 요청하세요</div>'
-        + '<div class="ezjc-note">직무 기준이 연결되면 과업·기대 스킬을 근거로 AI가 KR을 추천합니다.</div>';
+        + '<div class="ezjc-note">✦ 직무 기준이 연결되면 과업·기대 스킬을 근거로 AI가 KR을 추천합니다.</div>';
     } else {
       var longMission = (jp.mission || '').length > 80;
       h += '<div class="ezjc-ptitle">' + esc(jp.title || '') + '</div>'

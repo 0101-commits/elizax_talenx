@@ -108,6 +108,52 @@
 
   /* ---------------- DOM refs ---------------- */
   var el = {};
+  var curTab = "chat";
+
+  /* ---------------- EZNotif — 알림 단일 스토어 (§6 잔존형 알림: 토스트→FAB 카운트→[알림] 탭) ---------------- */
+  var EZNotif = (function () {
+    var KEY = "ezk_notif_v1", MAX = 50, subs = [];
+    function load() {
+      try { var a = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(a) ? a : []; }
+      catch (e) { return []; }
+    }
+    function save(arr) {
+      try { localStorage.setItem(KEY, JSON.stringify(arr.slice(-MAX))); } catch (e) { /* storage 불가 무시 */ }
+    }
+    function emit() { subs.forEach(function (cb) { try { cb(); } catch (e) { /* ignore */ } }); }
+    function stamp() {
+      var t = new Date();
+      function z(n) { return (n < 10 ? "0" : "") + n; }
+      return (t.getMonth() + 1) + "/" + t.getDate() + " " + z(t.getHours()) + ":" + z(t.getMinutes());
+    }
+    return {
+      push: function (n) {
+        if (!n || !n.title) return null;
+        var arr = load();
+        var item = {
+          id: n.id || ("ntf-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+          title: String(n.title), body: n.body ? String(n.body) : "",
+          action: n.action ? String(n.action) : null,
+          kind: n.kind || "info", read: false, at: stamp(), ts: Date.now()
+        };
+        arr.push(item); save(arr); emit(); return item;
+      },
+      list: function () { return load().sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); }); },
+      markRead: function (id) {
+        var arr = load(), hit = false;
+        arr.forEach(function (n) { if (n.id === id && !n.read) { n.read = true; hit = true; } });
+        if (hit) { save(arr); emit(); }
+      },
+      markAllRead: function () {
+        var arr = load(), hit = false;
+        arr.forEach(function (n) { if (!n.read) { n.read = true; hit = true; } });
+        if (hit) { save(arr); emit(); }
+      },
+      unreadCount: function () { return load().filter(function (n) { return !n.read; }).length; },
+      onChange: function (cb) { if (typeof cb === "function") subs.push(cb); }
+    };
+  })();
+  window.EZNotif = EZNotif;
 
   /* ---------------- Helpers ---------------- */
   function h(tag, cls, attrs) {
@@ -179,6 +225,11 @@
     /* FAB */
     var fab = h("button", "ezx-fab", { "aria-label": "elizax 열기", "title": "elizax" });
     fab.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 2z" fill="currentColor"/><circle cx="18.5" cy="16.5" r="2" fill="currentColor" opacity=".85"/></svg>';
+    /* FAB 카운트 = 미확인 알림 수 전용 (0이면 숨김) — §5.2 */
+    var cnt = h("span", "ezx-cnt");
+    cnt.hidden = true;
+    fab.appendChild(cnt);
+    el.cnt = cnt;
     fab.addEventListener("click", openPanel);
 
     /* Panel */
@@ -199,12 +250,24 @@
     });
     var gear = h("button", "ezx-x", { "aria-label": "AI 연결 설정", title: "AI 연결 설정", text: "⚙" });
     gear.addEventListener("click", function () {
-      if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateAiBadge(); renderMessages(); });
+      if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateStatus(); renderMessages(); });
     });
     var xbtn = h("button", "ezx-x", { "aria-label": "닫기", text: "✕" });
     xbtn.addEventListener("click", closePanel);
     top.appendChild(mark); top.appendChild(titles); top.appendChild(gear); top.appendChild(exbtn); top.appendChild(xbtn);
     head.appendChild(top);
+
+    /* 3탭 IA — 대화 / 기록 / 알림 (§5) */
+    var tabs = h("div", "ezx-tabs");
+    el.tabBtns = {};
+    [["chat", "대화"], ["rec", "기록"], ["ntf", "알림"]].forEach(function (d) {
+      var b = h("button", "ezx-tab" + (d[0] === "chat" ? " on" : ""), { type: "button", "data-tab": d[0] });
+      b.innerHTML = "<span>" + d[1] + "</span><span class=\"ezx-tab-dot\" hidden></span>"
+        + (d[0] === "ntf" ? "<span class=\"ezx-tab-n\" hidden></span>" : "");
+      b.addEventListener("click", function () { setTab(d[0]); });
+      el.tabBtns[d[0]] = b;
+      tabs.appendChild(b);
+    });
 
     /* perspective 스트립 제거 — 관점 자동전환 로직(setPerspective)은 유지, 시각 chrome만 삭제 */
     el.persp = null;
@@ -249,8 +312,17 @@
     var list = h("div", "ezx-list", { role: "log", "aria-live": "polite" });
     el.list = list;
 
+    /* [기록]·[알림] 패인 — 기존 앵커(.ezx-ctx/.ezx-list/.ezx-foot)는 유지, 탭 모드 클래스로만 전환 */
+    var recPane = h("div", "ezx-pane ezx-rec-pane");
+    var ntfPane = h("div", "ezx-pane ezx-ntf-pane");
+    el.recPane = recPane; el.ntfPane = ntfPane;
+
     /* footer / composer */
     var foot = h("div", "ezx-foot");
+    /* 연결 상태 배너 (죽은 updateAiBadge 대체 — proxy/direct/offline 3모드) */
+    var status = h("div", "ezx-status");
+    el.status = status;
+    foot.appendChild(status);
     var comp = h("div", "ezx-composer");
     var ta = h("textarea", "ezx-ta", { rows: "1", placeholder: "메시지를 입력하세요…", "aria-label": "메시지 입력" });
     ta.addEventListener("input", autoGrow);
@@ -269,42 +341,17 @@
     foot.appendChild(comp); foot.appendChild(footRow);
     el.textarea = ta; el.send = send;
 
-    /* [Phase1 IA] 탭 스트립 — 대화 · 기록 · 알림 (헤더 바로 아래) */
-    var tabs = h("div", "ezx-tabs", { role: "tablist" });
-    tabs.innerHTML =
-      '<button type="button" class="ezx-tab on" data-ezx-tab="chat" role="tab">대화</button>' +
-      '<button type="button" class="ezx-tab" data-ezx-tab="rec" role="tab">기록 <span class="ic">◷</span></button>' +
-      '<button type="button" class="ezx-tab" data-ezx-tab="ntf" role="tab">알림<span class="ezx-tab-n" data-ezx-ntfn hidden>0</span></button>';
-    tabs.addEventListener("click", function (e) {
-      var b = e.target.closest("[data-ezx-tab]");
-      if (b) showTab(b.getAttribute("data-ezx-tab"));
-    });
+    /* 탭 스트립·패인은 위(el.tabBtns / el.recPane / el.ntfPane)에서 이미 구성됨 —
+       구 data-ezx-tab 스트립·.ezx-tabpane 이중 생성은 제거(astryx 리스킨 CSS가 .ezx-mode-* 단일 방식) */
     el.tabs = tabs;
-
-    /* 탭 패널 — 기록(EZLedger 임베드) · 알림(EZNotif 보관함) */
-    var paneRec = h("div", "ezx-tabpane ezx-pane-rec");
-    var paneNtf = h("div", "ezx-tabpane ezx-pane-ntf");
-    el.paneRec = paneRec; el.paneNtf = paneNtf;
-    paneNtf.addEventListener("click", function (e) {
-      var b = e.target.closest("[data-ntf]");
-      if (!b || !window.EZNotif || !EZNotif.run) return;
-      var ent = EZNotif.run(b.getAttribute("data-ntf"));   /* "다시 실행" */
-      if (ent && ent.action) {
-        if (ent.action.type === "ask") showTab("chat");    /* 대화로 이어짐 */
-        else closePanel();                                 /* 허브·화면 이동은 패널 밖 */
-      } else {
-        renderNtfPane();                                   /* 읽음 표시만 갱신 */
-      }
-    });
 
     panel.appendChild(head);
     panel.appendChild(tabs);
     panel.appendChild(ctx);
     panel.appendChild(list);
+    panel.appendChild(recPane);
+    panel.appendChild(ntfPane);
     panel.appendChild(foot);
-    panel.appendChild(paneRec);
-    panel.appendChild(paneNtf);
-    panel.setAttribute("data-ezx-tab", "chat");
 
     root.appendChild(fab);
     root.appendChild(panel);
@@ -336,17 +383,83 @@
     /* 백엔드 probe는 비동기 — 완료 후 연결 상태 표기를 실제 모드로 갱신 */
     if (window.EZAI && window.EZAI.probe) {
       window.EZAI.probe(function () {
-        updateAiBadge();
+        updateStatus();
         if (!msgs().length) renderMessages();
       });
     }
-    /* [Phase1 IA] 알림 보관함 변경 구독 — FAB·탭 배지 갱신 */
-    document.addEventListener("ezx:notif", function (ev) {
-      updateNtfBadges();
-      var reason = ev && ev.detail && ev.detail.reason;
-      if (reason === "add" && el.panel && el.panel.getAttribute("data-ezx-tab") === "ntf") renderNtfPane();
+
+    /* 알림 스토어 → FAB 카운트·[알림] 탭 카운트 실시간 반영
+       (구 ezx:notif document 이벤트 구독은 EZNotif.onChange 구독으로 일원화) */
+    EZNotif.onChange(function () {
+      updateFabCount();
+      if (curTab === "ntf") renderNtf();
     });
-    updateNtfBadges();
+    updateFabCount();
+    updateStatus();
+    /* 성과 기록 변경 → [기록] 탭 도트 또는 즉시 재렌더 */
+    document.addEventListener("ezl:changed", function () {
+      if (curTab === "rec" && window.EZLedger && EZLedger.renderRows) EZLedger.renderRows(el.recPane);
+      else toggleTabDot("rec", true);
+    });
+  }
+
+  /* ---------------- 3탭 전환 ---------------- */
+  /* hl = 성과 기록 하이라이트 대상 entry id (외부 Elizax.showTab("rec", id) 진입용) */
+  function setTab(k, hl) {
+    if (k !== "chat" && k !== "rec" && k !== "ntf") k = "chat";
+    curTab = k;
+    el.root.classList.toggle("ezx-mode-rec", k === "rec");
+    el.root.classList.toggle("ezx-mode-ntf", k === "ntf");
+    for (var t in el.tabBtns) el.tabBtns[t].classList.toggle("on", t === k);
+    if (k === "rec") {
+      toggleTabDot("rec", false);
+      /* 하이라이트가 필요하면 renderInto(=성과 기록 임베드 렌더), 아니면 renderRows */
+      if (window.EZLedger && hl && EZLedger.renderInto) EZLedger.renderInto(el.recPane, hl);
+      else if (window.EZLedger && EZLedger.renderRows) EZLedger.renderRows(el.recPane);
+      else el.recPane.innerHTML = '<div class="ezx-pane-empty">성과 기록 모듈이 아직 로드되지 않았습니다.</div>';
+    }
+    if (k === "ntf") {
+      renderNtf();
+      EZNotif.markAllRead();
+    }
+  }
+  function toggleTabDot(k, on) {
+    var d = el.tabBtns && el.tabBtns[k] && el.tabBtns[k].querySelector(".ezx-tab-dot");
+    if (d) d.hidden = !on;
+  }
+  function updateFabCount() {
+    var n = EZNotif.unreadCount();
+    if (el.cnt) { el.cnt.hidden = n === 0; el.cnt.textContent = n > 9 ? "9+" : String(n); }
+    var tn = el.tabBtns && el.tabBtns.ntf && el.tabBtns.ntf.querySelector(".ezx-tab-n");
+    if (tn) { tn.hidden = n === 0; tn.textContent = String(n); }
+  }
+  function renderNtf() {
+    var p = el.ntfPane;
+    if (!p) return;
+    var arr = EZNotif.list();
+    if (!arr.length) {
+      p.innerHTML = '<div class="ezx-pane-empty">알림이 아직 없습니다.<br>제안·감지·응답 도착이 여기에 남아 다시 실행할 수 있습니다.</div>';
+      return;
+    }
+    p.innerHTML = "";
+    arr.forEach(function (n) {
+      var row = h("div", "ezx-ntf-row" + (n.read ? "" : " unread"));
+      row.innerHTML = '<span class="dot"></span><div class="bd"><div class="tt">' + esc(n.title) + "</div>"
+        + (n.body ? '<div class="bs">' + esc(n.body) + "</div>" : "")
+        + '<div class="ba">' + esc(n.at || "") + "</div></div>";
+      if (n.action) {
+        var act = h("button", "ezx-ntf-act", { type: "button", text: "다시 실행" });
+        act.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          EZNotif.markRead(n.id);
+          setTab("chat");
+          sendMessage(String(n.action));
+        });
+        row.appendChild(act);
+      }
+      row.addEventListener("click", function () { EZNotif.markRead(n.id); });
+      p.appendChild(row);
+    });
   }
 
   function autoGrow() {
@@ -454,7 +567,7 @@
       var connect = h("button", "ezx-starter", { type: "button", text: "⚙ AI 연결" });
       connect.style.marginLeft = "6px";
       connect.addEventListener("click", function () {
-        if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateAiBadge(); renderMessages(); });
+        if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateStatus(); renderMessages(); });
       });
       off.appendChild(connect);
       wrap.appendChild(off);
@@ -463,7 +576,7 @@
       var onNote = h("div", "ezx-persp-note");
       onNote.style.marginTop = "10px";
       onNote.innerHTML = (ready ? "● <b>연결됨</b> · " : "◐ ") + esc(window.EZAI ? window.EZAI.modeLabel() : "확인 중");
-      onNote.style.color = ready ? "#15803D" : "#B45309";
+      onNote.style.color = ready ? "var(--color-success)" : "var(--color-warning)";
       wrap.appendChild(onNote);
     }
 
@@ -953,7 +1066,8 @@
     var score = ev ? ev.weighted_score : 73.3;
     var owned = objsOwnedBy(subjId);
     var objCount = owned.length;
-    var asof = "2026 상반기 · 6/30 마감 실적 기준";
+    /* 기준 시점 단일 발급 (EZClock) — 드리프트 해소 (P6) */
+    var asof = window.EZKit && EZKit.clock ? "기준 " + EZKit.clock.asOf() : "기준 2026-07-16 06:00";
     var md = "", recos = [];
 
     if (p === "manager") {
@@ -1152,15 +1266,19 @@
   }
 
   /* ---------------- Open / close ---------------- */
-  /* 헤더 서브타이틀에 AI 연결 상태 상시 표시 */
-  function updateAiBadge() {
-    if (!el.sub) return;
-    var rdy = window.EZAI && EZAI.ready && EZAI.ready();
+  /* 컴포저 상단 연결 상태 배너 — proxy/direct/offline 3모드 */
+  function updateStatus() {
+    if (!el.status) return;
     var m = aiMode();
-    var dot = rdy ? '<span style="color:#15803D">● Claude</span>'
-      : m === "offline" ? '<span style="color:#98A2B3">○ 오프라인</span>'
-      : '<span style="color:#B45309">◐ 연결 전</span>';
-    el.sub.innerHTML = "AI 성과관리 코치 · " + dot;
+    var rdy = !!(window.EZAI && EZAI.ready && EZAI.ready());
+    if (m === "offline") {
+      el.status.innerHTML = '<span class="off">○ 오프라인 — 예시 응답 · ⚙에서 AI 연결</span>';
+    } else if (rdy) {
+      el.status.innerHTML = '<span class="ok">● 연결됨</span> · '
+        + esc(window.EZAI && EZAI.modeLabel ? EZAI.modeLabel() : m);
+    } else {
+      el.status.innerHTML = '<span class="wait">◐ 연결 확인 중</span>';
+    }
   }
 
   function openPanel() {
@@ -1168,8 +1286,9 @@
     el.root.classList.add("ezx-open");
     syncPerspectiveFromRole();
     updateScreenChip();
-    updateAiBadge();
-    updateNtfBadges();
+    /* updateAiBadge는 폐기됨 — 연결 상태는 ezx-status 배너(updateStatus)로 일원화 */
+    updateStatus();
+    updateFabCount();
     setTimeout(function () { try { el.textarea.focus(); } catch (e) {} }, 220);
   }
   function closePanel() {
@@ -1179,68 +1298,11 @@
     try { el.fab.focus(); } catch (e) {}
   }
 
-  /* ---------------- [Phase1 IA] 패널 탭 (대화 · 기록 · 알림) ---------------- */
+  /* ---------------- 외부 진입용 탭 API — setTab(단일 구현)에 위임 ----------------
+     tx_ctx_ledger 등 외부 호출자의 Elizax.showTab("rec", entryId) 계약 유지 */
   function showTab(key, hl) {
-    if (!el.panel || !el.tabs) return;
-    if (key !== "chat" && key !== "rec" && key !== "ntf") key = "chat";
-    el.panel.setAttribute("data-ezx-tab", key);
-    var bs = el.tabs.querySelectorAll("[data-ezx-tab]");
-    for (var i = 0; i < bs.length; i++) {
-      bs[i].classList.toggle("on", bs[i].getAttribute("data-ezx-tab") === key);
-    }
-    if (key === "rec" && window.EZLedger && EZLedger.renderInto) {
-      try { EZLedger.renderInto(el.paneRec, hl || null); } catch (e) { /* 무해화 */ }
-    }
-    if (key === "ntf") {
-      renderNtfPane();                                       /* 미열람 bold 상태로 먼저 표시 */
-      if (window.EZNotif && EZNotif.markAllRead) {
-        try { EZNotif.markAllRead(); } catch (e) { /* 무해화 */ }  /* 탭 열람 = 모두 읽음 */
-      }
-    }
-  }
-
-  function fmtNtfTs(ts) {
-    var t = new Date(ts || Date.now());
-    function z(n) { return (n < 10 ? "0" : "") + n; }
-    return (t.getMonth() + 1) + "/" + t.getDate() + " " + z(t.getHours()) + ":" + z(t.getMinutes());
-  }
-
-  function renderNtfPane() {
-    var box = el.paneNtf;
-    if (!box) return;
-    var arr = [];
-    try { arr = (window.EZNotif && EZNotif.list && EZNotif.list()) || []; } catch (e) { arr = []; }
-    var html = '<div class="ezx-ntf-hd">알림<span>elizax가 보낸 선제 제안·감지 알림 보관함</span></div>';
-    if (!arr.length) {
-      html += '<div class="ezx-ntf-empty">아직 알림이 없습니다 — elizax의 선제 제안이 여기에 보관됩니다.</div>';
-    } else {
-      html += '<div class="ezx-ntf-list">';
-      arr.forEach(function (n) {
-        html += '<button type="button" class="ezx-ntf-row' + (n.read ? "" : " unread") + '" data-ntf="' + esc(n.id) + '">' +
-          '<span class="tx">' + esc(n.text) + "</span>" +
-          '<span class="mt">' + esc(fmtNtfTs(n.ts)) + " · " + esc(n.kind || "알림") +
-          (n.action ? ' <span class="go">다시 실행 ›</span>' : "") + "</span></button>";
-      });
-      html += "</div>";
-    }
-    box.innerHTML = html;
-  }
-
-  /* FAB·알림 탭의 미열람 카운트 배지 (0이면 숨김) */
-  function updateNtfBadges() {
-    var n = 0;
-    try { n = (window.EZNotif && EZNotif.unreadCount()) || 0; } catch (e) { n = 0; }
-    var label = n > 9 ? "9+" : String(n);
-    if (el.fab) {
-      var fb = el.fab.querySelector(".ezx-fab-n");
-      if (!fb) { fb = h("span", "ezx-fab-n"); el.fab.appendChild(fb); }
-      fb.textContent = label;
-      fb.hidden = !n;
-    }
-    if (el.tabs) {
-      var tb = el.tabs.querySelector("[data-ezx-ntfn]");
-      if (tb) { tb.textContent = label; tb.hidden = !n; }
-    }
+    if (!state.open) openPanel();
+    setTab(key, hl || null);
   }
 
   /* ---------------- Public API ---------------- */

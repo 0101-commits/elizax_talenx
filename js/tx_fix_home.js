@@ -176,7 +176,10 @@
       '#s-home .txh-sub{font-size:12px;color:var(--ink-4);margin-bottom:8px}',
       /* clickable affordance */
       '#s-home .card .frow{cursor:pointer}',
-      '#s-home .card .goal{cursor:pointer}'
+      '#s-home .card .goal{cursor:pointer}',
+      /* v2 §11: 홈 상시 ✦ 앵커 1개 — 그 외 추가 금지 */
+      '#s-home .txf-anchor-brief{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--color-accent-muted,rgba(31,122,240,.28));color:var(--color-accent,#1F7AF0);background:var(--color-background-card,#fff);font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:var(--radius-full,999px);cursor:pointer;margin-left:8px}',
+      '#s-home .txf-anchor-brief:hover{background:var(--color-accent-muted,rgba(31,122,240,.08))}'
     ].join('\n');
     document.head.appendChild(st);
   }
@@ -733,6 +736,16 @@
           setPreset(pill.getAttribute('data-p'));
         });
       });
+      /* v2 §11: "✦ 오늘 브리핑" 상시 앵커 — 기존 미팅 브리핑 드로어 재사용 */
+      if (!home.querySelector('.txf-anchor-brief')) {
+        var brief = el('button', 'txf-anchor-brief', '✦ 오늘 브리핑');
+        brief.setAttribute('data-astryx-theme', 'talenx');
+        preset.parentNode.insertBefore(brief, preset.nextSibling);
+        cap(brief, function () {
+          if (window.EZUpgrade && EZUpgrade.openMeetingBrief) EZUpgrade.openMeetingBrief();
+          else if (window.Elizax && Elizax.send) Elizax.send('오늘 브리핑을 보여줘');
+        });
+      }
     }
 
     /* ---- 대시보드 설정 → settings modal (widget visibility) ---- */

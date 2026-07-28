@@ -17,29 +17,28 @@
   /* ================= CSS ================= */
   var css = [
     /* ---- B1 글로우 오브: FAB 상태를 색·모션으로만 ---- */
+    /* 색은 accent 토큰 유도(§8) — .ezx-fab이 astryx 테마 루트라 var 해석됨. keyframes는 ez_kit 단일 정의(ezkSpin/ezkPulse) 참조 */
     ".ezx-fab{ isolation:isolate; }",
     ".ezx-fab::before{ content:''; position:absolute; inset:-4px; border-radius:50%; z-index:-1;",
-    "  background:conic-gradient(from 0deg, #1F7AF0, #7CC0FF, #B07CFF, #1F7AF0);",
-    "  opacity:0; filter:blur(7px); transition:opacity .4s ease; }",
-    "body.ezup-glow-work .ezx-fab::before{ opacity:.85; animation:ezupSpin 1.6s linear infinite; }",
-    "body.ezup-glow-suggest .ezx-fab::before{ opacity:.7; animation:ezupHalo 1.8s ease-in-out infinite; }",
+    "  background:conic-gradient(from 0deg, var(--color-accent), color-mix(in srgb, var(--color-accent) 45%, white), color-mix(in srgb, var(--color-accent) 55%, var(--color-text-purple)), var(--color-accent));",
+    "  opacity:0; filter:blur(7px); transition:opacity var(--duration-medium) var(--ease-standard); }",
+    "body.ezup-glow-work .ezx-fab::before{ opacity:.85; animation:ezkSpin var(--duration-slow-max) linear infinite; }",
+    "body.ezup-glow-suggest .ezx-fab::before{ opacity:.7; animation:ezkPulse var(--duration-slow) ease-in-out infinite; }",
     "body.ezup-glow-wait .ezx-fab::before{ opacity:.55; filter:blur(4px); animation:none; }",
-    "@keyframes ezupSpin{ to{ transform:rotate(360deg); } }",
-    "@keyframes ezupHalo{ 0%,100%{ transform:scale(1); opacity:.4; } 50%{ transform:scale(1.18); opacity:.85; } }",
-    "@media (prefers-reduced-motion:reduce){ .ezx-fab::before{ animation:none !important; } }",
 
     /* ---- B2 컨텍스트 칩: FAB 왼쪽에서 잠깐 내미는 제안 pill ---- */
-    ".ezup-ctxchip{ position:fixed; right:88px; bottom:32px; z-index:899;",
-    "  display:flex; align-items:center; gap:7px; font-family:var(--sans); font-size:12.5px; font-weight:600; letter-spacing:-.01em;",
-    "  color:var(--blue-2,#1F7AF0); background:color-mix(in srgb, var(--card,#fff) 86%, transparent);",
+    /* 단일 pill 슬롯(§6): FAB 위 1좌표(r24 b94) — eze-pill·agh-popup과 동일 슬롯을 시간 공유. astryx 토큰만(chipEl에 data-astryx-theme 스탬프) */
+    ".ezup-ctxchip{ position:fixed; right:24px; bottom:94px; z-index:var(--z-badge);",
+    "  display:flex; align-items:center; gap:7px; font-family:var(--font-family-body); font-size:12.5px; font-weight:600; letter-spacing:-.01em;",
+    "  color:var(--color-accent); background:color-mix(in srgb, var(--color-background-surface) 86%, transparent);",
     "  backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);",
-    "  border:1px solid var(--line,#e0e0e0); border-radius:999px; padding:9px 15px; cursor:pointer;",
-    "  box-shadow:0 8px 26px rgba(0,0,0,.12); white-space:nowrap;",
-    "  opacity:0; transform:translateX(14px) scale(.8); transform-origin:right center;",
-    "  transition:opacity .3s ease, transform .38s cubic-bezier(.32,.72,.24,1); }",
+    "  border:1px solid var(--color-border); border-radius:var(--radius-full); padding:9px 15px; cursor:pointer;",
+    "  box-shadow:0 8px 26px var(--color-shadow); white-space:nowrap;",
+    "  opacity:0; transform:translateY(10px) scale(.85); transform-origin:right bottom;",
+    "  transition:opacity var(--duration-medium-min) var(--ease-standard), transform var(--duration-medium) var(--ease-standard); }",
     ".ezup-ctxchip.show{ opacity:1; transform:none; }",
     ".ezup-ctxchip:active{ transform:scale(.95); }",
-    ".ezup-ctxchip .spark{ color:var(--blue,#1F7AF0); }",
+    ".ezup-ctxchip .spark{ color:var(--color-accent); }",
 
     /* ---- A3 품질 린트 바 ---- */
     ".ezup-lint{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:7px; font-family:var(--sans); font-size:11px; }",
@@ -131,16 +130,15 @@
     work: { chip: "주간 체크인 요약", ask: "주간 중간점검 요약해줘" }
   };
   var chipEl = null, chipTimer = null;
-  function showCtxChip(key) {
-    var cfg = CTX_SUGGEST[key];
-    if (!cfg) { hideCtxChip(); return; }
+  function showChip(cfg) {
     if (!chipEl) {
       chipEl = document.createElement("button");
       chipEl.className = "ezup-ctxchip";
       chipEl.type = "button";
+      chipEl.setAttribute("data-astryx-theme", "talenx"); /* astryx 토큰 스코프 — body 직속이라 직접 스탬프 */
       chipEl.addEventListener("click", function () {
         var ask = chipEl._ask;
-        hideCtxChip();
+        hideCtxChip(true); /* acted — [알림] 적재 생략 */
         if (ask === "__brief__") openMeetingBrief();
         else elizaxSend(ask);
       });
@@ -149,19 +147,36 @@
     chipEl.innerHTML = '<span class="spark">✦</span>' + esc(cfg.chip);
     chipEl._ask = cfg.ask;
     clearTimeout(chipTimer);
+    /* 단일 슬롯 선점 — 상위 우선순위(감지 카드·pill)가 점유 중이면 표시하지 않고 [알림]에만 적재됨 */
+    if (window.EZProactive && !EZProactive.claim("ezup-ctxchip", hideCtxChip)) return;
     requestAnimationFrame(function () { chipEl.classList.add("show"); });
-    /* 선제 알림 단일화: 이미 떠 있는 다른 선제 팝업(agh-popup/pill)을 닫고 이 chip으로 교체 */
-    if (window.EZProactive) EZProactive.claim("ezup-ctxchip", hideCtxChip);
-    chipTimer = setTimeout(hideCtxChip, 6000);
+    chipTimer = setTimeout(hideCtxChip, 6000); /* 자연 소멸 → 코디네이터가 [알림] 탭 적재 */
   }
-  function hideCtxChip() {
-    if (window.EZProactive) EZProactive.release("ezup-ctxchip");
+  function showCtxChip(key) {
+    var cfg = CTX_SUGGEST[key];
+    if (!cfg) { hideCtxChip(); return; }
+    showChip(cfg);
+  }
+  function hideCtxChip(acted) {
+    if (window.EZProactive) EZProactive.release("ezup-ctxchip", acted === true);
     clearTimeout(chipTimer);
     if (chipEl) chipEl.classList.remove("show");
   }
+  /* §6 온보딩: AI 진입점 0인 4화면 최초 1회 안내 pill */
+  var ONBOARD_SCREENS = { wf: 1, att: 1, hrm: 1, pay: 1 };
+  function maybeOnboard(key) {
+    if (!ONBOARD_SCREENS[key]) return false;
+    var seen = {};
+    try { seen = JSON.parse(localStorage.getItem("ezup_onboard_v1") || "{}"); } catch (e) {}
+    if (seen[key]) return false;
+    seen[key] = 1;
+    try { localStorage.setItem("ezup_onboard_v1", JSON.stringify(seen)); } catch (e) {}
+    showChip({ chip: "이 화면에서도 elizax에게 물어볼 수 있어요", ask: "이 화면에서 도와줄 수 있는 일을 알려줘" });
+    return true;
+  }
   document.addEventListener("click", function (e) {
     var gb = e.target.closest("#gnb [data-s]");
-    if (gb) { setTimeout(function () { showCtxChip(gb.getAttribute("data-s")); }, 350); return; }
+    if (gb) { setTimeout(function () { var k = gb.getAttribute("data-s"); if (!maybeOnboard(k)) showCtxChip(k); }, 350); return; }
     var sn = e.target.closest(".subnav a[data-p]");
     if (sn) {
       var sec = sn.closest("section.screen");

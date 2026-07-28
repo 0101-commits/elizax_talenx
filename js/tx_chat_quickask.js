@@ -88,13 +88,13 @@
     var st = document.createElement("style");
     st.id = STYLE_ID;
     st.textContent =
-      "#" + BTN_ID + "{position:fixed;z-index:100010;display:none;" +
-        "align-items:center;gap:6px;padding:7px 14px;border-radius:999px;" +
+      "#" + BTN_ID + "{position:fixed;z-index:var(--z-top);display:none;" +
+        "align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius-full);" +
         "cursor:pointer;font-size:12px;font-weight:700;line-height:1;" +
         "white-space:nowrap;user-select:none;" +
-        "color:#fff;background:var(--blue,#1F7AF0);" +
-        "border:1px solid var(--blue,#1F7AF0);" +
-        "box-shadow:0 6px 18px rgba(31,122,240,.35);}" +
+        "color:var(--color-on-accent);background:var(--color-accent);" +
+        "border:1px solid var(--color-accent);" +
+        "box-shadow:0 6px 18px color-mix(in srgb, var(--color-accent) 35%, transparent);}" +
       "#" + BTN_ID + ":hover{filter:brightness(1.08);}" +
       "#" + BTN_ID + ".on{display:inline-flex;}";
     (document.head || document.documentElement).appendChild(st);
@@ -107,6 +107,8 @@
     btn = document.createElement("button");
     btn.type = "button";
     btn.id = BTN_ID;
+    /* body 직속 부착 — astryx 토큰 스코프 루트 필요 */
+    btn.setAttribute("data-astryx-theme", "talenx");
     btn.innerHTML = esc(LABEL);
     // mousedown 에서 선택이 지워지는 것을 방지 (클릭 전에 selection 유지)
     btn.addEventListener("mousedown", function (e) {

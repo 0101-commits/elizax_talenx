@@ -54,41 +54,49 @@
       /* 헤더 세션 버튼 — 기존 .ezx-x 룩앤필을 따르되 접두사로 구분 */
       ".ezcs-hbtn{font-size:15px;line-height:1;}" +
 
+      /* [대화] 탭 상단 세션 바 (§5.2 — 헤더 ≡ 폐지 대체) */
+      ".ezcs-bar{display:flex;align-items:center;gap:6px;width:calc(100% - 20px);margin:6px 10px 0;" +
+      "padding:6px 10px;font-size:12px;color:var(--color-text-secondary);" +
+      "background:var(--color-background-muted);border:1px solid var(--color-border);border-radius:var(--radius-element);" +
+      "cursor:pointer;transition:background var(--duration-fast) var(--ease-standard);}" +
+      ".ezcs-bar:hover{background:var(--color-overlay-hover);}" +
+      ".ezx-mode-rec .ezcs-bar,.ezx-mode-ntf .ezcs-bar{display:none;}" +
+
       /* 드롭다운 — 패널(.ezx-panel, position:fixed) 기준 절대배치 */
       ".ezcs-drop{position:absolute;top:52px;left:10px;right:10px;z-index:40;" +
-      "background:var(--card,#fff);border:1px solid var(--line,#E4E7EC);border-radius:12px;" +
-      "box-shadow:0 12px 32px rgba(16,24,40,.16);overflow:hidden;display:none;" +
+      "background:var(--color-background-card);border:1px solid var(--color-border);border-radius:var(--radius-container);" +
+      "box-shadow:var(--shadow-high, 0 12px 32px rgba(16,24,40,.16));overflow:hidden;display:none;" +
       "max-height:min(46vh,340px);flex-direction:column;}" +
       ".ezcs-drop.on{display:flex;}" +
       ".ezcs-drop-h{flex:none;display:flex;align-items:center;justify-content:space-between;" +
-      "padding:8px 10px;border-bottom:1px solid var(--line,#E4E7EC);background:var(--soft,#F8FAFC);}" +
-      ".ezcs-drop-h b{font-size:12px;color:var(--ink,#1D2433);letter-spacing:-.01em;}" +
-      ".ezcs-new{border:1px solid var(--blue,#1F7AF0);background:transparent;color:var(--blue,#1F7AF0);" +
-      "border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;}" +
-      ".ezcs-new:hover{background:var(--blue,#1F7AF0);color:#fff;}" +
+      "padding:8px 10px;border-bottom:1px solid var(--color-border);background:var(--color-background-muted);}" +
+      ".ezcs-drop-h b{font-size:12px;color:var(--color-text-primary);letter-spacing:-.01em;}" +
+      ".ezcs-new{border:1px solid var(--color-accent);background:transparent;color:var(--color-accent);" +
+      "border-radius:var(--radius-element);padding:4px 10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;}" +
+      ".ezcs-new:hover{background:var(--color-accent);color:var(--color-on-accent);}" +
       ".ezcs-drop-list{flex:1;overflow-y:auto;padding:4px;}" +
 
       /* 세션 행 */
-      ".ezcs-row{display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border-radius:8px;" +
+      ".ezcs-row{display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border-radius:var(--radius-element);" +
       "cursor:pointer;border:1px solid transparent;}" +
-      ".ezcs-row:hover{background:var(--soft,#F8FAFC);}" +
-      ".ezcs-row.on{background:color-mix(in srgb, var(--blue,#1F7AF0) 9%, transparent);" +
-      "border-color:color-mix(in srgb, var(--blue,#1F7AF0) 32%, transparent);}" +
+      ".ezcs-row:hover{background:var(--color-background-muted);}" +
+      ".ezcs-row.on{background:color-mix(in srgb, var(--color-accent) 9%, transparent);" +
+      "border-color:color-mix(in srgb, var(--color-accent) 32%, transparent);}" +
       ".ezcs-row .ezcs-tt{flex:1;min-width:0;}" +
-      ".ezcs-row .ezcs-t1{font-size:12.5px;font-weight:600;color:var(--ink,#1D2433);" +
+      ".ezcs-row .ezcs-t1{font-size:12.5px;font-weight:600;color:var(--color-text-primary);" +
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
-      ".ezcs-row.on .ezcs-t1{color:var(--blue,#1F7AF0);}" +
-      ".ezcs-row .ezcs-t2{font-size:11px;color:#98A2B3;margin-top:1px;}" +
-      ".ezcs-act{flex:none;border:0;background:transparent;border-radius:6px;padding:3px 5px;" +
-      "font-size:12px;line-height:1;color:#98A2B3;cursor:pointer;visibility:hidden;}" +
+      ".ezcs-row.on .ezcs-t1{color:var(--color-accent);}" +
+      ".ezcs-row .ezcs-t2{font-size:11px;color:var(--color-text-disabled);margin-top:1px;}" +
+      ".ezcs-act{flex:none;border:0;background:transparent;border-radius:var(--radius-inner);padding:3px 5px;" +
+      "font-size:12px;line-height:1;color:var(--color-text-disabled);cursor:pointer;visibility:hidden;}" +
       ".ezcs-row:hover .ezcs-act{visibility:visible;}" +
-      ".ezcs-act:hover{background:var(--line,#E4E7EC);color:var(--ink,#1D2433);}" +
-      ".ezcs-empty{padding:14px 10px;font-size:12px;color:#98A2B3;text-align:center;}" +
+      ".ezcs-act:hover{background:var(--color-background-muted);color:var(--color-text-primary);}" +
+      ".ezcs-empty{padding:14px 10px;font-size:12px;color:var(--color-text-disabled);text-align:center;}" +
 
       /* 허브 내비 세션 그룹 — .agh-nitem 룩을 상속하고 폭만 관리 */
       ".ezcs-navsec .agh-nitem{display:flex;align-items:center;gap:6px;width:100%;text-align:left;}" +
       ".ezcs-navsec .ezcs-nt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}" +
-      ".ezcs-navsec .ezcs-nc{flex:none;font-size:10px;color:#98A2B3;font-weight:400;}";
+      ".ezcs-navsec .ezcs-nc{flex:none;font-size:10px;color:var(--color-text-disabled);font-weight:400;}";
     document.head.appendChild(st);
   }
 
@@ -99,8 +107,8 @@
     if (window.TX && TX.modal) {
       TX.modal({
         title: "대화 이름 변경",
-        body: '<input type="text" data-ezcs-name value="' + esc(sess.title) + '" maxlength="60" ' +
-          'style="width:100%;border:1px solid #D0D5DD;border-radius:8px;padding:9px;font:inherit;font-size:13px">',
+        body: '<div data-astryx-theme="talenx"><input type="text" data-ezcs-name value="' + esc(sess.title) + '" maxlength="60" ' +
+          'style="width:100%;border:1px solid var(--color-border);border-radius:var(--radius-element);padding:9px;font:inherit;font-size:13px;box-sizing:border-box"></div>',
         actions: [
           { label: "취소" },
           { label: "변경", kind: "primary", onClick: function (box) {
@@ -125,7 +133,7 @@
     if (window.TX && TX.modal) {
       TX.modal({
         title: "대화 삭제",
-        body: '<p style="font-size:13px;color:#475467;margin:0">"' + esc(sess.title) +
+        body: '<p data-astryx-theme="talenx" style="font-size:13px;color:var(--color-text-secondary);margin:0">"' + esc(sess.title) +
           '" 대화(메시지 ' + esc(sess.count) + '건)를 삭제합니다.<br>삭제한 대화는 복구할 수 없습니다.</p>',
         actions: [
           { label: "취소" },
@@ -160,7 +168,13 @@
     for (var i = 0; i < ss.length; i++) html += rowHtml(ss[i]);
     list.innerHTML = html || '<div class="ezcs-empty">저장된 대화가 없습니다</div>';
   }
-  function openDrop() { if (fab.drop) { renderDrop(); fab.drop.classList.add("on"); } }
+  function openDrop() {
+    if (!fab.drop) return;
+    renderDrop();
+    /* 세션 바 바로 아래에 정렬 (바가 탭 아래로 이동했으므로 동적 계산) */
+    if (fab.btn && fab.btn.offsetParent) fab.drop.style.top = (fab.btn.offsetTop + fab.btn.offsetHeight + 4) + "px";
+    fab.drop.classList.add("on");
+  }
   function closeDrop() { if (fab.drop) fab.drop.classList.remove("on"); }
   function dropOpen() { return !!(fab.drop && fab.drop.classList.contains("on")); }
 
@@ -169,14 +183,16 @@
     var panel = root.querySelector(".ezx-panel");
     if (!top || !panel || top.querySelector("[data-ezcs-toggle]")) return;
 
-    /* ≡ 버튼 — 닫기(✕, 헤더행 마지막 버튼) 바로 왼쪽에 주입 */
-    var btn = h("button", "ezx-x ezcs-hbtn", { "aria-label": "대화 목록", title: "대화 목록", text: "≡", "data-ezcs-toggle": "1" });
+    /* 세션 바 — [대화] 탭 상단 (§5.2: 헤더 ≡ 폐지) */
+    var btn = h("button", "ezcs-bar", { "aria-label": "대화 목록", title: "대화 목록", "data-ezcs-toggle": "1", type: "button" });
+    btn.innerHTML = "≡ <span>대화 목록</span><span style=\"margin-left:auto\">▾</span>";
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
       if (dropOpen()) closeDrop(); else openDrop();
     });
-    var closeBtn = top.lastElementChild; /* build() 순서상 마지막 = ✕ */
-    if (closeBtn) top.insertBefore(btn, closeBtn); else top.appendChild(btn);
+    var tabsRow = panel.querySelector(".ezx-tabs");
+    if (tabsRow && tabsRow.parentNode) tabsRow.parentNode.insertBefore(btn, tabsRow.nextSibling);
+    else { var closeBtn = top.lastElementChild; if (closeBtn) top.insertBefore(btn, closeBtn); else top.appendChild(btn); }
     fab.btn = btn;
 
     /* 드롭다운 본체 */

@@ -45,7 +45,8 @@
 (function () {
   "use strict";
 
-  var AS_OF = "2026 상반기 · 7/16 06:00 기준";
+  /* 기준 시점은 EZClock 단일 발급(P6) — 하드코딩 드리프트 금지 */
+  function AS_OF() { return (window.EZKit ? EZKit.clock.asOf() : "2026-07-16 06:00") + " 기준"; }
   var REC_ID = "rec.0716";
   var LS_PREFIX = "elizax_1on1_v1:";
 
@@ -164,115 +165,102 @@
     st.textContent = [
       /* 주입 바 */
       ".ez1o-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;margin:0 0 14px;",
-      "border:1px solid var(--line,#E4E7EC);border-radius:12px;background:var(--soft,#F8FAFC);}",
-      ".ez1o-btn{cursor:pointer;border:none;border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:700;",
-      "color:#fff;background:var(--blue,#1F7AF0);transition:filter .12s;}",
+      "border:1px solid var(--color-border,#E4E7EC);border-radius:12px;background:var(--color-background-muted,#F8FAFC);}",
+      ".ez1o-btn{cursor:pointer;border:none;border-radius:var(--radius-full,999px);padding:7px 14px;font-size:12.5px;font-weight:700;",
+      "color:var(--color-on-accent,#fff);background:var(--color-accent,#1F7AF0);transition:filter var(--duration-fast,.12s);}",
       ".ez1o-btn:hover{filter:brightness(1.07);}",
       ".ez1o-btn:disabled{opacity:.5;cursor:default;}",
-      ".ez1o-badge{font-size:10px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap;",
-      "color:#23408E;background:rgba(31,122,240,.07);border:1px solid rgba(31,122,240,.3);}",
-      ".ez1o-note{font-size:11.5px;color:var(--ink-3,#6B7280);}",
-      ".ez1o-linkbtn{cursor:pointer;margin-left:auto;border:1px solid var(--line,#E4E7EC);border-radius:999px;",
-      "padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--blue,#1F7AF0);background:var(--card,#fff);}",
-      ".ez1o-linkbtn:hover{border-color:var(--blue,#1F7AF0);background:rgba(31,122,240,.05);}",
-      ".ez1o-donetag{font-size:11px;font-weight:600;color:#15803D;}",
+      ".ez1o-badge{font-size:10px;font-weight:600;border-radius:var(--radius-full,999px);padding:2px 9px;white-space:nowrap;",
+      "color:var(--color-trust,#23408E);background:color-mix(in srgb, var(--color-accent,#17F) 7%, transparent);border:1px solid color-mix(in srgb, var(--color-accent,#17F) 30%, transparent);}",
+      ".ez1o-note{font-size:11.5px;color:var(--color-text-secondary,#6B7280);}",
+      ".ez1o-linkbtn{cursor:pointer;margin-left:auto;border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-full,999px);",
+      "padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--color-accent,#1F7AF0);background:var(--color-background-card,#fff);}",
+      ".ez1o-linkbtn:hover{border-color:var(--color-accent,#1F7AF0);background:color-mix(in srgb, var(--color-accent,#17F) 5%, transparent);}",
+      ".ez1o-donetag{font-size:11px;font-weight:600;color:var(--color-success,#15803D);}",
       /* 녹음 패널 */
       ".ez1o-panel{margin:0 0 14px;}",
-      ".ez1o-rec{border:1px solid var(--line,#E4E7EC);border-radius:14px;background:var(--card,#fff);overflow:hidden;}",
-      ".ez1o-rechead{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line,#E4E7EC);background:var(--soft,#F8FAFC);}",
-      ".ez1o-dot{width:10px;height:10px;border-radius:50%;background:#DC2626;animation:ez1oBlink 1s ease-in-out infinite;flex:none;}",
-      "@keyframes ez1oBlink{0%,100%{opacity:1}50%{opacity:.2}}",
-      ".ez1o-timer{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:#DC2626;min-width:44px;}",
+      ".ez1o-rec{border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-container,14px);background:var(--color-background-card,#fff);overflow:hidden;}",
+      ".ez1o-rechead{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--color-border,#E4E7EC);background:var(--color-background-muted,#F8FAFC);}",
+      ".ez1o-dot{width:10px;height:10px;border-radius:50%;background:var(--color-error,#DC2626);animation:ezkBlink 1s ease-in-out infinite;flex:none;}",
+      ".ez1o-timer{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--color-error,#DC2626);min-width:44px;}",
       ".ez1o-wave{display:flex;align-items:flex-end;gap:2px;height:18px;flex:none;}",
-      ".ez1o-wave i{width:3px;border-radius:2px;background:var(--blue,#1F7AF0);animation:ez1oWave 1.1s ease-in-out infinite;}",
+      ".ez1o-wave i{width:3px;border-radius:2px;background:var(--color-accent,#1F7AF0);animation:ez1oWave 1.1s ease-in-out infinite;}",
       ".ez1o-wave i:nth-child(1){height:6px;animation-delay:0s}.ez1o-wave i:nth-child(2){height:14px;animation-delay:.15s}",
       ".ez1o-wave i:nth-child(3){height:9px;animation-delay:.3s}.ez1o-wave i:nth-child(4){height:16px;animation-delay:.45s}",
       ".ez1o-wave i:nth-child(5){height:7px;animation-delay:.6s}.ez1o-wave i:nth-child(6){height:12px;animation-delay:.75s}",
       "@keyframes ez1oWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}",
-      ".ez1o-reclab{font-size:11.5px;color:var(--ink-3,#6B7280);}",
-      ".ez1o-stop{cursor:pointer;margin-left:auto;border:1px solid #DC2626;border-radius:999px;padding:5px 13px;",
-      "font-size:11.5px;font-weight:700;color:#DC2626;background:var(--card,#fff);}",
-      ".ez1o-stop:hover{background:rgba(220,38,38,.06);}",
+      ".ez1o-reclab{font-size:11.5px;color:var(--color-text-secondary,#6B7280);}",
+      ".ez1o-stop{cursor:pointer;margin-left:auto;border:1px solid var(--color-error,#DC2626);border-radius:var(--radius-full,999px);padding:5px 13px;",
+      "font-size:11.5px;font-weight:700;color:var(--color-error,#DC2626);background:var(--color-background-card,#fff);}",
+      ".ez1o-stop:hover{background:color-mix(in srgb, var(--color-error,#d32) 6%, transparent);}",
       ".ez1o-tr{max-height:220px;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:8px;}",
-      ".ez1o-line{display:flex;gap:8px;font-size:12.5px;line-height:1.55;animation:ez1oIn .25s ease;}",
-      "@keyframes ez1oIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}",
-      ".ez1o-line .tm{flex:none;font-size:10.5px;color:var(--ink-3,#9CA3AF);font-variant-numeric:tabular-nums;padding-top:2px;}",
+      ".ez1o-line{display:flex;gap:8px;font-size:12.5px;line-height:1.55;animation:ezkInsert var(--duration-fast,.25s) var(--ease-standard,ease);}",
+      ".ez1o-line .tm{flex:none;font-size:10.5px;color:var(--color-text-secondary,#9CA3AF);font-variant-numeric:tabular-nums;padding-top:2px;}",
       ".ez1o-line .nm{flex:none;font-weight:700;}",
-      ".ez1o-line.mgr .nm{color:#6D28D9;}.ez1o-line.mem .nm{color:var(--blue,#1F7AF0);}",
-      ".ez1o-gen{display:flex;align-items:center;gap:10px;padding:16px;font-size:12.5px;color:var(--ink-3,#6B7280);}",
-      ".ez1o-spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line,#E4E7EC);border-top-color:var(--blue,#1F7AF0);animation:ez1oSpin .8s linear infinite;flex:none;}",
-      "@keyframes ez1oSpin{to{transform:rotate(360deg)}}",
+      ".ez1o-line.mgr .nm{color:var(--color-text-purple,#6D28D9);}.ez1o-line.mem .nm{color:var(--color-accent,#1F7AF0);}",
+      ".ez1o-gen{display:flex;align-items:center;gap:10px;padding:16px;font-size:12.5px;color:var(--color-text-secondary,#6B7280);}",
+      ".ez1o-spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--color-border,#E4E7EC);border-top-color:var(--color-accent,#1F7AF0);animation:ezkSpin .8s linear infinite;flex:none;}",
       /* 요약 카드 */
-      ".ez1o-sum{border:1px solid var(--line,#E4E7EC);border-radius:14px;background:var(--card,#fff);padding:14px 16px;}",
-      ".ez1o-sum.ez1o-collapsed .ez1o-body{display:none;}",
+      ".ez1o-sum{border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-container,14px);background:var(--color-background-card,#fff);padding:14px 16px;}",
+      ".ez1o-sum.ez1o-collapsed .ez1o-body,.ez1o-sum.ez1o-collapsed .ezk-receipt-body{display:none;}",
       ".ez1o-sumhead{display:flex;align-items:center;flex-wrap:wrap;gap:8px;}",
       ".ez1o-sumhead .tt{font-size:14px;font-weight:800;}",
-      ".ez1o-asof{font-size:10.5px;color:var(--ink-3,#9CA3AF);margin-left:auto;}",
-      ".ez1o-h4{font-size:11.5px;font-weight:700;color:var(--ink-3,#6B7280);margin:14px 0 6px;}",
+      ".ez1o-asof{font-size:10.5px;color:var(--color-text-secondary,#9CA3AF);margin-left:auto;}",
+      ".ez1o-h4{font-size:11.5px;font-weight:700;color:var(--color-text-secondary,#6B7280);margin:14px 0 6px;}",
       ".ez1o-topic{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6;margin:4px 0;}",
-      ".ez1o-topic .no{flex:none;width:16px;height:16px;border-radius:50%;background:var(--blue-soft,#EAF2FE);color:var(--blue,#1F7AF0);",
+      ".ez1o-topic .no{flex:none;width:16px;height:16px;border-radius:50%;background:var(--color-accent-muted,#EAF2FE);color:var(--color-accent,#1F7AF0);",
       "font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;transform:translateY(2px);}",
-      ".ez1o-src{display:inline-block;font-size:10px;font-weight:600;border-radius:5px;padding:1px 7px;margin-left:5px;vertical-align:middle;",
-      "color:#1F7AF0;background:rgba(31,122,240,.08);border:1px solid rgba(31,122,240,.3);white-space:nowrap;}",
+      ".ez1o-src{display:inline-block;font-size:10px;font-weight:600;border-radius:var(--radius-inner,5px);padding:1px 7px;margin-left:5px;vertical-align:middle;",
+      "color:var(--color-accent,#1F7AF0);background:color-mix(in srgb, var(--color-accent,#17F) 8%, transparent);border:1px solid color-mix(in srgb, var(--color-accent,#17F) 30%, transparent);white-space:nowrap;}",
       ".ez1o-act{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6;margin:4px 0;}",
-      ".ez1o-act .bx{flex:none;width:12px;height:12px;border:1.5px solid var(--line-2,#CBD5E1);border-radius:3px;transform:translateY(2px);}",
-      ".ez1o-act .own{font-size:11px;color:var(--ink-3,#6B7280);}",
-      ".ez1o-sig{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6;margin:4px 0;padding:7px 10px;border-radius:8px;}",
-      ".ez1o-sig.risk{background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.25);}",
-      ".ez1o-sig.grow{background:rgba(21,128,61,.06);border:1px solid rgba(21,128,61,.25);}",
+      ".ez1o-act .bx{flex:none;width:12px;height:12px;border:1.5px solid var(--color-border-emphasized,#CBD5E1);border-radius:3px;transform:translateY(2px);}",
+      ".ez1o-act .own{font-size:11px;color:var(--color-text-secondary,#6B7280);}",
+      ".ez1o-sig{display:flex;gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6;margin:4px 0;padding:7px 10px;border-radius:var(--radius-element,8px);}",
+      ".ez1o-sig.risk{background:color-mix(in srgb, var(--color-warning,#B50) 7%, transparent);border:1px solid color-mix(in srgb, var(--color-warning,#B50) 25%, transparent);}",
+      ".ez1o-sig.grow{background:color-mix(in srgb, var(--color-success,#180) 6%, transparent);border:1px solid color-mix(in srgb, var(--color-success,#180) 25%, transparent);}",
       ".ez1o-sig .ic{flex:none;}",
       /* 게이트 (tx_agent 어휘 재사용) */
       ".ez1o-gate{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding:11px 13px;",
-      "background:var(--card,#fff);border:1px dashed var(--line-2,#CBD5E1);border-radius:14px;}",
-      ".ez1o-gate .lab{font-size:11.5px;color:var(--ink-3,#6B7280);margin-right:auto;}",
-      ".ez1o-gbtn{cursor:pointer;border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:6px 13px;font-size:12px;",
-      "font-weight:600;color:var(--ink,#1D2433);background:var(--card,#fff);transition:background .12s;}",
-      ".ez1o-gbtn:hover{background:rgba(31,122,240,.06);}",
-      ".ez1o-gbtn.primary{color:#fff;background:#23408E;border-color:#23408E;}",
-      ".ez1o-gbtn.primary:hover{background:#1B326F;}",
+      "background:var(--color-background-card,#fff);border:1px dashed var(--color-border-emphasized,#CBD5E1);border-radius:var(--radius-container,14px);}",
+      ".ez1o-gate .lab{font-size:11.5px;color:var(--color-text-secondary,#6B7280);margin-right:auto;}",
+      ".ez1o-gbtn{cursor:pointer;border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-full,999px);padding:6px 13px;font-size:12px;",
+      "font-weight:600;color:var(--color-text-primary,#1D2433);background:var(--color-background-card,#fff);transition:background var(--duration-fast,.12s);}",
+      ".ez1o-gbtn:hover{background:color-mix(in srgb, var(--color-accent,#17F) 6%, transparent);}",
+      ".ez1o-gbtn.primary{color:var(--color-on-accent,#fff);background:var(--color-trust,#23408E);border-color:var(--color-trust,#23408E);}",
+      ".ez1o-gbtn.primary:hover{background:color-mix(in srgb, var(--color-trust,#23408E) 85%, black);}",
       ".ez1o-gbtn:disabled{opacity:.45;cursor:default;}",
-      ".ez1o-gbtn[data-chosen=\"1\"]{opacity:1!important;box-shadow:0 0 0 2px #C2410C inset;}",
-      ".ez1o-dec{font-size:12px;font-weight:600;color:#15803D;}",
-      ".ez1o-drop{font-size:11.5px;color:var(--ink-3,#6B7280);margin-top:8px;}",
+      ".ez1o-gbtn[data-chosen=\"1\"]{opacity:1!important;box-shadow:0 0 0 2px var(--color-trust-warm,#C2410C) inset;}",
+      ".ez1o-dec{font-size:12px;font-weight:600;color:var(--color-success,#15803D);}",
+      ".ez1o-drop{font-size:11.5px;color:var(--color-text-secondary,#6B7280);margin-top:8px;}",
       /* 커버리지 맵 오버레이 */
-      ".ez1o-mapov{position:fixed;inset:0;z-index:1300;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:24px;}",
-      ".ez1o-map{background:var(--card,#fff);border-radius:18px;max-width:1080px;width:100%;max-height:88vh;overflow-y:auto;",
+      ".ez1o-mapov{position:fixed;inset:0;z-index:1300;background:var(--color-overlay,rgba(15,23,42,.45));display:flex;align-items:center;justify-content:center;padding:24px;}",
+      ".ez1o-map{background:var(--color-background-card,#fff);border-radius:var(--radius-container,18px);max-width:1080px;width:100%;max-height:88vh;overflow-y:auto;",
       "box-shadow:0 24px 64px rgba(15,23,42,.3);padding:22px 24px;}",
       ".ez1o-maphead{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;}",
       ".ez1o-maphead .tt{font-size:16.5px;font-weight:800;}",
-      ".ez1o-maphead .principle{flex-basis:100%;font-size:12px;color:#B45309;background:rgba(180,83,9,.07);",
-      "border:1px solid rgba(180,83,9,.25);border-radius:8px;padding:7px 11px;margin-top:6px;}",
-      ".ez1o-mapx{cursor:pointer;margin-left:auto;border:none;background:none;font-size:18px;color:var(--ink-3,#6B7280);line-height:1;}",
-      ".ez1o-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--ink-3,#6B7280);margin:10px 0 14px;}",
+      ".ez1o-maphead .principle{flex-basis:100%;font-size:12px;color:var(--color-warning,#B45309);background:color-mix(in srgb, var(--color-warning,#B50) 7%, transparent);",
+      "border:1px solid color-mix(in srgb, var(--color-warning,#B50) 25%, transparent);border-radius:var(--radius-element,8px);padding:7px 11px;margin-top:6px;}",
+      ".ez1o-mapx{cursor:pointer;margin-left:auto;border:none;background:none;font-size:18px;color:var(--color-text-secondary,#6B7280);line-height:1;}",
+      ".ez1o-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--color-text-secondary,#6B7280);margin:10px 0 14px;}",
       ".ez1o-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}",
       "@media(max-width:920px){.ez1o-cols{grid-template-columns:repeat(2,1fr);}}",
-      ".ez1o-col{background:var(--soft,#F8FAFC);border:1px solid var(--line,#E4E7EC);border-radius:14px;padding:12px;}",
+      ".ez1o-col{background:var(--color-background-muted,#F8FAFC);border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-container,14px);padding:12px;}",
       ".ez1o-col>.ch{font-size:12.5px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:6px;}",
-      ".ez1o-col>.ch .step{width:18px;height:18px;border-radius:50%;background:#23408E;color:#fff;font-size:10px;font-weight:800;",
+      ".ez1o-col>.ch .step{width:18px;height:18px;border-radius:50%;background:var(--color-trust,#23408E);color:var(--color-on-accent,#fff);font-size:10px;font-weight:800;",
       "display:inline-flex;align-items:center;justify-content:center;}",
-      ".ez1o-card{background:var(--card,#fff);border:1px solid var(--line,#E4E7EC);border-radius:10px;padding:9px 11px;margin-bottom:8px;}",
-      ".ez1o-card.new{border:1.5px solid #C2410C;box-shadow:0 0 0 3px rgba(194,65,12,.08);}",
+      ".ez1o-card{background:var(--color-background-card,#fff);border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-element,10px);padding:9px 11px;margin-bottom:8px;}",
+      ".ez1o-card.new{border:1.5px solid var(--color-trust-warm,#C2410C);box-shadow:0 0 0 3px color-mix(in srgb, var(--color-trust-warm,#C40) 8%, transparent);}",
       ".ez1o-card.cand{border-style:dashed;opacity:.85;}",
       ".ez1o-card .nm{font-size:12px;font-weight:700;line-height:1.4;}",
-      ".ez1o-st{font-size:9.5px;font-weight:700;border-radius:999px;padding:1px 8px;white-space:nowrap;display:inline-block;margin-bottom:5px;}",
-      ".ez1o-st.live{color:#15803D;background:rgba(21,128,61,.08);border:1px solid rgba(21,128,61,.3);}",
-      ".ez1o-st.new{color:#C2410C;background:rgba(194,65,12,.08);border:1px solid rgba(194,65,12,.35);}",
-      ".ez1o-st.cand{color:var(--ink-3,#6B7280);background:var(--soft,#F8FAFC);border:1px solid var(--line-2,#CBD5E1);}",
-      ".ez1o-stars{display:flex;gap:10px;font-size:10.5px;color:var(--ink-3,#6B7280);margin-top:6px;}",
-      ".ez1o-stars b{color:#B45309;font-weight:700;letter-spacing:1px;}",
+      ".ez1o-st{font-size:9.5px;font-weight:700;border-radius:var(--radius-full,999px);padding:1px 8px;white-space:nowrap;display:inline-block;margin-bottom:5px;}",
+      ".ez1o-st.live{color:var(--color-success,#15803D);background:color-mix(in srgb, var(--color-success,#180) 8%, transparent);border:1px solid color-mix(in srgb, var(--color-success,#180) 30%, transparent);}",
+      ".ez1o-st.new{color:var(--color-trust-warm,#C2410C);background:color-mix(in srgb, var(--color-trust-warm,#C40) 8%, transparent);border:1px solid color-mix(in srgb, var(--color-trust-warm,#C40) 35%, transparent);}",
+      ".ez1o-st.cand{color:var(--color-text-secondary,#6B7280);background:var(--color-background-muted,#F8FAFC);border:1px solid var(--color-border-emphasized,#CBD5E1);}",
+      ".ez1o-stars{display:flex;gap:10px;font-size:10.5px;color:var(--color-text-secondary,#6B7280);margin-top:6px;}",
+      ".ez1o-stars b{color:var(--color-warning,#B45309);font-weight:700;letter-spacing:1px;}",
       /* 아젠다·팀원 선택 */
-      ".ez1o-chip{cursor:pointer;border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:5px 12px;font-size:11.5px;",
-      "font-weight:600;color:var(--ink,#1D2433);background:var(--card,#fff);}",
-      ".ez1o-chip.on{color:#fff;background:var(--blue,#1F7AF0);border-color:var(--blue,#1F7AF0);}",
-      ".ez1o-agenda{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}",
-      ".ez1o-agrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}",
-      ".ez1o-agin{flex:1;min-width:180px;border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:6px 12px;font-size:12px;font-family:inherit;}",
-      ".ez1o-prom{display:flex;align-items:center;gap:8px;font-size:12px;padding:8px 10px;border:1px dashed var(--line-2,#CBD5E1);",
-      "border-radius:10px;color:var(--ink-2,#374151);}",
-      ".ez1o-prom .tg{cursor:pointer;border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:3px 10px;font-size:11px;",
-      "font-weight:600;background:var(--card,#fff);flex:none;margin-left:auto;}",
-      ".ez1o-prom .tg.done{color:#15803D;border-color:#15803D;background:rgba(21,128,61,.06);}",
-      ".ez1o-sel{border:1px solid var(--line,#E4E7EC);border-radius:999px;padding:6px 10px;font-size:12px;font-family:inherit;background:var(--card,#fff);}"
+      ".ez1o-chip{cursor:pointer;border:1px solid var(--color-border,#E4E7EC);border-radius:999px;padding:5px 12px;font-size:11.5px;",
+      ".ez1o-chip.on{color:var(--color-on-accent,#fff);background:var(--color-accent,#1F7AF0);border-color:var(--color-accent,#1F7AF0);}",
     ].join("");
     document.head.appendChild(st);
   }
@@ -307,22 +295,23 @@
     if (rk === "leader") {
       var tm = teamMembers();
       return '<div class="ez1o-bar" data-ez1o-bar>'
-        + '<button class="ez1o-btn" data-ez1o="start">&#10022; elizax 녹음·요약</button>'
+        + '<button class="ez1o-btn" data-ez1o="start">✦ elizax 녹음·요약</button>'
         + (tm.length ? memSelectHTML() : '<span class="ez1o-note">1:1 대상 팀원이 없습니다</span>')
-        + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
+        + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">◐ 제안만</span>'
         + '<span class="ez1o-note">팀원을 선택해 1:1을 주관하세요 · 기록 확정은 사람</span>'
         + mapBtn + '</div>'
         + '<div class="ez1o-panel" data-ez1o-panel></div>';
     }
     var confirmed = !!loadState().confirmedAt;
-    return '<div class="ez1o-bar" data-ez1o-bar>'
-      + '<button class="ez1o-btn" data-ez1o="start">&#10022; elizax 녹음·요약</button>'
-      + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
+    /* AI 관여 마커는 ✦ 하나(§4) — ⏺는 녹음(REC) 상태 인디케이터로만 존속 */
+    return '<div class="ez1o-bar" data-ez1o-bar data-astryx-theme="talenx">'
+      + '<button class="ez1o-btn" data-ez1o="start">✦ elizax 녹음·요약</button>'
+      + (window.EZKit ? EZKit.status("suggest") : '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9684; 제안만</span>')
       + '<span class="ez1o-note">녹음→받아쓰기→요약은 자동, 기록 확정은 사람</span>'
-      + (confirmed ? '<span class="ez1o-donetag">&#10003; 7/16 요약 확정됨 · 성과 기록 저장</span>' : '')
+      + (confirmed ? '<span class="ez1o-donetag">&#10003; 요약 확정됨 · 성과 기록 저장</span>' : '')
       + mapBtn
       + '</div>'
-      + '<div class="ez1o-panel" data-ez1o-panel></div>';
+      + '<div class="ez1o-panel" data-ez1o-panel data-astryx-theme="talenx"></div>';
   }
 
   function tryInject() {
@@ -522,15 +511,9 @@
 
   function summaryHTML() {
     var p = pair(), MGR = p.mgr, MEM = p.mem;
-    var title = "1:1 미팅 요약 · 7/16" + (lastRun && lastRun.memName ? " — " + lastRun.memName : "");
-    return '<div class="ez1o-sum" data-ez1o-sum>'
-      + '<div class="ez1o-sumhead">'
-      + '<span class="tt">' + esc(title) + '</span>'
-      + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
-      + '<span class="ez1o-asof">기준 시점 ' + esc(AS_OF) + '</span>'
-      + '</div>'
-      + '<div class="ez1o-body">'
-      + agendaSectionHTML()
+    var K = window.EZKit;
+    var title = '✦ 1:1 미팅 요약' + (lastRun && lastRun.memName ? ' — ' + lastRun.memName : '');
+    var body = agendaSectionHTML()
       + '<div class="ez1o-h4">논의 주제 3</div>'
       + '<div class="ez1o-topic"><span class="no">1</span><span>KR2 진척 — 신규 기획 3건 사용자 검증 통과, 잔여 2건 설계 중 (진행률 68%)' + chip("00:16") + '</span></div>'
       + '<div class="ez1o-topic"><span class="no">2</span><span>일정 리스크 — 외부 연동 파트너 응답 2주 지연, 잔여 검증 일정 순연 가능성' + chip("00:42") + '</span></div>'
@@ -540,15 +523,23 @@
       + '<div class="ez1o-act"><span class="bx"></span><span>머신러닝 기초 교육 과정 선정·예산 신청 <span class="own">— 담당 ' + esc(MEM) + ' · 기한 7/22</span></span></div>'
       + '<div class="ez1o-h4">감지 신호 2</div>'
       + '<div class="ez1o-sig risk"><span class="ic">&#9888;</span><span><b>리스크</b> · 일정 지연(외부 연동) — 이번 주 체크인 초안에 리스크 항목 반영을 제안합니다' + chip("00:42") + '</span></div>'
-      + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · 머신러닝 교육 수요 감지 — 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>'
-      + '</div>'
-      + '<div class="ez1o-gate" data-ez1o-gate>'
+      + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · 머신러닝 교육 수요 감지 — 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>';
+    var gate = '<div class="ez1o-gate" data-ez1o-gate>'
       + '<span class="lab">결정 게이트 · 사람이 확정 (승인 전에는 아무것도 반영되지 않음)</span>'
-      + '<button class="ez1o-gbtn primary" data-ez1o-gact="confirm">기록 확정 · 성과 기록에 저장</button>'
+      + '<button class="ez1o-gbtn primary" data-ez1o-gact="confirm">기록 확정·성과 기록 저장</button>'
       + '<button class="ez1o-gbtn" data-ez1o-gact="edit">수정</button>'
       + '<button class="ez1o-gbtn" data-ez1o-gact="drop">폐기</button>'
-      + '</div>'
       + '</div>';
+    /* 요약 카드 = EZReceipt 1벌(§7) — 헤더 칩 순서: as-of → 출처 → 상태 */
+    if (K) {
+      return '<div class="ez1o-sum" data-ez1o-sum>'
+        + K.receipt({ title: title, chips: K.asof() + K.src('talenx', REC_ID) + K.status('suggest'), body: body })
+        + gate + '</div>';
+    }
+    return '<div class="ez1o-sum" data-ez1o-sum>'
+      + '<div class="ez1o-sumhead"><span class="tt">' + esc(title) + '</span>'
+      + '<span class="ez1o-badge">&#9684; 제안만</span></div>'
+      + '<div class="ez1o-body">' + body + '</div>' + gate + '</div>';
   }
 
   /* ---------------- 게이트 결정 ---------------- */
@@ -558,12 +549,12 @@
 
     if (act === "edit") {
       /* 수정 모드: 본문을 직접 고친 뒤 확정 — 게이트는 열린 채 유지 */
-      var body = card.querySelector(".ez1o-body");
+      var body = card.querySelector(".ezk-receipt-body,.ez1o-body");
       if (body && body.getAttribute("contenteditable") !== "true") {
         body.setAttribute("contenteditable", "true");
-        body.style.outline = "2px dashed rgba(31,122,240,.4)";
+        body.style.outline = "2px dashed color-mix(in srgb, var(--color-accent,#17F) 40%, transparent)";
         body.style.borderRadius = "8px";
-        toast("수정 모드 — 요약을 직접 고친 뒤 [기록 확정 · 성과 기록에 저장]을 누르세요.", "");
+        toast("수정 모드 — 요약을 직접 고친 뒤 [기록 확정·성과 기록 저장]을 누르세요.", "");
       }
       return;
     }
@@ -574,8 +565,13 @@
       btns[i].disabled = true;
       if (btns[i].getAttribute("data-ez1o-gact") === act) btns[i].setAttribute("data-chosen", "1");
     }
-    var body2 = card.querySelector(".ez1o-body");
+    var body2 = card.querySelector(".ezk-receipt-body,.ez1o-body");
     if (body2) { body2.removeAttribute("contenteditable"); body2.style.outline = ""; }
+
+    /* 게이트 결정 → EZKit.gates 단일 스토어 기록 (P6) */
+    if (window.EZKit && (act === "confirm" || act === "drop")) {
+      EZKit.gates.set(REC_ID, { decision: act === "confirm" ? "승인" : "폐기", by: memberName() });
+    }
 
     if (act === "confirm") {
       var isLead = !!(lastRun && lastRun.memId);
@@ -594,19 +590,19 @@
       }));
       var dec = document.createElement("span");
       dec.className = "ez1o-dec";
-      dec.innerHTML = "&#10003; 확정 · 감사 기록됨";
+      dec.innerHTML = "&#10003; 확정 · ⛨ " + (window.EZKit ? esc(EZKit.gaId(REC_ID)) : "감사 기록됨");
       gate.appendChild(dec);
       if (isLead) {
         /* leader — 드롭다운의 팀원별 최근 1:1 라벨 갱신(원장 재조회) */
         var selEl = document.querySelector("[data-ez1o-mem]");
         if (selEl) selEl.outerHTML = memSelectHTML();
       } else {
-        var st = loadState(); st.confirmedAt = "2026-07-16"; saveState(st);
+        var st = loadState(); st.confirmedAt = (window.EZKit ? EZKit.clock.asOfDate() : "2026-07-16"); saveState(st);
         var bar = document.querySelector("[data-ez1o-bar]");
         if (bar && !bar.querySelector(".ez1o-donetag")) {
           var tag = document.createElement("span");
           tag.className = "ez1o-donetag";
-          tag.innerHTML = "&#10003; 7/16 요약 확정됨 · 성과 기록 저장";
+          tag.innerHTML = "&#10003; 요약 확정됨 · 성과 기록 저장";
           var link = bar.querySelector(".ez1o-linkbtn");
           bar.insertBefore(tag, link || null);
         }
@@ -664,6 +660,7 @@
     var ov = document.createElement("div");
     ov.className = "ez1o-mapov";
     ov.setAttribute("data-ez1o-mapov", "1");
+    ov.setAttribute("data-astryx-theme", "talenx");
     var cols = MAP.map(function (col, ci) {
       var cards = col.items.map(function (it) {
         return '<div class="ez1o-card ' + it.st + '">'
@@ -678,7 +675,7 @@
       '<div class="ez1o-map">'
       + '<div class="ez1o-maphead">'
       + '<span class="tt">지원 범위 맵 · 성과관리 전 주기 × elizax 기능 지원 범위</span>'
-      + '<span class="ez1o-asof">기준 시점 ' + esc(AS_OF) + '</span>'
+      + '<span class="ez1o-asof">📌 기준 시점 ' + esc(AS_OF()) + '</span>'
       + '<button class="ez1o-mapx" data-ez1o="mapclose" title="닫기">&#10005;</button>'
       + '<span class="principle">선정 원칙 — 초기엔 <b>기록 기여도 우선</b>: 기록이 충분히 쌓이면 <b>빈도 우선</b>으로 전환. '
       + '이번 신규 1순위 = 1on1 (빈도 ★★★ · 기록 기여 ★★★, 유일한 미지원 공백)</span>'

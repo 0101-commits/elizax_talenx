@@ -218,6 +218,7 @@
     } catch (e) { /* ignore */ }
 
     var body =
+      '<div data-astryx-theme="talenx">' +
       '<div class="ezcx-exp-sub">대화 “' + esc(title) + '” · 메시지 ' + count + '건</div>' +
       '<div class="ezcx-exp-opts">' +
         '<button type="button" class="ezcx-exp-opt" data-exp="md">' +
@@ -232,6 +233,7 @@
           '<span class="ezcx-exp-ic">⧉</span>' +
           '<span class="ezcx-exp-tx"><b>클립보드 복사</b><small>Markdown 텍스트로 바로 붙여넣기</small></span>' +
         '</button>' +
+      '</div>' +
       '</div>';
 
     var handle = TX.modal({
@@ -261,22 +263,22 @@
     st.id = "ezcx-export-style";
     st.textContent =
       /* 푸터행 버튼 — 기존 .ezx-reset 톤에 맞춤 */
-      ".ezcx-export-btn{ font-size:11px; color:var(--ink-3,#6B7280); font-weight:400;" +
+      ".ezcx-export-btn{ font-size:11px; color:var(--color-text-secondary); font-weight:400;" +
       " background:none; border:0; padding:0; margin-left:10px; cursor:pointer; font-family:inherit; }" +
-      ".ezcx-export-btn:hover{ color:var(--ink-2,#4B5563); text-decoration:underline; }" +
+      ".ezcx-export-btn:hover{ color:var(--color-text-primary); text-decoration:underline; }" +
       /* 모달 내부 */
-      ".ezcx-exp-sub{ font-size:12px; color:var(--ink-3,#6B7280); margin-bottom:10px; }" +
+      ".ezcx-exp-sub{ font-size:12px; color:var(--color-text-secondary); margin-bottom:10px; }" +
       ".ezcx-exp-opts{ display:flex; flex-direction:column; gap:8px; }" +
       ".ezcx-exp-opt{ display:flex; align-items:center; gap:12px; width:100%; text-align:left;" +
-      " padding:11px 14px; border:1px solid var(--line,#E4E7EC); border-radius:10px;" +
-      " background:var(--card,#fff); color:var(--ink,#1D2433); cursor:pointer; font-family:inherit; }" +
-      ".ezcx-exp-opt:hover{ border-color:var(--blue,#1F7AF0); background:var(--soft,#F8FAFC); }" +
+      " padding:11px 14px; border:1px solid var(--color-border); border-radius:var(--radius-container);" +
+      " background:var(--color-background-card); color:var(--color-text-primary); cursor:pointer; font-family:inherit; }" +
+      ".ezcx-exp-opt:hover{ border-color:var(--color-accent); background:var(--color-background-muted); }" +
       ".ezcx-exp-ic{ flex:0 0 30px; height:30px; display:flex; align-items:center; justify-content:center;" +
-      " border-radius:8px; background:var(--soft,#F8FAFC); border:1px solid var(--line,#E4E7EC);" +
-      " font-size:13px; color:var(--blue,#1F7AF0); }" +
+      " border-radius:var(--radius-element); background:var(--color-background-muted); border:1px solid var(--color-border);" +
+      " font-size:13px; color:var(--color-accent); }" +
       ".ezcx-exp-tx{ display:flex; flex-direction:column; gap:2px; }" +
       ".ezcx-exp-tx b{ font-size:13px; font-weight:600; }" +
-      ".ezcx-exp-tx small{ font-size:11px; color:var(--ink-3,#6B7280); }";
+      ".ezcx-exp-tx small{ font-size:11px; color:var(--color-text-secondary); }";
     document.head.appendChild(st);
   }
 

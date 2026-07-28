@@ -253,53 +253,53 @@
     st.id = "eze-style";
     st.textContent = "" +
       /* proactive pill — FAB(우하단 24/24, 56px) 바로 위 */
-      ".eze-pill{position:fixed;right:24px;bottom:94px;z-index:899;max-width:280px;" +
-      "background:var(--card,#fff);border:1px solid var(--line,#E5E7EB);border-radius:14px;" +
-      "box-shadow:0 10px 32px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.06);" +
-      "padding:10px 12px 9px;font-family:var(--sans,sans-serif);color:var(--ink,#111);" +
+      ".eze-pill{position:fixed;right:24px;bottom:94px;z-index:var(--z-badge);max-width:280px;" +
+      "background:var(--color-background-card);border:1px solid var(--color-border);border-radius:var(--radius-container);" +
+      "box-shadow:var(--shadow-high, 0 10px 32px rgba(0,0,0,.14));" +
+      "padding:10px 12px 9px;font-family:var(--font-family-body);color:var(--color-text-primary);" +
       "opacity:0;transform:translateY(10px) scale(.97);" +
-      "transition:opacity .28s ease,transform .28s cubic-bezier(.32,.72,.24,1);}" +
+      "transition:opacity var(--duration-medium-min) var(--ease-standard),transform var(--duration-medium-min) var(--ease-standard);}" +
       ".eze-pill.eze-show{opacity:1;transform:translateY(0) scale(1);}" +
       ".eze-pill.eze-hide{opacity:0;transform:translateY(6px) scale(.98);}" +
       /* 말풍선 꼬리 — FAB 방향(우하단) */
       ".eze-pill:after{content:\"\";position:absolute;right:22px;bottom:-6px;width:12px;height:12px;" +
-      "background:var(--card,#fff);border-right:1px solid var(--line,#E5E7EB);" +
-      "border-bottom:1px solid var(--line,#E5E7EB);transform:rotate(45deg);}" +
+      "background:var(--color-background-card);border-right:1px solid var(--color-border);" +
+      "border-bottom:1px solid var(--color-border);transform:rotate(45deg);}" +
       ".eze-hd{display:flex;align-items:center;gap:6px;margin-bottom:5px;}" +
-      ".eze-dot{width:7px;height:7px;border-radius:50%;background:var(--blue,#1F7AF0);flex:none;" +
-      "box-shadow:0 0 0 3px rgba(31,122,240,.15);}" +
-      ".eze-who{font-size:11px;font-weight:700;color:var(--ink-2,#333);letter-spacing:-.01em;}" +
-      ".eze-badge{font-size:10px;font-weight:700;color:#B45309;background:rgba(180,83,9,.09);" +
-      "border:1px solid rgba(180,83,9,.25);border-radius:8px;padding:1px 6px;line-height:1.5;}" +
+      ".eze-dot{width:7px;height:7px;border-radius:var(--radius-full);background:var(--color-accent);flex:none;" +
+      "box-shadow:0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);}" +
+      ".eze-who{font-size:11px;font-weight:700;color:var(--color-text-secondary);letter-spacing:-.01em;}" +
+      ".eze-badge{font-size:10px;font-weight:700;color:var(--color-warning);background:color-mix(in srgb, var(--color-warning) 9%, transparent);" +
+      "border:1px solid color-mix(in srgb, var(--color-warning) 25%, transparent);border-radius:var(--radius-element);padding:1px 6px;line-height:1.5;}" +
       ".eze-hd .sp{flex:1;}" +
-      ".eze-ib{border:0;background:transparent;color:var(--ink-3,#888);cursor:pointer;" +
-      "font-size:14px;line-height:1;padding:2px 4px;border-radius:6px;}" +
-      ".eze-ib:hover{background:var(--soft,#F3F4F6);color:var(--ink,#111);}" +
+      ".eze-ib{border:0;background:transparent;color:var(--color-text-secondary);cursor:pointer;" +
+      "font-size:14px;line-height:1;padding:2px 4px;border-radius:var(--radius-inner);}" +
+      ".eze-ib:hover{background:var(--color-background-muted);color:var(--color-text-primary);}" +
       ".eze-txt{display:block;width:100%;text-align:left;border:0;background:transparent;cursor:pointer;" +
-      "font-size:13px;font-weight:600;line-height:1.45;color:var(--ink,#111);padding:0;" +
+      "font-size:13px;font-weight:600;line-height:1.45;color:var(--color-text-primary);padding:0;" +
       "letter-spacing:-.01em;font-family:inherit;}" +
-      ".eze-txt:hover{color:var(--blue,#1F7AF0);}" +
-      ".eze-txt .go{color:var(--blue,#1F7AF0);font-weight:700;}" +
-      ".eze-src{margin-top:6px;font-size:10px;color:var(--ink-3,#999);letter-spacing:-.01em;}" +
-      ".eze-src b{font-weight:600;color:var(--ink-3,#999);}" +
+      ".eze-txt:hover{color:var(--color-accent);}" +
+      ".eze-txt .go{color:var(--color-accent);font-weight:700;}" +
+      ".eze-src{margin-top:6px;font-size:10px;color:var(--color-text-secondary);letter-spacing:-.01em;}" +
+      ".eze-src b{font-weight:600;color:var(--color-text-secondary);}" +
       /* ⋯ 미니 메뉴 — 단일 진입점 허브 */
-      ".eze-menu{position:fixed;right:24px;bottom:94px;z-index:910;min-width:176px;" +
-      "background:var(--card,#fff);border:1px solid var(--line,#E5E7EB);border-radius:12px;" +
-      "box-shadow:0 14px 40px rgba(0,0,0,.16);padding:6px;font-family:var(--sans,sans-serif);" +
-      "opacity:0;transform:translateY(8px);transition:opacity .2s ease,transform .2s ease;}" +
+      ".eze-menu{position:fixed;right:24px;bottom:94px;z-index:calc(var(--z-badge) + 10);min-width:176px;" +
+      "background:var(--color-background-popover);border:1px solid var(--color-border);border-radius:var(--radius-container);" +
+      "box-shadow:var(--shadow-high, 0 14px 40px rgba(0,0,0,.16));padding:6px;font-family:var(--font-family-body);" +
+      "opacity:0;transform:translateY(8px);transition:opacity var(--duration-fast) var(--ease-standard),transform var(--duration-fast) var(--ease-standard);}" +
       ".eze-menu.eze-show{opacity:1;transform:translateY(0);}" +
-      ".eze-menu .mhd{font-size:10px;font-weight:700;color:var(--ink-3,#999);padding:5px 9px 4px;" +
+      ".eze-menu .mhd{font-size:10px;font-weight:700;color:var(--color-text-secondary);padding:5px 9px 4px;" +
       "letter-spacing:.02em;}" +
       ".eze-mi{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;" +
-      "cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink-2,#333);padding:8px 9px;" +
-      "border-radius:8px;text-align:left;font-family:inherit;letter-spacing:-.01em;}" +
-      ".eze-mi:hover{background:var(--soft,#F3F4F6);color:var(--ink,#111);}" +
+      "cursor:pointer;font-size:12.5px;font-weight:600;color:var(--color-text-secondary);padding:8px 9px;" +
+      "border-radius:var(--radius-element);text-align:left;font-family:inherit;letter-spacing:-.01em;}" +
+      ".eze-mi:hover{background:var(--color-background-muted);color:var(--color-text-primary);}" +
       ".eze-mi .ic{width:16px;text-align:center;flex:none;}" +
       /* 역할 스위처 옆 근거 레벨 인디케이터 */
       ".eze-ev{display:inline-flex;align-items:center;gap:5px;margin-left:10px;padding:3px 9px;" +
-      "border:1px solid var(--line,#E5E7EB);border-radius:12px;background:var(--soft,#F6F7F9);" +
-      "font-size:11px;font-weight:600;color:var(--ink-3,#777);white-space:nowrap;cursor:default;}" +
-      ".eze-ev .lv{color:var(--blue,#1F7AF0);font-weight:700;}";
+      "border:1px solid var(--color-border);border-radius:var(--radius-full);background:var(--color-background-muted);" +
+      "font-size:11px;font-weight:600;color:var(--color-text-secondary);white-space:nowrap;cursor:default;}" +
+      ".eze-ev .lv{color:var(--color-accent);font-weight:700;}";
     document.head.appendChild(st);
   }
 
@@ -313,8 +313,8 @@
     if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
   }
 
-  function dismissPill(instant) {
-    if (window.EZProactive) EZProactive.release("eze-pill");
+  function dismissPill(instant, acted) {
+    if (window.EZProactive) EZProactive.release("eze-pill", acted === true);
     clearHideTimer();
     currentSg = null;
     if (!pillEl) return;
@@ -349,6 +349,7 @@
     var rk = roleKey();
     var pill = document.createElement("div");
     pill.className = "eze-pill";
+    pill.setAttribute("data-astryx-theme", "talenx"); /* body 직속 — 토큰 스코프 루트 */
     pill.setAttribute("role", "dialog");
     pill.setAttribute("aria-label", "elizax 선제 제안");
     pill.setAttribute("data-eze-key", key);
@@ -385,7 +386,7 @@
   function acceptSuggestion() {
     if (!currentSg) return;
     var key = currentSg.key, sg = currentSg.sg;
-    dismissPill(true);
+    dismissPill(true, true);
     /* proactive 수락도 맥락 원장에 축적 (모듈 간 계약: ez:ctx) */
     try {
       document.dispatchEvent(new CustomEvent("ez:ctx", {
@@ -445,6 +446,7 @@
 
     var menu = document.createElement("div");
     menu.className = "eze-menu";
+    menu.setAttribute("data-astryx-theme", "talenx"); /* body 직속 — 토큰 스코프 루트 */
     menu.setAttribute("role", "menu");
     menu.setAttribute("aria-label", "AI 진입점");
     /* pill이 떠 있으면 pill 위로, 아니면 FAB 위로 */
@@ -475,6 +477,7 @@
     var lv = (window.EZEvidencePolicy || {})[roleKey()] || "core";
     var chip = document.createElement("span");
     chip.className = "eze-ev";
+    chip.setAttribute("data-astryx-theme", "talenx"); /* 역할 바(talenx 오버레이) 내 부착 — 토큰 스코프 루트 */
     chip.title = "역할별 근거 노출 정책 — " + (EV_TITLES[lv] || EV_TITLES.core);
     chip.innerHTML = "근거 노출 <span class=\"lv\">" + esc(EV_LABELS[lv] || EV_LABELS.core) + "</span>";
     if (anchor.nextSibling) anchor.parentNode.insertBefore(chip, anchor.nextSibling);
@@ -515,7 +518,7 @@
         var idx = parseInt(mi.getAttribute("data-eze-mi"), 10);
         var act = menuActions[idx];
         closeMenu();
-        dismissPill(true);
+        dismissPill(true, true);
         if (act) { try { act.run(); } catch (err) { /* 무해화 */ } }
         return;
       }

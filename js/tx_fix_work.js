@@ -279,7 +279,14 @@
         + '<span class="sc-tab on">주간업무보고</span>'
         + '<span class="sc-add">+&nbsp;스크럼보드 추가</span>'
         + '<span class="spacer" style="flex:1"></span>'
+        /* v2 §11: 업무관리 ✦ 앵커 1개 — 기존 elizax 질의 프리셋, 신규 기능 아님 */
+        + '<button class="txf-anchor-scrum" data-astryx-theme="talenx" style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--color-accent-muted,rgba(31,122,240,.28));color:var(--color-accent,#1F7AF0);background:var(--color-background-card,#fff);font-size:12.5px;font-weight:700;padding:6px 13px;border-radius:var(--radius-full,999px);cursor:pointer;margin-right:10px">✦ 요약</button>'
         + '<span class="wp-kebab txf-sckebab" role="button" tabindex="0" aria-label="더보기" style="font-size:18px">⋮</span>';
+      var scrumAnchor = tabs.querySelector('.txf-anchor-scrum');
+      if (scrumAnchor) scrumAnchor.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (window.Elizax && Elizax.send) Elizax.send('이번 주 주간업무보고 스크럼보드를 요약해줘 — 완료·진행·블로커 중심으로');
+      });
     }
     // header h3 rename
     var h = sp.querySelector('.sc-head h3');

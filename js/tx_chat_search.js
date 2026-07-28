@@ -52,44 +52,44 @@
     st.textContent =
       /* 오버레이: 패널 전체를 덮는 반투명 배경 + 상단 카드 */
       ".ezcx-search-ov{position:absolute;inset:0;z-index:60;display:none;" +
-      "background:rgba(15,23,42,.28);backdrop-filter:blur(1px);" +
+      "background:var(--color-overlay);backdrop-filter:blur(1px);" +
       "border-radius:inherit;overflow:hidden;}" +
       ".ezcx-search-ov.on{display:block;}" +
-      ".ezcx-search-card{margin:10px 10px 0;background:var(--card,#fff);" +
-      "border:1px solid var(--line,#E4E7EC);border-radius:12px;" +
-      "box-shadow:0 12px 32px rgba(15,23,42,.18);display:flex;" +
+      ".ezcx-search-card{margin:10px 10px 0;background:var(--color-background-card);" +
+      "border:1px solid var(--color-border);border-radius:var(--radius-container);" +
+      "box-shadow:var(--shadow-high, 0 12px 32px rgba(15,23,42,.18));display:flex;" +
       "flex-direction:column;max-height:calc(100% - 20px);}" +
       /* 입력행 */
       ".ezcx-search-inrow{display:flex;align-items:center;gap:8px;" +
-      "padding:10px 12px;border-bottom:1px solid var(--line,#E4E7EC);}" +
+      "padding:10px 12px;border-bottom:1px solid var(--color-border);}" +
       ".ezcx-search-ico{font-size:14px;line-height:1;flex:none;}" +
       ".ezcx-search-in{flex:1;min-width:0;border:0;outline:0;background:transparent;" +
-      "font:inherit;font-size:13px;color:var(--ink,#1D2433);}" +
-      ".ezcx-search-in::placeholder{color:var(--mut,#98A2B3);}" +
+      "font:inherit;font-size:13px;color:var(--color-text-primary);}" +
+      ".ezcx-search-in::placeholder{color:var(--color-text-disabled);}" +
       ".ezcx-search-x{flex:none;border:0;background:transparent;cursor:pointer;" +
-      "font-size:13px;line-height:1;padding:4px;border-radius:6px;" +
-      "color:var(--mut,#667085);}" +
-      ".ezcx-search-x:hover{background:var(--soft,#F8FAFC);color:var(--ink,#1D2433);}" +
+      "font-size:13px;line-height:1;padding:4px;border-radius:var(--radius-inner);" +
+      "color:var(--color-text-secondary);}" +
+      ".ezcx-search-x:hover{background:var(--color-background-muted);color:var(--color-text-primary);}" +
       /* 결과 목록 */
       ".ezcx-search-list{overflow-y:auto;padding:6px;}" +
       ".ezcx-search-row{display:block;width:100%;text-align:left;border:0;" +
-      "background:transparent;cursor:pointer;padding:8px 10px;border-radius:9px;" +
-      "font:inherit;color:var(--ink,#1D2433);}" +
-      ".ezcx-search-row:hover{background:var(--soft,#F8FAFC);}" +
+      "background:transparent;cursor:pointer;padding:8px 10px;border-radius:var(--radius-element);" +
+      "font:inherit;color:var(--color-text-primary);}" +
+      ".ezcx-search-row:hover{background:var(--color-background-muted);}" +
       ".ezcx-search-sess{display:flex;align-items:center;gap:6px;font-size:11px;" +
-      "color:var(--mut,#667085);margin-bottom:3px;}" +
-      ".ezcx-search-sess b{color:var(--blue,#1F7AF0);font-weight:600;" +
+      "color:var(--color-text-secondary);margin-bottom:3px;}" +
+      ".ezcx-search-sess b{color:var(--color-accent);font-weight:600;" +
       "max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
       ".ezcx-search-role{flex:none;font-style:normal;}" +
-      ".ezcx-search-snip{font-size:12.5px;line-height:1.5;color:var(--ink,#1D2433);" +
+      ".ezcx-search-snip{font-size:12.5px;line-height:1.5;color:var(--color-text-primary);" +
       "word-break:break-word;}" +
-      ".ezcx-search-snip mark{background:rgba(31,122,240,.16);" +
-      "color:var(--blue,#1F7AF0);font-weight:600;padding:0 1px;border-radius:3px;}" +
+      ".ezcx-search-snip mark{background:var(--color-accent-muted);" +
+      "color:var(--color-accent);font-weight:600;padding:0 1px;border-radius:var(--radius-inner);}" +
       /* 빈 상태/안내 */
       ".ezcx-search-empty{padding:18px 12px;text-align:center;font-size:12px;" +
-      "color:var(--mut,#98A2B3);}" +
+      "color:var(--color-text-disabled);}" +
       ".ezcx-search-more{padding:6px 10px 10px;text-align:center;font-size:11px;" +
-      "color:var(--mut,#98A2B3);}" +
+      "color:var(--color-text-disabled);}" +
       /* 헤더 🔍 버튼 — 기존 .ezx-x 버튼 톤에 맞춤 */
       ".ezcx-search-btn{font-size:13px;}";
     document.head.appendChild(st);

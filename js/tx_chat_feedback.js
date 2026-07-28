@@ -96,24 +96,24 @@
     st.textContent =
       /* 버튼 행 */
       ".ezcx-fb-wrap{display:flex;align-items:center;gap:4px;margin:4px 0 2px;}" +
-      ".ezcx-fb-btn{border:1px solid var(--line,#E4E7EC);background:var(--card,#fff);color:var(--ink,#1D2433);" +
-      "border-radius:999px;padding:1px 9px;font-size:12px;line-height:1.6;cursor:pointer;opacity:.72;" +
-      "transition:opacity .12s,border-color .12s,background .12s;}" +
-      ".ezcx-fb-btn:hover{opacity:1;border-color:var(--blue,#1F7AF0);}" +
+      ".ezcx-fb-btn{border:1px solid var(--color-border);background:var(--color-background-card);color:var(--color-text-primary);" +
+      "border-radius:var(--radius-full);padding:1px 9px;font-size:12px;line-height:1.6;cursor:pointer;opacity:.72;" +
+      "transition:opacity var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard),background var(--duration-fast) var(--ease-standard);}" +
+      ".ezcx-fb-btn:hover{opacity:1;border-color:var(--color-accent);}" +
       ".ezcx-fb-btn.on{opacity:1;}" +
-      ".ezcx-fb-btn.ezcx-fb-up.on{border-color:var(--blue,#1F7AF0);color:var(--blue,#1F7AF0);background:rgba(31,122,240,.09);}" +
-      ".ezcx-fb-btn.ezcx-fb-down.on{border-color:#C2410C;color:#C2410C;background:rgba(194,65,12,.09);}" +
-      ".ezcx-fb-audit{font-size:11px;color:var(--muted,#98A2B3);margin-left:2px;}" +
+      ".ezcx-fb-btn.ezcx-fb-up.on{border-color:var(--color-accent);color:var(--color-accent);background:color-mix(in srgb, var(--color-accent) 9%, transparent);}" +
+      ".ezcx-fb-btn.ezcx-fb-down.on{border-color:var(--color-warning);color:var(--color-warning);background:color-mix(in srgb, var(--color-warning) 9%, transparent);}" +
+      ".ezcx-fb-audit{font-size:11px;color:var(--color-text-disabled);margin-left:2px;}" +
       /* 사유 모달 */
       ".ezcx-fb-opts{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px;}" +
-      ".ezcx-fb-opt{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line,#E4E7EC);" +
-      "border-radius:8px;background:var(--soft,#F8FAFC);cursor:pointer;font-size:13px;color:var(--ink,#1D2433);}" +
-      ".ezcx-fb-opt:hover{border-color:var(--blue,#1F7AF0);}" +
-      ".ezcx-fb-opt input{margin:0;accent-color:var(--blue,#1F7AF0);}" +
-      ".ezcx-fb-ta{width:100%;box-sizing:border-box;border:1px solid var(--line,#E4E7EC);border-radius:8px;" +
-      "padding:8px 10px;font-size:13px;font-family:inherit;background:var(--card,#fff);color:var(--ink,#1D2433);" +
+      ".ezcx-fb-opt{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--color-border);" +
+      "border-radius:var(--radius-element);background:var(--color-background-muted);cursor:pointer;font-size:13px;color:var(--color-text-primary);}" +
+      ".ezcx-fb-opt:hover{border-color:var(--color-accent);}" +
+      ".ezcx-fb-opt input{margin:0;accent-color:var(--color-accent);}" +
+      ".ezcx-fb-ta{width:100%;box-sizing:border-box;border:1px solid var(--color-border);border-radius:var(--radius-element);" +
+      "padding:8px 10px;font-size:13px;font-family:inherit;background:var(--color-background-card);color:var(--color-text-primary);" +
       "resize:vertical;min-height:56px;}" +
-      ".ezcx-fb-hint{font-size:11px;color:var(--muted,#98A2B3);margin-top:8px;}";
+      ".ezcx-fb-hint{font-size:11px;color:var(--color-text-disabled);margin-top:8px;}";
     document.head.appendChild(st);
   }
 
@@ -230,6 +230,8 @@
       return;
     }
     var body = document.createElement("div");
+    /* TX.modal은 talenx 오버레이 루트에 부착 — astryx 토큰 스코프 루트 필요 */
+    body.setAttribute("data-astryx-theme", "talenx");
     var html = '<div class="ezcx-fb-opts">';
     var i;
     for (i = 0; i < REASONS.length; i++) {

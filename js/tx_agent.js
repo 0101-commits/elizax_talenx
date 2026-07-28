@@ -48,7 +48,8 @@
     function z(n) { return (n < 10 ? "0" : "") + n; }
     return z(t.getHours()) + ":" + z(t.getMinutes());
   }
-  var AS_OF = "2026 상반기 · 7/15 06:00 기준";
+  /* 기준 시점 단일 원천 — EZKit.clock(P6). 폴백은 킷 부재 시에만 */
+  var AS_OF = "2026 상반기 · " + (window.EZKit ? window.EZKit.clock.asOf() : "2026-07-16 06:00") + " 기준";
 
   /* ---------------- state ---------------- */
   var state = {
@@ -84,7 +85,7 @@
   }
   function logAudit(act, target, ref) {
     /* 참조 ID는 원장 실 id — 호출부가 이미 원장 id(ctx-)를 넘겼으면 재발행하지 않는다.
-       GA-순번 위조 폐지: 원장 미가용이면 정직하게 "기록 전" 표시 */
+       GA-순번/해시 위조 폐지(EZKit.gaId 미사용): 원장 미가용이면 정직하게 "기록 전" 표시 */
     var gid = (ref && String(ref).indexOf("ctx-") === 0) ? ref
       : ledgerPublish({ type: "audit", source: "hub.audit", title: act + " — " + target, summary: "실행자 " + CU().name, weight: 1 });
     state.audit.unshift({ at: nowLabel(), actor: CU().name, act: act, target: target, ref: gid || ref || "기록 전" });
@@ -98,9 +99,10 @@
 
   /* ---------------- 자율성 배지 ---------------- */
   function autonomyBadge(mode) {
-    var map = { auto: ["자동 처리", "집계·데이터 반영은 에이전트가 바로 실행"], suggest: ["제안만", "등급·문구는 근거와 함께 제안만"], human_approve: ["승인 필요", "확정·전송은 사람 승인 게이트 필수"] };
+    /* 자율성 3단 단일 규격(§4.2): ● 자동=success / ◐ 제안만=warning / ○ 승인 필요=trust */
+    var map = { auto: ["●", "자동 처리", "집계·데이터 반영은 에이전트가 바로 실행"], suggest: ["◐", "제안만", "등급·문구는 근거와 함께 제안만"], human_approve: ["○", "승인 필요", "확정·전송은 사람 승인 게이트 필수"] };
     var m = map[mode] || map.suggest;
-    return '<span class="agh-badge agh-b-' + mode + '" title="' + esc(m[1]) + '">● ' + m[0] + "</span>";
+    return '<span class="agh-badge agh-b-' + mode + '" title="' + esc(m[2]) + '">' + m[0] + " " + m[1] + "</span>";
   }
 
   /* ---------------- 근거 칩 (원천 인용 · trace) ---------------- */
@@ -114,9 +116,19 @@
   }
 
   /* ---------------- 승인 게이트 (공통) ---------------- */
+  /* 게이트 결정의 진실의 원천 = EZKit.gates(localStorage `ezk_gates_v1` · onChange 구독).
+     state.decided는 세션 내 즉시 반영용 캐시일 뿐이라 읽기는 캐시→EZKit.gates 순. */
+  function gateDec(key) {
+    if (state.decided[key]) return state.decided[key];
+    if (window.EZKit) {
+      var k = window.EZKit.gates.get(key);
+      if (k) return { act: k.decision, note: k.reason || "" };
+    }
+    return null;
+  }
   function gateHTML(key, labels) {
     labels = labels || ["승인", "수정", "보류"];
-    var dec = state.decided[key];
+    var dec = gateDec(key);
     var btns = labels.map(function (l, i) {
       return '<button class="agh-btn' + (i === 0 ? " primary" : "") + '" data-gact="' + esc(l) + '" data-gkey="' + esc(key) + '"' +
         (dec ? " disabled" : "") + (dec && dec.act === l ? ' data-chosen="1"' : "") + ">" + esc(l) + "</button>";
@@ -127,6 +139,7 @@
   }
   function decideGate(key, act, note) {
     state.decided[key] = { act: act, note: note || "" };
+    if (window.EZKit) window.EZKit.gates.set(key, { decision: act, reason: note || "", by: CU().name, at: window.EZKit.clock.asOf() });
     var scr = SCREENS[key];
     /* 게이트 결정을 원장에 발행(hub.gate)하고, 감사 로그 참조도 같은 실 id로 통일 */
     var gid = ledgerPublish({
@@ -136,7 +149,10 @@
     });
     logAudit(act, (scr ? scr.title : key), gid);
     addAsset("결정", (scr ? scr.title : key) + " · " + act + (note ? " — " + note : ""), key);
-    /* 게이트 저장소 통일 — tx_roles의 'txr_gate_'+role 키에 기록해 EZJourney(결정맵)가 허브 결정을 반영 */
+    /* TXRoles.recordGate 호출 유지 — 진실의 원천은 EZKit.gates지만, recordGate가
+       역할별 게이트 키(txr_*)에 되쓰면서 평가관리 영수증을 재렌더하는 부수효과가 있다.
+       (tx_roles.js는 이 작업의 소유 파일이 아니므로 호출만 유지하고 위임은 손대지 않음)
+       gid = 원장 실 id — 영수증의 감사 참조도 위조 번호 대신 실 id로 찍힌다. */
     try { if (window.TXRoles && TXRoles.recordGate) TXRoles.recordGate(act, note || "", gid || null); } catch (eG) { /* 무시 */ }
     /* 같은 키의 게이트가 허브·채팅 카드 양쪽에 있을 수 있어 document 전역으로 모두 갱신 */
     Array.prototype.forEach.call(document.querySelectorAll('[data-gate="' + key + '"]'), function (g) {
@@ -167,8 +183,8 @@
     review:  { title: "리뷰 초안 함께 쓰기",       nav: "리뷰 초안 작성",      mode: "human_approve", group: "평가관리" },
     connmap: { title: "연결 지도 · 전략–목표–직무–역량–평가", nav: "연결 지도", mode: "suggest", group: "연결·계보" },
     procmap: { title: "결정 흐름",                nav: "결정 흐름",           mode: "human_approve", group: "연결·계보" },
-    assets:  { title: "산출물",                   nav: "산출물",             mode: null,            group: "자산" },
-    audit:   { title: "감사 로그",                nav: "감사 로그",           mode: null,            group: "자산" }
+    assets:  { title: "산출물",                   nav: "산출물",             mode: null,            group: "산출물" },
+    audit:   { title: "감사 로그",                nav: "감사 로그",           mode: null,            group: "감사 로그" }
   };
   var NAV_ORDER = ["home", "chat", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "connmap", "procmap", "assets", "audit"];
 
@@ -289,8 +305,9 @@
     if (el.root) return;
     var root = h("div", "agh-root");
 
-    /* ① 글로벌바 */
+    /* ① 글로벌바 — astryx on-dark 토큰 스코프 */
     var bar = h("div", "agh-gbar");
+    bar.setAttribute("data-astryx-media", "dark");
     bar.innerHTML =
       '<div class="agh-gl"><span class="agh-logo">✦</span><b>elizax</b><span class="agh-brand-sub">워크스페이스</span>' +
       '<span class="agh-rolechip" data-agh-role></span></div>' +
@@ -373,10 +390,10 @@
     var isEdit = act.indexOf("수정") === 0 || act === "직접 수정";
     var mo = TX.modal({
       title: isEdit ? "수정 지시 입력" : "보류 사유 입력",
-      body: '<p style="font-size:12.5px;color:#667085;margin:0 0 8px">' +
+      body: '<p style="font-size:12.5px;color:var(--agh-ink-3,#667085);margin:0 0 8px">' +
         (isEdit ? "자연어로 수정을 지시하면 근거와 함께 재작성됩니다. 변경 근거는 감사 로그에 남습니다."
                 : "보류 사유는 다음 심의에서 우선 재검토 큐로 들어갑니다.") + "</p>" +
-        '<textarea data-note style="width:100%;min-height:80px;border:1px solid #D0D5DD;border-radius:8px;padding:9px;font:inherit;font-size:13px"></textarea>',
+        '<textarea data-note style="width:100%;min-height:80px;border:1px solid var(--agh-line-2,#D0D5DD);border-radius:8px;padding:9px;font:inherit;font-size:13px"></textarea>',
       actions: [
         { label: "취소" },
         { label: isEdit ? "수정 반영" : "보류 확정", kind: "primary", onClick: function (box) {
@@ -579,7 +596,7 @@
     var objs = myObjectives().slice(0, 3);
     var pads = [{ title: "추천모델 v2 배포 · CTR +8%" }, { title: "온보딩 전환율 개선 +5%p" }, { title: "ML 온보딩 교육자료 (초안 제안)" }];
     var names = objs.concat(pads.slice(0, Math.max(0, 3 - objs.length))).slice(0, 3);
-    var cardCss = "flex:1;min-width:190px;background:#fff;border:1px solid #E4E7EC;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.55";
+    var cardCss = "flex:1;min-width:190px;background:var(--agh-card,#fff);border:1px solid var(--agh-line,#E4E7EC);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.55";
     var carryHTML =
       '<div class="agh-brief" data-agh-carry><span class="ic">⟳</span><div style="flex:1"><b>이어받은 출발점</b> — 매년 백지에서 다시 시작하지 않습니다. 작년 기록과 올해 직무 기준이 초안의 재료가 됩니다.' +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:9px">' +
@@ -769,7 +786,7 @@
     }
     var opsCount = ops.gaps.length + ops.drifts.length + 1;
     host.innerHTML = screenHead("qw7") +
-      '<p style="font-size:12px;color:#667085;margin:2px 0 10px">수립 품질은 목표수립 마감 전 게이트에서, 운영 신호는 주간 점검에서 각각 전달됩니다 — 이 화면은 두 채널의 통합 조망입니다.</p>' +
+      '<p style="font-size:12px;color:var(--agh-ink-3,#667085);margin:2px 0 10px">수립 품질은 목표수립 마감 전 게이트에서, 운영 신호는 주간 점검에서 각각 전달됩니다 — 이 화면은 두 채널의 통합 조망입니다.</p>' +
       '<div class="agh-scanline" data-agh-scan>팀 목표 8건 스캔 중 <i class="agh-spin"></i></div>' +
       '<div class="agh-brief" style="margin-top:12px"><span class="ic">✎</span><div><b>① 문장 품질 — 잘 쓴 목표인가</b><br>' +
       "목표 <b>문장 자체</b>의 결함(중복·미연계·측정 불가)입니다. 담당자에게 문장을 고치거나 병합하자고 제안할 일이지, 실행을 독촉할 일이 아닙니다.</div></div>" +
@@ -883,7 +900,7 @@
       { tag: "기록 보관", title: "과정이 기록으로 남는다", body: "카드마다 원천(citation)이 붙어 '등급 초안 만들기'까지 역추적됩니다. 평가 시즌이 열리면 이 24건이 등급 초안의 재료가 됩니다." }
     ], "");
     Array.prototype.forEach.call(host.querySelectorAll("[data-ti]"), function (n, i) {
-      T(function () { n.style.transition = "opacity .4s"; n.style.opacity = "1"; }, 300 + i * 350);
+      T(function () { n.style.transition = "opacity var(--duration-medium, .4s)"; n.style.opacity = "1"; }, 300 + i * 350);
     });
   };
 
@@ -1199,7 +1216,7 @@
       dd.rows.map(function (r) {
         var diffTxt = ["S", "A", "B"].filter(function (g) { return r.mix[g]; }).map(function (g) { return g + " " + r.mix[g]; }).join(" · ");
         var up = r.after > r.before;
-        return "<tr><td><b>" + esc(r.name) + "</b></td><td>" + diffTxt + "</td><td>× " + r.coef.toFixed(2) + "</td><td>" + r.before + "</td><td>→</td><td><b>" + r.after + "</b> <small style=\"color:" + (up ? "#15803D" : "#B45309") + "\">" + (up ? "▲" : "▼") + "</small></td></tr>";
+        return "<tr><td><b>" + esc(r.name) + "</b></td><td>" + diffTxt + "</td><td>× " + r.coef.toFixed(2) + "</td><td>" + r.before + "</td><td>→</td><td><b>" + r.after + "</b> <small style=\"color:" + (up ? "var(--agh-ok,#15803D)" : "var(--agh-warn,#B45309)") + "\">" + (up ? "▲" : "▼") + "</small></td></tr>";
       }).join("") + "</tbody></table>" +
       '<div class="agh-rows" style="margin-top:8px">' +
       '<div class="agh-prow">난이도 분포 · S <b>' + pctOf(dd.dist.S) + "%</b> · A <b>" + pctOf(dd.dist.A) + "%</b> · B <b>" + pctOf(dd.dist.B) + "%</b> <small>(표시 대상 " + dd.rows.length + "명 · KR " + distTot + "건)</small></div>" +
@@ -1496,7 +1513,7 @@
       if (window.EZProactive) EZProactive.claim("agh-popup", function () { if (card.parentNode) card.remove(); });
       requestAnimationFrame(function () { card.classList.add("show"); });
       card.addEventListener("click", function (e) {
-        if (e.target.closest("[data-pgo]")) { if (window.EZProactive) EZProactive.release("agh-popup"); card.remove(); openHub(a.screen); }
+        if (e.target.closest("[data-pgo]")) { if (window.EZProactive) EZProactive.release("agh-popup", true); card.remove(); openHub(a.screen); }
         if (e.target.closest("[data-pdis]")) { if (window.EZProactive) EZProactive.release("agh-popup"); card.classList.remove("show"); setTimeout(function () { card.remove(); }, 250); }
       });
     }, 9000);
@@ -1524,7 +1541,7 @@
       var rdy = EZAI.ready && EZAI.ready();
       var md = EZAI.mode ? EZAI.mode() : "offline";
       ai.textContent = rdy ? "● 연결됨" : md === "offline" ? "○ 오프라인 예시 응답" : "◐ AI 연결 전";
-      ai.style.color = rdy ? "#15803D" : md === "offline" ? "" : "#B45309";
+      ai.style.color = rdy ? "var(--agh-ok,#15803D)" : md === "offline" ? "" : "var(--agh-warn,#B45309)";
     }
     document.body.style.overflow = "hidden";
     showScreen(screen || defaultScreen());
@@ -1623,7 +1640,7 @@
 
     host.innerHTML = screenHead("connmap") +
       '<div class="agh-cmbar">' +
-        '<span class="agh-chip asof">◷ 기준 시점 · 2026 상반기 · 6/30 마감</span>' +
+        '<span class="agh-chip asof">◷ 기준 시점 · ' + esc(AS_OF) + '</span>' +
         '<span class="agh-auditchip">⛨ 감사 기록됨 · 권한 내 전사 조회</span>' +
         '<span class="agh-cmstat">직무 프로파일 연결 <b>' + withProf + '/' + n + ' (' + rate + '%)</b></span>' +
         '<span class="agh-cmstat">직무 근거 있는 목표 <b>' + goalRate + '%</b></span>' +
@@ -1646,11 +1663,12 @@
   };
 
   /* ============================================================
-     프로세스 맵 · 결정의 계보 — 목표수립→중간점검→평가→피드백 결정 타임라인
+     결정 흐름 · 결정의 계보 — 목표수립→중간점검→평가→피드백 결정 타임라인
      피드백 반영: 흩어진 근거 통합 · 난이도 근거 · 측정불가 KR 경고 · 작년→올해 승계
      ============================================================ */
   RENDER.procmap = function (host) {
     host = host || el.canvas;
+    /* 위조 GA-번호 생성기 폐지 — 계보 노드는 원장 실 id가 있을 때만 ID를 표시한다 */
     var d = D(), emps = d.employees || [], evals = d.evaluations || [], hist = d.evalHistory || [], krs = d.keyResults || [], objs = d.objectives || [];
     var cu = CU();
     var subj = emps.filter(function (e) { return evals.some(function (v) { return v.emp_id === e.emp_id; }); })[0] || emps[0] || { name: cu.name, emp_id: cu.emp_id };
@@ -1675,7 +1693,7 @@
     }
 
     host.innerHTML = screenHead("procmap") +
-      '<div class="agh-cmbar"><span class="agh-chip asof">◷ 기준 시점 · 2026 상반기</span><span class="agh-auditchip">⛨ 대상 ' + esc(subj.name || "") + ' · 권한 내 조회</span></div>' +
+      '<div class="agh-cmbar"><span class="agh-chip asof">◷ 기준 시점 · ' + esc(AS_OF) + '</span><span class="agh-auditchip">⛨ 대상 ' + esc(subj.name || "") + ' · 권한 내 조회</span></div>' +
       '<div class="agh-pmflow">' +
         node("목표수립", "pm1", "목표·가중치 확정", "ok", "1월 · 확정 스냅샷",
           'KR ' + myKr.length + '건 · 가중치 합 검증 · 핵심 KR <b>난이도 ' + esc(hardKr.difficulty || "-") + '</b> ' + srcChip("talenx", "okr.tree"),
@@ -1708,6 +1726,55 @@
       nd.addEventListener("click", function (e) { if (e.target.closest(".agh-btn")) return; nd.classList.toggle("open"); });
     });
   };
+
+  /* ---------------- ⌘K 팔레트 — 슬래시/의도 라우터와 동일 레지스트리(SCREENS·SCENARIOS) 재사용 ---------------- */
+  var palEl = null;
+  function paletteEntries() {
+    var out = NAV_ORDER.map(function (k) { return { key: k, label: SCREENS[k].nav, sub: SCREENS[k].title }; });
+    SCENARIOS.forEach(function (sc) { out.push({ key: sc.key, label: sc.chip, sub: SCREENS[sc.key] ? SCREENS[sc.key].nav : "" }); });
+    return out;
+  }
+  function closePalette() { if (palEl) { palEl.remove(); palEl = null; } }
+  function openPalette() {
+    closePalette();
+    palEl = h("div", "agh-pal");
+    palEl.innerHTML = '<div class="agh-palbox"><input type="text" placeholder="화면·시나리오 점프… (Esc 닫기)" data-pal-in><div class="agh-pallist" data-pal-list></div></div>';
+    document.body.appendChild(palEl);
+    var inp = palEl.querySelector("[data-pal-in]"), list = palEl.querySelector("[data-pal-list]"), all = paletteEntries();
+    function render(q) {
+      q = (q || "").toLowerCase();
+      var rows = all.filter(function (e) { return !q || (e.label + " " + e.sub).toLowerCase().indexOf(q) >= 0; }).slice(0, 14);
+      list.innerHTML = rows.map(function (e, i) {
+        return '<div class="agh-palrow' + (i === 0 ? " sel" : "") + '" data-pal-key="' + esc(e.key) + '">' + esc(e.label) + (e.sub ? ' <small>' + esc(e.sub) + "</small>" : "") + "</div>";
+      }).join("") || '<div class="agh-palrow dim">일치 항목 없음</div>';
+    }
+    render("");
+    inp.addEventListener("input", function () { render(inp.value); });
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { closePalette(); return; }
+      if (e.key === "Enter") {
+        var sel = list.querySelector(".agh-palrow.sel[data-pal-key]") || list.querySelector("[data-pal-key]");
+        if (sel) { var k = sel.getAttribute("data-pal-key"); closePalette(); openHub(k); }
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        var rows = Array.prototype.slice.call(list.querySelectorAll("[data-pal-key]"));
+        if (!rows.length) return;
+        var cur = list.querySelector(".agh-palrow.sel"), idx = rows.indexOf(cur);
+        if (cur) cur.classList.remove("sel");
+        rows[(idx + (e.key === "ArrowDown" ? 1 : rows.length - 1)) % rows.length].classList.add("sel");
+      }
+    });
+    palEl.addEventListener("click", function (e) {
+      var r = e.target.closest("[data-pal-key]");
+      if (r) { var k = r.getAttribute("data-pal-key"); closePalette(); openHub(k); }
+      else if (e.target === palEl) closePalette();
+    });
+    inp.focus();
+  }
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); palEl ? closePalette() : openPalette(); }
+  });
 
   window.TXAgent = {
     openHub: openHub,
