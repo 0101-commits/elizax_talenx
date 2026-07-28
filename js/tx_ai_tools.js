@@ -53,6 +53,118 @@
     return "full";
   }
 
+  /* ---------------- 근태·급여 열람 규칙 (EZPolicy MATRIX 미수록 종류) ----------------
+     tx_policy.js의 6종 매트릭스에는 근태·연차·급여 행이 없다. 민감도가 다른 종류라
+     여기서 별도 규칙을 정의하되, 판정 어휘(full/summ/anon/no)와 relOf()·viewerRole()
+     규약은 gate()와 동일하게 맞춘다.
+       full = 개인 상세 · summ = 팀 집계만 · anon = 전사 익명 집계 · no = 차단
+     원칙: 본인 급여·근태는 본인만, 조직장은 팀 근태 집계까지(급여는 불가), HR은 전사. */
+  var HROPS_POLICY = {
+    attendance: { self: "full", leader: "summ", hr: "full", exec: "anon" },
+    leave:      { self: "full", leader: "summ", hr: "full", exec: "anon" },
+    payroll:    { self: "full", leader: "no",   hr: "full", exec: "no" }
+  };
+  var HROPS_NOTE = {
+    summ: "개인 상세 대신 팀 집계만 제공합니다 (근태·급여 열람 규칙)",
+    anon: "전사 익명 집계만 제공합니다 (근태·급여 열람 규칙)",
+    no: "급여·근태 상세는 본인과 HR만 열람할 수 있습니다 (근태·급여 열람 규칙)"
+  };
+  function gateHrOps(kind, ownerId) {
+    var rel = relOf(ownerId), role = viewerRole();
+    if (rel === "self") return "full";
+    var row = HROPS_POLICY[kind] || HROPS_POLICY.attendance;
+    if (role === "leader" && rel !== "team") return "no"; /* 팀 밖은 조직장도 차단 */
+    return row[role] || "no";
+  }
+
+  function byPeriodDesc(a, b) { return String(b.period || "").localeCompare(String(a.period || "")); }
+  function attOf(empId) { return arr("attendance").filter(function (a) { return a.emp_id === empId; }).sort(byPeriodDesc); }
+  function payOf(empId) { return arr("payroll").filter(function (p) { return p.emp_id === empId; }).sort(byPeriodDesc); }
+  function leaveOf(empId) { return arr("leaves").filter(function (l) { return l.emp_id === empId; })[0] || null; }
+  function teamMembers(e) {
+    return arr("employees").filter(function (x) { return x.org_id === e.org_id; });
+  }
+  function avg(list, f) {
+    if (!list.length) return null;
+    var s = 0, n = 0;
+    for (var i = 0; i < list.length; i++) { var v = f(list[i]); if (v != null) { s += v; n++; } }
+    return n ? Math.round(s * 10 / n) / 10 : null;
+  }
+  function attBrief(a) {
+    return {
+      period: a.period, partial: !!a.partial, work_days: a.work_days, actual_days: a.actual_days,
+      leave_days: a.leave_days, overtime_hours: a.overtime_hours, late_count: a.late_count,
+      early_leave_count: a.early_leave_count, remote_days: a.remote_days,
+      avg_in_time: a.avg_in_time, avg_out_time: a.avg_out_time
+    };
+  }
+  /* 근태 이상 신호 — 화면(tx_fix_att.js)과 AI가 같은 판정을 쓰도록 여기 단일 정의 */
+  var OT_MONTH_LIMIT = 52; /* 주 12시간 연장 상한을 월로 환산(12h × 4.345주) */
+  function attSignals(cur, prev, lv) {
+    var out = [];
+    if (!cur) return out;
+    if (cur.overtime_hours >= OT_MONTH_LIMIT) {
+      out.push({ code: "overtime_limit", level: "warn",
+        text: "초과근로 " + cur.overtime_hours + "시간 — 월 환산 상한 " + OT_MONTH_LIMIT + "시간(주 12시간)에 도달했습니다" });
+    } else if (prev && prev.overtime_hours >= 1 && cur.overtime_hours >= prev.overtime_hours * 1.5 && cur.overtime_hours >= 15) {
+      out.push({ code: "overtime_spike", level: "warn",
+        text: "초과근로 급증 — " + prev.period + " " + prev.overtime_hours + "시간 → " + cur.period + " " + cur.overtime_hours + "시간 (+" +
+          Math.round((cur.overtime_hours / prev.overtime_hours - 1) * 100) + "%)" });
+    }
+    if (cur.late_count >= 3) {
+      out.push({ code: "late_high", level: cur.late_count >= 5 ? "warn" : "info",
+        text: "지각 " + cur.late_count + "회" + (prev ? " (전월 " + prev.late_count + "회)" : "") });
+    } else if (prev && cur.late_count > prev.late_count && cur.late_count >= 2) {
+      out.push({ code: "late_up", level: "info",
+        text: "지각 증가 — 전월 " + prev.late_count + "회 → " + cur.late_count + "회" });
+    }
+    if (lv && lv.remaining_days != null && lv.remaining_days >= 10) {
+      out.push({ code: "leave_expiring", level: "warn",
+        text: "연차 잔여 " + lv.remaining_days + "일 — " + lv.expiring_at + " 소멸 예정 (연차사용촉진 대상)" });
+    } else if (lv && lv.remaining_days != null && lv.remaining_days >= 5) {
+      out.push({ code: "leave_left", level: "info",
+        text: "연차 잔여 " + lv.remaining_days + "일 — " + lv.expiring_at + " 소멸 예정" });
+    }
+    return out;
+  }
+  /* 급여 전월 대비 변동 — 항목별 delta + payrollPolicy 근거 문장 */
+  function payChanges(cur, prev, emp) {
+    var pol = D().payrollPolicy || {};
+    var out = [];
+    if (!cur || !prev) return out;
+    function add(item, key, reason) {
+      var a = Number(prev[key] || 0), b = Number(cur[key] || 0);
+      if (a === b) return;
+      out.push({ item: item, prev: a, current: b, delta: b - a, reason: reason });
+    }
+    add("기본급", "base", "직급 기준 기본급 변동");
+    add("직책수당", "position_allowance", "직책 부여·해제에 따른 수당 변동");
+    if (Number(cur.overtime_pay || 0) !== Number(prev.overtime_pay || 0)) {
+      out.push({
+        item: "연장근로수당", prev: prev.overtime_pay, current: cur.overtime_pay,
+        delta: cur.overtime_pay - prev.overtime_pay,
+        reason: "연장근로 " + prev.overtime_hours + "시간 → " + cur.overtime_hours + "시간 · " +
+          (pol.overtime_formula || "기본급 ÷ 209 × 1.5 × 연장근로시간")
+      });
+    }
+    if (Number(cur.bonus || 0) !== Number(prev.bonus || 0)) {
+      out.push({
+        item: "성과급", prev: prev.bonus, current: cur.bonus, delta: cur.bonus - prev.bonus,
+        reason: cur.bonus ? (cur.bonus_reason || "성과급 지급월") + " · " + (pol.bonus_rule || "")
+          : "성과급 지급월(" + (pol.bonus_months || [6, 12]).join("·") + "월)이 아니어서 미지급"
+      });
+    }
+    var dPrev = prev.deduction_total || 0, dCur = cur.deduction_total || 0;
+    if (dPrev !== dCur) {
+      out.push({
+        item: "공제 합계", prev: dPrev, current: dCur, delta: dCur - dPrev,
+        reason: "과세 대상 급여(지급 합계 − 비과세 식대 " + Number(cur.meal_allowance || 0).toLocaleString("en-US") + "원) 변동에 따라 " +
+          (pol.tax_table_ref || "간이세액표") + " 기준 소득세·지방소득세와 4대보험료가 함께 조정됨"
+      });
+    }
+    return out;
+  }
+
   function krsOf(objectiveId) {
     return arr("keyResults").filter(function (k) { return k.objective_id === objectiveId; })
       .map(function (k) {
@@ -388,6 +500,140 @@
       return res;
     },
 
+    get_attendance: function (input) {
+      /* 근태 요약 + 이상 신호 — 본인/HR은 개인 상세, 조직장은 팀 집계, 그 외 차단 */
+      var e = findEmp(input.emp_id || input.name) || CU();
+      var lv = gateHrOps("attendance", e.emp_id);
+      if (lv === "no") return { blocked: true, policy: HROPS_NOTE.no };
+      var rows = attOf(e.emp_id);
+      if (!rows.length) return { error: "근태 기록이 없습니다: " + (e.name || e.emp_id) };
+      if (lv === "summ" || lv === "anon") {
+        var scope = (lv === "summ") ? teamMembers(e) : arr("employees");
+        var ids = {};
+        scope.forEach(function (x) { ids[x.emp_id] = 1; });
+        /* 집계 기준월은 확정월(부분월 제외) 중 최신 — 일부 대상자만 있는 부분월로 집계하면 왜곡된다 */
+        var scoped = arr("attendance").filter(function (a) { return ids[a.emp_id]; });
+        var period = String(input.period || "");
+        if (!period) {
+          scoped.forEach(function (a) { if (!a.partial && a.period > period) period = a.period; });
+        }
+        var pool = scoped.filter(function (a) { return a.period === period; });
+        return {
+          scope: lv === "summ" ? (e.orgName || e.org_id) : ((D().company || {}).name || "전사"),
+          period: period, headcount: pool.length,
+          avg_overtime_hours: avg(pool, function (a) { return a.overtime_hours; }),
+          avg_actual_days: avg(pool, function (a) { return a.actual_days; }),
+          avg_remote_days: avg(pool, function (a) { return a.remote_days; }),
+          late_total: pool.reduce(function (s, a) { return s + (a.late_count || 0); }, 0),
+          over_limit_count: pool.filter(function (a) { return a.overtime_hours >= OT_MONTH_LIMIT; }).length,
+          policy: HROPS_NOTE[lv],
+          note: "개인별 근태 상세는 본인과 HR만 열람할 수 있습니다."
+        };
+      }
+      var cur = input.period
+        ? (rows.filter(function (a) { return a.period === String(input.period); })[0] || null)
+        : rows[0];
+      if (!cur) return { error: "해당 기간 근태 기록이 없습니다: " + input.period };
+      var idx = rows.indexOf(cur);
+      var prev = rows[idx + 1] || null;
+      var lvRec = leaveOf(e.emp_id);
+      return {
+        owner: empBrief(e), as_of: (window.EZKit && EZKit.clock) ? EZKit.clock.asOfDate() : null,
+        current: attBrief(cur),
+        previous: prev ? attBrief(prev) : null,
+        history: rows.slice(0, 4).map(attBrief),
+        daily: (cur.daily || []).slice(0, 20),
+        signals: attSignals(cur, prev, lvRec),
+        source: "근태 원장(합성 데모 데이터) · 기준 " + cur.period + (cur.partial ? " (부분월 · " + cur.as_of + "까지)" : "")
+      };
+    },
+
+    get_leave_balance: function (input) {
+      /* 연차 잔여·소멸 예정·신청 이력 */
+      var e = findEmp(input.emp_id || input.name) || CU();
+      var lv = gateHrOps("leave", e.emp_id);
+      if (lv === "no") return { blocked: true, policy: HROPS_NOTE.no };
+      var rec = leaveOf(e.emp_id);
+      if (!rec) return { error: "연차 기록이 없습니다: " + (e.name || e.emp_id) };
+      if (lv === "summ" || lv === "anon") {
+        var scope = (lv === "summ") ? teamMembers(e) : arr("employees");
+        var ids = {};
+        scope.forEach(function (x) { ids[x.emp_id] = 1; });
+        var pool = arr("leaves").filter(function (l) { return ids[l.emp_id]; });
+        return {
+          scope: lv === "summ" ? (e.orgName || e.org_id) : ((D().company || {}).name || "전사"),
+          year: rec.year, headcount: pool.length,
+          avg_granted_days: avg(pool, function (l) { return l.granted_days; }),
+          avg_used_days: avg(pool, function (l) { return l.used_days; }),
+          avg_remaining_days: avg(pool, function (l) { return l.remaining_days; }),
+          promotion_target_count: pool.filter(function (l) { return l.promotion_target; }).length,
+          pending_requests: pool.reduce(function (s, l) {
+            return s + (l.requests || []).filter(function (r) { return r.status === "대기"; }).length;
+          }, 0),
+          policy: HROPS_NOTE[lv]
+        };
+      }
+      var reqs = rec.requests || [];
+      var pending = reqs.filter(function (r) { return r.status === "대기"; });
+      return {
+        owner: empBrief(e), year: rec.year,
+        granted_days: rec.granted_days, used_days: rec.used_days,
+        remaining_days: rec.remaining_days,
+        expiring_days: rec.expiring_days, expiring_at: rec.expiring_at,
+        promotion_target: !!rec.promotion_target,
+        pending_days: pending.reduce(function (s, r) { return s + (r.days || 0); }, 0),
+        requests: reqs.slice(-8).map(function (r) {
+          return { req_id: r.req_id, type: r.type, start: r.start, end: r.end, days: r.days, status: r.status, reason: r.reason };
+        }),
+        note: rec.promotion_target
+          ? "잔여 " + rec.remaining_days + "일 — " + rec.expiring_at + " 소멸 예정이며 연차사용촉진(근로기준법 §61) 대상입니다."
+          : "잔여 " + rec.remaining_days + "일은 " + rec.expiring_at + "에 소멸합니다.",
+        source: "연차 대장(합성 데모 데이터)"
+      };
+    },
+
+    get_payslip: function (input) {
+      /* 급여 명세 + 전월 대비 변동 항목·사유(payrollPolicy 근거) */
+      var e = findEmp(input.emp_id || input.name) || CU();
+      var lv = gateHrOps("payroll", e.emp_id);
+      if (lv !== "full") return { blocked: true, policy: HROPS_NOTE[lv] || HROPS_NOTE.no };
+      var rows = payOf(e.emp_id);
+      if (!rows.length) return { error: "급여 기록이 없습니다: " + (e.name || e.emp_id) };
+      var cur = input.period
+        ? (rows.filter(function (p) { return p.period === String(input.period); })[0] || null)
+        : rows[0];
+      if (!cur) {
+        return { error: "해당 기간 급여 명세가 없습니다: " + input.period,
+          available_periods: rows.map(function (p) { return p.period; }) };
+      }
+      var prev = rows[rows.indexOf(cur) + 1] || null;
+      var pol = D().payrollPolicy || {};
+      function slim(p) {
+        return {
+          period: p.period, pay_date: p.pay_date,
+          base: p.base, position_allowance: p.position_allowance, meal_allowance: p.meal_allowance,
+          overtime_pay: p.overtime_pay, overtime_hours: p.overtime_hours,
+          bonus: p.bonus, bonus_reason: p.bonus_reason || null,
+          gross: p.gross, deductions: p.deductions, deduction_total: p.deduction_total, net: p.net
+        };
+      }
+      return {
+        owner: empBrief(e), current: slim(cur), previous: prev ? slim(prev) : null,
+        net_delta: prev ? cur.net - prev.net : null,
+        gross_delta: prev ? cur.gross - prev.gross : null,
+        changes: payChanges(cur, prev, e),
+        available_periods: rows.map(function (p) { return p.period; }),
+        policy: {
+          pay_day: pol.pay_day, overtime_rate: pol.overtime_rate, night_rate: pol.night_rate,
+          bonus_months: pol.bonus_months, bonus_rule: pol.bonus_rule,
+          overtime_formula: pol.overtime_formula, tax_table_ref: pol.tax_table_ref,
+          nontaxable: pol.nontaxable
+        },
+        note: "금액은 데모용 합성 데이터입니다. 변동 사유는 payrollPolicy 규칙을 근거로 설명하세요.",
+        source: "급여 원장 + 급여 계산 규칙(payrollPolicy)"
+      };
+    },
+
     get_screen_context: function () {
       var label = "홈";
       try {
@@ -444,6 +690,12 @@
       input_schema: { type: "object", properties: { emp_id: { type: "string" }, type: { type: "string", description: "유형 필터: goal/checkin/oneonone/feedback/eval/org/job/rule" }, limit: { type: "number", description: "최근 N건 (기본 8, 최대 20)" } } } },
     { name: "simulate_whatif", description: "읽기 전용 what-if 시뮬레이션: 달성률 변화(achievement_delta, %p)나 강제배분 상한(cap_pct, %)을 가정했을 때 등급·종합점수·분포 변화를 실계산한다. 실제 데이터는 변경하지 않는다. 예: '달성률이 -10%p면 등급이 어떻게 되나'.",
       input_schema: { type: "object", properties: { achievement_delta: { type: "number", description: "달성률 변화 가정 (%p, 예: -10)" }, cap_pct: { type: "number", description: "상위등급(S+A) 강제배분 상한 % (예: 30)" }, emp_id: { type: "string", description: "대상 직원 (생략 시 현재 사용자)" } } } },
+    { name: "get_attendance", description: "근태 기록을 조회한다: 월 요약(소정근로일·실근무일·휴가일·초과근로시간·지각·조퇴·재택일수·평균 출퇴근시각), 전월 대비, 최근 4주 일별(있는 경우), 그리고 이상 신호(초과근로 상한 도달·급증, 지각 증가, 연차 소멸 임박). period 생략 시 최신 기간. 열람 규칙: 본인·HR은 개인 상세, 조직장은 팀 집계만, 그 외 차단.",
+      input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" }, period: { type: "string", description: "YYYY-MM (예: 2026-06). 생략 시 최신" } } } },
+    { name: "get_leave_balance", description: "연차 현황을 조회한다: 부여일수·사용일수·잔여일수·소멸 예정일수와 소멸일, 연차사용촉진 대상 여부, 신청 이력(연차/반차/병가/경조 · 승인/대기/반려). 열람 규칙: 본인·HR은 개인 상세, 조직장은 팀 집계만, 그 외 차단.",
+      input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" } } } },
+    { name: "get_payslip", description: "급여 명세를 조회한다: 지급 항목(기본급·직책수당·식대·연장근로수당·성과급)·공제 항목(소득세·지방소득세·국민연금·건강보험·고용보험·장기요양)·실지급액, 그리고 전월 대비 변동 항목과 사유(성과급 지급월, 연장근로 증감 등)를 급여 계산 규칙(payrollPolicy)과 함께 반환한다. period 생략 시 최신. 열람 규칙: 급여 상세는 본인과 HR만 — 조직장·경영진은 차단.",
+      input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" }, period: { type: "string", description: "YYYY-MM (예: 2026-06). 생략 시 최신" } } } },
     { name: "get_screen_context", description: "사용자가 지금 보고 있는 talenx 화면·역할·현재 사용자 정보.",
       input_schema: { type: "object", properties: {} } },
     { name: "navigate", description: "talenx 화면을 전환한다. section: home/work/perf/msf/appr/pay/att/hrm/wf. tab은 서브탭 인덱스(없으면 null). perf: 0목표 1피드백 2미팅 3리뷰 · appr: 0매트릭스 1인재리뷰 · work: 0업무 1스크럼 · pay: 0급여 1연말정산 · att: 0내근무 1내휴가 2구성원근무 3구성원휴가 4스케줄 5위치 6연차촉진 · hrm: 0사용자 1구성원 2인재검색 3인원현황 · wf: 0받은 1보낸 2서명",
@@ -471,6 +723,16 @@
         case "get_strategy_themes": return "전략 테마 " + result.count + "건";
         case "get_context_ledger": return result.items ? "성과 기록 " + result.count + "건 조회" : "성과 기록 " + result.count + "건 · 집계만";
         case "simulate_whatif": return result.after ? "시뮬 " + result.before.grade + " → " + result.after.grade + " (" + result.after.weighted_score + "점)" : "시뮬레이션 완료";
+        case "get_attendance": return result.current
+          ? (result.current.period + " 근태 · 초과 " + result.current.overtime_hours + "h · 신호 " + (result.signals || []).length + "건")
+          : (result.scope + " 근태 집계 " + result.headcount + "명 · " + result.period);
+        case "get_leave_balance": return result.remaining_days != null
+          ? ("연차 잔여 " + result.remaining_days + "일 / " + result.granted_days + "일")
+          : (result.scope + " 연차 집계 " + result.headcount + "명");
+        case "get_payslip": return result.current
+          ? (result.current.period + " 급여 · 실지급 " + Number(result.current.net).toLocaleString("en-US") + "원" +
+            (result.net_delta ? " (전월 대비 " + (result.net_delta > 0 ? "+" : "") + Number(result.net_delta).toLocaleString("en-US") + ")" : ""))
+          : "급여 명세 조회";
         case "get_screen_context": return result.screen;
         case "navigate": return result.ok ? result.moved_to + " 이동" : "이동 실패";
       }
@@ -483,7 +745,8 @@
     get_checkins: "ERP", get_team_status: "talenx", get_org_overview: "통계",
     get_screen_context: "맥락", navigate: "화면", get_job_profile: "talenx",
     get_upward_feedback: "talenx", get_context_ledger: "원장", simulate_whatif: "시뮬",
-    get_org_objectives: "talenx", get_prev_cycle: "talenx", get_strategy_themes: "전략"
+    get_org_objectives: "talenx", get_prev_cycle: "talenx", get_strategy_themes: "전략",
+    get_attendance: "ERP", get_leave_balance: "ERP", get_payslip: "ERP"
   };
   var LABEL_OF = {
     search_employee: "직원 검색", get_employee_profile: "프로필·평가 조회", get_objectives: "목표·KR 조회",
@@ -492,13 +755,17 @@
     get_upward_feedback: "상향 피드백 조회 (익명 보호)",
     get_context_ledger: "성과 기록 조회", simulate_whatif: "What-if 시뮬레이션 (읽기 전용)",
     get_org_objectives: "상위 목표 후보 조회", get_prev_cycle: "이어받은 출발점 조회",
-    get_strategy_themes: "전략 테마·KPI 조회"
+    get_strategy_themes: "전략 테마·KPI 조회",
+    get_attendance: "근태 요약·이상 신호 조회", get_leave_balance: "연차 잔여·신청 이력 조회",
+    get_payslip: "급여 명세·전월 대비 조회"
   };
 
   window.EZTools = {
     schemas: SCHEMAS,
     /* 이어받은 출발점 런타임 파생 — tx_fix_perf.js 목표 생성 폼과 공용 (F3) */
     deriveCarry: deriveCarry,
+    /* 근태·급여 판정 단일 정의 — 화면(tx_fix_att/tx_fix_pay)이 AI와 같은 규칙을 쓴다 */
+    hrOps: { signals: attSignals, changes: payChanges, gate: gateHrOps, otLimit: OT_MONTH_LIMIT },
     run: function (name, input) {
       var fn = EXEC[name];
       if (!fn) return { error: "unknown tool: " + name };

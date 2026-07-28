@@ -695,6 +695,13 @@
       ".ezx-rc-fallback{border:1px solid var(--color-border,#e3e5e8);border-left:3px solid var(--color-accent,#1F7AF0);",
       "border-radius:var(--radius-container,12px);background:var(--color-background-card,#fff);padding:12px 14px;}",
       ".ezx-rc-fallback .ezk-receipt-head{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px;}",
+      /* 도구 호출 투명화 줄 — "확인한 데이터: 목표 3건 · 체크인 5건" (허브 라이브 확인내역과 같은 문법) */
+      ".ezx-rc-tools{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;margin:0 0 9px;padding:6px 10px;",
+      "border:1px solid var(--ezx-hairline,var(--color-border,#e3e5e8));border-radius:var(--radius-element,8px);",
+      "background:var(--color-background-muted,#f5f6f8);}",
+      ".ezx-rc-tools .lb{font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--color-text-secondary,#6b7280);}",
+      ".ezx-rc-tools .tv{flex:1 1 auto;font-size:11.5px;line-height:1.5;color:var(--color-text-primary,#111827);}",
+      ".ezx-rc-tools .tn{font-size:10px;color:var(--color-text-secondary,#6b7280);white-space:nowrap;}",
       /* 메트릭 행 */
       ".ezx-rc-metrics{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px;}",
       ".ezx-rc-metric{display:flex;flex-direction:column;gap:1px;min-width:78px;padding:5px 10px;",
@@ -788,22 +795,74 @@
       : (wi.cap_pct != null ? 0 : -10);
     return p;
   }
+  function rcNum(v) { return (typeof v === "number" && isFinite(v)) ? v : null; }
+  /* 개인 단위 산출 추출 — EZCalc가 개인 결과를 지원하기 시작해도(다른 담당 작업 중)
+     카드가 깨지지 않도록 반환 형상을 방어적으로 읽는다. 인정 형상:
+       {before:{grade,weighted_score}, after:{…}} · {grade_change:{before,after}|"S→A"} ·
+       {weighted_score:{before,after}} · {personal|me|individual|target_result:{…}}
+     전사 분포 형상(before/after가 {S,A,B,C,D})에서는 아무것도 잡히지 않아 null을 돌려준다. */
+  function wiPersonal(res) {
+    if (!res || typeof res !== "object") return null;
+    var out = { bg: null, ag: null, bs: null, as: null, changed: null };
+    function side(o, gk, sk) {
+      if (!o || typeof o !== "object") return;
+      if (o.grade != null && out[gk] == null) out[gk] = o.grade;
+      var s = rcNum(o.weighted_score);
+      if (s == null) s = rcNum(o.score);
+      if (s != null && out[sk] == null) out[sk] = s;
+    }
+    function grab(o) {
+      if (!o || typeof o !== "object") return;
+      side(o.before, "bg", "bs");
+      side(o.after, "ag", "as");
+      var gc = o.grade_change;
+      if (typeof gc === "string" && out.ag == null) out.ag = gc;
+      else if (gc && typeof gc === "object" && Object.prototype.toString.call(gc) !== "[object Array]") {
+        if (out.bg == null) out.bg = (gc.before != null) ? gc.before : gc.from;
+        if (out.ag == null) out.ag = (gc.after != null) ? gc.after : gc.to;
+        if (gc.changed != null && out.changed == null) out.changed = !!gc.changed;
+      }
+      var ws = o.weighted_score;
+      if (ws && typeof ws === "object") {
+        if (out.bs == null && rcNum(ws.before) != null) out.bs = ws.before;
+        if (out.as == null && rcNum(ws.after) != null) out.as = ws.after;
+      }
+      if (o.grade_changed != null && out.changed == null) out.changed = !!o.grade_changed;
+    }
+    [res.personal, res.me, res.individual, res.target_result, res].forEach(grab);
+    if (out.bg == null && out.ag == null && out.bs == null && out.as == null) return null;
+    if (out.changed == null && out.bg != null && out.ag != null) out.changed = String(out.bg) !== String(out.ag);
+    return out;
+  }
   function whatifHTML(res, p) {
     if (!res) return "";
+    p = p || {};
     if (res.error || res.blocked) {
       return '<div class="ezx-rc-wirow warn"><span class="lb">불가</span><span>' +
         esc(res.error || res.policy || "시뮬레이션을 실행할 수 없습니다.") + "</span></div>";
     }
-    var b = res.before || {}, a = res.after || {};
     var dist = res.grade_distribution || {};
     var dk = Object.keys(dist).sort();
     var capUsed = (res.cap_pct != null) ? res.cap_pct : p.cap_pct;
     var deltaUsed = (res.achievement_delta != null) ? res.achievement_delta : p.achievement_delta;
     var html = '<div class="ezx-rc-wirow"><span class="lb">가정</span><span>달성률 ' +
-      esc(String(deltaUsed)) + "%p" +
+      esc(String(deltaUsed == null ? "-" : deltaUsed)) + "%p" +
       (capUsed != null ? " · 상위등급 상한 " + esc(String(capUsed)) + "%" : "") + "</span></div>";
-    /* 정식 엔진(EZCalc)은 개인 등급 단건이 아니라 전사 분포를 반환한다 — 형상별 렌더 */
-    if (Object.prototype.toString.call(res.gradeChange) === "[object Array]") {
+    /* 개인 결과가 있으면 개인 표시가 우선, 없으면 분포 표시 — 둘 다 있으면 둘 다 낸다 */
+    var pv = wiPersonal(res);
+    var isDist = Object.prototype.toString.call(res.gradeChange) === "[object Array]";
+    if (pv && (pv.bg != null || pv.ag != null)) {
+      html += '<div class="ezx-rc-wirow"><span class="lb">등급</span><span>' +
+        esc(String(pv.bg == null ? "-" : pv.bg)) + " → <b>" + esc(String(pv.ag == null ? "-" : pv.ag)) + "</b> " +
+        (pv.changed ? '<em class="chg">변동</em>' : '<em class="keep">유지</em>') + "</span></div>";
+    }
+    if (pv && (pv.bs != null || pv.as != null)) {
+      html += '<div class="ezx-rc-wirow"><span class="lb">종합</span><span>' +
+        esc(String(pv.bs == null ? "-" : pv.bs)) + " → <b>" +
+        esc(String(pv.as == null ? "-" : pv.as)) + "</b></span></div>";
+    }
+    var me = null;
+    if (isDist) {
       html += '<div class="ezx-rc-wirow"><span class="lb">분포</span><span>' +
         esc(res.gradeChange.map(function (g) {
           return g.grade + " " + g.before_pct + "%→" + g.after_pct + "%(" + (g.delta_pp > 0 ? "+" : "") + g.delta_pp + "pp)";
@@ -813,7 +872,6 @@
           esc(String(res.moved_pp)) + "pp 재배치" +
           (res.basis && res.basis.population_n ? " · 모집단 " + esc(String(res.basis.population_n)) + "명" : "") + "</span></div>";
       }
-      var me = null;
       (res.people || []).forEach(function (x) {
         if (p.emp_id && x.name && x.name === ((state.subject && state.subject.name) || CURRENT.name)) me = x;
       });
@@ -821,20 +879,7 @@
         html += '<div class="ezx-rc-wirow"><span class="lb">' + esc(me.name) + '</span><span>' +
           esc(String(me.before)) + " → <b>" + esc(String(me.after)) + "</b>점</span></div>";
       }
-      var bs = res.basis || {};
-      html += '<div class="ezx-rc-winote">' +
-        esc(bs.base_source || "") + (bs.cap_rule_source ? " · " + esc(bs.cap_rule_source) : "") +
-        "<br>읽기 전용 시뮬레이션 — 실제 데이터는 변경되지 않습니다 · 엔진 " + esc(res.engine || "-") +
-        (p.emp_id && !me ? " (전사 분포 기준 — 개인 등급 단건은 이 엔진이 산출하지 않습니다)" : "") + "</div>";
-      return html;
-    }
-    html += '<div class="ezx-rc-wirow"><span class="lb">등급</span><span>' +
-      esc(String(b.grade == null ? "-" : b.grade)) + " → <b>" + esc(String(a.grade == null ? "-" : a.grade)) + "</b> " +
-      (res.grade_changed ? '<em class="chg">변동</em>' : '<em class="keep">유지</em>') + "</span></div>";
-    html += '<div class="ezx-rc-wirow"><span class="lb">종합</span><span>' +
-      esc(String(b.weighted_score == null ? "-" : b.weighted_score)) + " → <b>" +
-      esc(String(a.weighted_score == null ? "-" : a.weighted_score)) + "</b></span></div>";
-    if (dk.length) {
+    } else if (dk.length) {
       html += '<div class="ezx-rc-wirow"><span class="lb">분포</span><span>' +
         esc(dk.map(function (k) { return k + " " + dist[k] + "명"; }).join(" · ")) +
         (res.top_grade_pct != null ? " · 상위 " + esc(String(res.top_grade_pct)) + "%" : "") + "</span></div>";
@@ -842,9 +887,14 @@
     if (res.cap_note) {
       html += '<div class="ezx-rc-wirow"><span class="lb">상한</span><span>' + esc(res.cap_note) + "</span></div>";
     }
-    html += '<div class="ezx-rc-winote">' +
-      esc(res.assumptions || "읽기 전용 시뮬레이션 — 실제 데이터는 변경되지 않습니다") +
-      " · 엔진 " + esc(res.engine || "-") + "</div>";
+    var bss = res.basis || {};
+    var notes = [];
+    if (bss.base_source) notes.push(bss.base_source + (bss.cap_rule_source ? " · " + bss.cap_rule_source : ""));
+    notes.push((res.assumptions || "읽기 전용 시뮬레이션 — 실제 데이터는 변경되지 않습니다") + " · 엔진 " + (res.engine || "-"));
+    if (isDist && !pv && !me && p.emp_id) {
+      notes.push("전사 분포 기준 — 개인 등급 단건은 이 엔진이 산출하지 않습니다");
+    }
+    html += '<div class="ezx-rc-winote">' + notes.map(esc).join("<br>") + "</div>";
     return html;
   }
   function runWhatIf(m, node) {
@@ -862,11 +912,13 @@
     /* 실행 사실을 원장에 남겨 감사 칩이 실 id를 얻게 한다 (위조 ID 금지) */
     if (!res.error && !res.blocked && window.EZLedger && EZLedger.add) {
       try {
-        var b = res.before || {}, a = res.after || {};
-        /* 엔진 형상별 요약 — 개인 등급(fallback) vs 전사 분포(EZCalc) */
-        var lbl = (a.grade != null || b.grade != null)
-          ? ((b.grade || "-") + " → " + (a.grade || "-"))
-          : (res.moved_pp != null ? "전사 분포 " + res.moved_pp + "pp 재배치" : "재계산");
+        var pv = wiPersonal(res);
+        /* 엔진 형상별 요약 — 개인 등급(있으면 우선) vs 전사 분포 */
+        var lbl = (pv && (pv.bg != null || pv.ag != null))
+          ? ((pv.bg == null ? "-" : pv.bg) + " → " + (pv.ag == null ? "-" : pv.ag))
+          : (pv && (pv.bs != null || pv.as != null))
+            ? ("종합 " + (pv.bs == null ? "-" : pv.bs) + " → " + (pv.as == null ? "-" : pv.as))
+            : (res.moved_pp != null ? "전사 분포 " + res.moved_pp + "pp 재배치" : "재계산");
         var ent = EZLedger.add({
           type: "audit",
           source: "elizax.whatif",
@@ -930,9 +982,22 @@
     [360, 780, 1500].forEach(function (d) { setTimeout(function () { syncCiteChip(m); }, d); });
   }
 
+  /* "확인한 데이터: 목표 3건 · 체크인 5건" — 실제로 호출된 도구만 나열한다(연출 금지) */
+  function toolsLineHTML(r) {
+    var t = r && r.tools;
+    if (Object.prototype.toString.call(t) !== "[object Array]" || !t.length) return "";
+    var parts = t.map(function (x) {
+      return String(x.summary || x.label || x.name || "").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+    }).filter(function (s) { return !!s; });
+    if (!parts.length) return "";
+    return '<div class="ezx-rc-tools"><span class="lb">확인한 데이터</span>' +
+      '<span class="tv">' + esc(parts.join(" · ")) + "</span>" +
+      '<span class="tn">도구 ' + t.length + "회</span></div>";
+  }
+
   function receiptBodyHTML(m) {
     var r = rcptOf(m) || {};
-    var html = "";
+    var html = toolsLineHTML(r);
     if (r.metrics && r.metrics.length) {
       html += '<div class="ezx-rc-metrics">';
       r.metrics.forEach(function (x) {
@@ -966,7 +1031,9 @@
     ensureRcptStyles();
     var r = rcptOf(m) || {};
     var node = h("div", "ezx-msg ai ezx-rcptmsg");
-    var chips = (r.offline ? statusChip("suggest", "AI 미연결 · 로컬 데이터 조회") : statusChip("approve", "승인 필요"))
+    var chips = (r.offline
+      ? statusChip("suggest", "AI 미연결 · 로컬 데이터 조회")
+      : statusChip("approve", "실AI 응답 · 승인 필요"))
       + citeChip(m) + auditChip(m);
     var body = receiptBodyHTML(m);
     if (window.EZKit && EZKit.receipt) {
@@ -975,7 +1042,7 @@
       node.innerHTML = '<div class="ezk-receipt ezx-rc-fallback"><div class="ezk-receipt-head">' +
         '<span class="ezk-receipt-title">' + esc(r.title || "확인 결과") + "</span>" +
         '<span class="ezk-chip ezk-asof">&#128204; 기준 ' +
-        esc(window.EZKit && EZKit.clock ? EZKit.clock.asOf() : "2026-07-16 06:00") + "</span>" +
+        esc(r.asOf || (window.EZKit && EZKit.clock ? EZKit.clock.asOf() : "2026-07-16 06:00")) + "</span>" +
         chips + '</div><div class="ezk-receipt-body">' + body + "</div></div>";
     }
     var wbtn = node.querySelector("[data-ezx-whatif]");
@@ -1176,7 +1243,8 @@
     var agentReady = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
     var workMsg = agentReady ? pushMessage(makeLiveWorkMsg())
       : (aiMode() !== "offline") ? pushMessage(makeWorkMsg(state.perspective)) : null;
-    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg };
+    /* _q = 원문 질문. 영수증 제목·What-if 가정 파싱이 완료 시점에 필요하다(SSE 경로 포함) */
+    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText };
     pushMessage(aiMsg);
     renderMessages();
     if (workMsg && !workMsg.live) animateWork(workMsg);
@@ -1194,7 +1262,7 @@
     };
     if (ids.actor_emp_id) body.actor_emp_id = ids.actor_emp_id;
 
-    if (agentReady) agentRespond(body, aiMsg);
+    if (agentReady) agentRespond(body, aiMsg, userText);
     else streamChat(body, aiMsg, userText);   /* 오프라인 의도 분기는 원문 질문이 필요 (G4) */
   }
 
@@ -1268,8 +1336,10 @@
   /* ---------------- 라이브 에이전트: tool-use 루프 (proxy·direct 공용) ----------
      Claude가 talenx 실데이터 도구를 호출하며 답한다.
      도구 이벤트가 작업중 카드에 실제 실행 내역으로 찍힌다. */
-  function agentRespond(body, aiMsg) {
+  function agentRespond(body, aiMsg, userText) {
     var work = aiMsg._work;
+    /* 실제 호출된 도구를 수집해 응답 완료 시 영수증 서술자로 만든다 (F16) */
+    var calls = aiMsg._calls = [];
     window.EZAI.agent({
       messages: buildHistoryMsgs(body, aiMsg),
       onText: function (t) {
@@ -1277,8 +1347,17 @@
         aiMsg.text += t;
         refreshBubble(aiMsg);
       },
-      onTool: function (name, input) { addWorkStep(work, name, input); },
+      onTool: function (name, input) {
+        calls.push({ name: name, input: input || {}, result: null, summary: null, pending: true });
+        addWorkStep(work, name, input);
+      },
       onToolResult: function (name, r, summary) {
+        for (var i = calls.length - 1; i >= 0; i--) {
+          if (calls[i].pending && calls[i].name === name) {
+            calls[i].result = r; calls[i].summary = summary || null; calls[i].pending = false;
+            break;
+          }
+        }
         finishWorkStep(work, summary);
         if (name === "navigate" && r && r.ok) aiMsg.note = "화면 전환 · " + (r.moved_to || "");
       },
@@ -1286,6 +1365,7 @@
         if (work) { work.done = true; work.steps.forEach(function (s) { s.st = 2; }); refreshWork(work); }
         aiMsg.streaming = false;
         extractCtxRefs(aiMsg); /* 실인용 근거 마커 → meta.ctxRefs */
+        attachLiveReceipt(aiMsg, calls, userText || aiMsg._q); /* 실AI 응답 → 영수증 카드 */
         /* 모델이 마커를 낸 경우의 폴백 (navigate 도구가 기본) */
         if (window.EZNav && window.EZNav.extractMarker) {
           try {
@@ -1343,6 +1423,7 @@
           extractCtxRefs(aiMsg);
           if (j.recommendations && j.recommendations.length) aiMsg.recos = j.recommendations;
           if (j.type === "fallback" || j.source === "fallback") { aiMsg.note = "AI 미연결 — 기본 응답"; }
+          else attachLiveReceipt(aiMsg, aiMsg._calls, aiMsg._q);
           finishStreaming();
           renderMessages();
         });
@@ -1396,8 +1477,9 @@
   function pctOf(v) { return (v == null) ? "-" : v + "%"; }
 
   /* --- 의도 분기표 (배열 순서 = 우선순위) --- */
+  var OFF_WHATIF_RE = /(만약|가정했|가정하|what\s*-?if|시뮬|재계산|바뀌면|떨어지면|올라가면|[-+]?\d+\s*%\s*p)/i;
   var OFF_INTENTS = [
-    ["whatif", /(만약|가정했|가정하|what\s*-?if|시뮬|재계산|바뀌면|떨어지면|올라가면|[-+]?\d+\s*%\s*p)/i],
+    ["whatif", OFF_WHATIF_RE],
     /* org·team이 grade보다 앞 — "전사 등급 분포"가 개인 등급으로 새지 않게 */
     ["org", /(전사|회사\s*전체|등급\s*분포|인원\s*현황|조직\s*현황|본부\s*별)/],
     ["team", /(팀원|우리\s*팀|팀\s*현황|팀\s*상황|부서원|구성원\s*현황)/],
@@ -1407,8 +1489,10 @@
     ["feedback", /(피드백|360|다면|상향\s*평가|상향\s*피드백)/],
     ["oneonone", /(1\s*on\s*1|1\s*:\s*1|원온원|면담|일대일)/i],
     ["job", /(직무|역량|스킬|과업|커리어|직무\s*기준)/],
-    ["work", /(근무|근태|출퇴근|휴가|연차|초과\s*근무|재택)/],
-    ["pay", /(급여|월급|명세서|연말\s*정산|수당|상여)/]
+    /* pay가 work보다 앞 — "연장근로수당"은 금액 질문이므로 급여로 답해야 한다 */
+    ["pay", /(급여|월급|명세서|연말\s*정산|수당|상여|성과급|실지급|공제|세금|4대\s*보험)/],
+    /* 근로/근무 표기 혼용 실사용어를 모두 받는다 — "초과근로"가 의도 미매칭으로 새던 버그 */
+    ["work", /(근무|근태|출퇴근|출근|퇴근|휴가|연차|반차|병가|초과\s*근[무로]|연장\s*근[무로]|야근|지각|조퇴|재택|근로\s*시간|소정)/]
   ];
   var OFF_GREET = /^(안녕|하이|반가|고마|감사|수고|ㅎㅇ|헬로|hi|hello|hey|누구|뭐\s*해|뭐하|테스트|test)/i;
   /* 약한 이동 동사 — "급여명세서 열어줘"처럼 화면 단어 없이 말한 경우 보강 판정 */
@@ -1714,7 +1798,8 @@
     };
   }
 
-  function offWhatIf(sid, sname, text) {
+  /* 질문 텍스트 → 가정치 파싱 (오프라인·온라인 카드 공용). 못 읽으면 null — 기본값은 호출부가 정한다. */
+  function parseWhatIfText(text) {
     var t = String(text || "");
     var delta = null, cap = null;
     var dm = /([+-]?\d+(?:\.\d+)?)\s*%\s*p/i.exec(t);
@@ -1726,6 +1811,12 @@
     var cm = /(상한|강제\s*배분|배분|캡|cap)[^0-9]{0,8}(\d+(?:\.\d+)?)/i.exec(t);
     if (cm) cap = Number(cm[2]);
     if (delta != null && /하락|떨어|하향|감소|낮아/.test(t) && delta > 0) delta = -delta;
+    return { delta: delta, cap: cap };
+  }
+
+  function offWhatIf(sid, sname, text) {
+    var pr = parseWhatIfText(text);
+    var delta = pr.delta, cap = pr.cap;
     if (delta == null && cap == null) delta = -10;
     var wi = { emp_id: sid, name: sname };
     if (delta != null) wi.achievement_delta = delta;
@@ -1750,6 +1841,182 @@
     };
   }
 
+  /* ---- 근무·연차·급여 — attendance/leaves/payroll 원천(scripts/enrich_hr_ops.py) 실조회 ----
+     열람 규칙(EZTools gateHrOps)이 개인 상세 / 팀·전사 집계 / 차단으로 갈리므로 세 형태를 모두 렌더한다.
+     원천이 비어 있으면 offNoData로 되돌려 "없는 수치는 지어내지 않는다"를 유지한다. */
+  var OFF_LEAVE_Q = /(휴가|연차|반차|병가|경조|소멸|촉진|잔여)/;
+  function won(n) {
+    if (n == null || isNaN(Number(n))) return "-";
+    return Number(n).toLocaleString("ko-KR") + "원";
+  }
+  function wonDelta(n) {
+    if (n == null || isNaN(Number(n))) return "-";
+    if (Number(n) === 0) return "변동 없음";
+    return (Number(n) > 0 ? "+" : "−") + Math.abs(Number(n)).toLocaleString("ko-KR") + "원";
+  }
+  function dayNum(n) { return (n == null) ? "-" : (Math.round(Number(n) * 10) / 10) + "일"; }
+  function hourNum(n) { return (n == null) ? "-" : (Math.round(Number(n) * 10) / 10) + "시간"; }
+
+  function offLeaveMine(sname, r) {
+    var md = sname + "님의 " + r.year + "년 연차는 부여 **" + dayNum(r.granted_days) + "** 중 **" +
+      dayNum(r.used_days) + "** 사용, 잔여 **" + dayNum(r.remaining_days) + "** 입니다.\n\n";
+    md += "- 소멸 예정 — " + dayNum(r.expiring_days) + " · " + (r.expiring_at || "-") +
+      (r.promotion_target ? " (연차사용촉진 대상)" : "") + "\n";
+    if (r.pending_days) md += "- 승인 대기 — " + dayNum(r.pending_days) + "\n";
+    var reqs = (r.requests || []).slice(-5).reverse();
+    if (reqs.length) {
+      md += "\n| 신청 | 기간 | 일수 | 상태 |\n| --- | --- | --- | --- |\n";
+      reqs.forEach(function (q) {
+        md += "| " + (q.type || "-") + " | " + (q.start || "-") +
+          (q.end && q.end !== q.start ? " ~ " + q.end : "") + " | " + dayNum(q.days) + " | " + (q.status || "-") + " |\n";
+      });
+    }
+    if (r.note) md += "\n> " + r.note;
+    return {
+      text: md,
+      receipt: offRc({
+        title: sname + " · 연차 현황",
+        metrics: [
+          { k: "잔여", v: dayNum(r.remaining_days) },
+          { k: "부여 / 사용", v: dayNum(r.granted_days) + " / " + dayNum(r.used_days) },
+          { k: "소멸 예정", v: dayNum(r.expiring_days) + " · " + (r.expiring_at || "-") }
+        ],
+        srcs: [offSrc("erp", "연차 대장 " + r.year), offSrc("rule", "근로기준법 §60 부여·§61 사용촉진")]
+      })
+    };
+  }
+
+  function offLeaveTeam(r) {
+    var md = "**" + (r.scope || "조직") + "** " + r.year + "년 연차 집계입니다 (대상 " + r.headcount + "명).\n\n" +
+      "- 평균 부여 " + dayNum(r.avg_granted_days) + " · 평균 사용 " + dayNum(r.avg_used_days) +
+      " · 평균 잔여 " + dayNum(r.avg_remaining_days) + "\n" +
+      "- 연차사용촉진 대상 " + r.promotion_target_count + "명 · 승인 대기 신청 " + r.pending_requests + "건\n";
+    if (r.policy) md += "\n> " + r.policy;
+    return {
+      text: md,
+      receipt: offRc({
+        title: (r.scope || "조직") + " · 연차 집계",
+        metrics: [
+          { k: "대상", v: r.headcount + "명" },
+          { k: "평균 잔여", v: dayNum(r.avg_remaining_days) },
+          { k: "촉진 대상", v: r.promotion_target_count + "명" }
+        ],
+        srcs: [offSrc("erp", "연차 대장 집계"), offSrc("rule", "열람 규칙 — 개인 상세 비공개")]
+      })
+    };
+  }
+
+  function offAttMine(sname, r, lr) {
+    var c = r.current || {}, p = r.previous || null;
+    var md = sname + "님의 **" + (c.period || "-") + "** 근태입니다" +
+      (c.partial ? " (진행 중 · " + (r.as_of || "") + " 기준)" : "") + ".\n\n";
+    md += "- 근무 " + dayNum(c.actual_days) + " / 소정 " + dayNum(c.work_days) +
+      " · 휴가 " + dayNum(c.leave_days) + " · 재택 " + dayNum(c.remote_days) + "\n";
+    md += "- 초과근로 " + hourNum(c.overtime_hours) +
+      (p ? " (전월 " + hourNum(p.overtime_hours) + ")" : "") + "\n";
+    md += "- 지각 " + (c.late_count || 0) + "회 · 조퇴 " + (c.early_leave_count || 0) + "회 · 평균 " +
+      (c.avg_in_time || "-") + " 출근 / " + (c.avg_out_time || "-") + " 퇴근\n";
+    var sig = r.signals || [];
+    if (sig.length) {
+      md += "\n확인이 필요한 신호\n";
+      sig.forEach(function (s) { md += "- " + (s.level === "warn" ? "▲ " : "") + s.text + "\n"; });
+    } else {
+      md += "\n임계값을 넘은 신호는 없습니다 (초과근로 월 52시간 · 지각 3회 기준).\n";
+    }
+    var lvOk = lr && !lr.error && !lr.blocked && lr.remaining_days != null;
+    if (lvOk) md += "\n연차 잔여 " + dayNum(lr.remaining_days) + " · " + (lr.expiring_at || "-") + " 소멸 예정\n";
+    if (r.source) md += "\n> " + r.source;
+    return {
+      text: md,
+      receipt: offRc({
+        title: sname + " · 근태 " + (c.period || ""),
+        metrics: [
+          { k: "근무 / 소정", v: dayNum(c.actual_days) + " / " + dayNum(c.work_days) },
+          { k: "초과근로", v: hourNum(c.overtime_hours) },
+          { k: "일별 기록", v: ((r.daily || []).length) + "일" }
+        ],
+        srcs: [offSrc("erp", "근태 원장 " + (c.period || "")),
+          offSrc("rule", "판정 기준 — 초과근로 월 52시간(주 12시간 환산)")]
+      })
+    };
+  }
+
+  function offAttTeam(r) {
+    var md = "**" + (r.scope || "조직") + "** " + (r.period || "") + " 근태 집계입니다 (대상 " + r.headcount + "명).\n\n" +
+      "- 평균 초과근로 " + hourNum(r.avg_overtime_hours) + " · 평균 근무 " + dayNum(r.avg_actual_days) +
+      " · 평균 재택 " + dayNum(r.avg_remote_days) + "\n" +
+      "- 지각 합계 " + r.late_total + "회 · 초과근로 상한 도달 " + r.over_limit_count + "명\n";
+    if (r.note) md += "\n> " + r.note;
+    return {
+      text: md,
+      receipt: offRc({
+        title: (r.scope || "조직") + " · 근태 집계 " + (r.period || ""),
+        metrics: [
+          { k: "대상", v: r.headcount + "명" },
+          { k: "평균 초과근로", v: hourNum(r.avg_overtime_hours) },
+          { k: "상한 도달", v: r.over_limit_count + "명" }
+        ],
+        srcs: [offSrc("erp", "근태 원장 집계 " + (r.period || "")),
+          offSrc("rule", "열람 규칙 — 개인 상세 비공개")]
+      })
+    };
+  }
+
+  function offWork(sid, sname, q) {
+    if (OFF_LEAVE_Q.test(String(q || ""))) {
+      var lr0 = ezRun("get_leave_balance", { emp_id: sid });
+      if (lr0 && lr0.blocked) return offBlocked(sname, lr0.policy);
+      if (lr0 && !lr0.error) return lr0.scope ? offLeaveTeam(lr0) : offLeaveMine(sname, lr0);
+    }
+    var ar = ezRun("get_attendance", { emp_id: sid });
+    if (!ar) return offNoData("work");
+    if (ar.blocked) return offBlocked(sname, ar.policy);
+    if (ar.error) return { text: sname + "님의 근태 기록이 로컬 데이터에 없습니다. 근무관리 화면에서 직접 조회해 주세요." };
+    if (ar.scope) return offAttTeam(ar);
+    return offAttMine(sname, ar, ezRun("get_leave_balance", { emp_id: sid }));
+  }
+
+  function offPay(sid, sname) {
+    var r = ezRun("get_payslip", { emp_id: sid });
+    if (!r) return offNoData("pay");
+    if (r.blocked) return offBlocked(sname, r.policy);
+    if (r.error) {
+      return { text: sname + "님의 급여 명세가 로컬 데이터에 없습니다" +
+        ((r.available_periods || []).length ? " (보유 기간 — " + r.available_periods.join(" · ") + ")" : "") + "." };
+    }
+    var c = r.current || {}, pol = r.policy || {};
+    var md = sname + "님의 **" + (c.period || "-") + "** 급여입니다 (지급일 " + (c.pay_date || "-") + ").\n\n";
+    md += "- 지급 합계 **" + won(c.gross) + "** · 공제 " + won(c.deduction_total) + " · 실지급 **" + won(c.net) + "**\n";
+    if (r.net_delta != null) md += "- 전월 대비 실지급 " + wonDelta(r.net_delta) + "\n";
+    var ch = r.changes || [];
+    if (ch.length) {
+      md += "\n전월 대비 변동\n";
+      ch.forEach(function (x) {
+        md += "- **" + x.item + "** " + won(x.prev) + " → " + won(x.current) + " (" + wonDelta(x.delta) + ")" +
+          (x.reason ? " — " + x.reason : "") + "\n";
+      });
+    } else if (r.previous) {
+      md += "\n전월과 지급·공제 항목이 동일합니다.\n";
+    }
+    md += "\n계산 규칙 — 지급일 매월 " + (pol.pay_day || "-") + "일 · 연장 " + (pol.overtime_rate || "-") + "배 · 성과급 " +
+      ((pol.bonus_months || []).join("·") || "-") + "월 · " + (pol.tax_table_ref || "간이세액표") + "\n";
+    /* r.note는 AI에게 주는 지시문이라 화면에 그대로 내보내지 않는다 */
+    md += "\n> 금액은 데모용 합성 데이터입니다.";
+    return {
+      text: md,
+      receipt: offRc({
+        title: sname + " · 급여 " + (c.period || ""),
+        metrics: [
+          { k: "실지급", v: won(c.net) },
+          { k: "전월 대비", v: wonDelta(r.net_delta) },
+          { k: "연장근로", v: hourNum(c.overtime_hours) }
+        ],
+        srcs: [offSrc("erp", "급여 원장 " + (c.period || "")),
+          offSrc("rule", "급여 계산 규칙 — " + (pol.overtime_formula || "연장수당 산식"))]
+      })
+    };
+  }
+
   function offNoData(kind) {
     var m = (kind === "pay")
       ? { label: "급여관리", what: "급여 명세·연말정산" }
@@ -1765,7 +2032,7 @@
   function offGreet() {
     return {
       text: "안녕하세요, " + CURRENT.name + "님. elizax입니다.\n\n" +
-        "지금은 **AI 미연결** 상태라 로컬 데이터 조회로만 답합니다. 목표 진척 · 체크인 · 평가 등급 · 팀 현황 · 직무 기준 · What-if 재계산을 물어보세요."
+        "지금은 **AI 미연결** 상태라 로컬 데이터 조회로만 답합니다. 목표 진척 · 체크인 · 평가 등급 · 팀 현황 · 직무 기준 · 근태·연차 · 급여 명세 · What-if 재계산을 물어보세요."
     };
   }
 
@@ -1778,6 +2045,8 @@
         "- 평가 등급과 산출 근거 — \"내 등급 근거가 뭐야\"\n" +
         "- 팀 현황 / 전사 등급 분포 — 조직장·HR 권한\n" +
         "- 직무 기준·기대 역량 — \"내 직무 기준 알려줘\"\n" +
+        "- 근태·연차 — \"이번 달 초과근로 얼마야\" / \"연차 며칠 남았어\"\n" +
+        "- 급여 명세 — \"지난달 급여 왜 늘었어\"\n" +
         "- What-if 재계산 — \"달성률 -10%p면 등급 어떻게 돼?\"\n" +
         "- 화면 이동 — \"급여 화면으로 가줘\""
     };
@@ -1801,8 +2070,8 @@
     else if (intent === "feedback") out = offFeedback(sid, sname);
     else if (intent === "oneonone") out = offOneOnOne(sname);
     else if (intent === "job") out = offJob(sid, sname);
-    else if (intent === "work") out = offNoData("work");
-    else if (intent === "pay") out = offNoData("pay");
+    else if (intent === "work") out = offWork(sid, sname, q);
+    else if (intent === "pay") out = offPay(sid, sname);
     if (!out) { out = offUnknown(); intent = "unknown"; }
     return {
       text: out.text,
@@ -1854,6 +2123,181 @@
       }
     }
     setTimeout(tick, 120);
+  }
+
+  /* ---------------- 실AI 응답 영수증 서술자 (F16) ----------------
+     "검증 가능한 답변"이 오프라인에서만 성립하지 않도록, 라이브 응답에도 같은 카드를 붙인다.
+     서술자에는 **실제로 일어난 일만** 담는다 — 호출된 도구와 그 요약, 모델 실인용 근거,
+     as-of 시각. 연출 스텝이나 추정 수치는 넣지 않는다.
+     도구를 하나도 안 부른 순수 대화 응답에는 카드를 붙이지 않는다(신호 희석 방지).
+
+     descriptor(msg.meta.receipt) 스키마:
+       { title, asOf, offline:false, mode,
+         tools:  [{ name, src, label, summary }],   // 실제 호출된 도구 (navigate·화면확인 제외)
+         metrics:[{ k, v, sub? }],                  // 도구 결과에서만 추출 (최대 4)
+         srcs:   [{ kind, label }],                 // 근거 칩 (도구 원천)
+         whatif: { emp_id?, achievement_delta?, cap_pct? } | null,
+         wiParams?, wiResult? }                     // What-if 실행 후 runWhatIf가 채움 */
+  var RC_SKIP_TOOLS = { navigate: 1, get_screen_context: 1 };
+  /* EZKit.src가 아는 kind는 talenx/erp/rule/web — 도구 원천을 그 어휘로 옮긴다 */
+  var RC_SRC_KIND = {
+    get_checkins: "erp", simulate_whatif: "rule", get_strategy_themes: "rule",
+    get_context_ledger: "talenx", get_org_overview: "talenx"
+  };
+  var RC_INTENT_TITLE = {
+    goal: "목표 진척", checkin: "체크인 기록", grade: "등급 산출", team: "팀 현황",
+    org: "전사 성과 조망", feedback: "피드백", oneonone: "1:1 기록", job: "직무 기준",
+    whatif: "What-if 가정", work: "근무 확인", pay: "급여 확인"
+  };
+  var RC_SELF_INTENT = { team: 1, org: 1 };   /* 대상자 이름을 붙이지 않는 조직 단위 질문 */
+
+  function rcLabelOf(name) {
+    return (window.EZTools && EZTools.labelOf) ? EZTools.labelOf(name) : name;
+  }
+  function rcSrcOf(name) {
+    return (window.EZTools && EZTools.srcOf) ? EZTools.srcOf(name) : "talenx";
+  }
+  /* 도구 결과 → 메트릭 행. 결과에 실제로 있는 값만 쓴다(없으면 행을 만들지 않는다). */
+  function rcMetricsOf(name, res) {
+    var out = [];
+    if (!res || typeof res !== "object" || res.error || res.blocked) return out;
+    var i, s, n, o;
+    if (name === "get_objectives") {
+      var objs = res.objectives || [];
+      out.push({ k: "담당 목표", v: (res.count != null ? res.count : objs.length) + "건" });
+      s = 0; n = 0;
+      for (i = 0; i < objs.length; i++) { if (rcNum(objs[i].progress) != null) { s += objs[i].progress; n++; } }
+      if (n) out.push({ k: "평균 진척", v: (Math.round(s / n * 10) / 10) + "%" });
+    } else if (name === "get_checkins") {
+      var cs = res.checkins || [];
+      out.push({ k: "체크인", v: (res.count != null ? res.count : cs.length) + "건" });
+      if (cs.length && cs[0].date) out.push({ k: "마지막", v: String(cs[0].date) });
+    } else if (name === "get_employee_profile") {
+      var ev = res.evaluation;
+      if (ev && ev.grade != null) out.push({ k: "등급", v: String(ev.grade) });
+      if (ev && rcNum(ev.weighted_score) != null) out.push({ k: "종합 점수", v: ev.weighted_score + "/100" });
+      if (ev && ev.period) out.push({ k: "기간", v: String(ev.period) });
+    } else if (name === "get_team_status") {
+      if (res.team_size != null) out.push({ k: "팀원", v: res.team_size + "명" });
+      var mem = res.members || [];
+      s = 0; n = 0;
+      for (i = 0; i < mem.length; i++) { if (rcNum(mem[i].avg_progress) != null) { s += mem[i].avg_progress; n++; } }
+      if (n) out.push({ k: "평균 진척", v: (Math.round(s / n * 10) / 10) + "%" });
+    } else if (name === "get_org_overview") {
+      if (res.employees != null) out.push({ k: "인원", v: res.employees + "명" });
+      var d = res.grade_distribution || {}, tot = 0, top = 0;
+      for (var g in d) { if (Object.prototype.hasOwnProperty.call(d, g)) { tot += d[g]; if (g === "S" || g === "A") top += d[g]; } }
+      if (tot) out.push({ k: "상위등급(S+A)", v: (Math.round(top * 1000 / tot) / 10) + "%" });
+    } else if (name === "get_job_profile") {
+      o = res.profile || {};
+      if ((o.task_areas || []).length) out.push({ k: "과업 영역", v: o.task_areas.length + "개" });
+      if ((o.competency_profile || []).length) out.push({ k: "기준 역량", v: o.competency_profile.length + "종" });
+      if ((o.skills || []).length) out.push({ k: "기대 스킬", v: o.skills.length + "종" });
+    } else if (name === "get_context_ledger") {
+      if (res.count != null) out.push({ k: "성과 기록", v: res.count + "건" });
+    } else if (name === "get_upward_feedback") {
+      if (res.count != null) out.push({ k: "상향 피드백", v: res.count + "건" });
+    } else if (name === "get_org_objectives") {
+      if (res.count != null) out.push({ k: "상위 목표 후보", v: res.count + "건" });
+    } else if (name === "get_strategy_themes") {
+      if (res.count != null) out.push({ k: "전략 테마", v: res.count + "건" });
+    } else if (name === "get_prev_cycle") {
+      if (res.first_cycle) out.push({ k: "이전 사이클", v: "없음" });
+      else if (res.prev_evaluation && res.prev_evaluation.grade != null) out.push({ k: "직전 등급", v: String(res.prev_evaluation.grade) });
+    } else if (name === "search_employee") {
+      if (res.count != null) out.push({ k: "검색 결과", v: res.count + "명" });
+    } else if (name === "simulate_whatif") {
+      var pv = wiPersonal(res);
+      if (pv && (pv.bg != null || pv.ag != null)) {
+        out.push({ k: "시뮬 등급", v: (pv.bg == null ? "-" : pv.bg) + " → " + (pv.ag == null ? "-" : pv.ag) });
+      } else if (res.moved_pp != null) {
+        out.push({ k: "분포 재배치", v: res.moved_pp + "pp" });
+      }
+    }
+    return out;
+  }
+  function rcTitle(question, calls) {
+    var intent = offlineIntent(question);
+    var subj = (needsSubject(state.perspective) && state.subject) ? state.subject.name : CURRENT.name;
+    var t = RC_INTENT_TITLE[intent];
+    if (t) return RC_SELF_INTENT[intent] ? t : (subj + " · " + t);
+    for (var i = 0; i < calls.length; i++) {
+      if (!RC_SKIP_TOOLS[calls[i].name]) return rcLabelOf(calls[i].name) + " 결과";
+    }
+    var q = String(question || "").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+    if (!q) return "확인 결과";
+    return q.length > 22 ? q.slice(0, 21) + "…" : q;
+  }
+  /* What-if 서술자 — simulate_whatif를 실제로 부른 경우가 1순위,
+     아니면 질문에 명시된 가정치(예: "-10%p", "상한 30%")가 읽힐 때만. 추정 기본값은 넣지 않는다. */
+  function rcWhatIf(calls, question, sid) {
+    var i, wi;
+    for (i = 0; i < calls.length; i++) {
+      if (calls[i].name !== "simulate_whatif") continue;
+      var inp = calls[i].input || {};
+      wi = { emp_id: inp.emp_id || sid };
+      if (rcNum(Number(inp.achievement_delta)) != null && inp.achievement_delta !== "") wi.achievement_delta = Number(inp.achievement_delta);
+      if (inp.cap_pct != null && inp.cap_pct !== "") wi.cap_pct = Number(inp.cap_pct);
+      return wi;
+    }
+    if (!OFF_WHATIF_RE.test(String(question || ""))) return null;
+    var pr = parseWhatIfText(question);
+    if (pr.delta == null && pr.cap == null) return null;
+    wi = { emp_id: sid };
+    if (pr.delta != null) wi.achievement_delta = pr.delta;
+    if (pr.cap != null) wi.cap_pct = pr.cap;
+    return wi;
+  }
+  /* 모델이 실제로 인용한 성과 기록이 있는가 (판정 주체는 tx_ctx_ledger — 여기서 승격 금지) */
+  function rcHasCitations(aiMsg) {
+    var meta = (aiMsg && aiMsg.meta) || {};
+    return meta.ctxCited === true && resolveRefs(meta.ctxRefs).length > 0;
+  }
+  function buildLiveReceipt(calls, question, aiMsg) {
+    calls = Object.prototype.toString.call(calls) === "[object Array]" ? calls : [];
+    var data = calls.filter(function (c) { return c && c.name && !RC_SKIP_TOOLS[c.name]; });
+    var sid = resolveEmpIds().emp_id;
+    var wi = rcWhatIf(data, question, sid);
+    /* 카드를 붙일 근거: 실데이터 도구 호출 · 모델 실인용 · 명시된 What-if 가정 중 하나 이상 */
+    if (!data.length && !rcHasCitations(aiMsg) && !wi) return null;
+
+    var tools = [], metrics = [], srcs = [], seenM = {}, seenS = {};
+    data.forEach(function (c) {
+      tools.push({
+        name: c.name, src: rcSrcOf(c.name), label: rcLabelOf(c.name),
+        summary: c.summary || null
+      });
+      rcMetricsOf(c.name, c.result).forEach(function (x) {
+        if (seenM[x.k] || metrics.length >= 4) return;
+        seenM[x.k] = 1; metrics.push(x);
+      });
+      var kind = RC_SRC_KIND[c.name] || "talenx";
+      var label = rcSrcOf(c.name) + " · " + rcLabelOf(c.name);
+      if (!seenS[label]) { seenS[label] = 1; srcs.push({ kind: kind, label: label }); }
+    });
+    return {
+      title: rcTitle(question, data),
+      asOf: (window.EZKit && EZKit.clock) ? EZKit.clock.asOf() : "",
+      offline: false,
+      mode: aiMode(),
+      tools: tools,
+      metrics: metrics,
+      srcs: srcs.slice(0, 5),
+      whatif: wi
+    };
+  }
+  /* 응답 완료 시 서술자를 msg.meta.receipt에 채운다 — 카드 렌더는 buildReceiptNode가 담당 */
+  function attachLiveReceipt(aiMsg, calls, question) {
+    if (!aiMsg || aiMsg.role !== "ai" || aiMsg._stopped) return null;
+    if (aiMsg.receipt || (aiMsg.meta && aiMsg.meta.receipt)) return rcptOf(aiMsg);
+    var r = null;
+    try { r = buildLiveReceipt(calls, question, aiMsg); }
+    catch (e) { return null; }
+    if (!r) return null;
+    aiMsg.receipt = r;
+    if (!aiMsg.meta) aiMsg.meta = {};
+    aiMsg.meta.receipt = r;   /* 세션 복원 후에도 카드로 남도록 */
+    return r;
   }
 
   function readSSE(res, aiMsg) {
@@ -1923,6 +2367,8 @@
       }
       if (msg.recommendations && msg.recommendations.length) aiMsg.recos = msg.recommendations;
       if (msg.truncated) { aiMsg.note = "일부 생략됨"; }
+      /* 라이브(proxy·direct) 텍스트 경로 — 도구 이벤트는 없지만 모델 실인용·명시 가정이 있으면 영수증 */
+      attachLiveReceipt(aiMsg, aiMsg._calls, aiMsg._q);
       saveHistory();
       renderMessages();
     } else if (msg.type === "fallback") {

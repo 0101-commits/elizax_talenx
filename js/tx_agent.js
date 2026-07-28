@@ -14,6 +14,26 @@
      openHub, closeHub, open(screen), openFull, closeFull,
      SCENARIOS, runScenario(key, host), intentFor(text)
    }.
+
+   ── window.EZCalc — 등급/점수 what-if 공개 계약 (순수 함수 · DOM 비접촉) ──
+   EZCalc.simulate(params)
+     · params 없거나 emp_id 없음 → 전사 분포 엔진 (기존 계약 불변)
+         before / after = 등급 분포 {S,A,B,C,D}(%)  ·  gradeChange[]  ·  people[]  ·  basis{…}
+     · params.emp_id 지정      → 위 결과에 개인 산출을 얹는다. 이때만 형상이 바뀐다:
+         before / after            = { weighted_score, score, grade }   (개인)
+         distribution_before/after = 등급 분포 (분포는 여기로 계속 제공 · gradeChange[]도 유지)
+         person                    = simulatePerson() 전체 결과
+         target                    = { emp_id, name, org, period }
+         grade_changed             = boolean
+         grade_change              = { from, to, changed, cut_used, next_grade, margin_to_next }
+         applied_weight            = 달성 축 가중치(실측 적합 추정치, 0~1)
+         assumptions               = 가정 요약 문장(데모 가정 표기 포함)
+         basis.person_score_source / person_score_model / grade_cuts / grade_cut_source
+       ※ 평가 기록이 없으면 person_error만 채우고 분포 형상을 그대로 둔다.
+   EZCalc.person({emp_id, achievement_delta}) → 개인 산출만 (분포 계산 없음)
+   EZCalc.gradeCuts()  → { cuts:[{grade,min}], source, from_data:false }  ← 등급컷은 항상 데모 가정
+   EZCalc.scoreModel() → { ok, w_achievement, w_peer, w_exec, rmse, n }   ← evaluations 실측 적합
+   EZCalc.calibDiff() / EZCalc.baseDistribution() — 난이도 보정 원자료 · 기준 분포
    ============================================================ */
 (function () {
   "use strict";
@@ -32,6 +52,107 @@
   function myObjectives() {
     var cu = CU();
     return (D().objectives || []).filter(function (o) { return o.owner_emp_id === cu.emp_id; });
+  }
+
+  /* ============================================================
+     실데이터 조회 헬퍼 — 대본(상수) 제거용 공통 원천.
+     원칙: 없는 값은 만들지 않는다. 조회가 비면 null/빈 배열을 돌려주고
+           호출측이 "기록 없음"으로 정직하게 표기한다.
+     ============================================================ */
+  function empById(id) {
+    if (!id) return null;
+    return (D().employees || []).filter(function (e) { return e.emp_id === id; })[0] || null;
+  }
+  /* 직속 팀원 = employees.manager_id 실 링크 (조직 소속 team()과 다름 — 이름 상수 금지) */
+  function directReports(id) {
+    var mid = id || CU().emp_id;
+    return (D().employees || []).filter(function (e) { return e.manager_id === mid; });
+  }
+  /* 기준 시점 Date — EZKit.clock 단일 원천 (DEMO_TODAY 하드코딩 폐기) */
+  function asOfDate() {
+    var s = "2026-07-16";
+    try { if (window.EZKit && EZKit.clock && EZKit.clock.asOfDate) s = EZKit.clock.asOfDate(); } catch (e) {}
+    var d = new Date(String(s));
+    return isNaN(d.getTime()) ? new Date("2026-07-16") : d;
+  }
+  function dnum(s) { var d = new Date(String(s)); return isNaN(d.getTime()) ? null : d.getTime(); }
+  function daysBetween(aMs, bMs) { return Math.round((aMs - bMs) / 86400000); }
+  /* 목표 기간 창 — objectives[].period("FY2026-2Q")를 실제로 파싱. 못 읽으면 null(가정하지 않음) */
+  function periodWindow(period) {
+    var m = /FY(\d{4})[-\s]?([1-4])Q/i.exec(String(period || ""));
+    if (!m) return null;
+    var y = +m[1], q = +m[2];
+    return { start: Date.UTC(y, (q - 1) * 3, 1), end: Date.UTC(y, q * 3, 0), label: "FY" + y + "-" + q + "Q" };
+  }
+  function krIndex() {
+    var m = {};
+    (D().keyResults || []).forEach(function (k) { m[k.kr_id] = k; });
+    return m;
+  }
+  function objIndex() {
+    var m = {};
+    (D().objectives || []).forEach(function (o) { m[o.objective_id] = o; });
+    return m;
+  }
+  /* 진척 신호 임계 — 화면에 기준을 함께 노출해야 하므로 단일 상수로 둔다 */
+  var SIG = { GAP_WARN: 14, GAP_BAD: 30, DRIFT_MIN: 20 };
+  /* 팀원 1인의 주간 신호 — checkins·keyResults 실집계.
+     gap  = 마지막 체크인 이후 경과일 (기록 없으면 null)
+     drift= 기간 경과율 − KR 진척률 (%p · 목표 period로 계산, 기간 미상이면 null)
+     drop = 진척 하락(progress_delta < 0) 실제 기록 */
+  function memberSignals(emp) {
+    var d = D(), today = asOfDate().getTime();
+    var cks = (d.checkins || []).filter(function (c) { return c.emp_id === emp.emp_id; })
+      .sort(function (a, b) { return (a.checkin_date < b.checkin_date) ? 1 : -1; });
+    var kmap = krIndex(), omap = objIndex(), krs = [], seen = {};
+    cks.forEach(function (c) {
+      var k = kmap[c.kr_id];
+      if (!k || seen[k.kr_id]) return;
+      seen[k.kr_id] = 1;
+      var ob = omap[k.objective_id] || null;
+      var w = periodWindow(ob && ob.period);
+      var elapsed = w ? Math.max(0, Math.min(100, Math.round((today - w.start) / (w.end - w.start) * 100))) : null;
+      var prog = Math.round(k.progress || 0);
+      krs.push({
+        kr_id: k.kr_id, name: k.name, progress: prog, weight: k.weight,
+        elapsed: elapsed, drift: (elapsed == null ? null : elapsed - prog),
+        period: (ob && ob.period) || null, objective: ob ? ob.title : null
+      });
+    });
+    krs.sort(function (a, b) { return (b.drift == null ? -1 : b.drift) - (a.drift == null ? -1 : a.drift); });
+    var last = cks[0] || null;
+    return {
+      emp: emp, name: emp.name || emp.emp_id, emp_id: emp.emp_id,
+      checkins: cks, count: cks.length, last: last,
+      gap: last ? daysBetween(today, dnum(last.checkin_date)) : null,
+      krs: krs, worst: krs[0] || null,
+      blockers: cks.filter(function (c) { return !!c.blocker; }),
+      lows: cks.filter(function (c) { return c.confidence === "low"; }),
+      drops: cks.filter(function (c) { return typeof c.progress_delta === "number" && c.progress_delta < 0; })
+    };
+  }
+  /* 주간 체크인 실집계 — QW1의 단일 원천. 팀원이 없으면 team:[] 로 빈 상태를 알린다. */
+  function qw1Facts() {
+    var team = directReports();
+    var sigs = team.map(memberSignals);
+    var gapped = sigs.filter(function (s) { return s.gap == null || s.gap >= SIG.GAP_WARN; });
+    var lag = sigs.filter(function (s) { return s.worst && s.worst.drift != null && s.worst.drift >= SIG.DRIFT_MIN; });
+    var flagged = {};
+    gapped.concat(lag).forEach(function (s) { flagged[s.emp_id] = 1; });
+    var blockerCnt = 0, lowCnt = 0, dropCnt = 0;
+    sigs.forEach(function (s) { blockerCnt += s.blockers.length; lowCnt += s.lows.length; dropCnt += s.drops.length; });
+    /* 발송 초안 대상 = 드리프트 최대 → 동률이면 체크인 공백 최장 */
+    var target = lag.concat(gapped).sort(function (a, b) {
+      var da = (a.worst && a.worst.drift) || 0, db = (b.worst && b.worst.drift) || 0;
+      if (db !== da) return db - da;
+      return ((b.gap == null ? 9999 : b.gap) - (a.gap == null ? 9999 : a.gap));
+    })[0] || null;
+    return {
+      team: sigs, gapped: gapped, lag: lag,
+      clean: sigs.filter(function (s) { return !flagged[s.emp_id]; }),
+      blockerCnt: blockerCnt, lowCnt: lowCnt, dropCnt: dropCnt,
+      target: target, thresholds: SIG
+    };
   }
   /* 대상자 단일 원천 — 인계 컨텍스트(openHub(screen,{empId}))가 있으면 그 직원,
      없으면 조직원은 본인 / 조직장·HR은 팀 첫 인원. 화면마다 이름을 하드코딩하지 않는다. */
@@ -223,15 +344,15 @@
        heavy : true=340px 도킹엔 넓어 요약 스텁+전체화면 버튼으로 임베드
      ============================================================ */
   var SCENARIOS = [
-    { key: "qw1",    chip: "주간 체크인 브리핑 만들어줘",        desc: "talenx·ERP·1:1 기록을 스캔해 체크인 대상과 부진 인원을 요약하고, 리더가 보낼 메시지 초안까지 준비합니다.", roles: ["leader"],        heavy: false, mode: "auto" },
+    { key: "qw1",    chip: "주간 체크인 브리핑 만들어줘",        desc: "직속 팀원(manager_id)의 체크인·KR 진척 기록을 스캔해 체크인 공백·진척 지연 인원을 실집계하고, 실 레코드 id를 근거로 붙인 메시지 초안까지 준비합니다.", roles: ["leader"],        heavy: false, mode: "auto" },
     { key: "qw2",    chip: "이번 분기 목표 초안 잡아줘",         desc: "작년 평가·피드백과 직무 R&R을 이어받아 목표 초안 3안을 만들고 상위목표 정렬을 검증합니다.",                   roles: ["member"],        heavy: false, mode: "suggest" },
     { key: "qw7",    chip: "팀 목표 정렬·중복 점검해줘",         desc: "팀 목표 전건을 문장 품질(중복·미연계·측정불가)과 운영 신호(체크인 공백·진척 정체) 두 축으로 점검합니다.",     roles: ["leader", "exec"], heavy: true,  mode: "suggest" },
-    { key: "qw4",    chip: "내 성과 근거 타임라인 보여줘",       desc: "달성·프로젝트·피드백·1:1 기록이 발생 시점에 자동으로 기록된 1년치 근거 타임라인입니다.",                        roles: ["member"],        heavy: true,  mode: "suggest" },
+    { key: "qw4",    chip: "내 성과 근거 타임라인 보여줘",       desc: "체크인·KR 달성·평가 이력·피드백·성과 기록 원장에 실제로 남은 기록만 발생 시점 순으로 모아 근거 타임라인을 만듭니다. 기록이 없으면 만들지 않습니다.",                        roles: ["member"],        heavy: true,  mode: "suggest" },
     { key: "qw6",    chip: "피드백 문장 다듬어줘",              desc: "SBI 구조로 피드백 문장을 정제합니다. 의도는 유지하고 전달 방식만 다듬습니다.",                              roles: ["leader"],        heavy: false, mode: "suggest" },
     { key: "qw3",    chip: "평가 코멘트 초안 써줘",             desc: "ERP 실적·직무군 분포·평가규정을 대조해 문장별 출처가 붙은 코멘트 초안을 만듭니다.",                          roles: ["leader"],        heavy: false, mode: "human_approve" },
     /* 칩에서 특정 이름을 빼고 대상자는 인계 컨텍스트(targetEmp)가 정한다 — 데이터에 없는 이름 고정 금지 */
     { key: "hold",   chip: "등급 초안 만들어줘",       desc: "근거가 부족하면 추정하지 않고 정지 후 질문합니다. 보강 경로를 고르면 재개됩니다.",                            roles: ["leader"],        heavy: false, mode: "suggest" },
-    { key: "qw5",    chip: "평가 편향 점검해줘",                desc: "본부별 등급 분포·근거량을 대조해 관대화·중심화 의심을 플래그와 근거로만 제시합니다.",                        roles: ["hr", "exec"],    heavy: true,  mode: "suggest" },
+    { key: "qw5",    chip: "평가 편향 점검해줘",                desc: "조직별 등급 분포·근거량을 전사 평균과 실제로 대조해 관대화·엄격화·중심화 의심을 모집단 N과 판정 기준을 밝힌 플래그로만 제시합니다.", roles: ["hr", "exec"],    heavy: true,  mode: "suggest" },
     { key: "calib",  chip: "등급 조정 심의 열어줘",       desc: "4개 관점 에이전트가 조정 논거를 교차 심의하고, 가정 슬라이더로 상한을 즉시 재산출합니다.",                 roles: ["hr"],            heavy: true,  mode: "human_approve" },
     { key: "review", chip: "리뷰 초안 같이 쓰자",               desc: "AI가 근거를 인용해 초안 문장을 제안하고, 사용자가 문장 단위로 반영·무시합니다.",                             roles: ["leader", "hr"],  heavy: true,  mode: "human_approve" },
     { key: "connmap", chip: "연결 지도 보여줘 (전략–목표–직무–역량)", desc: "사업전략·조직목표·개인목표·직무 R&R·스킬·역량·평가가 어떻게 이어지는지 한 장으로 보여주고, 데이터에 없는 연결은 AI가 근거로 잇습니다. 직무 연결률도 표시합니다.", roles: ["hr", "exec", "leader"], heavy: true, mode: "suggest" },
@@ -241,24 +362,50 @@
     for (var i = 0; i < SCENARIOS.length; i++) if (SCENARIOS[i].key === key) return SCENARIOS[i];
     return null;
   }
-  /* heavy 시나리오 스텁의 핵심 숫자 미리보기 */
-  var STUB_NUMS = {
-    qw7:    "8건 스캔 · 문장 품질 3건 · 운영 신호 5건",
-    qw4:    "근거 24건 기록",
-    qw5:    "4본부 스캔 · 편향 플래그 2",
-    review: "5/12 작성 · AI 보조 ON"
-  };
-  /* calib 미리보기는 상수가 아니라 실집계 재산출값 (simulateCalib은 함수 선언 → 호이스팅) */
+  /* heavy 시나리오 스텁의 핵심 숫자 미리보기 — 전부 실집계 재산출값(상수 폐기).
+     조회가 실패하면 빈 문자열이 되어 미리보기 줄이 사라진다 — 틀린 숫자를 남기지 않는다. */
+  var STUB_NUMS = {};
   function stubNum(key) {
-    if (key !== "calib") return STUB_NUMS[key] || "";
     try {
-      var s = simulateCalib({});
-      if (s.error) return "기준 분포 없음 — 평가 기록 필요";
-      var mv = s.gradeChange.filter(function (g) { return g.delta_pp !== 0; });
-      return (mv.length
-        ? mv.map(function (g) { return g.grade + " " + g.before_pct + "%→" + g.after_pct + "%"; }).join(" · ")
-        : "상한 " + s.cap_pct + "% 이내 — 조정 불필요") + " · 모집단 " + s.basis.population_n + "명";
-    } catch (e) { return ""; }
+      if (key === "qw4") {
+        var t4 = targetEmp(), it4 = qw4Items(t4);
+        if (!it4.length) return esc(t4.name) + " 기록 0건 — 근거 없음";
+        var tg = {};
+        it4.forEach(function (x) { tg[x.tag] = (tg[x.tag] || 0) + 1; });
+        return "근거 " + it4.length + "건 — " + Object.keys(tg).map(function (k) { return k + " " + tg[k]; }).join(" · ");
+      }
+      if (key === "calib") {
+        var s = simulateCalib({});
+        if (s.error) return "기준 분포 없음 — 평가 기록 필요";
+        var mv = s.gradeChange.filter(function (g) { return g.delta_pp !== 0; });
+        return (mv.length
+          ? mv.map(function (g) { return g.grade + " " + g.before_pct + "%→" + g.after_pct + "%"; }).join(" · ")
+          : "상한 " + s.cap_pct + "% 이내 — 조정 불필요") + " · 모집단 " + s.basis.population_n + "명";
+      }
+      if (key === "qw7") {
+        var sc = qw7Scope();
+        if (!sc.objectives.length) return "범위 내 목표 0건 — 점검 대상 없음";
+        var iss = qw7QualityRows(sc).filter(function (r) { return r.issue; }).length;
+        return "목표 " + sc.objectives.length + "건 · KR " + sc.krs.length + "건 스캔 · 문장 품질 지적 " + iss +
+          "건 · 운영 신호 " + qw7OpsRows(sc).count + "건";
+      }
+      if (key === "qw5") {
+        var st = orgBiasStats();
+        if (!st) return "평가 기록 없음 — 편향 판정 불가";
+        return "조직 " + st.units.length + "곳 스캔(모집단 " + BIAS.MIN_N + "명 이상) · 편향 플래그 " + st.flagged.length + "곳 · 전사 " + st.company.n + "명";
+      }
+      if (key === "review") {
+        var rf = reviewFacts();
+        if (!rf.sigs.length) return "리뷰 대상 0명";
+        return "대상 " + rf.sigs.length + "명 · 근거 확보 " + rf.withEv.length + "/" + rf.sigs.length;
+      }
+      if (key === "connmap") {
+        var emps = D().employees || [];
+        var withP = emps.filter(function (e) { return e.jobProfileId; }).length;
+        return "직무 프로파일 연결 " + withP + "/" + emps.length + " (" + (emps.length ? Math.round(withP / emps.length * 100) : 0) + "%)";
+      }
+    } catch (e) { /* 조회 실패 시 상수 폴백 */ }
+    return STUB_NUMS[key] || "";
   }
 
   /* ---------------- 채팅 임베드 실행 ---------------- */
@@ -377,7 +524,7 @@
       '<button class="agh-gitem" data-agh-back title="이전 화면으로 (Esc)" style="display:none">‹ 뒤로</button>' +
       '<span class="agh-rolechip" data-agh-role></span></div>' +
       '<div class="agh-gr">' +
-      '<button class="agh-gitem" data-agh-alerts>🔔 알림 <b data-agh-alertcnt>3</b></button>' +
+      '<button class="agh-gitem" data-agh-alerts>🔔 알림 <b data-agh-alertcnt>0</b></button>' +
       '<button class="agh-gitem" data-agh-ctxtoggle title="판단 근거·사람 확인 패널 열기/닫기">☰ 근거</button>' +
       '<span class="agh-gitem" data-agh-ai title="AI 연결 상태">◐ AI 상태 확인 중</span>' +
       '<button class="agh-gitem" data-agh-dock title="도킹 대화창으로 전환">◱ 도킹으로</button>' +
@@ -565,18 +712,31 @@
      ============================================================ */
   /* 실AI vs 데모 대본 명시 — EZKit.status 계열 배지(ezk-chip). 어떤 화면이 실호출인지 감춘 채
      "라이브"라고 말하지 않는다. */
-  function liveBadge() {
+  /* 화면별 산출 근거 등급 — 배지 문구가 실제와 어긋나지 않게 3단으로 나눈다.
+       calc  : 수치·명단이 전부 talenx 기록 실집계 (AI 미연결이어도 "데모"가 아니다)
+       mixed : 실데이터를 인용하되 서술 문장 일부는 예시 대본
+       script: 아직 대본 화면 */
+  var DATA_GRADE = {
+    qw1: "calc", qw4: "calc", qw5: "calc", qw7: "calc", calib: "calc", connmap: "calc", review: "calc",
+    qw2: "mixed", qw3: "mixed", qw6: "mixed",
+    hold: "script"
+  };
+  function liveBadge(key) {
     var live = aiLive();
-    var lab = live ? "실AI 응답" : "데모 시나리오";
-    var tip = live ? "elizax가 실제 데이터를 조회해 응답합니다" : "AI 미연결 — 준비된 예시 흐름입니다(실호출 없음)";
+    var g = DATA_GRADE[key] || "script";
+    var lab, tip;
+    if (live) { lab = "실AI 응답"; tip = "elizax가 실제 데이터를 조회해 응답합니다"; }
+    else if (g === "calc") { lab = "실데이터 집계"; tip = "AI 미연결 — 화면의 수치·명단은 talenx 기록 실집계입니다(대본 아님, 실AI 호출 없음)"; }
+    else if (g === "mixed") { lab = "실데이터 인용 · 서술 예시"; tip = "AI 미연결 — 인용 근거는 실기록이지만 서술 문장 일부는 준비된 예시입니다"; }
+    else { lab = "데모 시나리오"; tip = "AI 미연결 — 준비된 예시 흐름입니다(실호출 없음)"; }
     var mk = (window.EZKit && EZKit.marker) || "✦";
-    return '<span class="ezk-chip ezk-status" data-mode="' + (live ? "auto" : "suggest") +
+    return '<span class="ezk-chip ezk-status" data-mode="' + (live || g === "calc" ? "auto" : "suggest") +
       '" title="' + esc(tip) + '">' + mk + " " + lab + "</span>";
   }
   function screenHead(key) {
     var s = SCREENS[key];
     return '<div class="agh-shead"><div><h2>' + esc(s.title) + "</h2>" +
-      (s.mode ? autonomyBadge(s.mode) : "") + liveBadge() +
+      (s.mode ? autonomyBadge(s.mode) : "") + liveBadge(key) +
       '<span class="agh-auditchip">⛨ 감사 기록됨</span></div>' +
       '<span class="agh-asof2">기준 시점 · ' + esc(AS_OF) + " ▾</span></div>";
   }
@@ -596,8 +756,17 @@
     host.innerHTML =
       '<div class="agh-shead"><div><h2>오늘은 어떤 도움을 드릴까요?</h2>' +
       '<span class="agh-exp">역할 주체 <b>' + esc(r.label) + "</b> 기준으로 화면과 권한이 자동 구성됩니다</span></div></div>" +
-      '<div class="agh-brief"><span class="ic">⚡</span><div><b>선제 감지 3건</b> — 가중치 합 105% · 전사목표 미연결 1건 · 체크인 지연 3명. ' +
-      "호출 없이 에이전트가 먼저 포착했습니다. 아래 과제 카드에서 확인하세요.</div></div>" +
+      /* 선제 감지 건수·내용은 alertsNow() 실계산 결과 — 상수 폐기 */
+      (function () {
+        var al = alertsNow();
+        if (!al.length) {
+          return '<div class="agh-brief"><span class="ic">⚡</span><div><b>선제 감지 0건</b> — 지금 조회되는 임계 초과 신호가 없습니다. ' +
+            "없는 경고를 만들지 않습니다.</div></div>";
+        }
+        return '<div class="agh-brief"><span class="ic">⚡</span><div><b>선제 감지 ' + al.length + "건</b> — " +
+          al.map(function (a) { return esc(a.title); }).join(" · ") + ". " +
+          "호출 없이 에이전트가 먼저 포착했습니다. 🔔 알림 또는 아래 과제 카드에서 확인하세요.</div></div>";
+      })() +
       '<div class="agh-qwgrid">' + cards + "</div>";
     ctxPanelIf(host, [
       { tag: "챗봇 vs 에이전트", title: "이 워크스페이스가 다른 점 (9축)", body: "촉발=선제 · 산출물=편집 가능한 결과물 · 과정=진행 단계 표시 · 근거=원천 인용 · 통제권=단계·문장 단위 승인 게이트 · 동시성=여러 에이전트 동시 실행" },
@@ -818,115 +987,248 @@
   }
 
   /* ---------- QW7 · 목표 정렬·중복 점검 — 문장 품질 vs 운영 신호 2분면 ---------- */
-  /* 운영 신호 — 팀 목표별 최근 체크인 공백을 checkins 실데이터에서 계산.
-     데모 기준일 = 2026-07-16 (체크인 데이터는 2026-04-04~06-27 범위).
-     팀 목표가 얇으면 결정적 폴백 행으로 3행을 보장한다. */
-  function qw7OpsRows() {
-    var DEMO_TODAY = new Date("2026-07-16");
-    /* 운영 신호 임계 — 체크인 공백 14일 warn / 30일 bad · 진척 드리프트(기간 경과율-진행률) 20%p */
-    var GAP_WARN = 14, GAP_BAD = 30, DRIFT_MIN = 20;
-    /* 목표 기간은 FY2026-2Q(2026-04-01~06-30)로 가정하고 경과율을 계산한다 */
-    var P_START = new Date("2026-04-01"), P_END = new Date("2026-06-30");
-    var elapsed = Math.max(0, Math.min(100, Math.round((DEMO_TODAY - P_START) / (P_END - P_START) * 100)));
+  /* 점검 범위 단일 원천 — 내 목표 + 내 조직(및 하위 조직) 목표 + 직속·동료 소유 목표.
+     중복 대조군에는 같은 상위목표를 공유하는 형제 조직 목표까지 넣는다(크로스팀 중복 탐지). */
+  function qw7Scope() {
+    var d = D(), cu = CU();
+    var orgSet = {};
+    (function () {
+      var kids = {};
+      (d.orgs || []).forEach(function (o) { (kids[o.parent_id] = kids[o.parent_id] || []).push(o.org_id); });
+      var q = [cu.org_id], seen = {};
+      while (q.length) {
+        var id = q.shift();
+        if (!id || seen[id]) continue;
+        seen[id] = 1; orgSet[id] = 1;
+        (kids[id] || []).forEach(function (c) { q.push(c); });
+      }
+    })();
     var ids = {};
+    ids[cu.emp_id] = 1;
+    directReports().forEach(function (e) { ids[e.emp_id] = 1; });
     team().forEach(function (e) { ids[e.emp_id] = 1; });
-    var gaps = [], drifts = [], stall = null;
-    try {
-      (D().objectives || []).forEach(function (o) {
-        if (!ids[o.owner_emp_id]) return;
-        var latest = null;
-        (D().checkins || []).forEach(function (c) {
-          if (c.objective_id === o.objective_id && (!latest || c.checkin_date > latest)) latest = c.checkin_date;
-        });
-        var prog = Math.round(o.progress || 0);
-        if (latest) {
-          var gap = Math.round((DEMO_TODAY - new Date(latest)) / 86400000);
-          if (gap >= GAP_WARN) gaps.push({ title: o.title, gap: gap, progress: prog });
-        }
-        var drift = elapsed - prog;
-        if (drift >= DRIFT_MIN) drifts.push({ title: o.title, elapsed: elapsed, progress: prog, drift: drift });
-        if (!stall && (o.progress || 0) < 30) stall = { title: o.title, progress: prog };
-      });
-    } catch (e) {}
-    gaps.sort(function (a, b) { return b.gap - a.gap; });
+    var objs = (d.objectives || []).filter(function (o) {
+      return ids[o.owner_emp_id] || orgSet[o.org_id];
+    });
+    var inScope = {};
+    objs.forEach(function (o) { inScope[o.objective_id] = 1; });
+    var parents = {};
+    objs.forEach(function (o) { if (o.parent_objective_id) parents[o.parent_objective_id] = 1; });
+    var siblings = (d.objectives || []).filter(function (o) {
+      return !inScope[o.objective_id] && o.parent_objective_id && parents[o.parent_objective_id];
+    });
+    function krsOf(list) {
+      var set = {};
+      list.forEach(function (o) { set[o.objective_id] = o; });
+      return (d.keyResults || []).filter(function (k) { return set[k.objective_id]; });
+    }
+    return { objectives: objs, krs: krsOf(objs), siblings: siblings, siblingKrs: krsOf(siblings) };
+  }
+  /* 운영 신호 — 점검 범위 목표별 최근 체크인 공백·진척 드리프트를 실데이터에서 계산.
+     기준 시점은 EZKit.clock(asOfDate), 기간 경과율은 objectives[].period 파싱값.
+     신호가 없으면 없다고 말한다 — 폴백으로 가짜 목표명을 만들지 않는다. */
+  function qw7OpsRows(scope) {
+    scope = scope || qw7Scope();
+    var today = asOfDate().getTime();
+    var lastByObj = {};
+    (D().checkins || []).forEach(function (c) {
+      if (!lastByObj[c.objective_id] || c.checkin_date > lastByObj[c.objective_id].checkin_date) lastByObj[c.objective_id] = c;
+    });
+    var gaps = [], drifts = [], stalls = [], elapsedSeen = null;
+    scope.objectives.forEach(function (o) {
+      var prog = Math.round(o.progress || 0);
+      var w = periodWindow(o.period);
+      var elapsed = w ? Math.max(0, Math.min(100, Math.round((today - w.start) / (w.end - w.start) * 100))) : null;
+      if (elapsed != null && elapsedSeen == null) elapsedSeen = elapsed;
+      var last = lastByObj[o.objective_id];
+      if (last) {
+        var gap = daysBetween(today, dnum(last.checkin_date));
+        if (gap >= SIG.GAP_WARN) gaps.push({ id: o.objective_id, title: o.title, gap: gap, progress: prog, ref: last });
+      } else {
+        gaps.push({ id: o.objective_id, title: o.title, gap: null, progress: prog, ref: null });
+      }
+      if (elapsed != null && elapsed - prog >= SIG.DRIFT_MIN) {
+        drifts.push({ id: o.objective_id, title: o.title, elapsed: elapsed, progress: prog, drift: elapsed - prog, period: o.period });
+      }
+      if (prog < 30) stalls.push({ id: o.objective_id, title: o.title, progress: prog });
+    });
+    gaps.sort(function (a, b) { return (b.gap == null ? 99999 : b.gap) - (a.gap == null ? 99999 : a.gap); });
     drifts.sort(function (a, b) { return b.drift - a.drift; });
-    var pads = [
-      { title: "실험 파이프라인 자동화", gap: 41, progress: 34 },
-      { title: "리텐션 대시보드 구축", gap: 19, progress: 46 },
-      { title: "온보딩 전환율 개선", gap: 15, progress: 51 }
-    ];
-    for (var i = 0; gaps.length < 3 && i < pads.length; i++) gaps.push(pads[i]);
-    if (!drifts.length) drifts.push({ title: "리텐션 대시보드 구축", elapsed: elapsed, progress: 46, drift: Math.max(DRIFT_MIN, elapsed - 46) });
-    if (!stall) stall = { title: "A/B 테스트 속도 2배", progress: 24 };
-    return { gaps: gaps.slice(0, 3), drifts: drifts.slice(0, 2), stall: stall, elapsed: elapsed, gapWarn: GAP_WARN, gapBad: GAP_BAD };
+    stalls.sort(function (a, b) { return a.progress - b.progress; });
+    return {
+      gaps: gaps.slice(0, 3), drifts: drifts.slice(0, 2), stalls: stalls.slice(0, 1),
+      gapTotal: gaps.length, driftTotal: drifts.length, stallTotal: stalls.length,
+      elapsed: elapsedSeen, gapWarn: SIG.GAP_WARN, gapBad: SIG.GAP_BAD, driftMin: SIG.DRIFT_MIN,
+      count: gaps.length + drifts.length + stalls.length
+    };
+  }
+  /* KR 명칭 토큰 겹침 — "유사도 90%" 같은 근거 없는 퍼센트 대신 겹친 표현 수/겹침비율로만 말한다.
+     겹침비율 = 공통 토큰 수 ÷ 짧은 쪽 토큰 수 (2글자 이상 토큰만 계산) */
+  var DUP = { MIN_TOKENS: 2, MIN_RATIO: 0.6 };
+  function krTokens(s) {
+    var seen = {}, out = [];
+    String(s == null ? "" : s).toLowerCase().replace(/[^0-9a-z가-힣%]+/g, " ").split(" ").forEach(function (t) {
+      if (t.length >= 2 && !seen[t]) { seen[t] = 1; out.push(t); }
+    });
+    return out;
+  }
+  function krOverlap(a, b) {
+    var ta = krTokens(a), tb = krTokens(b);
+    if (!ta.length || !tb.length) return null;
+    var set = {}; tb.forEach(function (t) { set[t] = 1; });
+    var inter = ta.filter(function (t) { return set[t]; });
+    if (inter.length < DUP.MIN_TOKENS) return null;
+    var ratio = inter.length / Math.min(ta.length, tb.length);
+    if (ratio < DUP.MIN_RATIO) return null;
+    return { shared: inter, n: inter.length, denom: Math.min(ta.length, tb.length), ratio: ratio };
+  }
+  /* 문장 품질 행 — 실 KR 레코드에서만 만든다. 상수 6행 폐기. */
+  function qw7QualityRows(scope) {
+    var d = D(), rows = [];
+    var omap = objIndex();
+    var empMap = {};
+    (d.employees || []).forEach(function (e) { empMap[e.emp_id] = e; });
+    var pool = scope.krs.concat(scope.siblingKrs);
+    var inScopeKr = {};
+    scope.krs.forEach(function (k) { inScopeKr[k.kr_id] = 1; });
+    var NUM = /[0-9]|%|억|만원|건|명|점|배|회/;
+    scope.krs.forEach(function (k) {
+      var ob = omap[k.objective_id] || {};
+      var owner = empMap[ob.owner_emp_id] || {};
+      var parent = ob.parent_objective_id ? omap[ob.parent_objective_id] : null;
+      var lint = [];
+      try { lint = (window.EZLint && EZLint.lint) ? EZLint.lint(k.name, "goal") : []; } catch (e) { lint = []; }
+      var dup = null;
+      for (var i = 0; i < pool.length && !dup; i++) {
+        var o2 = pool[i];
+        if (o2.kr_id === k.kr_id || o2.objective_id === k.objective_id) continue;
+        var ov = krOverlap(k.name, o2.name);
+        if (ov) {
+          var ob2 = omap[o2.objective_id] || {};
+          dup = { kr: o2, ov: ov, objective: ob2.title || o2.objective_id, cross: !inScopeKr[o2.kr_id] };
+        }
+      }
+      var flags = [];
+      if (dup) flags.push("dup");
+      if (!parent) flags.push("noparent");
+      if (!NUM.test(String(k.name) + " " + String(k.target_value || ""))) flags.push("nonum");
+      if (!k.difficulty_basis || !k.difficulty_basis.type) flags.push("nobasis");
+      if (lint.length) flags.push("lint");
+      var res, cls;
+      if (dup) {
+        cls = dup.cross ? "dupb" : "dup";
+        res = "▲ 중복 후보 — 「" + dup.kr.name + "」(" + dup.objective + ")와 겹친 표현 " + dup.ov.n +
+          "개(" + dup.ov.shared.join("·") + ") · 겹침 " + dup.ov.n + "/" + dup.ov.denom;
+      } else if (flags.indexOf("noparent") >= 0) {
+        cls = "miss"; res = "▲ 미연계 — 상위목표 참조(parent_objective_id)가 비어 있음";
+      } else if (flags.indexOf("nonum") >= 0) {
+        cls = "dupb"; res = "▲ 측정 불가 — 명칭·목표값에 정량 표현이 없음";
+      } else if (flags.indexOf("nobasis") >= 0) {
+        cls = "dupb"; res = "▲ 난이도 근거 없음 — 난이도 " + (k.difficulty || "-") + " 판단 근거 미기록";
+      } else if (lint.length) {
+        cls = "dupb"; res = "▲ 문장 규칙 위반 — " + lint.map(function (h) { return h.tag; }).join(" · ");
+      } else {
+        cls = "ok"; res = "✓ 점검 통과 — 중복·미연계·측정 불가 신호 없음";
+      }
+      rows.push({
+        kr: k, objective: ob, owner: owner.name || ob.owner_emp_id || "-",
+        parentTitle: parent ? parent.title : null,
+        lint: lint, dup: dup, cls: cls, res: res, issue: cls !== "ok"
+      });
+    });
+    rows.sort(function (a, b) { return (b.issue ? 1 : 0) - (a.issue ? 1 : 0); });
+    return rows;
   }
   RENDER.qw7 = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
-    var tm = team().slice(0, 6);
-    var fallback = ["김서연", "박도윤", "이준호", "최민아", "정하람", "서지우"];
-    var rows = [
-      { n: 0, goal: "온보딩 전환율 개선", kr: "KR2 · 활성화율 +8%p", res: "▲ 중복 A — 2번 목표와 90% 유사", cls: "dup" },
-      { n: 1, goal: "신규 유저 온보딩 개선", kr: "KR2 · 활성화율 +8%p", res: "▲ 중복 A — 병합 대상", cls: "dup" },
-      { n: 2, goal: "리텐션 대시보드 구축", kr: "KR3 · 4주 잔존 62%", res: "✓ 정렬됨", cls: "ok" },
-      { n: 3, goal: "실험 파이프라인 자동화", kr: "연결 없음", res: "▲ 미연계 — 어느 팀 KR에도 안 걸림", cls: "miss" },
-      { n: 4, goal: "A/B 테스트 속도 2배", kr: "KR1 · 실험 velocity", res: "▲ 중복 B — 76% 유사 (관점 상이)", cls: "dupb" },
-      { n: 5, goal: "업계 Top 수준 달성", kr: "KR 미지정", res: "▲ 측정 불가 표현 — 평가 시점에 달성 근거를 다툴 위험", cls: "dupb" }
-    ];
-    var ops = qw7OpsRows();
-    /* 문장 품질 행을 EZLint 규칙 엔진(tx_upgrade.js)으로 실제 검사 — 걸리는 행에만 규칙 ID 칩 */
-    var lintHits = rows.map(function (r) {
-      try { return (window.EZLint && EZLint.lint) ? EZLint.lint(r.goal, "goal") : []; }
-      catch (e2) { return []; }
-    });
-    function lintChips(i) {
-      return lintHits[i].map(function (hh) {
+    var scope = qw7Scope();
+    var ops = qw7OpsRows(scope);
+    var allRows = qw7QualityRows(scope);
+    var MAX_ROWS = 8;
+    var rows = allRows.slice(0, MAX_ROWS);
+    var issueCnt = allRows.filter(function (r) { return r.issue; }).length;
+    var dupCnt = allRows.filter(function (r) { return r.dup; }).length;
+    var missCnt = allRows.filter(function (r) { return !r.parentTitle; }).length;
+
+    if (!scope.objectives.length) {
+      host.innerHTML = screenHead("qw7") +
+        '<div class="agh-emptybox"><b>점검할 목표가 조회되지 않았습니다.</b><br>' +
+        "범위 = 내 목표 + 내 조직·하위 조직 목표 + 직속·동료 소유 목표. 현재 <b>0건</b>이라 점검 대상이 없습니다 — 예시 목표를 만들지 않습니다.</div>";
+      logAudit("판단 정지", "목표 정렬 점검 · 범위 내 목표 0건", "qw7.no-scope");
+      return;
+    }
+    function lintChips(r) {
+      return r.lint.map(function (hh) {
         return ' <span class="agh-flag" title="' + esc(hh.tip || "") + '">' + esc(hh.id) + (hh.word ? " · 「" + esc(hh.word) + "」" : "") + "</span>";
       }).join("");
     }
-    function qualBtns(r, nm) {
+    function qualBtns(r) {
+      var nm = r.kr.name;
       return '<button class="agh-btn sm" data-qw7-act="수정 제안 · ' + esc(nm) + '">수정 제안</button> ' +
-        (r.cls === "dup" ? '<button class="agh-btn sm" data-qw7-act="병합 제안 · ' + esc(nm) + '">병합 제안</button> ' : "") +
+        (r.dup ? '<button class="agh-btn sm" data-qw7-act="병합 제안 · ' + esc(nm) + '">병합 제안</button> ' : "") +
         '<button class="agh-btn sm" data-qw7-act="elizax 정제 · ' + esc(nm) + '">elizax로 정제</button>';
     }
     function opsBtns(title) {
       return ' <button class="agh-btn sm" data-qw7-act="체크인 리마인드 · ' + esc(title) + '">체크인 리마인드</button> <button class="agh-btn sm" data-qw7-act="1:1 제안 · ' + esc(title) + '">1:1 제안</button>';
     }
-    var opsCount = ops.gaps.length + ops.drifts.length + 1;
+    var opsHTML =
+      ops.gaps.map(function (g) {
+        return '<div class="agh-prow ' + (g.gap == null || g.gap >= ops.gapBad ? "bad" : "warn") + '"><span class="agh-tag">운영 신호</span>「' + esc(g.title) + "」 — " +
+          (g.gap == null ? "체크인 <b>기록 없음</b>" : "체크인 <b>" + g.gap + "일</b> 없음 (마지막 " + esc(g.ref.checkin_date) + ")") +
+          " · 진행률 " + g.progress + "% " +
+          (g.ref ? refChip("talenx", g.ref.checkin_id, g.ref.comment || "") : srcChip("talenx", g.id)) + opsBtns(g.title) + "</div>";
+      }).join("") +
+      ops.drifts.map(function (dr) {
+        return '<div class="agh-prow ' + (dr.drift >= 35 ? "bad" : "warn") + '"><span class="agh-tag">운영 신호</span>진척 드리프트 · 「' + esc(dr.title) + "」 — " +
+          esc(dr.period || "") + " 기간 경과 " + dr.elapsed + "% 대비 진행률 " + dr.progress + "% (<b>−" + dr.drift + "%p</b>) " +
+          srcChip("talenx", dr.id) + opsBtns(dr.title) + "</div>";
+      }).join("") +
+      ops.stalls.map(function (s) {
+        return '<div class="agh-prow warn"><span class="agh-tag">운영 신호</span>진척 정체 · 「' + esc(s.title) + "」 — 진행률 <b>" + s.progress + "%</b> (30% 미만) " +
+          srcChip("talenx", s.id) + opsBtns(s.title) + "</div>";
+      }).join("");
+    if (!opsHTML) opsHTML = '<div class="agh-emptybox">운영 신호 없음 — 범위 내 목표 ' + scope.objectives.length + "건 모두 체크인 공백 " + ops.gapWarn + "일 미만·드리프트 " + ops.driftMin + "%p 미만·진행률 30% 이상입니다.</div>";
+
     host.innerHTML = screenHead("qw7") +
       '<p style="font-size:12px;color:var(--agh-ink-3,#667085);margin:2px 0 10px">수립 품질은 목표수립 마감 전 게이트에서, 운영 신호는 주간 점검에서 각각 전달됩니다 — 이 화면은 두 채널의 통합 조망입니다.</p>' +
-      '<div class="agh-scanline" data-agh-scan>팀 목표 8건 스캔 중 <i class="agh-spin"></i></div>' +
+      '<div class="agh-scanline" data-agh-scan>목표 ' + scope.objectives.length + "건 · KR " + scope.krs.length + "건 스캔 중 <i class=\"agh-spin\"></i></div>" +
       '<div class="agh-brief" style="margin-top:12px"><span class="ic">✎</span><div><b>① 문장 품질 — 잘 쓴 목표인가</b><br>' +
-      "목표 <b>문장 자체</b>의 결함(중복·미연계·측정 불가)입니다. 담당자에게 문장을 고치거나 병합하자고 제안할 일이지, 실행을 독촉할 일이 아닙니다.</div></div>" +
-      '<table class="agh-table" data-agh-tbl style="opacity:.35"><thead><tr><th>담당자 · 개인목표</th><th>상위 KR 연계</th><th>점검 결과</th><th>행 처방</th></tr></thead><tbody>' +
+      "목표 <b>문장 자체</b>의 결함(중복·미연계·측정 불가·난이도 근거 누락)입니다. 담당자에게 문장을 고치거나 병합하자고 제안할 일이지, 실행을 독촉할 일이 아닙니다.<br>" +
+      "<b>중복 산출식</b> — KR 명칭을 2글자 이상 토큰으로 쪼개 겹친 표현이 <b>" + DUP.MIN_TOKENS + "개 이상</b>이고 겹침비율(공통÷짧은 쪽)이 <b>" +
+      Math.round(DUP.MIN_RATIO * 100) + "% 이상</b>일 때만 중복 후보로 봅니다. 근거 없는 '유사도 %'는 쓰지 않습니다. " +
+      "대조군은 범위 내 KR " + scope.krs.length + "건 + 같은 상위목표를 공유하는 형제 조직 KR " + scope.siblingKrs.length + "건.</div></div>" +
+      '<table class="agh-table" data-agh-tbl style="opacity:.35"><thead><tr><th>담당자 · 목표 · KR</th><th>상위 목표 연계</th><th>점검 결과</th><th>행 처방</th></tr></thead><tbody>' +
       rows.map(function (r, i) {
-        var nm = (tm[i] && tm[i].name) || fallback[i];
-        return '<tr class="' + r.cls + '" data-ri="' + i + '"><td><span class="agh-tag">수립 품질</span><b>' + esc(nm) + "</b> · " + esc(r.goal) + "</td><td>" + esc(r.kr) + '</td><td class="res" data-res>스캔 대기…</td><td style="white-space:nowrap">' + qualBtns(r, r.goal) + "</td></tr>";
+        return '<tr class="' + r.cls + '" data-ri="' + i + '"><td><span class="agh-tag">수립 품질</span><b>' + esc(r.owner) + "</b> · " +
+          esc(r.objective.title || "") + "<br><small>" + esc(r.kr.kr_id) + " · " + esc(r.kr.name) + " (" + esc(r.kr.weight || "-") + " · 난이도 " + esc(r.kr.difficulty || "-") + ")</small></td><td>" +
+          (r.parentTitle ? esc(r.parentTitle) : "<b>연결 없음</b>") + '</td><td class="res" data-res>스캔 대기…</td><td style="white-space:nowrap">' + qualBtns(r) + "</td></tr>";
       }).join("") + "</tbody></table>" +
+      (allRows.length > MAX_ROWS ? '<p style="font-size:11.5px;color:var(--agh-ink-3,#667085);margin:6px 0 0">KR ' + allRows.length + "건 중 지적 우선 " + MAX_ROWS + "건만 표시 · 전체 지적 " + issueCnt + "건</p>" : "") +
       '<div class="agh-linkrow"><button class="agh-btn" data-qw7-act="수정 제안 일괄 발송">수정 제안 일괄 발송</button> <button class="agh-btn" data-qw7-act="병합 제안 일괄">병합 제안 일괄</button></div>' +
       '<div class="agh-brief" style="margin-top:16px"><span class="ic">⏱</span><div><b>② 운영 신호 — 잘 굴러가는 목표인가</b><br>' +
       "문장은 멀쩡해도 <b>실행이 멈춘</b> 목표입니다. 문장 수정이 아니라 체크인 리마인드나 1:1로 풀어야 하는, 완전히 다른 처방입니다. " +
-      "임계 — 체크인 공백 " + ops.gapWarn + "일 주의 · " + ops.gapBad + "일 경고 · 드리프트(기간 경과율−진행률) 20%p 이상.</div></div>" +
-      '<div class="agh-rows" data-agh-ops style="opacity:.35">' +
-      ops.gaps.map(function (g) {
-        return '<div class="agh-prow ' + (g.gap >= ops.gapBad ? "bad" : "warn") + '"><span class="agh-tag">운영 신호</span>「' + esc(g.title) + "」 — 체크인 <b>" + g.gap + "일</b> 없음 · 진행률 " + g.progress + "%" + opsBtns(g.title) + "</div>";
-      }).join("") +
-      ops.drifts.map(function (dr) {
-        return '<div class="agh-prow ' + (dr.drift >= 35 ? "bad" : "warn") + '"><span class="agh-tag">운영 신호</span>진척 드리프트 · 「' + esc(dr.title) + "」 — 기간 경과 " + dr.elapsed + "% 대비 진행률 " + dr.progress + "% (<b>−" + dr.drift + "%p</b>)" + opsBtns(dr.title) + "</div>";
-      }).join("") +
-      '<div class="agh-prow warn"><span class="agh-tag">운영 신호</span>진척 정체 · 「' + esc(ops.stall.title) + "」 — 진행률 <b>" + ops.stall.progress + "%</b> (30% 미만)" + opsBtns(ops.stall.title) + "</div></div>" +
+      "임계 — 체크인 공백 " + ops.gapWarn + "일 주의 · " + ops.gapBad + "일 경고 · 드리프트(기간 경과율−진행률) " + ops.driftMin + "%p 이상. 기준 시점 " +
+      esc(asOfDate().toISOString().slice(0, 10)) + " (EZKit.clock).</div></div>" +
+      '<div class="agh-rows" data-agh-ops style="opacity:.35">' + opsHTML + "</div>" +
       '<div class="agh-linkrow"><button class="agh-btn" data-qw7-act="체크인 리마인드 일괄 발송">체크인 리마인드 일괄 발송</button> <button class="agh-btn" data-qw7-act="1:1 제안 일괄">1:1 제안 일괄</button></div>' +
       '<div class="agh-verdict" data-agh-verdict style="display:none"></div>' +
       gateHTML("qw7", ["병합·연결 승인", "수정", "보류"]);
     ctxPanelIf(host, [
       { tag: "두 개의 질문", title: "문장 품질 ≠ 운영 신호", body: "'목표 문장이 모호하다'와 '체크인이 두 달째 없다'는 다른 문제입니다. 앞은 <b>수정·병합 제안</b>으로, 뒤는 <b>리마인드·1:1</b>로 — 처방이 달라 섹션을 나눠 제시합니다." },
-      { tag: "확인 내역", title: "talenx 목표 트리·체크인 대조", body: "김서연·박도윤 목표 문구·지표(KR2) <b>90% 일치</b> — 사실상 같은 일 " + srcChip("talenx", "목표 대조") + " 체크인 공백은 목표별 최근 체크인 기록으로 계산했습니다 " + srcChip("talenx", "체크인 기록") }
+      { tag: "확인 내역", title: "무엇을 무엇과 대조했나", body: "범위 목표 <b>" + scope.objectives.length + "건</b> · KR <b>" + scope.krs.length + "건</b>, 중복 대조군에 형제 조직 KR <b>" + scope.siblingKrs.length + "건</b> 포함. " +
+        "중복 " + dupCnt + "건 · 상위목표 미연계 " + missCnt + "건 · 지적 합계 " + issueCnt + "건. " + srcChip("talenx", "목표·KR 트리") + srcChip("talenx", "체크인 기록") }
     ], "");
     T(function () {
       var tbl = host.querySelector("[data-agh-tbl]"); tbl.style.opacity = "1";
-      host.querySelector("[data-agh-scan]").innerHTML = "팀 목표 8건 스캔 — <b>문장 품질 3건 · 운영 신호 " + opsCount + "건</b> · 0.9s · " + srcChip("talenx", "목표 트리·체크인 대조") + ' <span class="agh-flag">▲ 중복 2쌍</span><span class="agh-flag">▲ 미연계 1건</span><span class="agh-flag">▲ 체크인 공백 최장 ' + ops.gaps[0].gap + "일</span>";
+      host.querySelector("[data-agh-scan]").innerHTML = "목표 " + scope.objectives.length + "건 · KR " + scope.krs.length +
+        "건 스캔 — <b>문장 품질 지적 " + issueCnt + "건 · 운영 신호 " + ops.count + "건</b> · " +
+        srcChip("talenx", "목표 트리·체크인 대조") +
+        (dupCnt ? ' <span class="agh-flag">▲ 중복 후보 ' + dupCnt + "건</span>" : "") +
+        (missCnt ? ' <span class="agh-flag">▲ 미연계 ' + missCnt + "건</span>" : "") +
+        (ops.gaps.length ? ' <span class="agh-flag">▲ 체크인 공백 최장 ' + (ops.gaps[0].gap == null ? "기록 없음" : ops.gaps[0].gap + "일") + "</span>" : "");
       Array.prototype.forEach.call(tbl.querySelectorAll("[data-res]"), function (c, i) {
-        T(function () { c.innerHTML = esc(rows[i].res) + lintChips(i); }, 150 * i);
+        T(function () { c.innerHTML = esc(rows[i].res) + lintChips(rows[i]); }, 150 * i);
       });
     }, 1300);
     T(function () {
@@ -936,76 +1238,281 @@
     T(function () {
       var v = host.querySelector("[data-agh-verdict]");
       v.style.display = "";
-      v.innerHTML = "<b>문장 품질</b> — 중복 A 두 건은 <b>1건 병합</b>(담당: 공동), 미연계 목표는 <b>KR1(실험 velocity) 연결</b>, '업계 Top 수준'은 측정 지표로 바꾸는 <b>수정 제안</b>을 권합니다. " +
-        "<b>운영 신호</b> — 체크인이 " + ops.gaps[0].gap + "일 끊긴 「" + esc(ops.gaps[0].title) + "」 등 " + ops.gaps.length + "건은 <b>체크인 리마인드</b>를, 기간 경과 대비 <b>−" + ops.drifts[0].drift + "%p</b> 뒤처진 「" + esc(ops.drifts[0].title) + "」와 진행률 30% 미만 「" + esc(ops.stall.title) + "」는 <b>1:1</b>을 권합니다. " +
-        "병합·수정 제안·리마인드 발송은 모두 승인 게이트로만 실행됩니다." + '<span class="agh-auditchip">⛨ 감사 기록됨</span>';
+      var q = issueCnt
+        ? "<b>문장 품질</b> — 지적 <b>" + issueCnt + "건</b>(중복 후보 " + dupCnt + " · 미연계 " + missCnt + "). 중복 후보는 <b>병합 또는 지표 분리</b>, 미연계는 <b>상위목표 연결</b>, 측정 불가·난이도 근거 누락은 <b>수정 제안</b>을 권합니다. "
+        : "<b>문장 품질</b> — KR " + scope.krs.length + "건에서 중복·미연계·측정 불가 신호가 없습니다. ";
+      var o = ops.count
+        ? "<b>운영 신호</b> — " +
+          (ops.gaps.length ? "체크인이 " + (ops.gaps[0].gap == null ? "한 번도 없는" : ops.gaps[0].gap + "일 끊긴") + " 「" + esc(ops.gaps[0].title) + "」 등 " + ops.gapTotal + "건은 <b>체크인 리마인드</b>, " : "") +
+          (ops.drifts.length ? "기간 경과 대비 <b>−" + ops.drifts[0].drift + "%p</b> 뒤처진 「" + esc(ops.drifts[0].title) + "」 등 " + ops.driftTotal + "건은 <b>1:1</b>을 권합니다. " : "") +
+          (ops.stalls.length ? "진행률 30% 미만 「" + esc(ops.stalls[0].title) + "」 " + ops.stallTotal + "건도 1:1 대상입니다. " : "")
+        : "<b>운영 신호</b> — 임계를 넘는 목표가 없습니다. ";
+      v.innerHTML = q + o + "병합·수정 제안·리마인드 발송은 모두 승인 게이트로만 실행됩니다." + '<span class="agh-auditchip">⛨ 감사 기록됨</span>';
     }, 2600);
   };
 
-  /* ---------- QW1 · 주간 체크인 팝업 ---------- */
+  /* ---------- QW1 · 주간 체크인 팝업 ----------
+     대본 전면 폐기 — 대상 팀원은 employees.manager_id 실 직속, 수치는 checkins·keyResults
+     실집계, 근거는 실 레코드 id(checkin_id · kr_id). 신호가 없으면 "확인할 신호 없음"으로 멈춘다. */
+  function qw1MsgDraft(t) {
+    if (!t) return null;
+    var w = t.worst, bl = t.blockers[0] || null, parts = [];
+    if (w && w.drift != null && w.drift >= SIG.DRIFT_MIN) {
+      parts.push("「" + esc(w.name) + "」 진척이 <b>" + w.progress + "%</b>인데 " +
+        (w.period ? esc(w.period) + " " : "") + "기간은 <b>" + w.elapsed + "%</b> 지났습니다(<b>−" + w.drift + "%p</b>)");
+    } else if (w) {
+      parts.push("「" + esc(w.name) + "」 진척이 <b>" + w.progress + "%</b>로 기록돼 있습니다");
+    }
+    if (t.gap == null) parts.push("체크인 기록이 아직 한 건도 없습니다");
+    else if (t.gap >= SIG.GAP_WARN) parts.push("마지막 체크인이 <b>" + t.gap + "일</b> 전(" + esc(t.last.checkin_date) + ")입니다");
+    if (bl) parts.push("직전 체크인에 「" + esc(bl.blocker) + "」가 블로커로 남아 있습니다");
+    if (!parts.length) return null;
+    return parts;
+  }
   RENDER.qw1 = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
-    /* 운영 신호 채널 연결 — QW7과 같은 계산(qw7OpsRows)을 주간 점검에서도 재사용 */
-    var ops = qw7OpsRows();
-    var opsRows =
-      '<div class="agh-prow ' + (ops.gaps[0].gap >= ops.gapBad ? "bad" : "warn") + '"><span class="agh-tag">운영 신호</span>「' + esc(ops.gaps[0].title) + "」 — 체크인 <b>" + ops.gaps[0].gap + "일</b> 없음 · 진행률 " + ops.gaps[0].progress + "%</div>" +
-      '<div class="agh-prow warn"><span class="agh-tag">운영 신호</span>진척 드리프트 · 「' + esc(ops.drifts[0].title) + "」 — 기간 경과 " + ops.drifts[0].elapsed + "% 대비 진행률 " + ops.drifts[0].progress + "% (<b>−" + ops.drifts[0].drift + "%p</b>)</div>";
+    var f = qw1Facts();
+
+    /* 팀원 0명 역할(직속 없음)에서 열리면 빈 상태 — 남의 팀 이름을 지어내지 않는다 */
+    if (!f.team.length) {
+      host.innerHTML = screenHead("qw1") +
+        '<div class="agh-emptybox"><b>직속 팀원이 없어 주간 체크인을 만들 수 없습니다.</b><br>' +
+        "이 화면은 <b>" + esc(CU().name) + "</b> 님을 <code>employees.manager_id</code>로 참조하는 구성원을 대상으로 집계합니다. " +
+        "현재 조회된 직속 인원은 <b>0명</b>입니다 — 대상이 없으므로 대신할 이름을 가정하지 않습니다.</div>";
+      ctxPanelIf(host, [
+        { tag: "빈 상태", title: "왜 비어 있나", kind: "warn", body: "대상자는 조직 소속이 아니라 <b>실제 보고선(manager_id)</b>으로 정합니다. 보고선이 비어 있으면 집계 자체를 만들지 않습니다. " + srcChip("talenx", "employees.manager_id") }
+      ], "");
+      logAudit("판단 정지", "주간 체크인 · 직속 팀원 0명", "qw1.no-team");
+      return;
+    }
+
+    var scans = [
+      ["talenx", "체크인 기록 스캔 (직속 " + f.team.length + "명)",
+        f.gapped.length ? "체크인 공백 " + f.gapped.length + "명" : "전원 " + SIG.GAP_WARN + "일 이내 기록"],
+      ["talenx", "KR 진척 대비 기간 경과 대조",
+        f.lag.length ? "진척 지연 " + f.lag.length + "명" : "드리프트 " + SIG.DRIFT_MIN + "%p 이상 없음"],
+      ["rule", "블로커·확신도·진척 하락 기록 확인",
+        "블로커 " + f.blockerCnt + "건 · 낮은 확신 " + f.lowCnt + "건 · 진척 하락 " + f.dropCnt + "건"]
+    ];
+    function rowFor(s) {
+      var bits = [], cls = "warn";
+      if (s.gap == null) { bits.push("체크인 기록 <b>없음</b>"); cls = "bad"; }
+      else {
+        bits.push("마지막 체크인 <b>" + s.gap + "일</b> 전 (" + esc(s.last.checkin_date) + ")");
+        if (s.gap >= SIG.GAP_BAD) cls = "bad";
+      }
+      if (s.worst) {
+        bits.push("「" + esc(s.worst.name) + "」 진척 " + s.worst.progress + "%" +
+          (s.worst.drift != null ? " · 기간 경과 " + s.worst.elapsed + "% (−" + s.worst.drift + "%p)" : ""));
+        if (s.worst.drift != null && s.worst.drift >= SIG.DRIFT_MIN) cls = "bad";
+      } else bits.push("연결된 KR 기록 없음");
+      if (s.blockers.length) bits.push("블로커 " + s.blockers.length + "건");
+      var ref = s.last
+        ? refChip("talenx", s.last.checkin_id, (s.last.comment || "") + (s.last.blocker ? " · 블로커: " + s.last.blocker : ""))
+        : srcChip("talenx", "체크인 기록 없음");
+      var krRef = s.worst ? refChip("erp", s.worst.kr_id, s.worst.objective || s.worst.name) : "";
+      return '<div class="agh-prow ' + cls + '"><span class="agh-tag">' +
+        (s.worst && s.worst.drift != null && s.worst.drift >= SIG.DRIFT_MIN ? "진척 지연" : "체크인 대상") +
+        "</span><b>" + esc(s.name) + "</b> · " + bits.join(" · ") + " " + ref + krRef + "</div>";
+    }
+    var signaled = f.lag.concat(f.gapped.filter(function (s) { return f.lag.indexOf(s) < 0; }));
+    var rowsHTML = signaled.length
+      ? signaled.map(rowFor).join("")
+      : '<div class="agh-emptybox">이번 주 확인할 신호 없음 — 직속 ' + f.team.length + "명 모두 체크인 공백 " + SIG.GAP_WARN +
+        "일 미만이고 드리프트 " + SIG.DRIFT_MIN + "%p 미만입니다. 없는 신호를 만들지 않습니다.</div>";
+
+    var t = f.target, draft = qw1MsgDraft(t);
+    var msgHTML = draft
+      ? '<div class="agh-draftmsg" data-agh-msg style="display:none"><div class="lab">● 선제 초안 — 리더가 ' + esc(t.name) + " 님에게 보낼 메시지</div>" +
+        "<p>" + esc(t.name) + " 님, " + draft.join(". ") + ". 막힌 지점이 있는지 <b>10분 1:1</b>로 같이 정리해볼까요?</p>" +
+        "<small>근거 — " +
+        (t.last ? refChip("talenx", t.last.checkin_id, t.last.comment || "") : srcChip("talenx", "체크인 기록 없음")) +
+        (t.worst ? refChip("erp", t.worst.kr_id, t.worst.name) : "") +
+        " · 톤은 질책이 아닌 지원 프레임 · <b>발송 전 리더 승인 필요</b></small></div>"
+      : '<div class="agh-draftmsg" data-agh-msg style="display:none"><div class="lab">● 초안 없음</div>' +
+        "<p>보낼 만한 신호가 조회되지 않아 메시지를 만들지 않았습니다 — 근거 없는 독촉 문구를 지어내지 않습니다.</p></div>";
+
     host.innerHTML = screenHead("qw1") +
+      '<div class="agh-scanline">직속 팀원 <b>' + f.team.length + "명</b> 대상 · 기준 " + esc(asOfDate().toISOString().slice(0, 10)) +
+      " · 임계 체크인 공백 " + SIG.GAP_WARN + "일(경고 " + SIG.GAP_BAD + "일) · 드리프트 " + SIG.DRIFT_MIN + "%p " +
+      srcChip("talenx", "employees.manager_id") + "</div>" +
       '<div class="agh-scan3" data-agh-s3>' +
-      [["talenx", "KR 업데이트 로그 스캔", "7일 무변동 3명"], ["ERP", "달성률 대비 잔여기간 대조", "진척 지연 1명"], ["1:1", "최근 체크인 이력 확인", "14일+ 미실시 2명"]].map(function (r, i) {
-        return '<div class="agh-scanrow" data-sr="' + i + '"><span class="agh-src agh-s-' + (i === 0 ? "talenx" : i === 1 ? "erp" : "rule") + '">' + r[0] + '</span><span class="txt">' + esc(r[1]) + '</span><b class="out" data-out></b></div>';
+      scans.map(function (r, i) {
+        return '<div class="agh-scanrow" data-sr="' + i + '"><span class="agh-src agh-s-' + r[0] + '">' +
+          (r[0] === "rule" ? "체크인" : "talenx") + '</span><span class="txt">' + esc(r[1]) + '</span><b class="out" data-out></b></div>';
       }).join("") + "</div>" +
       '<div class="agh-sumgrid" data-agh-sum style="opacity:.3">' +
-      '<div class="agh-sumcard warn"><b>3</b><span>체크인 대상</span></div>' +
-      '<div class="agh-sumcard bad"><b>1</b><span>부진 (지연)</span></div>' +
-      '<div class="agh-sumcard ok"><b>8</b><span>정상 진행</span></div></div>' +
-      '<div class="agh-rows" data-agh-rows style="display:none">' +
-      '<div class="agh-prow bad">부진 · 정민서 — KR2 달성 41% (잔여 3주)</div>' +
-      '<div class="agh-prow warn">대상 · 김도현 — 업데이트 9일 무변동</div>' +
-      '<div class="agh-prow warn">대상 · 한유진 — 1:1 16일 미실시</div>' + opsRows + "</div>" +
-      '<div class="agh-draftmsg" data-agh-msg style="display:none"><div class="lab">● 선제 초안 — 리더가 정민서 님에게 보낼 메시지</div>' +
-      "<p>민서 님, 이번 주 <b>KR2(신규 온보딩 자동화)</b> 진척이 지연 구간에 들어왔어요. 잔여 3주 기준 계획 대비 약 <b>-24%p</b>입니다. " +
-      "막힌 지점이 있는지 <b>10분 1:1</b>로 같이 정리해볼까요? 화·수 오후 중 편한 시간 알려주세요.</p>" +
-      '<small>talenx 진척·1:1 이력과 ERP 달성률 근거 · 톤은 질책이 아닌 지원 프레임 · <b>발송 전 리더 승인 필요</b></small></div>' +
+      '<div class="agh-sumcard warn"><b>' + f.gapped.length + "</b><span>체크인 대상</span></div>" +
+      '<div class="agh-sumcard bad"><b>' + f.lag.length + "</b><span>진척 지연</span></div>" +
+      '<div class="agh-sumcard ok"><b>' + f.clean.length + "</b><span>신호 없음</span></div></div>" +
+      '<div class="agh-rows" data-agh-rows style="display:none">' + rowsHTML + "</div>" +
+      msgHTML +
       gateHTML("qw1", ["승인·발송", "수정", "보류"]);
     ctxPanelIf(host, [
       { tag: "자동 처리 배지", title: "집계는 바로, 발송은 게이트", body: "데이터 스캔·요약은 에이전트가 상시 자동 처리하지만, 사람에게 닿는 메시지는 <b>승인 필요</b> — 승인 없이는 발송되지 않습니다." },
-      { tag: "선제 감지", title: "이번 주 감지 계기", body: "월요일 06:00 정기 스캔에서 지연 신호 포착 → 리더에게 선제 팝업으로 먼저 말 걸었습니다. " + srcChip("rule", "매주 정기 스캔") }
+      { tag: "산출식", title: "이 수치는 어떻게 나왔나", body:
+        "대상 = <code>employees.manager_id</code> = " + esc(CU().name) + " 인 직속 <b>" + f.team.length + "명</b><br>" +
+        "체크인 공백 = 기준 시점 − 마지막 <code>checkins.checkin_date</code><br>" +
+        "드리프트 = 목표 <code>period</code> 경과율 − <code>keyResults.progress</code><br>" +
+        "블로커·확신도·진척 하락 = <code>checkins.blocker / confidence / progress_delta</code> 실카운트 " +
+        srcChip("talenx", "체크인·KR 기록") }
     ], "");
-    var outs = ["7일 무변동 3명", "진척 지연 1명", "14일+ 미실시 2명"];
     Array.prototype.forEach.call(host.querySelectorAll("[data-sr]"), function (r, i) {
       T(function () {
         r.classList.add("done");
-        r.querySelector("[data-out]").textContent = "→ " + outs[i];
+        r.querySelector("[data-out]").textContent = "→ " + scans[i][2];
       }, 500 + i * 550);
     });
     T(function () { host.querySelector("[data-agh-sum]").style.opacity = "1"; host.querySelector("[data-agh-rows]").style.display = ""; }, 2300);
-    T(function () { host.querySelector("[data-agh-msg]").style.display = ""; ctxAppendIf(host, '<div class="agh-live ok">초안 생성됨 — 발송 초안을 바로 편집할 수 있게 준비했습니다. 리더 승인 대기.</div>'); }, 3100);
+    T(function () {
+      host.querySelector("[data-agh-msg]").style.display = "";
+      ctxAppendIf(host, draft
+        ? '<div class="agh-live ok">초안 생성됨 — ' + esc(t.name) + ' 님 대상. 근거는 실 체크인·KR 기록입니다. 리더 승인 대기.</div>'
+        : '<div class="agh-live warn">발송 초안 없음 — 조회된 신호가 없어 문구를 만들지 않았습니다.</div>');
+    }, 3100);
   };
 
-  /* ---------- QW4 · 상시 근거 수집 ---------- */
+  /* ---------- QW4 · 상시 근거 수집 ----------
+     대상자의 실기록만 모은다: 체크인(checkins) · KR 달성(keyResults) · 평가 확정(evalHistory)
+     · 수시/상향 피드백(feedbackHistory·upwardFeedback) · 성과 기록 원장(get_context_ledger).
+     한 건도 없으면 예시를 만들지 않고 정지한다(qw1·qw5·qw7과 같은 규칙). */
+  function z2(n) { return (n < 10 ? "0" : "") + n; }
+  function qw4SortKey(s) {
+    var t = String(s || "");
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+    if (m) return m[1] + m[2] + m[3];
+    var fy = /^FY(\d{4})/.exec(t);
+    if (fy) return fy[1] + "1231";
+    var md = /^(\d{1,2})\/(\d{1,2})/.exec(t);
+    if (md) {
+      var y = (asOfDate() || new Date(2026, 6, 16)).getFullYear();
+      return String(y) + z2(Number(md[1])) + z2(Number(md[2]));
+    }
+    return "00000000";
+  }
+  function qw4Items(emp) {
+    var d = D(), id = emp && emp.emp_id, out = [];
+    if (!id) return out;
+    var ki = krIndex(), oi = objIndex();
+    /* 1) 체크인 — 진척 기록·블로커. 레코드 id를 근거 칩에 그대로 노출 */
+    (d.checkins || []).filter(function (c) { return c.emp_id === id; }).forEach(function (c) {
+      var kr = ki[c.kr_id], obj = oi[c.objective_id];
+      var body = (kr ? "「" + kr.name + "」 " : "") + "진척 " + Math.round(c.progress_snapshot || 0) + "%" +
+        (c.progress_delta != null ? " (" + (c.progress_delta > 0 ? "+" : "") + (Math.round(c.progress_delta * 10) / 10) + "%p)" : "") +
+        (c.comment ? " — " + c.comment : "");
+      out.push({
+        date: c.checkin_date, tag: c.blocker ? "블로커" : "체크인", body: body,
+        kind: "erp", src: "체크인 " + (c.checkin_id || ""),
+        sub: c.blocker ? "블로커 · " + c.blocker : (obj ? obj.title : "")
+      });
+    });
+    /* 2) KR 달성 — 진척 100% 또는 status가 완료인 것만 "달성"으로 부른다 */
+    (d.keyResults || []).forEach(function (k) {
+      var obj = oi[k.objective_id];
+      if (!obj || obj.owner_emp_id !== id) return;
+      var done = (k.progress != null && k.progress >= 100) || /완료|달성/.test(String(k.status || ""));
+      if (!done) return;
+      /* 달성 시점은 KR에 없으므로 목표 기간의 종료일로 둔다(파싱 실패 시 기간 표기 그대로) */
+      var w = periodWindow(obj.period);
+      var wEnd = w ? new Date(w.end).toISOString().slice(0, 10) : null;
+      out.push({
+        date: wEnd || obj.period || null,
+        tag: "달성", body: "「" + k.name + "」 " + (k.current_value || "-") + " / 목표 " + (k.target_value || "-") +
+          " · 가중 " + (k.weight || "-"), kind: "talenx", src: "KR " + (k.kr_id || ""), sub: obj.title
+      });
+    });
+    /* 3) 평가 확정 이력 — evalHistory 실값만 */
+    var eh = (d.evalHistory || []).filter(function (x) { return x.emp_id === id; })[0];
+    ((eh && eh.history) || []).forEach(function (hr) {
+      out.push({
+        date: hr.period, tag: "평가", body: hr.period + " 확정 등급 " + hr.grade +
+          (hr.score != null ? " · 종합 " + hr.score + "점" : ""),
+        kind: "talenx", src: "평가 이력 " + hr.period, sub: ""
+      });
+    });
+    /* 4) 수시 피드백 */
+    (d.feedbackHistory || []).filter(function (f) { return f.emp_id === id; }).forEach(function (f) {
+      var who = f.source_type === "leader" ? "조직장" : (f.source_type === "peer" ? "동료" : (f.source_type || "수시"));
+      out.push({
+        date: f.period, tag: "피드백", body: who + " 피드백 — " + f.summary,
+        kind: "talenx", src: "피드백 " + (f.fb_id || ""), sub: ""
+      });
+    });
+    /* 5) 상향 피드백 — 조직장 본인 것만 (응답자 수 실값) */
+    (d.upwardFeedback || []).filter(function (u) { return u.leader_emp_id === id; }).forEach(function (u) {
+      out.push({
+        date: u.period, tag: "상향", body: "상향 피드백 응답 " + (u.respondents || 0) + "명 · 주제 " +
+          ((u.themes || []).slice(0, 3).join(" / ") || "-"),
+        kind: "talenx", src: "상향 " + (u.uf_id || ""), sub: ""
+      });
+    });
+    /* 6) 성과 기록 원장 — 결정·합의·근거가 남은 실 레코드 */
+    try {
+      var lg = (window.EZTools && EZTools.run) ? (EZTools.run("get_context_ledger", { emp_id: id, limit: 8 }) || {}) : {};
+      (lg.items || []).forEach(function (it) {
+        /* 체크인 원장 항목은 위 1)에서 checkins 원천으로 이미 잡았다 — 같은 사건을 두 줄로 세지 않는다 */
+        var src = String((it && it.source) || "");
+        if (src.indexOf("perf.checkin.") === 0) return;
+        /* 허브 감사 로그는 근거가 아니라 행위 기록 — 감사 로그 화면에서 본다 */
+        if (src === "hub.audit" || it.type === "audit") return;
+        out.push({
+          date: it.at || null, tag: "성과 기록", body: it.title + (it.summary ? " — " + it.summary : ""),
+          kind: "rule", src: "원장 " + (it.id || ""), sub: ""
+        });
+      });
+    } catch (e) { /* 원장 조회 실패는 항목 없음으로 취급 */ }
+    /* 날짜 표기 3종 혼재(2026-04-25 / FY2025 / 7/14 10:00) — 파싱 가능한 것만 시각축에 정렬 */
+    out.forEach(function (x) { x._k = qw4SortKey(x.date); });
+    out.sort(function (a, b) { return a._k < b._k ? 1 : (a._k > b._k ? -1 : 0); });
+    return out;
+  }
+
   RENDER.qw4 = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
-    var items = [
-      ["2025 · 11", "달성", "KR2 신규계약 유지율 112% 달성 (목표 105%)", "erp", "ERP · 실적 리포트"],
-      ["2025 · 09", "프로젝트", "'온보딩 개편' 리드 완료, 활성화율 +9%p", "talenx", "Jira · 완료 이슈"],
-      ["2025 · 07", "1:1", "'발표 자신감 부족' 개선 합의 → 4회 이행 확인", "talenx", "1:1 노트 · talenx"],
-      ["2025 · 04", "피드백", "동료 3인 '협업 리드십 탁월' 수시 피드백 수신", "rule", "동료피드백 · 3건"]
-    ];
+    var emp = targetEmp();
+    var items = qw4Items(emp);
+    if (!items.length) {
+      host.innerHTML = screenHead("qw4") +
+        '<div class="agh-emptybox"><b>' + esc(emp.name) + ' 님 이름으로 기록된 근거가 조회되지 않았습니다.</b><br>' +
+        "이 화면은 체크인·KR 달성·평가 이력·피드백·성과 기록 원장의 <b>실기록</b>만 모읍니다. " +
+        "현재 <b>0건</b>이라 예시 근거를 만들지 않습니다.</div>";
+      ctxPanelIf(host, [
+        { tag: "판단 정지", title: "왜 비어 있나", body: "근거 타임라인은 기록에서만 만듭니다. 체크인·피드백이 쌓이면 이 화면이 자동으로 채워집니다." }
+      ], "");
+      logAudit("판단 정지", "상시 근거 수집 · " + emp.name + " 기록 0건", "qw4.no-record");
+      return;
+    }
+    var byTag = {};
+    items.forEach(function (x) { byTag[x.tag] = (byTag[x.tag] || 0) + 1; });
+    var tagLine = Object.keys(byTag).map(function (k) { return k + " " + byTag[k]; }).join(" · ");
+    var shown = items.slice(0, 8), rest = items.length - shown.length;
+    var span = (function () {
+      var ks = items.map(function (x) { return x._k; }).filter(function (k) { return k !== "00000000"; });
+      if (!ks.length) return "";
+      var lo = ks[ks.length - 1], hi = ks[0];
+      return lo.slice(0, 4) + "." + lo.slice(4, 6) + " ~ " + hi.slice(0, 4) + "." + hi.slice(4, 6);
+    })();
     host.innerHTML = screenHead("qw4") +
-      '<div class="agh-brief"><span class="ic">🗂</span><div><b>기억을 소환하지 않습니다. 1년치 근거가 이미 모여 있습니다.</b> 달성·프로젝트·피드백·1:1 기록이 발생 시점에 자동으로 기록됩니다(제안만 모드).</div></div>' +
+      '<div class="agh-brief"><span class="ic">🗂</span><div><b>기억을 소환하지 않습니다 — ' + esc(emp.name) +
+      ' 님 기록 ' + items.length + '건이 이미 모여 있습니다.</b> 체크인·KR 달성·평가 이력·피드백·성과 기록 원장에서 발생 시점 그대로 모았습니다' +
+      (span ? " (" + esc(span) + ")" : "") + '. 없는 근거는 만들지 않습니다.</div></div>' +
       '<div class="agh-tl" data-agh-tl>' +
-      items.map(function (it, i) {
-        return '<div class="agh-tli" data-ti="' + i + '" style="opacity:0"><span class="dt">' + esc(it[0]) + '</span><span class="agh-tag">' + esc(it[1]) + "</span><div class=\"bd\">" + esc(it[2]) + "</div>" + srcChip(it[3], it[4]) + "</div>";
-      }).join("") + '<div class="agh-tlmore">↑ 이전 8개월 · 총 24건 기록됨</div></div>' +
-      '<div class="agh-sidecard"><div class="lab">수집 요약</div><b class="big">24건</b>' +
-      '<div class="mini">목표·달성 8 · 프로젝트 6 · 수시 피드백 7 · 1:1 기록 3</div>' +
+      shown.map(function (it, i) {
+        return '<div class="agh-tli" data-ti="' + i + '" style="opacity:0"><span class="dt">' + esc(it.date || "시점 미상") +
+          '</span><span class="agh-tag">' + esc(it.tag) + '</span><div class="bd">' + esc(it.body) +
+          (it.sub ? '<br><small style="color:var(--agh-ink-3,#667085)">' + esc(it.sub) + "</small>" : "") + "</div>" +
+          srcChip(it.kind, it.src) + "</div>";
+      }).join("") +
+      (rest > 0 ? '<div class="agh-tlmore">↑ 이전 기록 ' + rest + "건 더 있음 · 총 " + items.length + "건</div>" : "") +
+      "</div>" +
+      '<div class="agh-sidecard"><div class="lab">수집 요약</div><b class="big">' + items.length + '건</b>' +
+      '<div class="mini">' + esc(tagLine) + "</div>" +
       '<button class="agh-btn primary wide" data-agh-nav="qw3">이 근거로 등급 초안 만들기 →</button>' +
       "<small>초안 등급 제안 · 최종 결정은 평가자 게이트로</small></div>";
     ctxPanelIf(host, [
-      { tag: "기록 보관", title: "과정이 기록으로 남는다", body: "카드마다 원천(citation)이 붙어 '등급 초안 만들기'까지 역추적됩니다. 평가 시즌이 열리면 이 24건이 등급 초안의 재료가 됩니다." }
+      { tag: "기록 보관", title: "과정이 기록으로 남는다", body: "카드마다 원천 레코드 id가 붙어 '등급 초안 만들기'까지 역추적됩니다. 평가 시즌이 열리면 이 " + items.length + "건이 등급 초안의 재료가 됩니다." }
     ], "");
     Array.prototype.forEach.call(host.querySelectorAll("[data-ti]"), function (n, i) {
       T(function () { n.style.transition = "opacity var(--duration-medium, .4s)"; n.style.opacity = "1"; }, 300 + i * 350);
@@ -1344,30 +1851,132 @@
     });
   };
 
-  /* ---------- QW5 · 평가 편향 점검 ---------- */
+  /* ---------- QW5 · 평가 편향 점검 ----------
+     대본 폐기 — evaluations × orgs × employees 실집계.
+     판정 임계는 상수(BIAS)를 쓰되 화면에 기준과 모집단 N을 함께 밝힌다. */
+  var BIAS = { MIN_N: 8, DEV_PP: 15, CONC_PCT: 65 };
+  function orgBiasStats() {
+    var d = D();
+    var orgById = {};
+    (d.orgs || []).forEach(function (o) { orgById[o.org_id] = o; });
+    var evByEmp = {};
+    (d.evaluations || []).forEach(function (v) { evByEmp[v.emp_id] = v; });
+    var ckByEmp = {};
+    (d.checkins || []).forEach(function (c) { ckByEmp[c.emp_id] = (ckByEmp[c.emp_id] || 0) + 1; });
+
+    var comp = { n: 0, counts: { S: 0, A: 0, B: 0, C: 0, D: 0 }, ck: 0, period: null };
+    var units = {};
+    (d.employees || []).forEach(function (e) {
+      var v = evByEmp[e.emp_id];
+      if (!v || comp.counts[v.grade] == null) return;
+      var ck = ckByEmp[e.emp_id] || 0;
+      comp.n++; comp.counts[v.grade]++; comp.ck += ck;
+      if (!comp.period && v.period) comp.period = v.period;
+      var o = orgById[e.org_id];
+      var key = e.org_id || "-";
+      var u = units[key] || (units[key] = {
+        org_id: key, name: (o && o.name) || e.orgName || key,
+        n: 0, counts: { S: 0, A: 0, B: 0, C: 0, D: 0 }, ck: 0, members: []
+      });
+      u.n++; u.counts[v.grade]++; u.ck += ck;
+      u.members.push({ emp_id: e.emp_id, name: e.name, grade: v.grade, score: v.weighted_score, ck: ck });
+    });
+    if (!comp.n) return null;
+    var compTop = (comp.counts.S + comp.counts.A) / comp.n * 100;
+    var compCk = comp.ck / comp.n;
+
+    var list = [];
+    Object.keys(units).forEach(function (k) {
+      var u = units[k];
+      if (u.n < BIAS.MIN_N) return;                    /* 모집단이 얇으면 편향을 말하지 않는다 */
+      u.topPct = Math.round((u.counts.S + u.counts.A) / u.n * 100);
+      u.dev = Math.round(u.topPct - compTop);
+      u.ckAvg = Math.round(u.ck / u.n * 100) / 100;
+      var mode = GRADES.reduce(function (m, g) { return u.counts[g] > u.counts[m] ? g : m; }, "S");
+      u.mode = mode;
+      u.modePct = Math.round(u.counts[mode] / u.n * 100);
+      /* 이상치 인원 = 판정 대상 등급자 중 근거 기록(체크인)이 전사 평균 미만인 인원 실카운트 */
+      if (u.dev >= BIAS.DEV_PP) {
+        u.kind = "lenient"; u.tag = "관대화 의심";
+        u.pool = u.members.filter(function (m) { return m.grade === "S" || m.grade === "A"; });
+      } else if (u.dev <= -BIAS.DEV_PP) {
+        u.kind = "strict"; u.tag = "엄격화 의심";
+        u.pool = u.members.filter(function (m) { return m.grade !== "S" && m.grade !== "A"; });
+      } else if (u.modePct >= BIAS.CONC_PCT) {
+        u.kind = "central"; u.tag = "중심화 의심";
+        u.pool = u.members.filter(function (m) { return m.grade === mode; });
+      } else {
+        u.kind = "normal"; u.tag = "정상 범위"; u.pool = [];
+      }
+      u.outliers = u.pool.filter(function (m) { return m.ck < compCk; }).length;
+      list.push(u);
+    });
+    /* 편차 절댓값이 큰 순 → 같은 값이면 모집단 큰 순 */
+    list.sort(function (a, b) {
+      var fa = a.kind === "normal" ? 0 : 1, fb = b.kind === "normal" ? 0 : 1;
+      if (fa !== fb) return fb - fa;
+      var da = Math.abs(a.dev), db = Math.abs(b.dev);
+      if (db !== da) return db - da;
+      return b.n - a.n;
+    });
+    return {
+      company: { n: comp.n, counts: comp.counts, topPct: Math.round(compTop * 10) / 10, ckAvg: Math.round(compCk * 100) / 100, period: comp.period || "현재 평가 주기" },
+      units: list,
+      flagged: list.filter(function (u) { return u.kind !== "normal"; }),
+      thresholds: BIAS
+    };
+  }
   RENDER.qw5 = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
+    var st = orgBiasStats();
+    if (!st) {
+      host.innerHTML = screenHead("qw5") +
+        '<div class="agh-emptybox"><b>평가 기록이 없어 편향을 판정할 수 없습니다.</b><br>등급 분포를 만들 모집단이 0명입니다 — 추정하지 않습니다.</div>';
+      logAudit("판단 정지", "평가 편향 점검 · 평가 기록 없음", "qw5.no-data");
+      return;
+    }
+    var c = st.company;
+    var show = st.flagged.concat(st.units.filter(function (u) { return u.kind === "normal"; })).slice(0, 6);
+    var flagged = st.flagged;
     host.innerHTML = screenHead("qw5") +
-      '<div class="agh-scanline" data-agh-scan>본부 4곳 등급 분포·근거량 스캔 중 <i class="agh-spin"></i></div>' +
+      '<div class="agh-scanline" data-agh-scan>조직 ' + st.units.length + "곳(모집단 " + BIAS.MIN_N + "명 이상) 등급 분포·근거량 스캔 중 <i class=\"agh-spin\"></i></div>" +
+      '<div class="agh-brief" style="margin-top:10px"><span class="ic">📐</span><div><b>판정 기준 — 이 화면의 임계값</b><br>' +
+      "전사 상위등급(S+A) 비율 <b>" + c.topPct + "%</b> (모집단 <b>" + c.n + "명</b> · " + esc(c.period) +
+      " · S " + c.counts.S + " · A " + c.counts.A + " · B " + c.counts.B + " · C " + c.counts.C + " · D " + c.counts.D + "명)를 기준선으로 두고, " +
+      "조직별 상위등급 비율이 <b>±" + BIAS.DEV_PP + "%p</b>를 벗어나면 관대화/엄격화, 단일 등급이 <b>" + BIAS.CONC_PCT + "%</b> 이상이면 중심화로 표시합니다. " +
+      "모집단 <b>" + BIAS.MIN_N + "명 미만</b> 조직은 판정하지 않습니다. 이상치 인원 = 해당 등급군 중 근거 기록(체크인)이 전사 평균 <b>" + c.ckAvg + "건/인</b> 미만인 인원 실카운트. " +
+      srcChip("talenx", "evaluations × orgs 집계") + srcChip("talenx", "체크인 근거량") + "</div></div>" +
       '<div class="agh-biasgrid" data-agh-bias style="opacity:.3">' +
-      [["개발본부", "관대화 의심", "A비율 41% (전사 28%) · 근거량 평균 이하", "warn"],
-       ["컨설팅본부", "정상", "분포·근거량 균형", "ok"],
-       ["마케팅본부", "중심화 의심", "B 집중 71% · 변별 근거 부족", "warn"],
-       ["UX본부", "정상", "분포·근거량 균형", "ok"]].map(function (b) {
-        return '<div class="agh-bias ' + b[3] + '"><b>' + esc(b[0]) + '</b><span class="tag">' + esc(b[1]) + "</span><p>" + esc(b[2]) + "</p></div>";
+      show.map(function (u) {
+        var cls = u.kind === "normal" ? "ok" : "warn";
+        var body = "상위등급(S+A) <b>" + u.topPct + "%</b> · 전사 " + c.topPct + "% 대비 " + (u.dev > 0 ? "+" : "") + u.dev + "%p" +
+          " · 최빈 " + u.mode + " " + u.modePct + "%" +
+          "<br>모집단 <b>" + u.n + "명</b> (S " + u.counts.S + " · A " + u.counts.A + " · B " + u.counts.B + " · C " + u.counts.C + " · D " + u.counts.D + ")" +
+          " · 근거 " + u.ckAvg + "건/인 (전사 " + c.ckAvg + ")" +
+          (u.kind === "normal" ? "" : "<br>이상치 인원 <b>" + u.outliers + "명</b> — " + u.pool.length + "명 중 근거 기록 평균 미만");
+        return '<div class="agh-bias ' + cls + '"><b>' + esc(u.name) + '</b><span class="tag">' + esc(u.tag) + "</span><p>" + body + "</p></div>";
       }).join("") + "</div>" +
-      '<div class="agh-verdict" data-agh-verdict style="display:none">개발본부는 실적 대비 등급 상승폭 설명력이 낮은 인원이 <b>3명</b>, 마케팅본부는 등급 변별 근거가 부족합니다. ' +
-      "편향 <b>플래그+근거</b>만 제시하며, 등급 수정은 하지 않습니다 — 검토 승인 시 등급 조정 회의 안건으로 전달됩니다." +
+      '<div class="agh-verdict" data-agh-verdict style="display:none">' +
+      (flagged.length
+        ? flagged.slice(0, 3).map(function (u) {
+            return "<b>" + esc(u.name) + "</b>(" + esc(u.tag) + ") — 상위등급 " + u.topPct + "% · 전사 대비 " + (u.dev > 0 ? "+" : "") + u.dev +
+              "%p · 근거 부족 인원 <b>" + u.outliers + "명</b>";
+          }).join("<br>") +
+          "<br>편향 <b>플래그+근거</b>만 제시하며, 등급 수정은 하지 않습니다 — 검토 승인 시 등급 조정 회의 안건으로 전달됩니다."
+        : "임계(±" + BIAS.DEV_PP + "%p · 단일등급 " + BIAS.CONC_PCT + "%)를 넘는 조직이 없습니다 — 없는 편향을 만들지 않습니다.") +
       '<span class="agh-auditchip">⛨ 감사 기록됨</span></div>' +
       '<div class="agh-linkrow"><button class="agh-btn" data-agh-nav="calib">→ 등급 조정 심의 회의에서 검토</button></div>' +
       gateHTML("qw5", ["검토 승인", "수정", "보류"]);
     ctxPanelIf(host, [
-      { tag: "정치 배제", title: "민감 이슈 처리 원칙", body: "관대화·편향은 <b>재검토 제안</b>만 하며 자동 수정하지 않습니다. 플래그의 모든 판단에는 분포·근거량 원천이 인용됩니다. " + srcChip("rule", "관대화·강제배분 감사") + srcChip("erp", "실적 대조") }
+      { tag: "정치 배제", title: "민감 이슈 처리 원칙", body: "관대화·편향은 <b>재검토 제안</b>만 하며 자동 수정하지 않습니다. 플래그의 모든 판단에는 분포·근거량 원천이 인용됩니다. " + srcChip("rule", "관대화·강제배분 감사") + srcChip("talenx", "평가 기록 집계") },
+      { tag: "한계 표기", title: "임계값은 데모 상수", kind: "warn", body: "±" + BIAS.DEV_PP + "%p · 단일등급 " + BIAS.CONC_PCT + "% · 모집단 " + BIAS.MIN_N + "명은 talenx 데이터에 편향 판정 정책이 없어 <b>화면에서 정한 상수</b>입니다. 분포·인원·근거량은 모두 실집계값입니다." }
     ], "");
     T(function () {
       host.querySelector("[data-agh-bias]").style.opacity = "1";
-      host.querySelector("[data-agh-scan]").innerHTML = "본부 4곳 스캔 완료 · " + srcChip("talenx", "등급 분포") + srcChip("erp", "실적 대비 상승폭") + ' <span class="agh-flag">▲ 편향 플래그 2본부</span>';
+      host.querySelector("[data-agh-scan]").innerHTML = "조직 " + st.units.length + "곳 스캔 완료 · 모집단 " + c.n + "명 " +
+        srcChip("talenx", "등급 분포") + srcChip("talenx", "근거 기록량") +
+        (flagged.length ? ' <span class="agh-flag">▲ 편향 플래그 ' + flagged.length + "곳</span>" : ' <span class="agh-flag ok">임계 초과 없음</span>');
     }, 1500);
     T(function () { host.querySelector("[data-agh-verdict]").style.display = ""; }, 2400);
   };
@@ -1515,14 +2124,26 @@
        params: {
          cap_pct?:           number  강제배분 상한 % (20~40 권장 · 기본 = 현재 슬라이더 값)
          achievement_delta?: number  달성 가정치 %p — 개인 종합점수에 더해 볼 델타 (기본 0)
+         emp_id?:            string  지정 시 개인 산출(person)을 함께 반환 — 아래 참조
        }
-       returns: {
+       returns(분포 · emp_id 없음 = 기존 계약 불변): {
          cap_pct, achievement_delta,
          before:      { S,A,B,C,D },   // 조정 전 등급 분포 (%)
          after:       { S,A,B,C,D },   // 상한 적용 후 분포 (%)
+         distribution_before / distribution_after,  // 위와 동일(개인 호출에서도 유지되는 별칭)
          gradeChange: [ { grade, before_pct, after_pct, delta_pp } ],
          people:      [ { name, coef, before, after } ]  // 난이도 보정계수(coef) × (원점수+델타)
        }
+       returns(개인 · emp_id 지정): 위 항목 + {
+         before/after: { weighted_score, score, grade },   // ← 개인값으로 대체(분포는 distribution_*)
+         person, target, grade_changed, applied_weight, assumptions,
+         grade_change: { from, to, changed, cut_used, next_grade, margin_to_next },
+         basis: { …, person_score_source, person_score_model, grade_cuts, grade_cut_source }
+       }
+       평가 기록이 없으면 person_error만 채우고 분포 형상을 유지한다.
+     EZCalc.person({emp_id, achievement_delta}) → 개인 산출 단독 호출
+     EZCalc.gradeCuts()  → 등급컷(관측 최저점 기반 추정 · from_data:false = 항상 데모 가정)
+     EZCalc.scoreModel() → 달성 축 가중치 실측 적합 { ok, w_achievement, w_peer, w_exec, rmse, n }
      EZCalc.calibDiff() → 난이도 보정 원자료 { rows, dist, basisTot, basisHas, sNoBasis } */
   var GRADES = ["S", "A", "B", "C", "D"];
   /* 기준 분포 — 하드코딩 {S:8,A:32,B:44,C:12,D:4} 폐기.
@@ -1553,6 +2174,120 @@
     return {
       grades: ["S", "A"], fromData: false,
       source: "데모 가정 — talenx 데이터에 등급 분포 정책이 없어 상위등급(S+A) 상한을 화면 슬라이더로 가정합니다"
+    };
+  }
+  /* ---- 개인 단위 what-if 보조 ----
+     종합점수 가중치가 데이터에 기재돼 있지 않아, evaluations 실측으로 최소제곱 적합해
+     달성 축 가중치를 추정한다(적합 오차 RMSE를 함께 반환 — 숨기지 않는다). */
+  var _achFit = null;
+  function achievementWeightFit() {
+    if (_achFit) return _achFit;
+    var evs = (D().evaluations || []).filter(function (v) {
+      return v && v.components && typeof v.weighted_score === "number" &&
+        typeof v.components.achievement_norm === "number";
+    });
+    if (evs.length < 10) { _achFit = { ok: false, n: evs.length }; return _achFit; }
+    function mse(a, b) {
+      var c = 100 - a - b, s = 0;
+      for (var i = 0; i < evs.length; i++) {
+        var k = evs[i].components;
+        var p = (a * k.achievement_norm + b * (k.peer_strength_norm || 0) + c * (k.exec_consistency_norm || 0)) / 100;
+        var d = p - evs[i].weighted_score;
+        s += d * d;
+      }
+      return s / evs.length;
+    }
+    var best = null, a, b;
+    for (a = 0; a <= 100; a += 5) for (b = 0; a + b <= 100; b += 5) {
+      var e1 = mse(a, b);
+      if (!best || e1 < best.e) best = { a: a, b: b, e: e1 };
+    }
+    for (a = Math.max(0, best.a - 4); a <= Math.min(100, best.a + 4); a++)
+      for (b = Math.max(0, best.b - 4); a + b <= 100 && b <= best.b + 4; b++) {
+        var e2 = mse(a, b);
+        if (e2 < best.e) best = { a: a, b: b, e: e2 };
+      }
+    _achFit = {
+      ok: true, n: evs.length,
+      w_achievement: best.a / 100, w_peer: best.b / 100, w_exec: (100 - best.a - best.b) / 100,
+      rmse: Math.round(Math.sqrt(best.e) * 100) / 100
+    };
+    return _achFit;
+  }
+  /* 등급컷 — talenx 데이터에 등급 분포 정책이 없다. 평가 기록에서 관측된 등급별 최저
+     종합점수를 경계로 "추정"할 뿐이므로 항상 데모 가정으로 표기한다. */
+  function gradeCuts() {
+    var mins = {}, n = 0;
+    (D().evaluations || []).forEach(function (v) {
+      if (typeof v.weighted_score !== "number" || GRADES.indexOf(v.grade) < 0) return;
+      n++;
+      if (mins[v.grade] == null || v.weighted_score < mins[v.grade]) mins[v.grade] = v.weighted_score;
+    });
+    var cuts = GRADES.filter(function (g) { return mins[g] != null; })
+      .map(function (g) { return { grade: g, min: mins[g] }; })
+      .sort(function (x, y) { return y.min - x.min; });
+    return {
+      cuts: cuts, n: n, from_data: false,
+      source: cuts.length
+        ? "데모 가정 — 등급컷 정책이 talenx 데이터에 없어 평가 기록 " + n + "건에서 관측된 등급별 최저 종합점수(" +
+          cuts.map(function (c) { return c.grade + "≥" + c.min; }).join(" · ") + ")를 경계로 추정"
+        : "데모 가정 — 등급컷을 만들 평가 기록이 없습니다"
+    };
+  }
+  function gradeOfScore(score, gc) {
+    for (var i = 0; i < gc.cuts.length; i++) if (score >= gc.cuts[i].min) return gc.cuts[i].grade;
+    return gc.cuts.length ? gc.cuts[gc.cuts.length - 1].grade : null;
+  }
+  /* 개인 단위 산출 — emp_id의 달성률 변화(%p)를 가정해 종합점수·등급 변화를 계산.
+     원본 evaluations는 불변 · 반환값은 화면/도구용 계산값. */
+  function simulatePerson(params) {
+    params = params || {};
+    var id = params.emp_id || (params.employee && params.employee.emp_id) || null;
+    var delta = +(params.achievement_delta || 0) || 0;
+    if (!id) return { error: "대상 emp_id가 없어 개인 산출을 만들 수 없습니다." };
+    var ev = (D().evaluations || []).filter(function (v) { return v.emp_id === id; })[0];
+    if (!ev || typeof ev.weighted_score !== "number") {
+      return { error: "평가 기록이 없어 개인 산출을 만들 수 없습니다: " + id };
+    }
+    var emp = empById(id) || {};
+    var fit = achievementWeightFit();
+    var w = fit.ok ? fit.w_achievement : 0.5;
+    var gc = gradeCuts();
+    var beforeScore = ev.weighted_score;
+    var afterScore = Math.max(0, Math.min(100, Math.round((beforeScore + delta * w) * 10) / 10));
+    var beforeGrade = ev.grade, afterGrade = gradeOfScore(afterScore, gc) || ev.grade;
+    /* 다음 등급까지 남은 점수 — 현재 등급보다 한 칸 위 경계 기준 */
+    var idx = -1, i;
+    for (i = 0; i < gc.cuts.length; i++) if (gc.cuts[i].grade === afterGrade) idx = i;
+    var next = (idx > 0) ? gc.cuts[idx - 1] : null;
+    var cutUsed = (idx >= 0) ? gc.cuts[idx] : null;
+    return {
+      target: { emp_id: id, name: emp.name || id, org: emp.orgName || null, period: ev.period || null },
+      achievement_delta: delta,
+      applied_weight: Math.round(w * 1000) / 1000,
+      before: { weighted_score: beforeScore, score: beforeScore, grade: beforeGrade },
+      after: { weighted_score: afterScore, score: afterScore, grade: afterGrade },
+      grade_changed: beforeGrade !== afterGrade,
+      grade_change: {
+        from: beforeGrade, to: afterGrade, changed: beforeGrade !== afterGrade,
+        cut_used: cutUsed ? cutUsed.grade + " ≥ " + cutUsed.min : null,
+        next_grade: next ? next.grade : null,
+        margin_to_next: next ? Math.round((next.min - afterScore) * 10) / 10 : null
+      },
+      basis: {
+        score_source: "talenx 평가 기록 " + (ev.evaluation_id || id) + " · 종합 " + beforeScore + "점 · " + (ev.period || "기간 미기재"),
+        score_model: fit.ok
+          ? "달성 축 가중치 " + Math.round(w * 100) + "% — talenx 데이터에 가중치 표가 없어 evaluations " + fit.n +
+            "건 최소제곱 적합으로 추정(적합 오차 RMSE " + fit.rmse + "점). 추정값이므로 데모 가정입니다."
+          : "달성 축 가중치 50% — 적합할 평가 기록이 부족해 사용한 데모 가정값입니다.",
+        score_model_from_data: false,
+        grade_cuts: gc.cuts,
+        grade_cut_source: gc.source,
+        grade_cut_from_data: false
+      },
+      assumptions: "달성률 " + (delta > 0 ? "+" : "") + delta + "%p 가정 · " +
+        "달성 축 가중치 " + Math.round(w * 100) + "%(실측 적합 추정) · " + gc.source +
+        " · 읽기 전용 — 실제 데이터는 변경되지 않습니다"
     };
   }
   function simulateCalib(params) {
@@ -1599,8 +2334,9 @@
       var b = Math.round((r.before + delta) * 10) / 10;
       return { name: r.name, coef: r.coef, before: b, after: Math.round(b * r.coef * 10) / 10 };
     });
-    return {
+    var out = {
       cap_pct: cap, achievement_delta: delta, before: base, after: adj,
+      distribution_before: base, distribution_after: adj,
       gradeChange: gradeChange, people: people, moved_pp: moved,
       basis: {
         population_n: bd.n, counts: bd.count, period: bd.period,
@@ -1609,8 +2345,40 @@
         cap_rule_source: rule.source, cap_rule_from_data: rule.fromData
       }
     };
+    /* emp_id가 오면 개인 산출을 얹는다 — 분포 API(무 emp_id 호출)는 위 형상 그대로 유지.
+       개인 호출에서만 before/after를 개인 {weighted_score,grade}로 바꾸고
+       분포는 distribution_before/after·gradeChange로 계속 제공한다. */
+    var pid = params.emp_id || null;
+    if (pid) {
+      var p = simulatePerson({ emp_id: pid, achievement_delta: delta });
+      if (p.error) {
+        out.person_error = p.error;
+      } else {
+        out.person = p;
+        out.target = p.target;
+        out.before = p.before;
+        out.after = p.after;
+        out.grade_changed = p.grade_changed;
+        out.grade_change = p.grade_change;
+        out.applied_weight = p.applied_weight;
+        out.assumptions = p.assumptions;
+        out.basis.person_score_source = p.basis.score_source;
+        out.basis.person_score_model = p.basis.score_model;
+        out.basis.grade_cuts = p.basis.grade_cuts;
+        out.basis.grade_cut_source = p.basis.grade_cut_source;
+        out.basis.grade_cut_from_data = false;
+      }
+    }
+    return out;
   }
-  window.EZCalc = { simulate: simulateCalib, calibDiff: calibDiffData, baseDistribution: baseDistribution };
+  window.EZCalc = {
+    simulate: simulateCalib,
+    person: simulatePerson,          /* 개인 단위 전용 — 분포 계산 없이 등급/점수만 */
+    gradeCuts: gradeCuts,            /* 관측 기반 등급컷(데모 가정) */
+    scoreModel: achievementWeightFit,/* 달성 축 가중치 실측 적합 결과 */
+    calibDiff: calibDiffData,
+    baseDistribution: baseDistribution
+  };
 
   /* 산출 근거 한 줄 — 모집단 N·기준 분포 출처·상한 규칙 출처 */
   function calibBasisHTML(sim) {
@@ -1700,30 +2468,82 @@
       }
     });
   }
+  /* 리뷰 대상 실집계 — 이름 3명 상수·"5/12" 폐기.
+     대상 = 직속 팀원(manager_id) · 없으면 같은 조직 구성원 · 그것도 없으면 빈 상태.
+     진행 카운트 = 리뷰 문장을 세울 근거(체크인 기록)가 확보된 인원 / 전체 대상 (실카운트) */
+  function reviewFacts() {
+    var list = directReports(), src = "직속(manager_id)";
+    if (!list.length) { list = team(); src = "같은 조직(org_id)"; }
+    var sigs = list.map(memberSignals);
+    var withEv = sigs.filter(function (s) { return s.count > 0; });
+    var want = (state.ctx && state.ctx.empId) || null;
+    var cur = (want && sigs.filter(function (s) { return s.emp_id === want; })[0]) || withEv[0] || sigs[0] || null;
+    return { sigs: sigs, withEv: withEv, cur: cur, src: src };
+  }
+  /* 제안 문장은 조회된 사실로만 구성 — 근거가 없으면 문장을 만들지 않는다(정지 원칙) */
+  function reviewProposal(s) {
+    if (!s || !s.count) return null;
+    var w = s.worst, bits = [];
+    if (w) {
+      bits.push("「" + w.name + "」를 진척 " + w.progress + "%까지 진행" +
+        (w.elapsed != null ? "(" + (w.period || "") + " 기간 경과 " + w.elapsed + "% 대비 " + (w.drift > 0 ? "−" + w.drift : "+" + Math.abs(w.drift)) + "%p)" : ""));
+    }
+    bits.push("점검 주기 동안 체크인 " + s.count + "건을 기록");
+    if (s.blockers.length) bits.push("블로커 " + s.blockers.length + "건을 조기에 공유(" + s.blockers[0].blocker + " 등)");
+    if (s.lows.length) bits.push("확신도 '낮음' " + s.lows.length + "건을 스스로 표시해 리스크를 선공유");
+    return bits.join("하고, ") + "함";
+  }
   RENDER.review = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
+    var rf = reviewFacts();
+    if (!rf.sigs.length) {
+      host.innerHTML = screenHead("review") +
+        '<div class="agh-emptybox"><b>리뷰 대상이 없습니다.</b><br>' +
+        "대상은 <code>employees.manager_id</code> 직속 → 없으면 같은 조직 구성원으로 정합니다. 조회 결과 <b>0명</b>이라 대상 이름을 가정하지 않습니다.</div>";
+      logAudit("판단 정지", "리뷰 초안 · 대상 0명", "review.no-target");
+      return;
+    }
+    var cur = rf.cur;
+    var prop = reviewProposal(cur);
+    var propChips = cur && cur.last
+      ? refChip("talenx", cur.last.checkin_id, cur.last.comment || "") +
+        (cur.worst ? refChip("erp", cur.worst.kr_id, cur.worst.objective || cur.worst.name) : "")
+      : srcChip("talenx", "근거 기록 없음");
     host.innerHTML = screenHead("review") +
-      '<div class="agh-revlayout"><div class="agh-revside"><div class="lab">리뷰 대상 <b>5 / 12</b></div>' +
-      [["김지훈 책임", "작성 중", "cur"], ["이수민 선임", "작성 완료", "done"], ["박도현 책임", "대기", ""]].map(function (r) {
-        return '<div class="agh-revtgt ' + r[2] + '"><b>' + esc(r[0]) + "</b><span>" + esc(r[1]) + "</span></div>";
+      '<div class="agh-revlayout"><div class="agh-revside"><div class="lab">리뷰 대상 <b>' + rf.sigs.length + "명</b> · 근거 확보 <b>" + rf.withEv.length + " / " + rf.sigs.length + "</b></div>" +
+      rf.sigs.map(function (s) {
+        var cls = (cur && s.emp_id === cur.emp_id) ? "cur" : (s.count ? "done" : "");
+        var st = (cur && s.emp_id === cur.emp_id) ? "작성 중" : (s.count ? "근거 " + s.count + "건" : "근거 없음");
+        return '<div class="agh-revtgt ' + cls + '"><b>' + esc(s.name) + "</b><span>" + esc(st) + "</span></div>";
       }).join("") +
-      '<div class="lab" style="margin-top:12px">섹션</div><div class="agh-revsec">핵심 성과 ✓<br>개선 영역 ●<br>역량 평가 ·<br>차년도 방향 ·<br>종합 총평 ·</div></div>' +
-      '<div class="agh-revmain"><div class="lab">핵심 성과 <span class="agh-flag ok">AI 작성보조 ON</span></div>' +
-      '<div class="agh-revdoc" data-agh-doc><p>상반기 talenx 직무모듈 통합설계를 담당하며 팀 내 핵심 전력으로 기여함.</p></div>' +
+      '<div class="lab" style="margin-top:12px">대상 산출</div><div class="agh-revsec" style="font-size:11.5px">' +
+      esc(rf.src) + " 기준<br>근거 = checkins 기록 유무<br>이름·건수 모두 실조회값</div></div>" +
+      '<div class="agh-revmain"><div class="lab">핵심 성과 · ' + esc(cur ? cur.name : "-") + ' <span class="agh-flag ok">AI 작성보조 ON</span></div>' +
+      '<div class="agh-revdoc" data-agh-doc><p>' +
+      esc(cur && cur.worst && cur.worst.objective ? "「" + cur.worst.objective + "」 과제를 담당함." : "담당 과제 기록이 조회되지 않았습니다.") + "</p></div>" +
       '<div class="agh-revprop" data-agh-prop style="display:none"><div class="lab">AI 제안 및 근거 — 삽입 문장 하이라이트</div>' +
-      '<p class="hl">분기 중 3개 유관부서(마케팅본부, 컨설팅본부, UX 디자인팀)와의 연동 과제를 무중단으로 완료해 대규모 업그레이드 배포 안정성을 높인 점이 확인됨</p>' +
-      srcChip("talenx", "talenx 업무보드") + srcChip("rule", "Slack 협의 로그") + srcChip("erp", "ERP 배포 이력") +
-      '<div class="acts"><button class="agh-btn primary" data-rev-apply>반영</button><button class="agh-btn" data-rev-skip>무시</button></div>' +
-      '<small>변경 요약 · +2문장, 지표 신규 인용 — 변경 근거 기록</small></div>' +
-      '<div class="agh-revcmd"><input type="text" value="핵심 성과를 정량 근거와 함께 보강해줘. talenx, Slack 데이터 참고" data-agh-revin>' +
+      (prop
+        ? '<p class="hl">' + esc(prop) + "</p>" + propChips +
+          '<div class="acts"><button class="agh-btn primary" data-rev-apply>반영</button><button class="agh-btn" data-rev-skip>무시</button></div>' +
+          "<small>변경 요약 · +1문장, 조회된 KR 진척·체크인 근거만 인용 — 변경 근거 기록</small>"
+        : '<p class="hl">⛔ 근거를 찾지 못해 제안 문장을 만들지 않았습니다 — ' + esc(cur ? cur.name : "대상") +
+          " 님의 체크인·KR 기록이 조회되지 않습니다.</p>" + srcChip("talenx", "체크인 기록 없음") +
+          "<small>추정으로 리뷰 문장을 채우지 않습니다.</small>") + "</div>" +
+      '<div class="agh-revcmd"><input type="text" value="핵심 성과를 조회된 KR 진척·체크인 근거로 보강해줘" data-agh-revin>' +
       '<button class="agh-btn primary" data-agh-revgo>지시</button></div></div></div>' +
       gateHTML("review", ["섹션 승인", "수정", "보류"]);
     ctxPanelIf(host, [
-      { tag: "문장 단위 통제권", title: "단계·문장 단위 승인", body: "AI가 ERP 실적·자기평가서를 근거로 초안을 실시간 생성하고 삽입 문장을 하이라이트로 표시 — 사용자는 문장 단위로 반영/무시합니다." },
+      { tag: "문장 단위 통제권", title: "단계·문장 단위 승인", body: "AI가 조회된 KR 진척·체크인 기록을 근거로 초안을 생성하고 삽입 문장을 하이라이트로 표시 — 사용자는 문장 단위로 반영/무시합니다." },
+      { tag: "산출식", title: "대상·진행 카운트", body: "대상 <b>" + rf.sigs.length + "명</b> = " + esc(rf.src) + " 실조회 · 근거 확보 <b>" + rf.withEv.length + "명</b> = 체크인 기록 1건 이상. 근거 0건인 대상은 문장을 제안하지 않고 멈춥니다. " + srcChip("talenx", "employees·checkins") },
       { tag: "민감 이슈", title: "인라인 도우미", body: "저성과·민감 문구는 에이전트가 동시에 감지해 문장 옆에서 대안을 제시하고 변경 근거를 기록합니다." }
     ], "");
-    T(function () { host.querySelector("[data-agh-prop]").style.display = ""; ctxAppendIf(host, '<div class="agh-live">talenx, Slack, ERP 데이터를 인용해 \'핵심 성과\' 문단에 2문장을 제안했습니다.</div>'); }, 1300);
+    T(function () {
+      host.querySelector("[data-agh-prop]").style.display = "";
+      ctxAppendIf(host, prop
+        ? '<div class="agh-live">' + esc(cur.name) + " 님의 KR 진척·체크인 " + cur.count + "건을 인용해 '핵심 성과' 문단 제안을 만들었습니다.</div>"
+        : '<div class="agh-live warn">근거 조회 실패 — 제안 문장을 만들지 않았습니다.</div>');
+    }, 1300);
     host.addEventListener("click", function (e) {
       if (e.target.closest("[data-rev-apply]")) {
         /* 하드코딩 문장이 아니라 지금 제안 박스에 떠 있는 문장을 그대로 반영 */
@@ -1856,23 +2676,70 @@
   /* ============================================================
      선제 알림 (형태② — 에이전트가 먼저 말 건다)
      ============================================================ */
-  /* 알림 문구를 하드코딩 대신 qw7OpsRows() 실계산(체크인 공백·드리프트)으로 생성
-     + 병렬 세션 추가 알림 2종(진척 신호·연결 지도) 통합 */
+  /* 알림 = 실계산 신호만 — 조회로 만들 수 없는 항목은 아예 만들지 않는다(빈 배열 허용).
+     ① 목표 문장 품질(qw7QualityRows) ② 체크인 공백·드리프트(qw7OpsRows)
+     ③ 평가 편향(orgBiasStats) ④ 직무 프로파일 연결(connmap과 같은 집계) */
   function alertsNow() {
-    var ops = qw7OpsRows();
-    var g = ops.gaps[0], dr = ops.drifts[0];
-    return [
-      { title: "가중치 합계 105%", body: "목표 가중치 합이 상한을 5%p 초과 — 조정안 준비됨", screen: "qw2" },
-      { title: "체크인 공백 " + ops.gaps.length + "건", body: "「" + g.title + "」 " + g.gap + "일 무체크인 · 진척 드리프트 −" + dr.drift + "%p — 초안 발송 대기", screen: "qw1" },
-      { title: "등급 조정 D-3", body: "개발본부 관대화 의심 — 심의 안건 검토 필요", screen: "calib" },
-      { title: "진척 신호 감지", body: "체크인 지표 급변 " + ops.drifts.length + "건 — 목표 대비 이탈 신호, 체크인 초안 준비됨", screen: "qw1" },
-      { title: "목표–직무 연결 점검", body: "목표·직무·역량 연결 상태 — 연결 지도에서 확인", screen: "connmap" }
-    ];
+    var out = [];
+    try {
+      var scope = qw7Scope();
+      var ops = qw7OpsRows(scope);
+      var rows = qw7QualityRows(scope);
+      var issues = rows.filter(function (r) { return r.issue; });
+      if (issues.length) {
+        out.push({
+          title: "목표 문장 품질 지적 " + issues.length + "건",
+          body: "KR " + scope.krs.length + "건 중 중복·미연계·측정 불가 신호 " + issues.length + "건 — 예: 「" + issues[0].kr.name + "」",
+          screen: "qw7"
+        });
+      }
+      if (ops.gaps.length) {
+        var g = ops.gaps[0];
+        out.push({
+          title: "체크인 공백 " + ops.gapTotal + "건",
+          body: "「" + g.title + "」 " + (g.gap == null ? "체크인 기록 없음" : g.gap + "일 무체크인") + " · 진행률 " + g.progress + "%",
+          screen: "qw1"
+        });
+      }
+      if (ops.drifts.length) {
+        var dr = ops.drifts[0];
+        out.push({
+          title: "진척 드리프트 " + ops.driftTotal + "건",
+          body: "「" + dr.title + "」 기간 경과 " + dr.elapsed + "% 대비 진행률 " + dr.progress + "% (−" + dr.drift + "%p)",
+          screen: "qw7"
+        });
+      }
+    } catch (e) { /* 조회 실패 시 알림을 지어내지 않는다 */ }
+    try {
+      var st = orgBiasStats();
+      if (st && st.flagged.length) {
+        var u = st.flagged[0];
+        out.push({
+          title: "평가 편향 플래그 " + st.flagged.length + "곳",
+          body: u.name + " " + u.tag + " — 상위등급 " + u.topPct + "% (전사 " + st.company.topPct + "%) · 모집단 " + u.n + "명",
+          screen: "qw5"
+        });
+      }
+    } catch (e2) { /* 무시 */ }
+    try {
+      var d = D(), emps = d.employees || [];
+      var missing = emps.filter(function (e) { return !e.jobProfileId; }).length;
+      if (missing) {
+        out.push({
+          title: "직무 프로파일 미연결 " + missing + "명",
+          body: "목표가 직무에 정박하지 못하면 평가 근거가 흔들립니다 — 연결 지도에서 확인",
+          screen: "connmap"
+        });
+      }
+    } catch (e3) { /* 무시 */ }
+    return out;
   }
   function showAlerts() {
     if (!(window.TX && TX.menu)) return;
     var btn = el.root.querySelector("[data-agh-alerts]");
-    TX.menu(btn, alertsNow().map(function (a) {
+    var al = alertsNow();
+    if (!al.length) { toast("지금 조회되는 임계 초과 신호가 없습니다 — 없는 알림을 만들지 않습니다."); return; }
+    TX.menu(btn, al.map(function (a) {
       return { label: "▲ " + a.title + " — " + a.body, onClick: function () { showScreen(a.screen); } };
     }));
   }
@@ -1882,8 +2749,13 @@
     if (popupShown) return;
     setTimeout(function () {
       if (popupShown || state.open) return;
+      /* 역할별 관심 화면과 맞는 실알림을 고른다 — 인덱스 고정(0/1/2)은 알림 개수가
+         실계산으로 바뀌면 엉뚱한 항목을 집으므로 폐기. 알림이 없으면 팝업도 없다. */
+      var al = alertsNow();
+      if (!al.length) return;
       popupShown = true;
-      var a = alertsNow()[role().key === "leader" ? 1 : role().key === "hr" ? 2 : 0];
+      var want = { leader: ["qw1", "qw7"], hr: ["qw5", "calib"], exec: ["qw7", "qw5"], member: ["qw2", "qw7"] }[role().key] || [];
+      var a = al.filter(function (x) { return want.indexOf(x.screen) >= 0; })[0] || al[0];
       var card = h("div", "agh-popup");
       card.innerHTML = '<div class="hd"><span class="dot"></span>에이전트 알림 · 선제 감지</div>' +
         "<b>" + esc(a.title) + "</b><p>" + esc(a.body) + "</p>" +

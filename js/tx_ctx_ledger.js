@@ -47,11 +47,26 @@
  *      열리면(.ezx-open) 배지는 숨겨 패널과 겹치지 않게 한다.
  *    - 전역(EZChat/TXRoles/TALENX_DATA/TX.toast)은 존재 확인 후 사용,
  *      EZChat이 늦게 뜨면 300ms 간격 최대 20회 폴링으로 결선한다.
+ * ⑤ source 규약 — **원장 항목의 source는 표시 문자열이 아니라 조인 키다.**
+ *    형태: `<도메인>.<종류>.<레코드id>`  (예: perf.checkin.CHK-EMP0078-2)
+ *      · 도메인 = perf / eval / job / rule / 1on1 / org …
+ *      · 종류   = checkin · obj · fb …  (도메인 안의 레코드 종류)
+ *      · 레코드id = TALENX_DATA의 실제 키 (OBJ-* KR-* CHK-* EVAL-* FB-* JOB-*)
+ *    결정 흐름 맵(tx_journey.js ledgerMatchFor)은 evidence의 src와 원장 source에서
+ *    이 id 토큰(/\b(OBJ|KR|CHK|EVAL|FB|JOB)-…/)을 뽑아 노드↔기록을 조인한다.
+ *    → source에 레코드 id가 없으면 조인이 **구조적으로 불가능**해 맵에서
+ *      "대응 기록 없음"으로 남는다. 날짜·회차 같은 표시 정보는 title/summary에 둔다.
+ *    실제 레코드가 없는 합성 시드는 id 자리에 `local.*`을 써서(perf.obj.local.0,
+ *    perf.checkin.local.0620) "레코드 id가 아님"을 소스에서 드러낸다.
+ *    예외: 1on1은 DATA에 레코드 id가 없어 tx_1on1/tx_journey와 함께
+ *    `1on1.rec.<MMDD>` 날짜 키를 공유한다(파일 간 합의된 키라 임의 변경 금지).
+ *    스토어 v3 = 옛 날짜 기반 체크인/피드백 source를 실 id로 승격하는 마이그레이션.
  * ========================================================================== */
 (function () {
   "use strict";
 
   var LS_PREFIX = "elizax_ctx_v1:";
+  var STORE_V = 3;           /* 스토어 스키마 버전 (v3 = source 조인 키 규약) */
   var MAX_ITEMS = 80;
   var RENDER_DELAY = 240;
   var Z_PANEL = 100020;     /* quickask(100010)·fix_home(100001)보다 위 */
@@ -204,6 +219,50 @@
     return changed;
   }
 
+  /* v2 → v3 스토어 호환 — source 조인 키 규약 승격 (④ source 규약).
+     구버전 시드는 체크인/피드백 source를 날짜(perf.checkin.0620)로 만들어서
+     CHK-/FB- 레코드 id가 없다 → 결정 흐름 맵이 노드와 조인할 방법이 없다.
+     같은 사용자의 같은 월/일 레코드를 찾아 실 id로 승격하고, 못 찾으면
+     local.<MMDD>로 표시해 "레코드 id가 아님"을 소스에서 드러낸다.
+     source는 chainSig에 들어가지 않으므로 기록 체인은 영향받지 않는다. */
+  function findByMD(list, dateKey, mm, dd) {
+    for (var i = 0; i < list.length; i++) {
+      var d = String((list[i] && list[i][dateKey]) || "").split("-");
+      if (d.length === 3 && d[1] === mm && d[2] === dd) return list[i];
+    }
+    return null;
+  }
+  /* dateKey 없는 종류(피드백)는 날짜 필드 자체가 없어 본인 레코드 첫 건으로 승격한다 */
+  var MIGRATE_V3 = [
+    { type: "checkin", re: /^perf\.checkin\.(\d{2})(\d{2})$/, prefix: "perf.checkin.",
+      coll: "checkins", dateKey: "checkin_date", idKey: "checkin_id" },
+    { type: "feedback", re: /^perf\.fb\.(\d{2})(\d{2})$/, prefix: "perf.fb.",
+      coll: "feedbackHistory", dateKey: null, idKey: "fb_id" }
+  ];
+  function migrateSourceKeys(list) {
+    var changed = false, cache = {};
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it || !it.source) continue;
+      for (var r = 0; r < MIGRATE_V3.length; r++) {
+        var rule = MIGRATE_V3[r];
+        if (it.type !== rule.type) continue;
+        var m = rule.re.exec(String(it.source));
+        if (!m) continue;
+        if (!cache[rule.coll]) {
+          cache[rule.coll] = (DATA[rule.coll] || []).filter(function (x) { return x && x.emp_id === CU.emp_id; });
+        }
+        var hit = rule.dateKey
+          ? findByMD(cache[rule.coll], rule.dateKey, m[1], m[2])
+          : (cache[rule.coll][0] || null);
+        it.source = rule.prefix + ((hit && hit[rule.idKey]) || ("local." + m[1] + m[2]));
+        changed = true;
+        break;
+      }
+    }
+    return changed;
+  }
+
   function loadStore() {
     if (items) return items;
     items = [];
@@ -214,7 +273,11 @@
         var obj = JSON.parse(raw);
         if (obj && Object.prototype.toString.call(obj.items) === "[object Array]") {
           items = obj.items.filter(function (it) { return it && it.id && it.type && it.title; });
-          if ((obj.v || 1) < 2) migrated = backfillSeedFlags(items);
+          var ver = obj.v || 1;
+          if (ver < 2) backfillSeedFlags(items);
+          if (ver < 3) migrateSourceKeys(items);
+          /* 버전만 올라간 경우에도 1회 저장 — 매 로드마다 마이그레이션 재실행 방지 */
+          migrated = ver < STORE_V;
         }
       }
     } catch (e) { items = []; }
@@ -251,7 +314,7 @@
         }
         items = kept;
       }
-      localStorage.setItem(KEY, JSON.stringify({ v: 2, items: items }));
+      localStorage.setItem(KEY, JSON.stringify({ v: STORE_V, items: items }));
     } catch (e) { /* storage 불가 환경 무시 */ }
   }
   function sorted() {
@@ -309,7 +372,9 @@
       g++;
     }
 
-    /* 체크인 2 — 실제 체크인 코멘트가 있으면 사용 */
+    /* 체크인 2 — 실제 체크인 코멘트가 있으면 사용.
+       source는 날짜가 아니라 실제 checkin_id를 싣는다 (④ source 규약 = 조인 키).
+       날짜는 title/summary가 보여주고, 조인은 CHK- 토큰이 담당한다. */
     var cks = (DATA.checkins || []).filter(function (c) { return c && c.emp_id === CU.emp_id && c.comment; });
     cks.sort(function (a, b) { return String(a.checkin_date || "") < String(b.checkin_date || "") ? 1 : -1; });
     var ckSeeds = [
@@ -324,7 +389,7 @@
         if (md.length === 3) { slot = { mon: parseInt(md[1], 10) || slot.mon, day: parseInt(md[2], 10) || slot.day, hh: slot.hh, mm: slot.mm }; }
       }
       out.push(mkSeed(slot.mon, slot.day, slot.hh, slot.mm, "checkin",
-        "perf.checkin." + z2(slot.mon) + z2(slot.day),
+        "perf.checkin." + ((c && c.checkin_id) || ("local." + z2(slot.mon) + z2(slot.day))),
         "주간 체크인 (" + slot.mon + "/" + slot.day + ")",
         c ? c.comment + (c.confidence ? " · 확신도 " + c.confidence : "") : "진행률 업데이트 · 장애 요인 없음",
         2));
@@ -336,9 +401,10 @@
     out.push(mkSeed(6, 30, 16, 30, "oneonone", "1on1.rec.0630",
       mgr + "와 1on1 (6/30)", "리뷰 단계 병목 이슈 논의 · 7월 개선 액션 2건 합의", 2));
 
-    /* 피드백 1 */
-    out.push(mkSeed(6, 12, 11, 20, "feedback", "perf.fb.0612",
-      "동료 피드백 — 프로젝트 리뷰", "SBI: 검증 프로세스 설계가 협업 품질을 높였다는 동료 2인 피드백", 1));
+    /* 피드백 1 — source는 실제 fb_id (없으면 local.*) */
+    var fb = (DATA.feedbackHistory || []).filter(function (f) { return f && f.emp_id === CU.emp_id; })[0];
+    out.push(mkSeed(6, 12, 11, 20, "feedback", "perf.fb." + ((fb && fb.fb_id) || "local.0612"),
+      "동료 피드백 — 프로젝트 리뷰 (6/12)", "SBI: 검증 프로세스 설계가 협업 품질을 높였다는 동료 2인 피드백", 1));
 
     /* 직무 기대역량 1 */
     out.push(mkSeed(5, 2, 10, 0, "job", "job.profile." + (CU.job_id || "JOB"),
@@ -419,10 +485,13 @@
       list.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
       list = list.slice(list.length - MAX_ITEMS);
     }
-    try { localStorage.setItem(key, JSON.stringify({ v: 2, items: list })); } catch (e2) { /* storage 불가 무시 */ }
+    try { localStorage.setItem(key, JSON.stringify({ v: STORE_V, items: list })); } catch (e2) { /* storage 불가 무시 */ }
     return e;
   }
 
+  /* entry.source는 표시 문자열이 아니라 조인 키다 — `<도메인>.<종류>.<레코드id>` (④ source 규약).
+     레코드 id(OBJ-/KR-/CHK-/EVAL-/FB-/JOB-) 없이 날짜·회차만 넣으면 결정 흐름 맵과
+     조인되지 않아 그 기록은 맵에서 영영 "대응 기록 없음"으로 남는다. */
   function addEntry(entry) {
     if (!entry || !entry.title) return null;
     /* emp_id가 붙어 있고 현재 사용자와 다르면 수신자 원장으로 라우팅 (개인별 전달 계약) */
@@ -1237,7 +1306,7 @@
   /* ================= 내보내기 / 가져오기 (F4) ================= */
   function exportJson() {
     try {
-      var blob = new Blob([JSON.stringify({ v: 2, emp_id: CU.emp_id, exported_at: nowStamp(), items: loadStore() }, null, 2)],
+      var blob = new Blob([JSON.stringify({ v: STORE_V, emp_id: CU.emp_id, exported_at: nowStamp(), items: loadStore() }, null, 2)],
         { type: "application/json" });
       var a = document.createElement("a");
       a.href = URL.createObjectURL(blob);

@@ -118,7 +118,19 @@
     st.textContent = [
       /* --- 목표 생성 오버레이: 내 직무 기준 패널 --- */
       '#s-perf .txf-jobpanel{width:270px;flex:none;background:var(--card,#fff);border:1px solid var(--line,#ECEEF2);border-radius:12px;padding:16px;font-size:12.5px;color:var(--ink,#2A2E39)}',
-      '@media(max-width:1100px){#s-perf .txf-jobpanel{display:none}}',
+      /* ≤1100px 계약 — 패널을 없애지 않는다. 요약 헤더는 남기고 본문만 접는다.
+         목표 생성 폼의 carry 패널(tx_fix_perf)과 같은 브레이크포인트를 쓰되,
+         carry가 모달로 빠지는 자리에서 이쪽은 인라인 펼치기로 접근 경로를 준다. */
+      '.ezjc-cotoggle{display:none;margin-left:auto;flex:none;align-items:center;gap:4px;font:inherit;font-size:11px;font-weight:700;color:var(--blue,#1F7AF0);background:var(--card,#fff);border:1px solid var(--line,#ECEEF2);border-radius:999px;padding:3px 9px;cursor:pointer;white-space:nowrap}',
+      '.ezjc-cotoggle:hover{background:var(--blue-soft,#E9F1FE)}',
+      '.ezjc-cosum{display:none;font-size:11px;color:var(--ink-3,#9096A3);margin-top:3px;line-height:1.45}',
+      '@media(max-width:1100px){',
+      '#s-perf .txf-jobpanel{width:100%;flex:1 1 100%;padding:12px 14px}',
+      '#s-perf .txf-jobpanel .ezjc-cotoggle{display:inline-flex}',
+      '#s-perf .txf-jobpanel .ezjc-cosum{display:block}',
+      '#s-perf .txf-jobpanel.ezjc-collapsed .ezjc-ph{padding-bottom:0;border-bottom:none;margin-bottom:0}',
+      '#s-perf .txf-jobpanel.ezjc-collapsed > *:not(.ezjc-ph){display:none}',
+      '}',
       '.txf-jobpanel .ezjc-ph{display:flex;gap:9px;align-items:flex-start;padding-bottom:11px;border-bottom:1px solid var(--line,#ECEEF2);margin-bottom:11px}',
       '.txf-jobpanel .ezjc-ph .ic{font-size:16px;line-height:1.2}',
       '.txf-jobpanel .ezjc-ph b{font-size:13.5px;font-weight:800}',
@@ -169,7 +181,12 @@
       '.ezjc-mapx{cursor:pointer;margin-left:auto;border:none;background:none;font-size:18px;color:var(--ink-3,#9096A3);line-height:1}',
       '.ezjc-subj{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2,#5C6474);margin:10px 0 0;flex-wrap:wrap}',
       '.ezjc-subj select{border:1px solid var(--line,#ECEEF2);border-radius:8px;padding:6px 9px;font-size:12.5px;color:var(--ink,#2A2E39);background:var(--card,#fff)}',
-      '.ezjc-legend{font-size:10.5px;color:var(--ink-3,#9096A3);margin-left:auto}',
+      /* 연결선 범례 — 선 색 5종이 각각 무슨 관계인지 (실선/점선만 설명하던 범례 대체) */
+      '.ezjc-legend2{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:9px;font-size:10.5px;color:var(--ink-3,#9096A3)}',
+      '.ezjc-legend2 .lg{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}',
+      '.ezjc-legend2 .lg i{display:inline-block;width:16px;height:2px;border-radius:2px;flex:none}',
+      '.ezjc-legend2 .lg i.dash{height:0;background:none;border-top:2px dashed #7B61FF}',
+      '.ezjc-legend2 .sep{color:var(--ink-4,#B4B9C4)}',
       '.ezjc-mapwrap{position:relative;overflow-x:auto;margin-top:12px;padding-bottom:6px}',
       '.ezjc-svg{position:absolute;left:0;top:0;pointer-events:none;z-index:0}',
       '.ezjc-cols{position:relative;z-index:1;display:grid;grid-template-columns:repeat(6,minmax(168px,1fr));gap:14px;min-width:1090px}',
@@ -190,7 +207,27 @@
       '.ezjc-qlink{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:7px 12px;border:1px solid var(--line,#ECEEF2);border-radius:8px;background:var(--card,#fff);color:var(--blue-2,#0E63D6);cursor:pointer}',
       '.ezjc-qlink:hover{background:var(--blue-soft,#E9F1FE)}',
       '.ezjc-qcap{font-size:12px;color:var(--ink-3,#9096A3);margin:4px 0 13px}',
-      '.ezjc-quality .tx-kpi .c{background:var(--card,#fff)}',
+      '.ezjc-quality .tx-kpi{flex-wrap:wrap}',
+      '.ezjc-quality .tx-kpi .c{background:var(--card,#fff);min-width:150px}',
+      /* 타일 = 드릴다운 진입점. 100%도 클릭 가능 — "미달 0건"도 정보다 */
+      '.ezjc-quality .tx-kpi .c.ezjc-qtile{cursor:pointer;transition:border-color .12s,background .12s}',
+      '.ezjc-quality .tx-kpi .c.ezjc-qtile:hover,.ezjc-quality .tx-kpi .c.ezjc-qtile:focus-visible{border-color:var(--blue,#1F7AF0);background:var(--blue-soft,#E9F1FE);outline:none}',
+      '.ezjc-quality .tx-kpi .c .qn{font-size:10.5px;color:var(--ink-4,#B4B9C4);margin-top:5px;line-height:1.45}',
+      '.ezjc-quality .tx-kpi .c .qn b{font-weight:800;color:#B45309}',
+      '.ezjc-quality .tx-kpi .c .qn b.ok{color:#15803D}',
+      /* --- 미달 항목 드릴다운 --- */
+      '.ezjc-qdsum{font-size:12.5px;color:var(--ink-2,#5C6474);line-height:1.6;background:var(--soft,#F5F6F8);border-radius:9px;padding:10px 12px;margin-bottom:12px}',
+      '.ezjc-qdsum b{color:var(--ink,#2A2E39)}',
+      '.ezjc-qdok{font-size:12.5px;font-weight:700;color:#15803D;background:rgba(21,128,61,.07);border:1px solid rgba(21,128,61,.25);border-radius:9px;padding:14px 14px;line-height:1.6}',
+      '.ezjc-qrow{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;padding:9px 4px;border-bottom:1px solid var(--line,#ECEEF2);font-size:12px}',
+      '.ezjc-qrow .w{flex:none;width:96px;font-weight:700;color:var(--ink,#2A2E39);line-height:1.45}',
+      '.ezjc-qrow .t{flex:1;min-width:0;color:var(--ink,#2A2E39);line-height:1.45;word-break:break-word}',
+      '.ezjc-qrow .t .s{display:block;font-size:10.5px;color:var(--ink-3,#9096A3);margin-top:2px}',
+      /* order:2 = 사유 줄은 버튼 뒤, 항상 새 줄 (flex-basis:100%) */
+      '.ezjc-qrow .y{order:2;flex-basis:100%;padding-left:106px;font-size:11px;color:#B45309;line-height:1.45}',
+      '.ezjc-qgo{flex:none;border:1px solid var(--line,#ECEEF2);background:var(--card,#fff);color:var(--blue-2,#0E63D6);border-radius:6px;font-size:10.5px;font-weight:700;padding:3px 8px;cursor:pointer;white-space:nowrap}',
+      '.ezjc-qgo:hover{background:var(--blue-soft,#E9F1FE)}',
+      '@media(max-width:760px){.ezjc-qrow .y{padding-left:0}}',
       /* --- 직무 프로파일 drawer 내부 --- */
       '.ezjc-dr .ezjc-sec:first-child{margin-top:0}',
       '.ezjc-dr .ezjc-mission{font-size:13px}',
@@ -245,13 +282,24 @@
   /* ============================================================
      1) 목표 생성 오버레이 패널 — window.EZJob.panelHTML(emp)
      ============================================================ */
+  /* 접힌 상태에서도 "무엇이 들어 있는지"는 알아야 한다 — 헤더용 한 줄 요약 */
+  function panelSummary(jp) {
+    if (!jp) return '직무 프로파일 미연결';
+    var tasks = jp.tasks || {}, n = 0;
+    Object.keys(tasks).forEach(function (a) { n += (tasks[a] || []).length; });
+    return '과업 ' + n + ' · 기대 스킬 ' + ((jp.skills || []).length) + ' · 역량 ' + compProfile(jp).length;
+  }
   function panelHTML(emp) {
     injectStyle();
     emp = emp || cu();
     var jp = profileOf(emp);
-    var h = '<div class="txf-jobpanel" data-ezjc-panel>'
+    /* ezjc-collapsed는 ≤1100px에서만 효력 — 넓은 화면은 지금까지와 동일하게 펼친 상태 */
+    var h = '<div class="txf-jobpanel ezjc-collapsed" data-ezjc-panel>'
       + '<div class="ezjc-ph"><span class="ic">🧩</span><div><b>내 직무 기준</b>'
-      + '<div class="jt">' + esc(emp.jobTitle || '직무 미지정') + '</div></div></div>';
+      + '<div class="jt">' + esc(emp.jobTitle || '직무 미지정') + '</div>'
+      + '<div class="ezjc-cosum">' + esc(panelSummary(jp)) + '</div></div>'
+      + '<button type="button" class="ezjc-cotoggle" data-ezjc="collapse" '
+      + 'title="좁은 화면에서 직무 기준 패널을 펼치거나 접습니다">⌄ 펼치기</button></div>';
     if (!jp) {
       h += '<div class="ezjc-missing">⚠ 직무 프로파일 미연결 — HR에 연결을 요청하세요</div>'
         + '<div class="ezjc-note">✦ 직무 기준이 연결되면 과업·기대 스킬을 근거로 AI가 KR을 추천합니다.</div>';
@@ -555,6 +603,49 @@
     svg.innerHTML = paths;
   }
 
+  /* 연결선 색 = 관계 종류. 범례가 없으면 5색이 장식으로 보인다 */
+  var LINE_LEGEND = [
+    ['#7B61FF', '전략 테마 → 조직 목표'],
+    ['#1F7AF0', '조직 목표 → 내 목표'],
+    ['#0E9F6E', 'KR → 직무 과업'],
+    ['#B45309', '직무 과업 → 역량'],
+    ['#5C6474', '역량 → 평가 근거']
+  ];
+  function legendHTML() {
+    return '<div class="ezjc-legend2">'
+      + LINE_LEGEND.map(function (l) {
+          return '<span class="lg"><i style="background:' + l[0] + '"></i>' + esc(l[1]) + '</span>';
+        }).join('')
+      + '<span class="lg"><i class="dash"></i>점선 · 직무 기준(사전 정의)</span>'
+      + '<span class="lg sep">테두리 강조 = 연결됨 · 흐림 = 미연결</span>'
+      + '</div>';
+  }
+
+  /* 선은 DOM 좌표로 그려지므로 리사이즈·스크롤로 배치가 바뀌면 다시 계산해야 한다.
+     렌더 시점 2회 호출만으로는 창을 줄이는 순간 선이 엉뚱한 곳에 남는다. */
+  var _redrawTimer = null, _winRedrawOn = false;
+  function scheduleRedraw() {
+    if (_redrawTimer) clearTimeout(_redrawTimer);
+    _redrawTimer = setTimeout(function () {
+      _redrawTimer = null;
+      var ov = document.querySelector('[data-ezjc-mapov]');
+      var wrap = ov && ov.querySelector('[data-ezjc-wrap]');
+      if (wrap) drawLines(wrap);
+    }, 80);
+  }
+  function bindRedraw(ov) {
+    if (!_winRedrawOn) { window.addEventListener('resize', scheduleRedraw); _winRedrawOn = true; }
+    /* 오버레이 스코프 리스너는 노드와 함께 사라진다 */
+    var wrap = ov.querySelector('[data-ezjc-wrap]');
+    var card = ov.querySelector('.ezjc-map');
+    if (wrap) wrap.addEventListener('scroll', scheduleRedraw);
+    if (card) card.addEventListener('scroll', scheduleRedraw);
+  }
+  function unbindRedraw() {
+    if (_winRedrawOn) { window.removeEventListener('resize', scheduleRedraw); _winRedrawOn = false; }
+    if (_redrawTimer) { clearTimeout(_redrawTimer); _redrawTimer = null; }
+  }
+
   function renderMap(ov, empId) {
     var wrap = ov.querySelector('[data-ezjc-wrap]');
     if (!wrap) return;
@@ -563,11 +654,22 @@
     setTimeout(function () { drawLines(wrap); }, 120);   /* 폰트 로딩 후 보정 */
   }
 
+  /* 열 때마다 오버레이를 새로 만든다(캐시 없음) — 역할·직무·대상자가 바뀌면
+     subjects()/mapBodyHTML()이 그 시점 데이터로 다시 계산된다. */
   function openLinkMap(empId) {
     injectStyle();
     closeLinkMap();
     var subj = subjects();
     var first = empId || (subj[0] && subj[0].emp_id) || cu().emp_id;
+    /* 드릴다운에서 넘어온 대상자가 기본 목록(subjects())에 없으면 목록 앞에 끼운다.
+       그러지 않으면 select는 첫 사람을, 본문은 요청받은 사람을 가리키는 불일치가 난다. */
+    var inList = false;
+    subj.forEach(function (s) { if (s && s.emp_id === first) inList = true; });
+    if (!inList) {
+      var target = empBy(first);
+      if (target) subj = [target].concat(subj);
+      else first = (subj[0] && subj[0].emp_id) || cu().emp_id;
+    }
     var selHTML = '<select data-ezjc="subj">' + subj.map(function (s) {
       return '<option value="' + esc(s.emp_id) + '"' + (s.emp_id === first ? ' selected' : '') + '>'
         + esc(s.name) + (s.jobTitle ? ' · ' + esc(s.jobTitle) : '') + '</option>';
@@ -580,38 +682,150 @@
       + '<span class="ezjc-chip">기준 시점 · 2026 상반기</span>'
       + '<button class="ezjc-mapx" data-ezjc="mapclose" title="닫기">✕</button>'
       + '<div class="sub">사업전략부터 평가까지, 데이터가 어떻게 이어지는지 봅니다</div></div>'
-      + '<div class="ezjc-subj"><span>대상</span>' + selHTML
-      + '<span class="ezjc-legend">테두리 강조 = 연결됨 · 흐림 = 미연결 · 실선 = 실제 데이터 참조 · 점선 = 직무 기준(사전 정의)</span></div>'
+      + '<div class="ezjc-subj"><span>대상</span>' + selHTML + '</div>'
+      + legendHTML()
       + '<div class="ezjc-mapwrap" data-ezjc-wrap></div>'
       + '</div>';
     document.body.appendChild(ov);
     renderMap(ov, first);
+    bindRedraw(ov);
   }
   function closeLinkMap() {
     var ov = document.querySelector('[data-ezjc-mapov]');
     if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    unbindRedraw();
   }
 
   /* ============================================================
      4) 목표–직무 연결 품질 지표 카드 (HR/경영진, #s-appr 평가 탭)
      ============================================================ */
-  function qualityHTML() {
+  var QD_MAX_ROWS = 200;   /* 드릴다운 표시 상한 — 넘으면 남은 건수를 한 줄로 알린다 */
+
+  /* 지표 6종을 "퍼센트"가 아니라 "모집단 · 미달 항목 목록"까지 계산한다.
+     100%만 늘어선 카드는 신호가 없다 — 무엇이 미달인지 열어볼 수 있어야 지표다. */
+  function qualityMetrics() {
     var es = arr('employees'), os = arr('objectives'), ks = arr('keyResults');
-    function pctOf(n, t) { return t ? Math.round(n / t * 100) + '%' : '—'; }
-    var tiles = [
-      [pctOf(es.filter(function (e) { return e.jobProfileId != null && e.jobProfileId !== ''; }).length, es.length), '직무 프로파일 연결률'],
-      [pctOf(os.filter(function (o) { return !!o.strategy_theme_id; }).length, os.length), '목표의 전략 연결률'],
-      [pctOf(ks.filter(function (k) { return !!k.job_task_ref; }).length, ks.length), 'KR 직무 근거 보유율'],
-      [pctOf(ks.filter(function (k) { return !!k.competency_id; }).length, ks.length), 'KR 역량 연결률'],
-      [pctOf(ks.filter(function (k) { return !!k.difficulty_basis; }).length, ks.length), 'KR 난이도 근거 보유율'],
-      [pctOf(ks.filter(function (k) { return /[0-9%]/.test(String(k.target_value || '')); }).length, ks.length), '측정 가능 KR 비율']
+    var oIdx = {};
+    os.forEach(function (o) { if (o) oIdx[o.objective_id] = o; });
+    function ownerOfObj(o) {
+      var e = o ? empBy(o.owner_emp_id) : null;
+      return { emp: (o && o.owner_emp_id) || '', who: (e && e.name) || (o && o.owner_emp_id) || '소유자 미상' };
+    }
+    function krMetric(key, label, ok, why) {
+      var miss = ks.filter(function (k) { return !ok(k); });
+      return {
+        key: key, label: label, unit: 'KR', total: ks.length, miss: miss.length,
+        rows: miss.map(function (k) {
+          var o = oIdx[k.objective_id], ow = ownerOfObj(o);
+          return {
+            emp: ow.emp, who: ow.who,
+            what: (k.kr_id || 'KR') + ' · ' + (k.name || ''),
+            sub: o ? o.title : (k.objective_id || ''),
+            why: why
+          };
+        })
+      };
+    }
+    var empMiss = es.filter(function (e) { return !(e.jobProfileId != null && e.jobProfileId !== ''); });
+    var objMiss = os.filter(function (o) { return o && !o.strategy_theme_id; });
+    return [
+      {
+        key: 'emp-jp', label: '직무 프로파일 연결률', unit: '명', total: es.length, miss: empMiss.length,
+        rows: empMiss.map(function (e) {
+          return {
+            emp: e.emp_id, who: e.name || e.emp_id,
+            what: e.jobTitle || '직무 미지정', sub: e.orgName || '',
+            why: 'jobProfileId 없음 — 직무 기준 없이 목표를 세우게 됩니다'
+          };
+        })
+      },
+      {
+        key: 'obj-st', label: '목표의 전략 연결률', unit: '목표', total: os.length, miss: objMiss.length,
+        rows: objMiss.map(function (o) {
+          var ow = ownerOfObj(o);
+          return {
+            emp: ow.emp, who: ow.who, what: o.title || o.objective_id,
+            sub: (LEVEL_KR[o.level] || o.level || '') + (o.period ? ' · ' + o.period : ''),
+            why: 'strategy_theme_id 없음 — 전략 기여를 설명할 근거가 없습니다'
+          };
+        })
+      },
+      krMetric('kr-job', 'KR 직무 근거 보유율', function (k) { return !!k.job_task_ref; },
+        'job_task_ref 없음 — 어느 직무 과업을 측정하는지 불명'),
+      krMetric('kr-comp', 'KR 역량 연결률', function (k) { return !!k.competency_id; },
+        'competency_id 없음 — 평가 역량과 연결되지 않음'),
+      krMetric('kr-diff', 'KR 난이도 근거 보유율', function (k) { return !!k.difficulty_basis; },
+        'difficulty_basis 없음 — 난이도 등급의 근거가 비어 있음'),
+      krMetric('kr-meas', '측정 가능 KR 비율', function (k) { return /[0-9%]/.test(String(k.target_value || '')); },
+        '목표값에 수치·%가 없음 — 달성 여부를 판정할 수 없음')
     ];
+  }
+  function metricBy(key) {
+    var ms = qualityMetrics();
+    for (var i = 0; i < ms.length; i++) if (ms[i].key === key) return ms[i];
+    return null;
+  }
+
+  /* 타일 클릭 → 미달 항목 목록. 미달 0건이면 "0건"이라는 사실 자체를 보여준다 */
+  function openQualityDetail(key) {
+    var m = metricBy(key);
+    if (!m) return;
+    var meId = cu().emp_id;
+    var canLedger = !!(window.EZLedger && window.EZLedger.openPanel);
+    var shown = m.rows.slice(0, QD_MAX_ROWS);
+    var pct = m.total ? Math.round((m.total - m.miss) / m.total * 100) : 0;
+    var head = '<div class="ezjc-qdsum">모집단 <b>' + m.total + ' ' + esc(m.unit) + '</b> 중 충족 <b>'
+      + (m.total - m.miss) + '</b> · 미달 <b>' + m.miss + '</b>건 (' + pct + '%)'
+      + '<br>기준 시점 2026 상반기 · 항목을 누르면 그 사람 기준으로 연결 지도를 엽니다</div>';
+    var body = document.createElement('div');
+    if (!m.miss) {
+      body.innerHTML = head
+        + '<div class="ezjc-qdok">✓ 미달 0건 — 모집단 ' + m.total + ' ' + esc(m.unit)
+        + ' 전부가 이 기준을 충족합니다. 이 지표에서는 조치할 항목이 없습니다.</div>';
+    } else {
+      body.innerHTML = head + shown.map(function (r) {
+        return '<div class="ezjc-qrow"><div class="w">' + esc(r.who) + '</div>'
+          + '<div class="t">' + esc(r.what) + (r.sub ? '<span class="s">' + esc(r.sub) + '</span>' : '') + '</div>'
+          + '<div class="y">' + esc(r.why) + '</div>'
+          + (r.emp ? '<button type="button" class="ezjc-qgo" data-qgo="map" data-emp="' + esc(r.emp) + '">연결 지도 →</button>' : '')
+          + (canLedger && r.emp && r.emp === meId ? '<button type="button" class="ezjc-qgo" data-qgo="ledger">원장 →</button>' : '')
+          + '</div>';
+      }).join('')
+        + (m.rows.length > shown.length
+            ? '<div class="ezjc-note">외 ' + (m.rows.length - shown.length) + '건 — 상위 ' + QD_MAX_ROWS + '건만 표시합니다.</div>'
+            : '');
+    }
+    var handle = null;
+    body.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('[data-qgo]') : null;
+      if (!b) return;
+      e.preventDefault();
+      if (handle && handle.close) handle.close();
+      if (b.getAttribute('data-qgo') === 'ledger') {
+        try { window.EZLedger.openPanel(); } catch (err) { /* 원장 미탑재 */ }
+        return;
+      }
+      openLinkMap(b.getAttribute('data-emp'));
+    });
+    handle = window.TX && window.TX.modal
+      ? window.TX.modal({ title: m.label + ' — 미달 항목', body: body, wide: true, actions: [{ label: '닫기', kind: 'ghost' }] })
+      : null;
+  }
+
+  function qualityHTML() {
+    var ms = qualityMetrics();
     return '<div class="ezjc-quality" data-ezjc-quality>'
       + '<div class="ezjc-qhead"><h3>목표–직무 연결 품질</h3>'
       + '<button class="ezjc-qlink" data-ezjc="map">🧭 연결 지도 열기</button></div>'
-      + '<div class="ezjc-qcap">직무 근거가 있는 목표가 평가 갈등을 줄입니다 · 기준 시점 2026 상반기</div>'
-      + '<div class="tx-kpi">' + tiles.map(function (t) {
-          return '<div class="c"><div class="n">' + esc(t[0]) + '</div><div class="l">' + esc(t[1]) + '</div></div>';
+      + '<div class="ezjc-qcap">직무 근거가 있는 목표가 평가 갈등을 줄입니다 · 타일을 누르면 미달 항목을 봅니다 · 기준 시점 2026 상반기</div>'
+      + '<div class="tx-kpi">' + ms.map(function (m) {
+          var pct = m.total ? Math.round((m.total - m.miss) / m.total * 100) + '%' : '—';
+          return '<div class="c ezjc-qtile" data-ezjc="qtile" data-qk="' + esc(m.key) + '" role="button" tabindex="0"'
+            + ' title="클릭 → 미달 항목 ' + m.miss + '건 보기">'
+            + '<div class="n">' + esc(pct) + '</div><div class="l">' + esc(m.label) + '</div>'
+            + '<div class="qn">' + m.total + ' ' + esc(m.unit) + ' 중 ' + (m.total - m.miss)
+            + ' · 미달 <b' + (m.miss ? '' : ' class="ok"') + '>' + m.miss + '</b>건</div>'
+            + '</div>';
         }).join('') + '</div>'
       + '</div>';
   }
@@ -664,6 +878,15 @@
     if (k === 'map') { openLinkMap(); return; }
     if (k === 'mapclose') { closeLinkMap(); return; }
     if (k === 'drawer') { openProfileDrawer(act.getAttribute('data-emp')); return; }
+    if (k === 'qtile') { openQualityDetail(act.getAttribute('data-qk')); return; }
+    if (k === 'collapse') {
+      var pnl = act.closest ? act.closest('[data-ezjc-panel]') : null;
+      if (pnl) {
+        var col = pnl.classList.toggle('ezjc-collapsed');
+        act.innerHTML = col ? '⌄ 펼치기' : '⌃ 접기';
+      }
+      return;
+    }
     if (k === 'mission-more') {
       var host = act.parentNode;
       var m = host && host.querySelector ? host.querySelector('[data-ezjc-mission]') : null;
@@ -694,7 +917,14 @@
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closeLinkMap();
+    if (e.key === 'Escape') { closeLinkMap(); return; }
+    /* 타일은 role="button" — 키보드로도 드릴다운이 열려야 한다 */
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var t = e.target;
+    var tile = t && t.closest ? t.closest('[data-ezjc="qtile"]') : null;
+    if (!tile) return;
+    e.preventDefault();
+    openQualityDetail(tile.getAttribute('data-qk'));
   });
 
   function boot() {
@@ -731,6 +961,8 @@
     openMap: openLinkMap,
     closeLinkMap: closeLinkMap,
     profileOf: profileOf,
-    qualityHTML: qualityHTML
+    qualityHTML: qualityHTML,
+    qualityMetrics: qualityMetrics,
+    openQualityDetail: openQualityDetail
   };
 })();
