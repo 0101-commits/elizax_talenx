@@ -97,6 +97,41 @@
     var r = window.EZKit ? EZKit.gates.get("txr_" + roleKey()) : null;
     return r && r.decision ? { act: r.decision, at: r.at, by: r.by } : null;
   }
+  function keyResultsOf(objs) {
+    var ids = objs.map(function (o) { return o && o.objective_id; });
+    return (D().keyResults || []).filter(function (k) { return k && ids.indexOf(k.objective_id) >= 0; });
+  }
+
+  /* ---------------- 시점 (F13 ①) ----------------
+     날짜 하드코딩 금지: 기준 시점은 EZKit.clock, 실행 구간은 checkins,
+     사이클 구간은 objectives.period에서만 파생한다. */
+  function asOfDate() { return window.EZKit ? EZKit.clock.asOfDate() : "2026-07-16"; }
+  function monthOf(iso) {
+    var m = /^\d{4}-(\d{2})/.exec(String(iso || ""));
+    return m ? parseInt(m[1], 10) : 0;
+  }
+  function asOfMD() { return mdOf(asOfDate()); }
+  /* period("FY2026-2Q") → 사이클 구간 + 기준 시점이 지금 어느 단계인지 */
+  function cycleInfo(objs, cks) {
+    var period = (objs[0] && objs[0].period) || "";
+    var m = /FY(\d{4})\D*([1-4])Q/i.exec(period);
+    var year = m ? parseInt(m[1], 10) : parseInt(asOfDate().slice(0, 4), 10) || 2026;
+    var q = m ? parseInt(m[2], 10) : 0;
+    var startM = q ? (q - 1) * 3 + 1 : 0, endM = q ? q * 3 : 0;
+    if (!q && cks.length) {                       /* period 미기재 → 실제 체크인 구간으로 폴백 */
+      startM = monthOf(cks[0].checkin_date);
+      endM = monthOf(cks[cks.length - 1].checkin_date);
+    }
+    if (!startM) { startM = 1; endM = 6; }
+    if (endM < startM) endM = startM;
+    var cur = monthOf(asOfDate()) || endM + 1;
+    var curKey = cur < startM ? "goal" : cur <= endM ? "run" : cur <= endM + 1 ? "eval" : "review";
+    return {
+      period: period || ("FY" + year + (q ? "-" + q + "Q" : "")),
+      year: year, startM: startM, endM: endM, curKey: curKey
+    };
+  }
+  var STAGE_ORDER = ["goal", "run", "eval", "review"];
 
   /* ---------------- 유틸 ---------------- */
   function esc(s) {
@@ -179,6 +214,19 @@
     var confirmed = oneOnOneConfirmed(subj.emp_id);
     var dec = gateDecision();
 
+    /* --- 시점 파생 (하드코딩 날짜 제거) --- */
+    var ci = cycleInfo(objs, cks);
+    var goalDate = ci.startM + "/1";                       /* 사이클 시작월 = 목표 확정 시점 */
+    var midCk = cks.length ? cks[Math.floor((cks.length - 1) / 2)] : null;
+    var midDate = midCk ? mdOf(midCk.checkin_date) : "—";
+    var midSrc = midCk ? "perf.mid." + String(midCk.checkin_date).slice(5).replace("-", "") : "perf.mid.none";
+    /* 1:1 확정일 = 확정 기록(있으면) · 없으면 기준 시점 */
+    var oneDate = mdOf(confirmed || asOfDate());
+    var calibDate = (ci.endM + 1) + "월 말";
+    var reviewDate = (ci.endM + 2) + "월 초";
+    var notifyDate = (ci.endM + 2) + "월 중";
+    var carryDate = "FY" + (ci.year + 1) + " 시작";
+
     var goalEv = objs.slice(0, 3).map(function (o) {
       return {
         t: "goal", title: o.title,
@@ -217,11 +265,11 @@
       src: "job." + (subj.job_id || "JOB")
     };
 
-    /* 등급 초안 상태 — 승인 대기 게이트 결정(세션) 반영 */
-    var e1state = "wait", e1label = "승인 대기", e1date = "7/15",
+    /* 등급 초안 상태 — 승인 대기 게이트 결정(세션) 반영. 미결정 시점 = 기준 시점 */
+    var e1state = "wait", e1label = "승인 대기", e1date = asOfMD(),
         e1decider = mgr + " · 승인 필요";
     if (dec && dec.act) {
-      e1date = dec.at ? String(dec.at).slice(5, 16) : "7/15";
+      e1date = dec.at ? String(dec.at).slice(5, 16) : asOfMD();
       e1decider = dec.by || mgr;
       if (dec.act === "승인") { e1state = "done"; e1label = "승인 완료"; }
       else if (dec.act === "보류") { e1state = "wait"; e1label = "보류"; }
@@ -245,7 +293,7 @@
     }
     if (confirmed) {
       e1Ev.push({
-        t: "oneonone", title: "1:1 미팅 요약 · 7/16 (확정 기록)",
+        t: "oneonone", title: "1:1 미팅 요약 · " + oneDate + " (확정 기록)",
         ex: "KR2 진척 · 외부 API 지연 리스크 · ML 교육 니즈 · 다음 체크인 합의",
         src: "1on1.rec.0716"
       });
@@ -265,14 +313,16 @@
               ? "「" + shorten(objs[0].title, 26) + "」" + (objs.length > 1 ? " 외 " + (objs.length - 1) + "건" : "") + (objInfo.fallback ? " · 조직 목표 기준" : "")
               : "등록된 목표 없음",
             state: "done", stateLabel: "승인 완료", ai: false,
-            date: "4/2", decider: mgr,
-            evidence: goalEv, ledgerType: "goal"
+            date: goalDate, decider: mgr,
+            evidence: goalEv, ledgerType: "goal",
+            /* procmap 이관 — 목표 문장 자체의 결함(난이도 근거·측정 가능성) */
+            warns: krWarnings(keyResultsOf(objs))
           },
           {
             id: "g2", title: "가중치 설정 100%",
             meta: "근거 rule.weight.sum · 평가규정 v3.1",
             state: "done", stateLabel: "승인 완료", ai: false,
-            date: "4/2", decider: mgr,
+            date: goalDate, decider: mgr,
             evidence: [
               {
                 t: "rule", title: "KR 가중치 합 100% 검증",
@@ -287,7 +337,7 @@
             id: "g3", title: "AI 목표 초안",
             meta: "초안 생성됨 · 제안만 — 확정은 사람이",
             state: "sug", stateLabel: "제안만", ai: true,
-            date: "3/30", decider: "— (제안만 · 확정 기록 없음)",
+            date: "—", decider: "— (제안만 · 확정 기록 없음)",
             evidence: [
               {
                 t: "eval", title: "FY2025 하반기 평가 이력",
@@ -319,9 +369,10 @@
           },
           {
             id: "r2", title: "중간점검 요약 확정",
-            meta: "5/30 · 진척·리스크 요약",
-            state: "done", stateLabel: "승인 완료", ai: true,
-            date: "5/30", decider: mgr,
+            meta: midCk ? midDate + " · 진척·리스크 요약" : "중간점검 근거로 쓸 체크인 기록 없음",
+            state: midCk ? "done" : "plan",
+            stateLabel: midCk ? "승인 완료" : "예정", ai: true,
+            date: midDate, decider: mgr,
             evidence: (function () {
               var arr = [];
               if (cks[0]) arr.push({
@@ -337,7 +388,7 @@
               arr.push({
                 t: "rule", title: "중간점검 요약 확정 절차",
                 ex: "요약은 자동 처리로 초안 생성됨 · 확정은 조직 책임자 승인",
-                src: "perf.mid.0530"
+                src: midSrc
               });
               return arr;
             })(),
@@ -345,14 +396,15 @@
           },
           {
             id: "r3", title: "1:1 미팅 요약 확정",
-            meta: confirmed ? "✓ 7/16 확정" : "요약 초안 생성됨 · 확정 전",
+            meta: confirmed ? "✓ " + oneDate + " 확정" : "요약 초안 생성됨 · 확정 전",
             state: confirmed ? "done" : "wait",
             stateLabel: confirmed ? "승인 완료" : "승인 대기",
             ai: true,
-            date: "7/16", decider: (subj.name || "구성원") + " (본인 확정)",
+            date: oneDate, decider: (subj.name || "구성원") + " (본인 확정)",
             evidence: [
               {
-                t: "oneonone", title: "1:1 미팅 요약 · 7/16",
+                /* src는 tx_1on1이 발행하는 원장 source와 맞춘 조인 키(고정) — 표시 날짜만 파생 */
+                t: "oneonone", title: "1:1 미팅 요약 · " + oneDate,
                 ex: "KR2 진척 · 외부 API 지연 리스크 · ML 교육 니즈 · 다음 체크인 합의",
                 src: "1on1.rec.0716"
               },
@@ -369,7 +421,7 @@
         ]
       },
       {
-        key: "eval", name: "평가", cur: true, nodes: [
+        key: "eval", name: "평가", cur: false, nodes: [
           {
             id: "e1", title: "등급 초안" + (ev && ev.grade ? " · " + ev.grade : ""),
             meta: ev
@@ -377,13 +429,13 @@
               : "초안 생성됨 · 산출 근거 인용",
             state: e1state, stateLabel: e1label, ai: true,
             date: e1date, decider: e1decider,
-            evidence: e1Ev, ledgerType: "eval"
+            evidence: e1Ev, ledgerType: "eval", whatif: true
           },
           {
             id: "e2", title: "등급 조정",
             meta: "인재 리뷰 세션에서 심의",
             state: "plan", stateLabel: "예정", ai: false,
-            date: "7월 말", decider: "인재 리뷰 참여자 (심의)",
+            date: calibDate, decider: "인재 리뷰 참여자 (심의)", whatif: true,
             evidence: [
               {
                 t: "rule", title: "등급 조정 승인 단계",
@@ -406,7 +458,7 @@
             id: "f1", title: "평가 코멘트 확정",
             meta: "체크인·1:1 기록이 코멘트 초안의 인용 근거로 준비됨",
             state: "plan", stateLabel: "예정", ai: true,
-            date: "8월 초", decider: mgr + " (승인 필요)",
+            date: reviewDate, decider: mgr + " (승인 필요)",
             evidence: [
               {
                 t: "feedback", title: "코멘트 초안 예정",
@@ -420,7 +472,7 @@
             id: "f2", title: "최종 등급 통보",
             meta: "등급 조정 확정 후 개별 통보",
             state: "plan", stateLabel: "예정", ai: false,
-            date: "8월 중", decider: "HR 운영 (통보 절차)",
+            date: notifyDate, decider: "HR 운영 (통보 절차)",
             evidence: [
               {
                 t: "rule", title: "등급 통보 절차",
@@ -434,7 +486,7 @@
             id: "f3", title: "다음 사이클 이어받기",
             meta: "확정 기록 → 내년 목표수립의 출발점",
             state: "plan", stateLabel: "예정", ai: false,
-            date: "12월", decider: "—",
+            date: carryDate, decider: "—",
             note: "이 사이클의 확정 기록이 내년 목표수립의 출발점이 됩니다",
             evidence: [
               {
@@ -448,7 +500,154 @@
         ]
       }
     ];
+    /* 현재 단계는 기준 시점 × 사이클 구간에서 파생 (고정 플래그 금지) */
+    stages.forEach(function (st) { st.cur = (st.key === ci.curKey); });
+    promoteLedgerNodes(stages, subj);
     return stages;
+  }
+
+  /* ================= 원장 → 결정 노드 동적 승격 (F13 ①) =================
+     하드코딩 10개 노드 위에, 원장에 실제로 쌓인 "결정형" 엔트리를 해당 단계에
+     노드로 얹는다. 시드·열람 로그는 결정이 아니므로 제외한다. */
+  var DECISION_SRC = /^(inbox\.(approve|reject)|1on1\.rec\.|meeting\.agree|goal\.gate\.|appr\.|eval\.submit|hub\.gate)/i;
+  var DECISION_TITLE = /승인|반려|확정|제출|합의|결정/;
+  var MAX_PROMOTED = 6;   /* 단계당 승격 상한 — 맵이 원장 덤프가 되지 않게 */
+
+  function isDecisionEntry(e) {
+    if (!e || e.seed) return false;                        /* 예시 시드는 결정이 아님 */
+    if (e.type === "audit" || e.type === "asset") return false;
+    return DECISION_SRC.test(String(e.source || "")) || DECISION_TITLE.test(String(e.title || ""));
+  }
+  function decisionActor(e) {
+    var s = String(e.summary || "") + " " + String(e.title || "");
+    if (/조직장이 확정|조직 책임자|리더 확정/.test(s)) return "조직 책임자 (승인)";
+    if (/본인 확정|본인 작성|자기평가/.test(s)) return (CU().name || "구성원") + " (본인 확정)";
+    return "원장 기록 · 결정자 미기재";
+  }
+  function ledgerNodeOf(e) {
+    var held = /반려|보류|폐기|철회/.test(String(e.title || ""));
+    return {
+      id: "L" + e.id,
+      title: shorten(e.title, 30),
+      meta: shorten(e.summary || e.source || "원장에 기록된 결정", 58),
+      state: held ? "wait" : "done",
+      stateLabel: held ? "보류·반려 기록" : "기록됨 · 원장 확정",
+      ai: false,
+      date: e.at || "—",
+      decider: decisionActor(e),
+      evidence: [{
+        t: e.type, title: e.title,
+        ex: e.summary || "(요약 없음)",
+        src: e.source || "app.event"
+      }],
+      ledgerType: e.type,
+      ledgerId: e.id,        /* 실 id 직결 — ② 조인 우회 */
+      fromLedger: true
+    };
+  }
+  function promoteLedgerNodes(stages, subj) {
+    var list = ledgerList();
+    if (!list || !list.length) return;
+    var byKey = {}, added = {};
+    stages.forEach(function (st) { byKey[st.key] = st; added[st.key] = 0; });
+    /* list()는 최신순 — 단계 안에서는 오래된 것이 위로 오도록 뒤집어 훑는다 */
+    for (var i = list.length - 1; i >= 0; i--) {
+      var e = list[i];
+      if (!isDecisionEntry(e)) continue;
+      /* 타인 원장으로 라우팅된 항목은 대상자 계보에만 노출 (역할 게이트 보강) */
+      if (e.emp_id && e.emp_id !== subj.emp_id) continue;
+      var st = byKey[STAGE_OF_TYPE[e.type] || "run"];
+      if (!st || added[st.key] >= MAX_PROMOTED) continue;
+      var nid = "L" + e.id, dup = false;
+      for (var j = 0; j < st.nodes.length; j++) if (st.nodes[j].id === nid) { dup = true; break; }
+      if (dup) continue;
+      st.nodes.push(ledgerNodeOf(e));
+      added[st.key]++;
+    }
+  }
+
+  /* ================= procmap 이관 — 목표 문장 결함 검사 (F13 ③) ================= */
+  function krWarnings(krs) {
+    if (!krs || !krs.length) return [];
+    var out = [];
+    var noBasis = krs.filter(function (k) {
+      return /^[AS]$/.test(String(k.difficulty || "").trim()) && !k.difficulty_basis;
+    });
+    /* 이름·목표값 어디에도 수치·단위가 없으면 평가 시점에 "달성 근거"를 다투게 된다 */
+    var vague = krs.filter(function (k) {
+      var nm = String(k.name || ""), tv = String(k.target_value || "");
+      return !/[0-9%]|억|만원|건|명|점|회|일|시간|배/.test(nm) && !/[0-9%]/.test(tv);
+    });
+    if (noBasis.length) {
+      out.push({
+        cls: "",
+        txt: "난이도 근거 없음 " + noBasis.length + "건 — "
+          + shorten(noBasis.map(function (k) { return k.name || k.kr_id; }).join(", "), 46)
+          + " · 난이도는 매겨져 있으나 비교 근거 필드가 비어 있어 평가 시 분쟁 소지"
+      });
+    }
+    if (vague.length) {
+      out.push({
+        cls: "crit",
+        txt: "측정 불가 KR " + vague.length + "건 — "
+          + shorten(vague.map(function (k) { return k.name || k.kr_id; }).join(", "), 46)
+          + " · 이름·목표값에 수치·단위가 없습니다. 수립 시점에 지표화 권고"
+      });
+    }
+    return out;
+  }
+
+  /* 열람 규칙 조회 — 등급 근거(eval_draft)를 이 관계에서 어떤 형태로 볼 수 있는가 */
+  function polLevel(rel) {
+    try { if (window.EZPolicy && EZPolicy.check) return EZPolicy.check(roleKey(), "eval_draft", rel); }
+    catch (e) { /* 정책 모듈 미로드 */ }
+    return "full";
+  }
+
+  /* What-if — 읽기 전용 시뮬레이션(EZTools 우선, EZCalc 폴백). 실데이터 변경 없음.
+     엔진이 두 가지 형태를 돌려주므로 둘 다 다룬다:
+       ① 개인 등급 시뮬 {before:{weighted_score,grade}, after:{…}}
+       ② 조직 등급 분포 시뮬 {gradeChange:[…], people:[…]}  ← people(타인 개인값)은 절대 표시하지 않는다 */
+  function runWhatIf(subj, delta) {
+    var res = null;
+    try { if (window.EZTools && EZTools.run) res = EZTools.run("simulate_whatif", { emp_id: subj.emp_id, achievement_delta: delta }); }
+    catch (e) { res = null; }
+    if (!res || res.error) {
+      try { if (window.EZCalc && EZCalc.simulate) res = EZCalc.simulate({ emp_id: subj.emp_id, achievement_delta: delta }) || res; }
+      catch (e2) { /* 엔진 없음 */ }
+    }
+    if (!res) return "시뮬레이션 엔진을 불러오지 못했습니다.";
+    if (res.blocked) return esc(res.policy || "열람 규칙에 따라 이 대상의 시뮬레이션은 제공되지 않습니다.");
+    if (res.error) return esc(res.error);
+
+    var head = "달성률 " + (delta > 0 ? "+" : "") + delta + "%p 가정 → ";
+
+    /* ① 개인 등급 시뮬 */
+    if (res.before && res.after && res.after.grade != null) {
+      return head + "종합 " + esc(res.before.weighted_score) + " → <b>" + esc(res.after.weighted_score) + "</b>점 · 등급 "
+        + esc(res.before.grade) + " → <b>" + esc(res.after.grade) + "</b>"
+        + (res.grade_changed ? " (등급 변동)" : " (등급 유지)")
+        + '<div class="wfnote">' + esc(res.assumptions || "읽기 전용 — 실제 데이터는 변경되지 않습니다") + "</div>";
+    }
+
+    /* ② 조직 분포 시뮬 — 권한 밖이면 이유를 밝히고 멈춘다(타인 등급 노출 금지) */
+    if (res.gradeChange) {
+      var lv = polLevel("org");
+      if (lv === "no" || lv === "summ") {
+        return "조직 등급 분포 시뮬레이션은 열람 권한 밖입니다 — 이 화면에서는 내 결정의 근거만 봅니다. (보관·열람 규칙 v3.1)";
+      }
+      var rows = res.gradeChange.filter(function (g) { return g && g.delta_pp; }).map(function (g) {
+        return esc(g.grade) + " " + esc(g.before_pct) + "% → <b>" + esc(g.after_pct) + "%</b> ("
+          + (g.delta_pp > 0 ? "+" : "") + esc(g.delta_pp) + "%p)";
+      });
+      var basis = res.basis || {};
+      return head + "조직 등급 분포 변화 · " + (rows.length ? rows.join(" · ") : "변화 없음")
+        + '<div class="wfnote">'
+        + esc(basis.base_source || "")
+        + (basis.cap_rule_source ? " · " + esc(basis.cap_rule_source) : "")
+        + " · 개인별 값은 표시하지 않습니다 · 읽기 전용 — 실제 데이터는 변경되지 않습니다</div>";
+    }
+    return "시뮬레이션 결과를 해석하지 못했습니다.";
   }
 
   /* ================= 성과 기록 연동 ================= */
@@ -468,10 +667,62 @@
     });
     return m;
   }
-  function ledgerMatch(type) {
+  /* ---- 노드 ↔ 원장 실키 매핑 (F13 ②) ----
+     type 첫 일치로 아무 항목이나 집어오던 방식 폐기. evidence의 src(perf.obj.OBJ-x,
+     chk.CHK-x …)를 조인 키로 써서 정확히 맞는 원장 항목만 반환한다.
+       strong = source 문자열 완전 일치
+       weak   = type 동일 + 엔티티 id 토큰(OBJ-0001 등) 공유
+     둘 다 없으면 null → 호출부는 버튼을 만들지 않는다(엉뚱한 곳으로 보내지 않기). */
+  /* 조인 키는 "레코드 id"만 — EMP-/ORG-는 사람·조직을 가리킬 뿐 같은 기록이라는 뜻이
+     아니라서 제외한다(작년 평가와 올해 초안이 EMP 토큰으로 붙는 오연결 방지). */
+  function idTokens(src) {
+    var m = String(src || "").match(/\b(OBJ|KR|CHK|EVAL|FB|JOB)-[A-Za-z0-9가-힣._-]+/g);
+    if (!m) return [];
+    return m.map(function (x) { return x.toUpperCase(); });
+  }
+  function shareToken(a, b) {
+    var ta = idTokens(a), tb = idTokens(b);
+    for (var i = 0; i < ta.length; i++) if (tb.indexOf(ta[i]) >= 0) return true;
+    return false;
+  }
+  function ledgerMatchFor(n) {
     var list = ledgerList();
-    if (!list) return null;
-    for (var i = 0; i < list.length; i++) if (list[i] && list[i].type === type) return list[i];
+    if (!list || !n) return null;
+    var i, j;
+    /* 원장에서 승격된 노드는 실 id 직결 */
+    if (n.ledgerId) {
+      for (i = 0; i < list.length; i++) if (list[i] && list[i].id === n.ledgerId) return list[i];
+      return null;
+    }
+    var evs = n.evidence || [];
+    var strong = null, weak = null;
+    for (i = 0; i < list.length; i++) {
+      var e = list[i];
+      if (!e || !e.source) continue;
+      var es = String(e.source).toLowerCase();
+      for (j = 0; j < evs.length; j++) {
+        var ev = evs[j];
+        var s = String((ev && ev.src) || "").toLowerCase();
+        if (!s || s === "chk.none") continue;
+        if (es === s) {
+          if (!strong || (e.ts || 0) > (strong.ts || 0)) strong = e;
+        } else if (e.type === ev.t && shareToken(e.source, ev.src)) {
+          if (!weak || (e.ts || 0) > (weak.ts || 0)) weak = e;
+        }
+      }
+    }
+    return strong || weak;
+  }
+  /* 원장 항목 id → 그 항목을 인용하는 노드 id (히스토리 → 맵 딥링크용) */
+  function nodeForLedger(ledgerId) {
+    if (!journeyCache || !ledgerId) return null;
+    for (var i = 0; i < journeyCache.length; i++) {
+      var ns = journeyCache[i].nodes;
+      for (var j = 0; j < ns.length; j++) {
+        var m = ledgerMatchFor(ns[j]);
+        if (m && m.id === ledgerId) return ns[j].id;
+      }
+    }
     return null;
   }
 
@@ -571,6 +822,18 @@
       "padding:4px 11px;font-size:10.5px;font-weight:700;color:var(--color-accent,#1F7AF0);background:var(--color-background-card,#fff);}",
       ".ezpm-lbtn:hover{background:color-mix(in srgb, var(--color-accent,#17F) 6%, transparent);}",
       ".ezpm-lat{font-size:10px;color:var(--color-text-disabled,#9096A3);margin-left:6px;font-variant-numeric:tabular-nums;}",
+      /* procmap 이관 — 목표 문장 결함 경고 */
+      ".ezpm-warn{font-size:11px;line-height:1.55;color:var(--color-warning,#B45309);background:color-mix(in srgb, var(--color-warning,#B50) 7%, transparent);",
+      "border:1px solid color-mix(in srgb, var(--color-warning,#B50) 28%, transparent);border-left-width:3px;border-radius:var(--radius-element,8px);padding:7px 10px;margin:8px 0 0;}",
+      ".ezpm-warn.crit{color:var(--color-error,#B91C1C);background:color-mix(in srgb, var(--color-error,#B12) 7%, transparent);",
+      "border-color:color-mix(in srgb, var(--color-error,#B12) 30%, transparent);}",
+      ".ezpm-warn:before{content:\"\\26A0\\FE0E  \";font-weight:800;}",
+      /* procmap 이관 — What-if(읽기 전용 시뮬) */
+      ".ezpm-wf{margin-top:12px;padding-top:10px;border-top:1px dashed var(--color-border,#ECEEF2);}",
+      ".ezpm-wf .wfh{font-size:11px;font-weight:700;color:var(--color-text-purple,#6D28D9);margin-bottom:6px;}",
+      ".ezpm-wf .wfout{font-size:11px;line-height:1.55;color:var(--color-text-secondary,#5C6474);background:var(--color-background-muted,#F5F6F8);",
+      "border:1px solid var(--color-border,#ECEEF2);border-radius:var(--radius-element,8px);padding:7px 10px;margin-top:8px;}",
+      ".ezpm-wf .wfnote{font-size:10px;color:var(--color-text-disabled,#9096A3);margin-top:4px;line-height:1.5;}",
       ".ezpm-empty{font-size:11.5px;color:var(--color-text-disabled,#9096A3);padding:8px 2px;line-height:1.6;}",
       /* 증거 흐름 선 */
       ".ezpm-line{fill:none;stroke:var(--color-accent,#1F7AF0);stroke-width:1.6;opacity:.3;}",
@@ -665,9 +928,11 @@
     return '<svg class="ezpm-svg" aria-hidden="true"></svg><div class="ezpm-cols">' + cols + "</div>";
   }
 
-  function renderFlow() {
+  /* keepSel=true면 원장 갱신·게이트 결정으로 다시 그려도 열려 있던 노드를 유지한다 */
+  function renderFlow(keepSel) {
     var ov = overlay();
     if (!ov) return;
+    var prevSel = keepSel ? selectedNode : null;
     var subj = subjectEmp();
     journeyCache = buildJourney(subj);
     curLinks = computeLinks(journeyCache);
@@ -678,7 +943,24 @@
     selectedNode = null;
     hoverNode = null;
     closePane();
+    if (prevSel) selectNode(prevSel);
     requestAnimationFrame(drawLines);
+  }
+
+  /* 노드 선택 — 클릭·딥링크 공통 경로 */
+  function selectNode(id) {
+    var ov = overlay();
+    if (!ov || !id) return false;
+    var node = ov.querySelector('[data-ezpm-node="' + id + '"]');
+    if (!node) return false;
+    var prev = ov.querySelector(".ezpm-node.sel");
+    if (prev) prev.classList.remove("sel");
+    node.classList.add("sel");
+    selectedNode = id;
+    applyLineHL();
+    renderNodePane(id);
+    try { node.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) { /* 구형 브라우저 */ }
+    return true;
   }
 
   function findNode(id) {
@@ -722,10 +1004,24 @@
     }).join("");
   }
 
+  /* procmap 이관 — What-if 진입(읽기 전용 시뮬) */
+  function whatifHTML() {
+    return '<div class="ezpm-wf"><div class="wfh">&#10022; What-if · 읽기 전용 시뮬레이션</div>'
+      + '<button class="ezpm-lbtn" data-ezpm-wf="-10">달성률 &minus;10%p 가정</button> '
+      + '<button class="ezpm-lbtn" data-ezpm-wf="10">달성률 +10%p 가정</button>'
+      + '<div class="wfout" data-ezpm-wfout>가정을 눌러보세요 — 실제 데이터는 변경되지 않습니다.</div></div>';
+  }
+  function warnsHTML(n) {
+    if (!n.warns || !n.warns.length) return "";
+    return n.warns.map(function (w) {
+      return '<div class="ezpm-warn' + (w.cls ? " " + w.cls : "") + '">' + esc(w.txt) + "</div>";
+    }).join("");
+  }
+
   function renderNodePane(id) {
     var n = findNode(id);
     if (!n) return;
-    var m = ledgerMatch(n.ledgerType);
+    var m = ledgerMatchFor(n);
     var html = '<div class="ph"><h3>' + esc(n.title)
       + (n.ai ? ' <span class="ezpm-ai">&#10022; AI 초안 · 사람 승인</span>' : "")
       + '</h3><button class="px" data-ezpm-pane-close title="닫기">&#10005;</button></div>'
@@ -740,11 +1036,16 @@
           + "</span></div></div>"
         : "")
       + (n.note ? '<div class="ezpm-note">' + esc(n.note) + "</div>" : "")
+      + warnsHTML(n)
       + '<div class="ezpm-evh">인용 근거 ' + n.evidence.length + "건"
       + (n.state === "done" ? '<span class="ezpm-evok">&#10003; 근거 확인 완료</span>' : "")
       + "</div>"
       + evidenceHTML(n.evidence)
-      + (m ? '<button class="ezpm-lbtn" data-ezpm-ledger="' + esc(m.id) + '">성과 기록에서 보기<span class="ezpm-lat">' + esc(m.at || "") + "</span></button>" : "");
+      /* 매칭된 원장 항목이 있을 때만 버튼 — 없으면 만들지 않는다(오연결 방지) */
+      + (m
+        ? '<button class="ezpm-lbtn" data-ezpm-ledger="' + esc(m.id) + '">성과 기록에서 보기<span class="ezpm-lat">' + esc(m.at || "") + "</span></button>"
+        : '<div class="ezpm-empty">이 결정에 대응하는 성과 기록 항목이 아직 없습니다 — 결정이 확정되면 원장에 남습니다.</div>')
+      + (n.whatif ? whatifHTML() : "");
     openPane(html);
   }
 
@@ -820,10 +1121,39 @@
   }
 
   /* ================= 열기 / 닫기 ================= */
-  function open(empId) {
+  /* 대상 구성원 게이트 — member는 언제나 본인 계보만, leader는 직속 팀원까지.
+     (procmap이 타인 등급을 노출하던 문제를 EZJourney에서 재현하지 않는다) */
+  function allowedSubject(empId) {
+    var me = CU(), rk = roleKey();
+    if (!empId || !empById(empId)) return me.emp_id;
+    if (empId === me.emp_id) return empId;
+    if (rk === "member") return me.emp_id;
+    if (rk === "leader") {
+      var e = empById(empId);
+      return (e && e.manager_id === me.emp_id) ? empId : me.emp_id;
+    }
+    return empId;   /* hr / exec */
+  }
+
+  /* open(arg)
+       (없음)                → 본인 계보
+       "EMP-0078"            → 해당 구성원(권한 내)
+       "e1" 등 노드 id        → 본인 계보 + 그 노드 선택·강조
+       {emp, node, ledger}   → 조합 지정. ledger=원장 항목 id → 그 항목을 인용한 노드로 착지 */
+  function open(arg) {
     injectStyle();
     close();
-    curSubjectId = (empId && empById(empId)) ? empId : CU().emp_id;
+    var empId = null, nodeId = null, ledgerId = null;
+    if (arg && typeof arg === "object") {
+      empId = arg.emp || arg.empId || null;
+      nodeId = arg.node || arg.nodeId || null;
+      ledgerId = arg.ledger || arg.ledgerId || null;
+    } else if (typeof arg === "string" && arg) {
+      if (empById(arg)) empId = arg;
+      else if (arg.indexOf("ctx-") === 0) ledgerId = arg;
+      else nodeId = arg;
+    }
+    curSubjectId = allowedSubject(empId);
     var ov = document.createElement("div");
     ov.className = "ezpm-root";
     ov.setAttribute("data-ezpm-root", "1");
@@ -850,6 +1180,20 @@
       + "</div>";
     document.body.appendChild(ov);
     renderFlow();
+    /* 딥링크 착지 — 노드 직접 지정 우선, 없으면 원장 항목을 인용하는 노드로.
+       못 찾으면 엉뚱한 노드로 보내지 않고 왜 못 찾았는지 알린다. */
+    if (!nodeId && ledgerId) {
+      nodeId = nodeForLedger(ledgerId);
+      if (!nodeId) {
+        openPane('<div class="ph"><h3>이 기록을 인용한 결정이 아직 없습니다</h3>'
+          + '<button class="px" data-ezpm-pane-close title="닫기">&#10005;</button></div>'
+          + '<div class="ezpm-empty">선택한 성과 기록은 이번 사이클의 결정 노드에 아직 인용되지 않았습니다.'
+          + " 체크인·1:1·평가가 확정되면 해당 단계의 결정에 근거로 연결됩니다.</div>"
+          + '<button class="ezpm-lbtn" data-ezpm-ledger="' + esc(ledgerId) + '">성과 기록에서 다시 보기</button>');
+        return;
+      }
+    }
+    if (nodeId) selectNode(nodeId);
   }
 
   function close() {
@@ -866,6 +1210,31 @@
       + (pad ? ' style="padding:9px 16px;font-size:13px"' : "")
       + ">&#9672; 결정 흐름</button>";
   }
+  /* 사이클 칩 — 현재 단계는 기준 시점 × period에서 파생(고정 문자열 금지) */
+  function myCycle() {
+    var me = CU();
+    var objs = objectivesOf(me).list;
+    return cycleInfo(objs, checkinsOf(me, objs.map(function (o) { return o.objective_id; })));
+  }
+  var CYCLE_SHORT = { goal: "목표", run: "실행", eval: "평가", review: "리뷰" };
+  function cycleChipInner(dock) {
+    var ai = STAGE_ORDER.indexOf(myCycle().curKey);
+    if (ai < 0) ai = 2;
+    var parts = [];
+    for (var i = 0; i < STAGE_ORDER.length; i++) {
+      if (dock && i < ai) continue;                          /* 도킹 칩은 현재+이후만 */
+      if (dock && i > ai + 1) break;
+      var cls = i < ai ? "stp" : i === ai ? "cur" : "nxt";
+      var lab = CYCLE_SHORT[STAGE_ORDER[i]] + (i < ai ? " &#10003;" : i === ai ? " 진행중" : dock ? "" : " 예정");
+      parts.push('<span class="' + cls + '">' + lab + "</span>");
+    }
+    return "&#9672; " + (dock ? "" : "사이클 ") + parts.join('<span class="sep">&#8250;</span>');
+  }
+  function cycleTitle() {
+    return "성과 사이클 — 지금 " + (CYCLE_SHORT[myCycle().curKey] || "평가")
+      + " 단계 · 클릭하면 과정과 근거를 한 장으로 봅니다";
+  }
+
   function tryInjectButtons() {
     /* (0) 역할 관점 바 — 사이클 현재 위치 상시 노출, 클릭 → 프로세스 맵 */
     var bar = document.querySelector(".txr-bar");
@@ -877,11 +1246,8 @@
         chip.className = "ezpm-cycle";
         chip.setAttribute("data-ezpm-cycle", "1");
         chip.setAttribute("data-ezpm-open", "1");
-        chip.title = "성과 사이클 — 목표수립·실행 완료, 지금 평가 단계 · 클릭하면 과정과 근거를 한 장으로 봅니다";
-        chip.innerHTML = '&#9672; 사이클 <span class="stp">목표 &#10003;</span><span class="sep">&#8250;</span>'
-          + '<span class="stp">실행 &#10003;</span><span class="sep">&#8250;</span>'
-          + '<span class="cur">평가 진행중</span><span class="sep">&#8250;</span>'
-          + '<span class="nxt">리뷰 예정</span>';
+        chip.title = cycleTitle();
+        chip.innerHTML = cycleChipInner(false);
         if (anchor.nextSibling) anchor.parentNode.insertBefore(chip, anchor.nextSibling);
         else anchor.parentNode.appendChild(chip);
       }
@@ -894,8 +1260,8 @@
       dchip.className = "ezpm-cycle ezpm-cycle--dock";
       dchip.setAttribute("data-ezpm-cycle", "1");
       dchip.setAttribute("data-ezpm-open", "1");
-      dchip.title = "성과 사이클 — 목표수립·실행 완료, 지금 평가 단계 · 클릭하면 과정과 근거를 한 장으로 봅니다";
-      dchip.innerHTML = '&#9672; <span class="cur">평가 진행중</span><span class="sep">&#8250;</span><span class="nxt">리뷰</span>';
+      dchip.title = cycleTitle();
+      dchip.innerHTML = cycleChipInner(true);
       ctx.appendChild(dchip);
     }
     /* (a) 성과관리 목표 화면 .perf-head */
@@ -953,6 +1319,17 @@
       return;
     }
 
+    /* procmap 이관 — What-if(읽기 전용). 대상은 현재 권한 내 구성원으로 고정 */
+    var wfb = t.closest ? t.closest("[data-ezpm-wf]") : null;
+    if (wfb && overlay()) {
+      var wout = overlay().querySelector("[data-ezpm-wfout]");
+      if (wout) {
+        wout.innerHTML = "계산 중…";
+        wout.innerHTML = runWhatIf(subjectEmp(), parseFloat(wfb.getAttribute("data-ezpm-wf")) || 0);
+      }
+      return;
+    }
+
     var cnt = t.closest ? t.closest("[data-ezpm-count]") : null;
     if (cnt && overlay()) {
       selectedNode = null;
@@ -966,14 +1343,7 @@
 
     var node = t.closest ? t.closest("[data-ezpm-node]") : null;
     if (node && overlay()) {
-      var id = node.getAttribute("data-ezpm-node");
-      selectedNode = id;
-      var ov2 = overlay();
-      var prev = ov2.querySelector(".ezpm-node.sel");
-      if (prev) prev.classList.remove("sel");
-      node.classList.add("sel");
-      applyLineHL();
-      renderNodePane(id);
+      selectNode(node.getAttribute("data-ezpm-node"));
       return;
     }
   });
@@ -981,7 +1351,7 @@
   document.addEventListener("change", function (e) {
     var sel = e.target && e.target.closest ? e.target.closest("[data-ezpm-subject]") : null;
     if (!sel) return;
-    curSubjectId = sel.value;
+    curSubjectId = allowedSubject(sel.value);   /* 셀렉터 조작으로 권한 밖 대상 진입 차단 */
     renderFlow();
   });
 
@@ -1011,10 +1381,32 @@
     if (overlay()) drawLines();
   });
 
+  /* ================= 라이브 구독 (F13 ①) =================
+     원장에 결정이 쌓이거나 게이트 결정이 바뀌면, 맵이 열려 있어도 즉시 반영. */
+  var wiredLedger = false, wiredGates = false;
+  function onLiveChange() { if (overlay()) renderFlow(true); }
+  function wireLive() {
+    if (!wiredLedger && window.EZLedger && EZLedger.on) {
+      try { EZLedger.on("add", onLiveChange); wiredLedger = true; } catch (e) { /* 구독 실패 무시 */ }
+    }
+    if (!wiredGates && window.EZKit && EZKit.gates && EZKit.gates.onChange) {
+      try { EZKit.gates.onChange(onLiveChange); wiredGates = true; } catch (e2) { /* 무시 */ }
+    }
+    return wiredLedger && wiredGates;
+  }
+
   /* ================= 부트스트랩 ================= */
   function boot() {
     injectStyle();
     tryInjectButtons();
+
+    /* 모듈 로드 순서와 무관하게 결선 (300ms × 20) */
+    if (!wireLive()) {
+      var lt = 0;
+      var lpoll = setInterval(function () {
+        if (wireLive() || ++lt >= 20) clearInterval(lpoll);
+      }, 300);
+    }
 
     /* TXFIX 훅 — 섹션 열릴 때마다 재주입 (tx_fix_*가 head를 재구성) */
     if (window.TXFIX) {
@@ -1047,5 +1439,10 @@
   else boot();
 
   /* ---------------- 전역 노출 ---------------- */
-  window.EZJourney = { open: open, close: close };
+  window.EZJourney = {
+    open: open,                 /* open() | open(empId) | open(nodeId) | open({emp,node,ledger}) */
+    openNode: function (nodeId, empId) { open({ node: nodeId, emp: empId || null }); },
+    openLedger: function (ledgerId) { open({ ledger: ledgerId }); },
+    close: close
+  };
 })();

@@ -33,6 +33,17 @@
  *    - 클릭 처리는 전부 document 레벨 이벤트 위임(data-ez1o 속성 라우팅).
  *    - 확정 시 localStorage(elizax_1on1_v1:<emp_id>)에 확정 기록을 남겨
  *      재진입 시 "✓ 요약 확정됨" 상태 줄을 보여준다.
+ *    - 아젠다 추천은 고정 문자열이 아니라 대상자의 실데이터(TALENX_DATA의
+ *      objectives/keyResults/checkins + feedbackHistory + 원장)에서만 도출하고,
+ *      각 항목에 원본 레코드 id 근거 칩을 붙인다(원장 항목은 클릭 시 openPanel).
+ *      실데이터가 없으면 채우지 않고 "기록이 아직 없습니다"로 정직하게 비운다.
+ *    - 받아쓰기 대본은 데모 자산 — 화면에 "데모 전사문"으로 계속 명시한다.
+ *      실AI 요약에는 대상자 실데이터 컨텍스트를 함께 주입하고, 기존 요약을
+ *      덮어쓰기 전 스냅샷을 [이전 버전] 토글로 남긴다(비가역 덮어쓰기 금지).
+ *    - 합의 항목은 [체크인 초안으로](ez:1on1-agreement 발행) / [다음 아젠다로]
+ *      (localStorage nextAgenda 이월)로 착지한다 — 이벤트 계약은 본문 주석 참조.
+ *    - 역할 관점(F10): leader는 팀 관점(리스크·정체 우선), member는 본인 관점
+ *      (내 약속·지원 요청 우선)으로 아젠다 문구·순서와 요약 프롬프트가 달라진다.
  *    - 노출: window.EZOneOnOne = {start, openMap}, window.EZCycle = {openMap}.
  * ④ 엣지 케이스
  *    - 녹음 중 화면 재렌더로 DOM이 사라지면 타이머 틱마다
@@ -94,6 +105,67 @@
     var objs = D().objectives || [];
     for (var i = 0; i < objs.length; i++) if (objs[i].owner_emp_id === empId && objs[i].title) return objs[i].title;
     return "담당 업무 품질 및 협업 만족도 향상";
+  }
+
+  /* ---------------- 실데이터 접근 (TALENX_DATA objectives/keyResults/checkins) ----------------
+     아젠다·요약 컨텍스트의 단일 원천. 시연용 고정 문자열은 여기서 만들지 않는다. */
+  function asOfDate() { return window.EZKit ? EZKit.clock.asOfDate() : "2026-07-16"; }
+  function dayDiff(from, to) {           /* "YYYY-MM-DD" 두 개 → 경과 일수(음수 가능) */
+    var a = Date.parse(String(from || "") + "T00:00:00"), b = Date.parse(String(to || "") + "T00:00:00");
+    if (isNaN(a) || isNaN(b)) return NaN;
+    return Math.round((b - a) / 86400000);
+  }
+  /* period 문자열("FY2026-2Q"/"FY2026-1H"/"FY2026") → 종료일. 데이터에 마감일 필드가 없어 기간에서 도출 */
+  function periodEnd(period) {
+    var s = String(period || ""), y = (s.match(/(20\d\d)/) || [])[1];
+    if (!y) return "";
+    if (/1Q/.test(s)) return y + "-03-31";
+    if (/2Q/.test(s)) return y + "-06-30";
+    if (/3Q/.test(s)) return y + "-09-30";
+    if (/4Q/.test(s)) return y + "-12-31";
+    if (/1H/.test(s)) return y + "-06-30";
+    return y + "-12-31";
+  }
+  function objectivesOwned(empId) {
+    return (D().objectives || []).filter(function (o) { return o.owner_emp_id === empId; });
+  }
+  function objById(id) {
+    var objs = D().objectives || [];
+    for (var i = 0; i < objs.length; i++) if (objs[i].objective_id === id) return objs[i];
+    return null;
+  }
+  function krById(id) {
+    var ks = D().keyResults || [];
+    for (var i = 0; i < ks.length; i++) if (ks[i].kr_id === id) return ks[i];
+    return null;
+  }
+  /* 대상자가 실제로 관여한 KR 집합 — 본인 소유 목표의 KR ∪ 본인이 체크인한 KR
+     (팀원은 조직 목표에 체크인만 하는 경우가 있어 소유 목표만 보면 데이터가 비어 보인다) */
+  function krsInvolved(empId) {
+    var seen = {}, out = [], i, ks;
+    objectivesOwned(empId).forEach(function (o) {
+      ks = (D().keyResults || []).filter(function (k) { return k.objective_id === o.objective_id; });
+      for (i = 0; i < ks.length; i++) if (!seen[ks[i].kr_id]) { seen[ks[i].kr_id] = 1; out.push(ks[i]); }
+    });
+    (D().checkins || []).forEach(function (c) {
+      if (c.emp_id !== empId || !c.kr_id || seen[c.kr_id]) return;
+      var k = krById(c.kr_id);
+      if (k) { seen[k.kr_id] = 1; out.push(k); }
+    });
+    return out;
+  }
+  /* 해당 KR에 대한 대상자의 체크인 — 날짜 오름차순. 본인 체크인이 없으면 KR 전체로 폴백 */
+  function checkinsFor(empId, krId) {
+    var all = (D().checkins || []).filter(function (c) { return c.kr_id === krId; });
+    var mine = all.filter(function (c) { return c.emp_id === empId; });
+    var use = mine.length ? mine : all;
+    return use.slice().sort(function (a, b) { return String(a.checkin_date) < String(b.checkin_date) ? -1 : 1; });
+  }
+  function primaryObjectiveId(empId) {
+    var owned = objectivesOwned(empId);
+    if (owned.length) return owned[0].objective_id;
+    var ks = krsInvolved(empId);
+    return ks.length ? ks[0].objective_id : "";
   }
   /* 대화 화자 짝 — member: 상사(관리자)↔본인 / leader: 본인(주관)↔선택 팀원 */
   function pair() {
@@ -259,8 +331,46 @@
       ".ez1o-stars{display:flex;gap:10px;font-size:10.5px;color:var(--color-text-secondary,#6B7280);margin-top:6px;}",
       ".ez1o-stars b{color:var(--color-warning,#B45309);font-weight:700;letter-spacing:1px;}",
       /* 아젠다·팀원 선택 */
+      ".ez1o-agenda{padding:12px 14px;}",
+      ".ez1o-agrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;}",
+      ".ez1o-aglist{display:flex;flex-direction:column;gap:9px;}",
+      ".ez1o-agitem{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}",
+      /* ↓ 이 규칙은 닫는 중괄호가 빠져 있어 .ez1o-chip.on(선택 표시)이 전혀 먹지 않았다 */
       ".ez1o-chip{cursor:pointer;border:1px solid var(--color-border,#E4E7EC);border-radius:999px;padding:5px 12px;font-size:11.5px;",
+      "font-weight:600;color:var(--color-text-primary,#1D2433);background:var(--color-background-card,#fff);text-align:left;}",
       ".ez1o-chip.on{color:var(--color-on-accent,#fff);background:var(--color-accent,#1F7AF0);border-color:var(--color-accent,#1F7AF0);}",
+      ".ez1o-evs{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;}",
+      ".ez1o-ev{font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;border-radius:var(--radius-inner,5px);padding:2px 7px;",
+      "color:var(--color-text-secondary,#6B7280);background:var(--color-background-muted,#F8FAFC);border:1px solid var(--color-border,#E4E7EC);}",
+      ".ez1o-ev.lk{cursor:pointer;color:var(--color-accent,#1F7AF0);border-color:color-mix(in srgb, var(--color-accent,#17F) 35%, transparent);}",
+      ".ez1o-ev.lk:hover{background:color-mix(in srgb, var(--color-accent,#17F) 8%, transparent);}",
+      ".ez1o-why{flex-basis:100%;font-size:11px;color:var(--color-text-secondary,#6B7280);padding-left:2px;}",
+      ".ez1o-empty{font-size:12.5px;line-height:1.6;color:var(--color-text-secondary,#6B7280);padding:10px 12px;border-radius:var(--radius-element,8px);",
+      "background:var(--color-background-muted,#F8FAFC);border:1px dashed var(--color-border-emphasized,#CBD5E1);}",
+      ".ez1o-xag{cursor:pointer;border:none;background:none;font-size:11px;color:var(--color-text-secondary,#9CA3AF);padding:0 4px;}",
+      ".ez1o-agin{flex:1;min-width:180px;border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-element,8px);padding:6px 10px;font-size:12.5px;}",
+      ".ez1o-sel{border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-full,999px);padding:5px 10px;font-size:11.5px;",
+      "background:var(--color-background-card,#fff);color:var(--color-text-primary,#1D2433);}",
+      ".ez1o-prom{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding:8px 11px;font-size:11.5px;",
+      "border-radius:var(--radius-element,8px);background:var(--color-background-muted,#F8FAFC);border:1px solid var(--color-border,#E4E7EC);}",
+      ".ez1o-prom .tg{cursor:pointer;margin-left:auto;border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-full,999px);",
+      "padding:4px 11px;font-size:11px;font-weight:600;background:var(--color-background-card,#fff);color:var(--color-text-primary,#1D2433);}",
+      ".ez1o-prom .tg.done{color:var(--color-success,#15803D);border-color:color-mix(in srgb, var(--color-success,#180) 35%, transparent);}",
+      /* 데모 자산 고지 · 합의 착지 · 이전 버전 토글 */
+      ".ez1o-demo{font-size:10px;font-weight:600;border-radius:var(--radius-full,999px);padding:2px 9px;white-space:nowrap;",
+      "color:var(--color-warning,#B45309);background:color-mix(in srgb, var(--color-warning,#B50) 8%, transparent);",
+      "border:1px solid color-mix(in srgb, var(--color-warning,#B50) 30%, transparent);}",
+      ".ez1o-agree{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;line-height:1.6;margin:6px 0;padding:7px 10px;",
+      "border-radius:var(--radius-element,8px);background:var(--color-background-muted,#F8FAFC);border:1px solid var(--color-border,#E4E7EC);}",
+      ".ez1o-agree .tx{flex:1;min-width:180px;}",
+      ".ez1o-lbtn{cursor:pointer;border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-full,999px);padding:4px 11px;font-size:11px;",
+      "font-weight:600;color:var(--color-accent,#1F7AF0);background:var(--color-background-card,#fff);white-space:nowrap;}",
+      ".ez1o-lbtn:hover{background:color-mix(in srgb, var(--color-accent,#17F) 7%, transparent);}",
+      ".ez1o-lbtn:disabled{opacity:.5;cursor:default;color:var(--color-text-secondary,#6B7280);}",
+      ".ez1o-prev{margin-top:10px;font-size:11.5px;}",
+      ".ez1o-prev summary{cursor:pointer;color:var(--color-text-secondary,#6B7280);font-weight:600;}",
+      ".ez1o-prevbody{margin-top:8px;padding:10px 12px;border-radius:var(--radius-element,8px);background:var(--color-background-muted,#F8FAFC);",
+      "border:1px solid var(--color-border,#E4E7EC);opacity:.9;}",
     ].join("");
     document.head.appendChild(st);
   }
@@ -339,25 +449,158 @@
 
   var lastRun = null; /* {agenda:[], memId, memName, aiText} — 마지막 녹음 회차 정보(게이트·AI 요약에서 참조) */
 
-  /* ---------------- 아젠다 준비 단계 (Pain T19) ---------------- */
-  function agendaSuggestions() {
-    var out = [], L = ledgerList(), lastCk = null, lastFb = null, lastOne = lastOneOnOneEntry(), i;
-    for (i = 0; i < L.length; i++) {
-      if (!lastCk && L[i].type === "checkin") lastCk = L[i];
-      if (!lastFb && L[i].type === "feedback") lastFb = L[i];
+  /* ---------------- 아젠다 준비 단계 (Pain T19) ----------------
+     대상자의 실제 목표·핵심성과·체크인·피드백·원장에서만 도출한다.
+     ④ 역할 관점: 같은 사실이라도 leader는 팀 관점(리스크·정체 우선),
+                  member는 본인 관점(내 약속·지원 요청 우선)으로 문구·순서가 달라진다. */
+  function targetEmpId() {
+    if (roleKey() === "leader") {
+      var m = selMember();
+      if (m) return m.emp_id;
     }
-    if (lastOne) out.push("지난 1:1 약속 점검 — " + cut(lastOne.summary || lastOne.title, 28));
-    if (lastCk) out.push("최근 체크인 — " + cut(lastCk.title, 28));
-    if (lastFb) out.push("피드백 — " + cut(lastFb.title, 28));
-    var fill = ["다음 분기 목표 방향", "협업·지원 요청", "성장·교육 계획"];
-    for (i = 0; out.length < 3 && i < fill.length; i++) out.push(fill[i]);
-    return out.slice(0, 3);
+    return CU().emp_id;
+  }
+  function targetName(empId) {
+    if (empId === CU().emp_id) return roleKey() === "leader" ? (CU().name || "본인") : memberName();
+    var e = empById(empId);
+    return (e && e.name) || "대상자";
+  }
+  /* 신호별 우선순위 — 낮을수록 먼저 */
+  var SIG_ORDER = {
+    leader: { blocker: 0, stall: 1, due: 2, low: 3, promise: 4, feedback: 5 },
+    member: { promise: 0, blocker: 1, stall: 2, due: 3, low: 4, feedback: 5 }
+  };
+  var SIG_TEXT = {
+    leader: {
+      promise: "지난 1:1 약속 확인 — ", blocker: "블로커 해소 지원 — ", stall: "진척 정체 점검 — ",
+      due: "기간 마감 리스크 — ", low: "달성률 점검 — ", feedback: "피드백 후속 코칭 — "
+    },
+    member: {
+      promise: "지난 1:1 약속 이행 — ", blocker: "막힌 곳 지원 요청 — ", stall: "제 진척 공유 — ",
+      due: "기간 마감 대응 — ", low: "달성률 만회 방안 — ", feedback: "받은 피드백 실행 — "
+    }
+  };
+  var STALL_DAYS = 21;   /* 체크인 공백 판정 기준 */
+  var LOW_PROGRESS = 60; /* 달성률 낮음 판정 기준(%) */
+  var MAX_AGENDA = 4;
+
+  /* 실데이터 사실 수집 → [{sig, text, why, refs:[{label,id,ledgerId}]}] */
+  function agendaFacts(empId) {
+    var rk = roleKey() === "leader" ? "leader" : "member";
+    var TXT = SIG_TEXT[rk], today = asOfDate(), out = [], seen = {};
+    function push(sig, label, why, refs) {
+      var key = sig + "|" + label;
+      if (seen[key]) return;
+      seen[key] = 1;
+      out.push({ sig: sig, text: TXT[sig] + cut(label, 22), why: why, refs: refs || [] });
+    }
+
+    /* (1) 원장 — 지난 1:1 합의 중 이행 확인이 안 된 건 */
+    var prom = lastOneOnOneEntry();
+    if (prom && !(loadState().promiseDone || {})[prom.id]) {
+      push("promise", prom.summary || prom.title, "이행 확인이 아직 표시되지 않은 지난 1:1 합의",
+        [{ label: "기록 " + String(prom.at || "").split(" ")[0], id: prom.id, ledgerId: prom.id }]);
+    }
+
+    /* (2) 핵심성과 — 블로커 / 진척 정체 / 낮은 달성률 */
+    krsInvolved(empId).forEach(function (k) {
+      var cks = checkinsFor(empId, k.kr_id), last = cks.length ? cks[cks.length - 1] : null;
+      var krRef = { label: k.kr_id, id: k.kr_id };
+      if (last && String(last.blocker || "").trim()) {
+        /* 블로커 원문은 근거(why)로 — 제목에 붙이면 핵심성과 이름이 잘려 나간다 */
+        push("blocker", k.name,
+          "최근 체크인(" + last.checkin_date + ")에 기록된 블로커: " + last.blocker,
+          [krRef, { label: last.checkin_id, id: last.checkin_id }]);
+      }
+      if (!last) {
+        push("stall", k.name, "이 핵심성과에 체크인 기록이 없습니다", [krRef]);
+      } else {
+        var gap = dayDiff(last.checkin_date, today);
+        if (!isNaN(gap) && gap >= STALL_DAYS) {
+          push("stall", k.name, "마지막 체크인 " + last.checkin_date + " · " + gap + "일 경과",
+            [krRef, { label: last.checkin_id, id: last.checkin_id }]);
+        } else if (Number(last.progress_delta) <= 0) {
+          push("stall", k.name, "최근 체크인 진척 변화 없음 (Δ" + Number(last.progress_delta || 0) + "%p)",
+            [krRef, { label: last.checkin_id, id: last.checkin_id }]);
+        }
+      }
+      var prog = Number(k.progress);
+      if (!isNaN(prog) && prog < LOW_PROGRESS) {
+        push("low", k.name, "현재 달성률 " + prog + "% (기준 " + LOW_PROGRESS + "% 미만)"
+          + (k.target_value ? " · 목표값 " + k.target_value : ""), [krRef]);
+      }
+    });
+
+    /* (3) 목표 — 기간 마감 임박·경과 (데이터에 마감일 필드가 없어 period에서 도출) */
+    var objSeen = {};
+    objectivesOwned(empId).concat(krsInvolved(empId).map(function (k) { return objById(k.objective_id); }))
+      .forEach(function (o) {
+        if (!o || objSeen[o.objective_id]) return;
+        objSeen[o.objective_id] = 1;
+        var end = periodEnd(o.period);
+        if (!end) return;
+        var left = dayDiff(today, end);
+        if (isNaN(left) || left > 30) return;
+        push("due", o.title,
+          left < 0 ? o.period + " 기간 종료(" + end + ") 후 " + (-left) + "일 경과 · 마무리 정리 필요"
+                   : o.period + " 마감 " + end + " · D-" + left,
+          [{ label: o.objective_id, id: o.objective_id }]);
+      });
+
+    /* (4) 받은 피드백 */
+    (D().feedbackHistory || []).forEach(function (f) {
+      if (f.emp_id !== empId) return;
+      push("feedback", f.summary || "", (f.period || "") + " " + (f.source_type || "") + " 피드백",
+        [{ label: f.fb_id, id: f.fb_id }]);
+    });
+
+    /* 우선순위 0은 falsy — `ord[sig] || 9`로 쓰면 최우선 신호(leader:blocker,
+       member:promise)가 꼴찌로 밀려 상한에서 잘려 나간다. 반드시 null 검사로 판단. */
+    var ord = SIG_ORDER[rk];
+    function rank(sig) { var v = ord[sig]; return v == null ? 9 : v; }
+    out.sort(function (a, b) { return rank(a.sig) - rank(b.sig); });
+    return out.slice(0, MAX_AGENDA);
+  }
+
+  /* 근거 칩 — 원장 항목 id가 있는 건만 클릭 가능(EZLedger.openPanel). 없으면 조용히 정적 칩 */
+  function refChipsHTML(refs) {
+    if (!refs || !refs.length) return "";
+    var h = '<span class="ez1o-evs">', i, r, live = !!(window.EZLedger && EZLedger.openPanel);
+    for (i = 0; i < refs.length; i++) {
+      r = refs[i];
+      if (r.ledgerId && live) {
+        h += '<button class="ez1o-ev lk" data-ez1o-ev="' + esc(r.ledgerId) + '" title="성과 기록에서 보기">'
+          + esc(r.label) + "</button>";
+      } else {
+        h += '<span class="ez1o-ev" title="원본 레코드 ' + esc(r.id) + '">' + esc(r.label) + "</span>";
+      }
+    }
+    return h + "</span>";
   }
 
   function renderAgenda(panel) {
-    var sugg = agendaSuggestions(), chips = "", i;
-    for (i = 0; i < sugg.length; i++) {
-      chips += '<button class="ez1o-chip' + (i === 0 ? " on" : "") + '" data-ez1o-chip>' + esc(sugg[i]) + "</button>";
+    var empId = targetEmpId(), facts = agendaFacts(empId), chips = "", i;
+    for (i = 0; i < facts.length; i++) {
+      chips += '<div class="ez1o-agitem">'
+        + '<button class="ez1o-chip' + (i === 0 ? " on" : "") + '" data-ez1o-chip>' + esc(facts[i].text) + "</button>"
+        + refChipsHTML(facts[i].refs)
+        + '<div class="ez1o-why">' + esc(facts[i].why) + "</div></div>";
+    }
+    /* 직전 1:1에서 [다음 아젠다로] 착지시킨 항목 — 실데이터 신호와 함께 노출 */
+    var carry = loadState().nextAgenda || [];
+    for (i = 0; i < carry.length; i++) {
+      chips += '<div class="ez1o-agitem">'
+        + '<button class="ez1o-chip on" data-ez1o-chip>' + esc(cut(carry[i], 34)) + "</button>"
+        + '<span class="ez1o-evs"><span class="ez1o-ev">지난 1:1 합의</span></span>'
+        + '<button class="ez1o-xag" data-ez1o="unag" data-i="' + i + '" title="이 아젠다 빼기">&#10005;</button></div>';
+    }
+    if (!chips) {
+      /* 고정 문자열로 채우지 않는다 — 없으면 없다고 말한다 */
+      chips = '<div class="ez1o-empty">이번 사이클 기록이 아직 없습니다 — 목표 기준으로 시작하세요.'
+        + (objectivesOwned(empId).length
+            ? ' 현재 목표: <b>' + esc(objTitleFor(empId)) + "</b>"
+            : " 등록된 목표도 아직 없습니다.")
+        + " 아래에 아젠다를 직접 입력할 수 있습니다.</div>";
     }
     /* 지난 약속 이행 체크 — 직전 1:1 원장 항목 + 완료 토글 */
     var prom = lastOneOnOneEntry(), promHTML = "";
@@ -372,13 +615,18 @@
       var m = selMember();
       if (m) who = '<span class="ez1o-reclab">대상 팀원: <b>' + esc(m.name) + "</b></span>";
     }
+    var srcNote = facts.length
+      ? '<div class="ez1o-note" style="margin:0 0 8px">' + esc(targetName(empId))
+        + '님의 실제 목표·핵심성과·체크인·피드백 기록에서 도출했습니다 · 기준 ' + esc(asOfDate())
+        + ' · 각 근거 칩은 원본 레코드 id입니다</div>'
+      : "";
     panel.innerHTML =
       '<div class="ez1o-rec"><div class="ez1o-rechead">'
       + '<b style="font-size:12.5px">1:1 준비 · 아젠다 선택</b>' + who
       + '<button class="ez1o-stop" data-ez1o="cancel" style="border-color:var(--line,#E4E7EC);color:var(--ink-3,#6B7280)">닫기</button>'
       + "</div>"
-      + '<div class="ez1o-agenda">'
-      + '<div class="ez1o-agrow">' + chips + "</div>"
+      + '<div class="ez1o-agenda">' + srcNote
+      + '<div class="ez1o-aglist">' + chips + "</div>"
       + '<div class="ez1o-agrow"><input class="ez1o-agin" data-ez1o-agin type="text" maxlength="60" placeholder="아젠다 직접 입력 (선택)">'
       + '<button class="ez1o-btn" data-ez1o="rec">&#9210; 녹음 시작</button></div>'
       + promHTML
@@ -401,7 +649,8 @@
     if (sess && !sess.finished) { toast("이미 녹음이 진행 중입니다.", ""); return; }
     killSession();
     var p = pair();
-    lastRun = { agenda: agenda || [], memId: p.memId, memName: p.memId ? p.mem : null, aiText: "" };
+    lastRun = { agenda: agenda || [], memId: p.memId, memName: p.memId ? p.mem : null, aiText: "",
+                empId: targetEmpId() };
     sess = { panel: panel, lineTimer: null, secTimer: null, idx: 0, sec: 0, script: buildScript(), finished: false };
     panel.innerHTML =
       '<div class="ez1o-rec">'
@@ -409,6 +658,8 @@
       + '<span class="ez1o-dot"></span><span class="ez1o-timer" data-ez1o-timer>00:00</span>'
       + '<span class="ez1o-wave"><i></i><i></i><i></i><i></i><i></i><i></i></span>'
       + '<span class="ez1o-reclab">녹음 중 · 실시간 받아쓰기 (' + esc(REC_ID) + ')</span>'
+      /* 대본은 데모 자산 — 실제 대화로 오인하지 않도록 녹음 중에도 계속 표시한다 */
+      + '<span class="ez1o-demo" title="받아쓰기 줄은 시연용 고정 대본입니다 — 실제 녹음이 아닙니다">데모 전사문</span>'
       + '<button class="ez1o-stop" data-ez1o="stop">&#9632; 종료·요약 생성</button>'
       + '</div>'
       + '<div class="ez1o-tr" data-ez1o-tr></div>'
@@ -466,12 +717,55 @@
     }, 1200);
   }
 
+  /* 대상자의 실데이터 컨텍스트 — 요약 프롬프트에 함께 주입해 요약이 실제 목표·수치를 인용하게 한다 */
+  function ctxLines(empId) {
+    var out = [], today = asOfDate();
+    objectivesOwned(empId).forEach(function (o) {
+      out.push("목표 " + o.objective_id + " " + o.title + " (진행률 " + o.progress + "%, 기간 " + o.period + ")");
+    });
+    krsInvolved(empId).slice(0, 6).forEach(function (k) {
+      var cks = checkinsFor(empId, k.kr_id), last = cks.length ? cks[cks.length - 1] : null;
+      out.push("핵심성과 " + k.kr_id + " " + k.name
+        + " · 달성률 " + k.progress + "%" + (k.target_value ? " / 목표값 " + k.target_value : "")
+        + (last ? " · 최근 체크인 " + last.checkin_id + " " + last.checkin_date
+                  + " (Δ" + last.progress_delta + "%p, " + (dayDiff(last.checkin_date, today)) + "일 경과"
+                  + (String(last.blocker || "").trim() ? ", 블로커: " + last.blocker : "") + ")"
+                : " · 체크인 기록 없음"));
+    });
+    (D().feedbackHistory || []).forEach(function (f) {
+      if (f.emp_id === empId) out.push("받은 피드백 " + f.fb_id + " (" + f.source_type + ") " + f.summary);
+    });
+    return out;
+  }
+
+  /* AI 요약 텍스트에서 합의(액션) 줄만 추출 — '액션' 섹션 우선, 없으면 담당/기한 포함 줄 */
+  function extractAgreements(text) {
+    var lines = String(text || "").split(/\r?\n/).map(function (s) {
+      return s.replace(/^\s*[-•*\d.)]+\s*/, "").trim();
+    }).filter(Boolean);
+    var inAct = false, act = [], loose = [], i, ln;
+    for (i = 0; i < lines.length; i++) {
+      ln = lines[i];
+      if (/^\W*액션/.test(ln)) { inAct = true; continue; }
+      if (/^\W*(논의\s*주제|감지\s*신호|요약)/.test(ln)) { inAct = false; continue; }
+      if (inAct) act.push(ln);
+      else if (/담당|기한/.test(ln)) loose.push(ln);
+    }
+    return (act.length ? act : loose).slice(0, 4);
+  }
+
   /* ---------------- 요약 실AI화 — 먼저 고정 요약 렌더 후, 연결돼 있으면 교체 ---------------- */
   function liveSummary(panel, transcript) {
     var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready());
-    var body = panel.querySelector(".ez1o-body");
+    /* EZKit 영수증으로 렌더되면 본문 클래스가 .ezk-receipt-body — 둘 다 잡아야 한다
+       (.ez1o-body만 보면 EZKit 로드 시 실AI 요약이 조용히 착지하지 못했다) */
+    var body = panel.querySelector(".ezk-receipt-body,.ez1o-body");
     if (!live || !body || !transcript) return;
+    var rk = roleKey() === "leader" ? "leader" : "member";
+    var empId = (lastRun && lastRun.empId) || targetEmpId();
     var ag = (lastRun && lastRun.agenda && lastRun.agenda.length) ? "아젠다: " + lastRun.agenda.join(" / ") + "\n" : "";
+    var ctx = ctxLines(empId);
+    var ctxBlock = ctx.length ? "대상자 실제 성과 데이터(talenx):\n" + ctx.join("\n") + "\n\n" : "";
     body.insertAdjacentHTML("afterbegin",
       '<div class="ez1o-note" data-ez1o-live style="margin-bottom:8px"><span class="ez1o-spin" style="display:inline-block;vertical-align:middle;margin-right:6px"></span>elizax가 받아쓰기 원문을 다시 요약하는 중…</div>');
     function clearNote() {
@@ -480,23 +774,51 @@
     }
     EZAI.agent({
       maxTurns: 2, maxTokens: 700,
-      system: "당신은 elizax — 1:1 미팅 요약가입니다. 주어진 받아쓰기 원문만 근거로 한국어 요약을 씁니다. "
+      system: "당신은 elizax — 1:1 미팅 요약가입니다. 받아쓰기 원문과 함께 제공된 대상자 실제 성과 데이터를 근거로 한국어 요약을 씁니다. "
+        + (rk === "leader"
+            ? "읽는 사람은 이 1:1을 주관한 조직장입니다. 팀 운영 관점에서 리스크·지원 필요·후속 코칭 포인트를 우선하세요. "
+            : "읽는 사람은 본인(구성원)입니다. 본인 관점에서 내가 할 일·요청한 지원·성장 계획을 우선하세요. ")
         + "형식: '논의 주제' 최대 3줄 / '액션 아이템' 2~3줄(담당·기한 포함) / '감지 신호' 1~2줄. "
         + "각 줄 끝에 (" + REC_ID + " · MM:SS) 형태로 근거 시각을 인용하세요. "
-        + "아젠다가 주어지면 해당 항목을 우선 반영하세요. 머리말·다른 텍스트 금지. 도구 호출 불필요.",
-      messages: [{ role: "user", content: ag + "받아쓰기 원문:\n" + transcript }],
+        + "실제 성과 데이터를 인용할 때는 해당 레코드 id(KR-… / CHK-… / OBJ-…)를 괄호에 함께 적으세요. "
+        + "제공되지 않은 수치를 지어내지 마세요. 아젠다가 주어지면 해당 항목을 우선 반영하세요. "
+        + "머리말·다른 텍스트 금지. 도구 호출 불필요.",
+      messages: [{ role: "user", content: ag + ctxBlock + "받아쓰기 원문(시연용 고정 대본):\n" + transcript }],
       onDone: function (text) {
         if (!document.body.contains(body)) return;
         clearNote();
         if (text && text.trim()) {
           if (lastRun) lastRun.aiText = text.trim();
+          /* 되돌릴 수 없는 덮어쓰기 금지 — 교체 직전 본문을 스냅샷해 [이전 버전]으로 남긴다 */
+          var prev = inertSnapshot(body.innerHTML);
+          var found = extractAgreements(text);
+          setAgreements(found.length ? found.map(function (s) { return { text: s }; }) : lastAgreements);
           body.innerHTML = '<div class="ez1o-h4">elizax 실시간 요약</div>'
             + '<div style="font-size:12.5px;line-height:1.75">' + esc(text.trim()).replace(/\n+/g, "<br>") + "</div>"
-            + agendaSectionHTML();
+            + agendaSectionHTML()
+            + agreementsSectionHTML()
+            + '<details class="ez1o-prev"><summary>이전 버전 (규칙 기반 요약) 보기</summary>'
+            + '<div class="ez1o-prevbody">' + prev + "</div></details>";
         }
       },
       onError: function () { clearNote(); } /* 오프라인·오류 → 고정 요약 유지(폴백) */
     });
+  }
+
+  /* 스냅샷은 보기 전용 — 옛 버튼이 다시 눌리지 않도록 라우팅 속성을 떼고 비활성화한다 */
+  function inertSnapshot(html) {
+    var d = document.createElement("div");
+    d.innerHTML = html;
+    var els = d.querySelectorAll("[data-ez1o],[data-ez1o-ev],[data-ez1o-chip],[data-ez1o-gact]"), i, el;
+    for (i = 0; i < els.length; i++) {
+      el = els[i];
+      el.removeAttribute("data-ez1o");
+      el.removeAttribute("data-ez1o-ev");
+      el.removeAttribute("data-ez1o-chip");
+      el.removeAttribute("data-ez1o-gact");
+      if (el.tagName === "BUTTON") el.disabled = true;
+    }
+    return d.innerHTML;
   }
 
   /* ---------------- 요약 카드 ---------------- */
@@ -509,11 +831,51 @@
     return h + "</div>";
   }
 
+  /* ---------------- 합의 사항 착지 ----------------
+     요약이 원장 축적으로만 끝나지 않도록, 합의 항목마다 다음 단계로 보내는 경로를 준다.
+     [체크인 초안으로] 는 아래 이벤트를 발행한다 — 수신측(체크인 화면)은 후속 작업이다.
+
+       이벤트 계약 (contract)
+       ─────────────────────────────────────────────────────────────
+       document.addEventListener("ez:1on1-agreement", function (e) { ... })
+         e.detail = {
+           emp_id:       String  // 합의 대상자 사번. 조직장이 주관한 1:1이면 팀원 사번,
+                                 // 본인 1:1이면 현재 사용자 사번. 항상 채워진다.
+           objective_id: String  // 대상자의 대표 목표 id. 없으면 빈 문자열("").
+           text:         String  // 합의 문장 원문(요약 카드에 표시된 그대로).
+         }
+       - 발행 시점: 사용자가 [체크인 초안으로]를 클릭한 순간 (사람의 명시적 행동)
+       - 발행 측은 side-effect를 만들지 않는다 — 초안 생성·저장은 전적으로 수신측 책임
+       - 수신자가 없어도 발행만 하고 조용히 지나간다(현재 상태)
+       ───────────────────────────────────────────────────────────── */
+  var lastAgreements = [];   /* [{text}] — 마지막 요약에서 뽑은 합의 항목 */
+  function setAgreements(list) { lastAgreements = list || []; }
+  function agreementsSectionHTML() {
+    if (!lastAgreements.length) return "";
+    var h = '<div class="ez1o-h4">합의 사항 착지 — 사람이 고른 것만 다음 단계로</div>', i;
+    for (i = 0; i < lastAgreements.length; i++) {
+      h += '<div class="ez1o-agree"><span class="tx">' + esc(lastAgreements[i].text) + "</span>"
+        + '<button class="ez1o-lbtn" data-ez1o="ck-draft" data-i="' + i + '">체크인 초안으로</button>'
+        + '<button class="ez1o-lbtn" data-ez1o="ag-next" data-i="' + i + '">다음 아젠다로</button></div>';
+    }
+    return h;
+  }
+
   function summaryHTML() {
     var p = pair(), MGR = p.mgr, MEM = p.mem;
     var K = window.EZKit;
     var title = '✦ 1:1 미팅 요약' + (lastRun && lastRun.memName ? ' — ' + lastRun.memName : '');
-    var body = agendaSectionHTML()
+    /* 고정 요약의 액션 아이템 2건이 곧 합의 사항 — 착지 버튼의 원천 */
+    setAgreements([
+      { text: "외부 연동 지연 건 파트너십 팀 에스컬레이션 — 담당 " + MGR + " · 기한 7/18" },
+      { text: "머신러닝 기초 교육 과정 선정·예산 신청 — 담당 " + MEM + " · 기한 7/22" }
+    ]);
+    var demoNote = '<div class="ez1o-note" style="margin:2px 0 6px">'
+      + '<span class="ez1o-demo">데모 전사문 기반</span> 아래 요약의 인용 시각(' + esc(REC_ID)
+      + ')은 시연용 고정 대본에서 나온 것입니다 — 실제 녹음 기록이 아닙니다. '
+      + '실AI가 연결되면 대상자의 실제 목표·체크인 데이터를 함께 참조해 다시 요약합니다.</div>';
+    var body = demoNote
+      + agendaSectionHTML()
       + '<div class="ez1o-h4">논의 주제 3</div>'
       + '<div class="ez1o-topic"><span class="no">1</span><span>KR2 진척 — 신규 기획 3건 사용자 검증 통과, 잔여 2건 설계 중 (진행률 68%)' + chip("00:16") + '</span></div>'
       + '<div class="ez1o-topic"><span class="no">2</span><span>일정 리스크 — 외부 연동 파트너 응답 2주 지연, 잔여 검증 일정 순연 가능성' + chip("00:42") + '</span></div>'
@@ -523,7 +885,8 @@
       + '<div class="ez1o-act"><span class="bx"></span><span>머신러닝 기초 교육 과정 선정·예산 신청 <span class="own">— 담당 ' + esc(MEM) + ' · 기한 7/22</span></span></div>'
       + '<div class="ez1o-h4">감지 신호 2</div>'
       + '<div class="ez1o-sig risk"><span class="ic">&#9888;</span><span><b>리스크</b> · 일정 지연(외부 연동) — 이번 주 체크인 초안에 리스크 항목 반영을 제안합니다' + chip("00:42") + '</span></div>'
-      + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · 머신러닝 교육 수요 감지 — 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>';
+      + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · 머신러닝 교육 수요 감지 — 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>'
+      + agreementsSectionHTML();
     var gate = '<div class="ez1o-gate" data-ez1o-gate>'
       + '<span class="lab">결정 게이트 · 사람이 확정 (승인 전에는 아무것도 반영되지 않음)</span>'
       + '<button class="ez1o-gbtn primary" data-ez1o-gact="confirm">기록 확정·성과 기록 저장</button>'
@@ -702,6 +1065,14 @@
     /* 맵 배경 클릭 → 닫기 */
     if (t && t.getAttribute && t.getAttribute("data-ez1o-mapov")) { closeMap(); return; }
 
+    /* 근거 칩 → 성과 기록(원장) 해당 항목으로 이동. 원장 미로드면 조용히 무시 */
+    var evEl = t && t.closest ? t.closest("[data-ez1o-ev]") : null;
+    if (evEl) {
+      var eid = evEl.getAttribute("data-ez1o-ev");
+      try { if (window.EZLedger && EZLedger.openPanel) EZLedger.openPanel(eid); } catch (e2) { /* 무해화 */ }
+      return;
+    }
+
     /* 아젠다 칩 토글 */
     var chipEl = t && t.closest ? t.closest("[data-ez1o-chip]") : null;
     if (chipEl) {
@@ -734,6 +1105,14 @@
         var pnl2 = act.closest("[data-ez1o-panel]");
         if (pnl2) pnl2.innerHTML = "";
       }
+      else if (kind === "unag") {          /* 이월 아젠다 제거 */
+        var stU = loadState(), ix = +act.getAttribute("data-i");
+        if (stU.nextAgenda && stU.nextAgenda.length > ix) {
+          stU.nextAgenda.splice(ix, 1); saveState(stU);
+          var pnlU = act.closest("[data-ez1o-panel]");
+          if (pnlU) renderAgenda(pnlU);
+        }
+      }
       else if (kind === "promise") {
         var row = act.closest("[data-ez1o-prom]");
         if (row) {
@@ -743,6 +1122,29 @@
           if (st2.promiseDone[pid]) { act.className = "tg done"; act.innerHTML = "&#10003; 이행 완료"; }
           else { act.className = "tg"; act.innerHTML = "이행 확인"; }
           toast(st2.promiseDone[pid] ? "지난 약속을 이행 완료로 표시했습니다." : "이행 확인을 취소했습니다.", "");
+        }
+      }
+      else if (kind === "ck-draft") {      /* 합의 → 체크인 초안 (이벤트 발행만, side-effect 0) */
+        var agC = lastAgreements[+act.getAttribute("data-i")];
+        if (agC) {
+          var eid2 = (lastRun && lastRun.empId) || targetEmpId();
+          document.dispatchEvent(new CustomEvent("ez:1on1-agreement", {
+            detail: { emp_id: eid2, objective_id: primaryObjectiveId(eid2) || "", text: agC.text }
+          }));
+          act.disabled = true; act.textContent = "✓ 체크인 초안으로 보냄";
+          toast("체크인 초안으로 보냈습니다 — 확정은 체크인 화면에서 하세요.", "ok");
+        }
+      }
+      else if (kind === "ag-next") {       /* 합의 → 다음 1:1 아젠다로 이월 */
+        var agN = lastAgreements[+act.getAttribute("data-i")];
+        if (agN) {
+          var stN = loadState();
+          stN.nextAgenda = stN.nextAgenda || [];
+          if (stN.nextAgenda.indexOf(agN.text) < 0) stN.nextAgenda.push(agN.text);
+          stN.nextAgenda = stN.nextAgenda.slice(-5);
+          saveState(stN);
+          act.disabled = true; act.textContent = "✓ 다음 아젠다에 추가됨";
+          toast("다음 1:1 아젠다에 추가했습니다.", "ok");
         }
       }
       else if (kind === "stop") finish();

@@ -681,6 +681,313 @@
     m.steps.forEach(function (s) { s.st = 2; });
     refreshWork(m);
   }
+  /* ---------------- 영수증 전용 카드 (F15) ----------------
+     검증 가능한 답변은 회색 말풍선이 아니라 화면 영수증(tx_roles)과 같은
+     시각 언어로 낸다: as-of 칩(EZKit.clock 실값) · 메트릭 행 · 근거 칩 · 감사 칩.
+     골격은 EZKit.receipt/asof/src 렌더러를 그대로 쓰고, 카드 내부 레이아웃만
+     여기서 정의한다(소유 파일 외 CSS 수정 없이 런타임 주입). */
+  function ensureRcptStyles() {
+    if (document.getElementById("ezx-rcpt-css")) return;
+    var css = [
+      ".ezx-msg.ezx-rcptmsg{align-self:stretch;max-width:100%;}",
+      ".ezx-rcptmsg .ezk-receipt{margin:0;}",
+      /* EZKit 미로드 폴백 골격 */
+      ".ezx-rc-fallback{border:1px solid var(--color-border,#e3e5e8);border-left:3px solid var(--color-accent,#1F7AF0);",
+      "border-radius:var(--radius-container,12px);background:var(--color-background-card,#fff);padding:12px 14px;}",
+      ".ezx-rc-fallback .ezk-receipt-head{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px;}",
+      /* 메트릭 행 */
+      ".ezx-rc-metrics{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px;}",
+      ".ezx-rc-metric{display:flex;flex-direction:column;gap:1px;min-width:78px;padding:5px 10px;",
+      "border:1px solid var(--ezx-hairline,var(--color-border,#e3e5e8));border-radius:var(--radius-element,8px);",
+      "background:var(--color-background-muted,#f5f6f8);}",
+      ".ezx-rc-metric .k{font-size:10px;letter-spacing:.02em;color:var(--color-text-secondary,#6b7280);}",
+      ".ezx-rc-metric .v{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--color-text-primary,#111827);}",
+      ".ezx-rc-metric .s{font-size:10px;color:var(--color-text-secondary,#6b7280);}",
+      /* 본문 — 말풍선과 동일한 마크다운 그래머 */
+      ".ezx-rc-body{font-size:12.5px;line-height:1.58;color:var(--color-text-primary,#111827);}",
+      ".ezx-rc-body p{margin:0 0 8px;} .ezx-rc-body p:last-child{margin-bottom:0;}",
+      ".ezx-rc-body h3{font-size:13px;font-weight:700;margin:10px 0 6px;} .ezx-rc-body h3:first-child{margin-top:0;}",
+      ".ezx-rc-body ul{margin:6px 0;padding-left:17px;} .ezx-rc-body li{margin:2px 0;}",
+      ".ezx-rc-body table{border-collapse:collapse;margin:6px 0;font-size:11.5px;width:100%;}",
+      ".ezx-rc-body th,.ezx-rc-body td{border:1px solid var(--ezx-hairline,var(--color-border,#e3e5e8));padding:3px 7px;text-align:left;}",
+      ".ezx-rc-body th{background:var(--color-background-muted,#f5f6f8);font-weight:600;}",
+      ".ezx-rc-body code{background:var(--color-background-muted,#f5f6f8);border-radius:4px;padding:1px 5px;font-size:11.5px;",
+      "font-family:var(--font-family-code,monospace);}",
+      /* 근거 칩 줄 */
+      ".ezx-rc-srcs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:9px;",
+      "padding-top:8px;border-top:1px dashed var(--ezx-hairline,var(--color-border,#e3e5e8));}",
+      ".ezx-rc-srcs .lb{font-size:10px;font-weight:700;color:var(--color-text-secondary,#6b7280);margin-right:2px;}",
+      /* 감사 칩 — 원장 실 id 없으면 '기록 전' 중립 표기 */
+      ".ezx-rc-pre{border-style:dashed !important;color:var(--color-text-secondary,#6b7280) !important;}",
+      /* 인용 3등급 — tx_ctx_ledger 스트립과 같은 시각 문법 (실인용/추측 점선/0건) */
+      ".ezx-rc-cite.cited{color:var(--color-text-green,#15803d);background:var(--color-background-green,rgba(21,128,61,.08));",
+      "border-color:var(--color-border-green,var(--color-border,#e3e5e8));font-weight:700;}",
+      ".ezx-rc-cite.guess{border-style:dashed;border-color:var(--color-border-emphasized,#c9ced6);",
+      "background:var(--color-background-surface,transparent);color:var(--color-text-secondary,#6b7280);}",
+      ".ezx-rc-cite.none{border-style:dashed;border-color:var(--color-border-orange,#f0b27a);",
+      "background:var(--color-background-orange,rgba(240,178,122,.12));color:var(--color-text-orange,#c2410c);font-weight:700;}",
+      /* What-if 재계산 (읽기 전용) */
+      ".ezx-rc-wi{margin-top:9px;padding-top:8px;border-top:1px dashed var(--ezx-hairline,var(--color-border,#e3e5e8));",
+      "display:flex;flex-wrap:wrap;align-items:center;gap:7px;}",
+      ".ezx-rc-wibtn{font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;padding:4px 11px;",
+      "border-radius:var(--radius-full,999px);border:1px solid var(--color-accent,#1F7AF0);",
+      "background:var(--color-background-card,#fff);color:var(--color-accent,#1F7AF0);}",
+      ".ezx-rc-wibtn:hover{background:var(--color-accent-muted,rgba(31,122,240,.1));}",
+      ".ezx-rc-wibtn[disabled]{opacity:.55;cursor:default;}",
+      ".ezx-rc-wihint{font-size:10px;color:var(--color-text-secondary,#6b7280);}",
+      ".ezx-rc-wiout{flex:1 1 100%;}",
+      ".ezx-rc-wiout:empty{display:none;}",
+      ".ezx-rc-wiout{margin-top:6px;border:1px solid var(--ezx-hairline,var(--color-border,#e3e5e8));",
+      "border-radius:var(--radius-element,8px);background:var(--color-background-muted,#f5f6f8);padding:8px 10px;}",
+      ".ezx-rc-wirow{display:flex;gap:8px;align-items:baseline;font-size:11.5px;padding:2px 0;",
+      "color:var(--color-text-primary,#111827);}",
+      ".ezx-rc-wirow .lb{width:52px;flex:none;font-size:10px;font-weight:700;color:var(--color-text-secondary,#6b7280);}",
+      ".ezx-rc-wirow.warn{color:var(--color-warning,#b45309);}",
+      ".ezx-rc-wirow .chg{font-style:normal;font-size:10px;font-weight:700;color:var(--color-warning,#b45309);}",
+      ".ezx-rc-wirow .keep{font-style:normal;font-size:10px;color:var(--color-text-secondary,#6b7280);}",
+      ".ezx-rc-winote{margin-top:5px;font-size:10px;line-height:1.45;color:var(--color-text-secondary,#6b7280);}"
+    ].join("");
+    var st = document.createElement("style");
+    st.id = "ezx-rcpt-css";
+    st.textContent = css;
+    (document.head || document.documentElement).appendChild(st);
+  }
+
+  /* EZKit.status 렌더러 재사용 — 라벨만 상황 문구로 교체(점 색은 data-mode가 결정) */
+  function statusChip(mode, label) {
+    var base = (window.EZKit && EZKit.status)
+      ? EZKit.status(mode)
+      : '<span class="ezk-chip ezk-status" data-mode="' + esc(mode) + '">-</span>';
+    return base.replace(/>[^<]*<\/span>\s*$/, ">" + esc(label) + "</span>");
+  }
+  /* 감사 칩 — 원장(EZLedger) 실 id만 "기록됨"으로 단언한다.
+     해시 위조 ID(EZKit.gaId) 금지 — 기록이 없으면 정직하게 "기록 전". */
+  function auditChip(m) {
+    var id = m && m.meta && m.meta.ledgerId;
+    if (id) return '<span class="ezk-chip ezk-audit" data-ezx-audit>&#9960; 감사 기록됨 · ' + esc(id) + "</span>";
+    return '<span class="ezk-chip ezk-audit ezx-rc-pre" data-ezx-audit>&#9960; 기록 전 — 실행 시 원장 기록</span>';
+  }
+
+  /* 영수증 서술자 접근 — meta에도 사본을 두어 세션 복원 후에도 카드로 남는다
+     (EZChat.serializeMsg는 role/text/note/fb/meta만 보존) */
+  function rcptOf(m) {
+    if (!m) return null;
+    if (m.receipt) return m.receipt;
+    if (m.meta && m.meta.receipt) { m.receipt = m.meta.receipt; return m.receipt; }
+    return null;
+  }
+
+  /* ---- What-if: EZTools.simulate_whatif 실행 결과를 카드 안에 인라인 표시 (F15) ----
+     오프라인에서도 로컬 계산이므로 동작한다. 읽기 전용 — 원본 데이터 불변. */
+  function whatifParams(r) {
+    var wi = r.whatif || {};
+    var p = {};
+    if (wi.emp_id) p.emp_id = wi.emp_id;
+    if (wi.cap_pct != null) p.cap_pct = wi.cap_pct;
+    p.achievement_delta = (wi.achievement_delta != null) ? wi.achievement_delta
+      : (wi.cap_pct != null ? 0 : -10);
+    return p;
+  }
+  function whatifHTML(res, p) {
+    if (!res) return "";
+    if (res.error || res.blocked) {
+      return '<div class="ezx-rc-wirow warn"><span class="lb">불가</span><span>' +
+        esc(res.error || res.policy || "시뮬레이션을 실행할 수 없습니다.") + "</span></div>";
+    }
+    var b = res.before || {}, a = res.after || {};
+    var dist = res.grade_distribution || {};
+    var dk = Object.keys(dist).sort();
+    var capUsed = (res.cap_pct != null) ? res.cap_pct : p.cap_pct;
+    var deltaUsed = (res.achievement_delta != null) ? res.achievement_delta : p.achievement_delta;
+    var html = '<div class="ezx-rc-wirow"><span class="lb">가정</span><span>달성률 ' +
+      esc(String(deltaUsed)) + "%p" +
+      (capUsed != null ? " · 상위등급 상한 " + esc(String(capUsed)) + "%" : "") + "</span></div>";
+    /* 정식 엔진(EZCalc)은 개인 등급 단건이 아니라 전사 분포를 반환한다 — 형상별 렌더 */
+    if (Object.prototype.toString.call(res.gradeChange) === "[object Array]") {
+      html += '<div class="ezx-rc-wirow"><span class="lb">분포</span><span>' +
+        esc(res.gradeChange.map(function (g) {
+          return g.grade + " " + g.before_pct + "%→" + g.after_pct + "%(" + (g.delta_pp > 0 ? "+" : "") + g.delta_pp + "pp)";
+        }).join(" · ")) + "</span></div>";
+      if (res.moved_pp != null) {
+        html += '<div class="ezx-rc-wirow"><span class="lb">이동폭</span><span>합계 ' +
+          esc(String(res.moved_pp)) + "pp 재배치" +
+          (res.basis && res.basis.population_n ? " · 모집단 " + esc(String(res.basis.population_n)) + "명" : "") + "</span></div>";
+      }
+      var me = null;
+      (res.people || []).forEach(function (x) {
+        if (p.emp_id && x.name && x.name === ((state.subject && state.subject.name) || CURRENT.name)) me = x;
+      });
+      if (me) {
+        html += '<div class="ezx-rc-wirow"><span class="lb">' + esc(me.name) + '</span><span>' +
+          esc(String(me.before)) + " → <b>" + esc(String(me.after)) + "</b>점</span></div>";
+      }
+      var bs = res.basis || {};
+      html += '<div class="ezx-rc-winote">' +
+        esc(bs.base_source || "") + (bs.cap_rule_source ? " · " + esc(bs.cap_rule_source) : "") +
+        "<br>읽기 전용 시뮬레이션 — 실제 데이터는 변경되지 않습니다 · 엔진 " + esc(res.engine || "-") +
+        (p.emp_id && !me ? " (전사 분포 기준 — 개인 등급 단건은 이 엔진이 산출하지 않습니다)" : "") + "</div>";
+      return html;
+    }
+    html += '<div class="ezx-rc-wirow"><span class="lb">등급</span><span>' +
+      esc(String(b.grade == null ? "-" : b.grade)) + " → <b>" + esc(String(a.grade == null ? "-" : a.grade)) + "</b> " +
+      (res.grade_changed ? '<em class="chg">변동</em>' : '<em class="keep">유지</em>') + "</span></div>";
+    html += '<div class="ezx-rc-wirow"><span class="lb">종합</span><span>' +
+      esc(String(b.weighted_score == null ? "-" : b.weighted_score)) + " → <b>" +
+      esc(String(a.weighted_score == null ? "-" : a.weighted_score)) + "</b></span></div>";
+    if (dk.length) {
+      html += '<div class="ezx-rc-wirow"><span class="lb">분포</span><span>' +
+        esc(dk.map(function (k) { return k + " " + dist[k] + "명"; }).join(" · ")) +
+        (res.top_grade_pct != null ? " · 상위 " + esc(String(res.top_grade_pct)) + "%" : "") + "</span></div>";
+    }
+    if (res.cap_note) {
+      html += '<div class="ezx-rc-wirow"><span class="lb">상한</span><span>' + esc(res.cap_note) + "</span></div>";
+    }
+    html += '<div class="ezx-rc-winote">' +
+      esc(res.assumptions || "읽기 전용 시뮬레이션 — 실제 데이터는 변경되지 않습니다") +
+      " · 엔진 " + esc(res.engine || "-") + "</div>";
+    return html;
+  }
+  function runWhatIf(m, node) {
+    var r = rcptOf(m);
+    if (!r || !r.whatif) return;
+    var out = node.querySelector("[data-ezx-wiout]");
+    var btn = node.querySelector("[data-ezx-whatif]");
+    var p = whatifParams(r);
+    var res = ezRun("simulate_whatif", p);
+    if (!res) res = { error: "시뮬레이션 도구(EZTools)가 로드되지 않았습니다." };
+    r.wiParams = p;
+    r.wiResult = res;
+    if (out) out.innerHTML = whatifHTML(res, p);
+    if (btn) btn.textContent = "↺ 다시 계산";
+    /* 실행 사실을 원장에 남겨 감사 칩이 실 id를 얻게 한다 (위조 ID 금지) */
+    if (!res.error && !res.blocked && window.EZLedger && EZLedger.add) {
+      try {
+        var b = res.before || {}, a = res.after || {};
+        /* 엔진 형상별 요약 — 개인 등급(fallback) vs 전사 분포(EZCalc) */
+        var lbl = (a.grade != null || b.grade != null)
+          ? ((b.grade || "-") + " → " + (a.grade || "-"))
+          : (res.moved_pp != null ? "전사 분포 " + res.moved_pp + "pp 재배치" : "재계산");
+        var ent = EZLedger.add({
+          type: "audit",
+          source: "elizax.whatif",
+          title: "What-if 재계산 · " + lbl,
+          summary: "달성률 " + p.achievement_delta + "%p" +
+            (p.cap_pct != null ? " · 상한 " + p.cap_pct + "%" : "") + " 가정 · 읽기 전용",
+          weight: 1
+        });
+        if (ent && ent.id) {
+          if (!m.meta) m.meta = {};
+          m.meta.ledgerId = ent.id;
+          var ac = node.querySelector("[data-ezx-audit]");
+          if (ac) ac.outerHTML = auditChip(m);
+        }
+      } catch (e) { /* 원장 오류 무시 */ }
+    }
+    if (m.meta) m.meta.receipt = r;
+    saveHistory();
+    scrollToBottom();
+  }
+
+  /* ---- 인용 3등급을 카드 안에서도 유지 (F15) ----
+     판정 주체는 tx_ctx_ledger(실인용 ctxCited / 추측 .guess / 0건 "기록 없음").
+     카드는 msg.meta의 그 판정을 그대로 읽어 같은 등급을 표시한다 — 자체 승격 금지. */
+  /* 원장에 실제로 존재하는 id만 인정 — 스트립(tx_ctx_ledger)과 같은 기준으로 세지 않으면
+     카드는 "추정 근거 4건", 스트립은 "기록 없음"으로 어긋난다. */
+  function resolveRefs(refs) {
+    if (Object.prototype.toString.call(refs) !== "[object Array]" || !refs.length) return [];
+    if (!window.EZLedger || !EZLedger.list) return refs.slice();
+    var idx = {}, ok = [], i;
+    try {
+      (EZLedger.list() || []).forEach(function (it) { if (it && it.id) idx[it.id] = 1; });
+    } catch (e) { return refs.slice(); }
+    for (i = 0; i < refs.length; i++) if (idx[refs[i]]) ok.push(refs[i]);
+    return ok;
+  }
+  function citeChip(m) {
+    var meta = (m && m.meta) || {};
+    var refs = resolveRefs(meta.ctxRefs);
+    if (meta.ctxCited === true && refs && refs.length) {
+      return '<span class="ezk-chip ezx-rc-cite cited" data-ezx-cite title="AI가 실제로 인용한 성과 기록">' +
+        "&#10003; 인용 근거 " + refs.length + "건</span>";
+    }
+    if (refs && refs.length) {
+      return '<span class="ezk-chip ezx-rc-cite guess" data-ezx-cite title="관련일 수 있는 기록 — 실인용 아님">' +
+        "&#9702; 추정 근거 " + refs.length + "건</span>";
+    }
+    return '<span class="ezk-chip ezx-rc-cite none" data-ezx-cite title="이 답변을 뒷받침하는 성과 기록이 없습니다">' +
+      "&#9888; 뒷받침 기록 없음</span>";
+  }
+  function syncCiteChip(m) {
+    var node = m && m._node;
+    if (!node || !node.parentNode) return;
+    var cur = node.querySelector("[data-ezx-cite]");
+    if (!cur) return;
+    var next = citeChip(m);
+    if (cur.outerHTML !== next) cur.outerHTML = next;
+  }
+  function scheduleCiteSync(m) {
+    /* tx_ctx_ledger는 messages 이벤트 240ms 뒤에 근거를 판정해 meta에 기록한다 */
+    [360, 780, 1500].forEach(function (d) { setTimeout(function () { syncCiteChip(m); }, d); });
+  }
+
+  function receiptBodyHTML(m) {
+    var r = rcptOf(m) || {};
+    var html = "";
+    if (r.metrics && r.metrics.length) {
+      html += '<div class="ezx-rc-metrics">';
+      r.metrics.forEach(function (x) {
+        html += '<div class="ezx-rc-metric"><span class="k">' + esc(x.k) + '</span><span class="v">' + esc(x.v) + "</span>" +
+          (x.sub ? '<span class="s">' + esc(x.sub) + "</span>" : "") + "</div>";
+      });
+      html += "</div>";
+    }
+    html += '<div class="ezx-rc-body">' + mdToHtml(stripCtxMarker(m.text || "")) + "</div>";
+    if (r.srcs && r.srcs.length) {
+      html += '<div class="ezx-rc-srcs"><span class="lb">근거</span>';
+      r.srcs.forEach(function (s) {
+        html += (window.EZKit && EZKit.src) ? EZKit.src(s.kind, s.label)
+          : '<span class="ezk-chip">' + esc(s.label) + "</span>";
+      });
+      html += "</div>";
+    }
+    if (r.whatif) {
+      html += '<div class="ezx-rc-wi">' +
+        '<button type="button" class="ezx-rc-wibtn" data-ezx-whatif>' +
+        (r.wiResult ? "↺ 다시 계산" : "↺ What-if 재계산") + "</button>" +
+        '<span class="ezx-rc-wihint">읽기 전용 · 실제 평가 데이터는 변경되지 않습니다</span>' +
+        '<div class="ezx-rc-wiout" data-ezx-wiout>' +
+        (r.wiResult ? whatifHTML(r.wiResult, r.wiParams || whatifParams(r)) : "") +
+        "</div></div>";
+    }
+    return html;
+  }
+
+  function buildReceiptNode(m) {
+    ensureRcptStyles();
+    var r = rcptOf(m) || {};
+    var node = h("div", "ezx-msg ai ezx-rcptmsg");
+    var chips = (r.offline ? statusChip("suggest", "AI 미연결 · 로컬 데이터 조회") : statusChip("approve", "승인 필요"))
+      + citeChip(m) + auditChip(m);
+    var body = receiptBodyHTML(m);
+    if (window.EZKit && EZKit.receipt) {
+      node.innerHTML = EZKit.receipt({ title: r.title, chips: chips, body: body });
+    } else {
+      node.innerHTML = '<div class="ezk-receipt ezx-rc-fallback"><div class="ezk-receipt-head">' +
+        '<span class="ezk-receipt-title">' + esc(r.title || "확인 결과") + "</span>" +
+        '<span class="ezk-chip ezk-asof">&#128204; 기준 ' +
+        esc(window.EZKit && EZKit.clock ? EZKit.clock.asOf() : "2026-07-16 06:00") + "</span>" +
+        chips + '</div><div class="ezk-receipt-body">' + body + "</div></div>";
+    }
+    var wbtn = node.querySelector("[data-ezx-whatif]");
+    if (wbtn) wbtn.addEventListener("click", function () { runWhatIf(m, node); });
+    if (m.note) node.appendChild(h("div", "ezx-note" + (m.noteWarn ? " warn" : ""), { text: m.note }));
+    if (m.recos && m.recos.length) node.appendChild(buildRecos(m.recos));
+    m._node = node;
+    m._bubble = node.querySelector(".ezx-rc-body");
+    scheduleCiteSync(m);
+    return node;
+  }
+
   function buildMsgNode(m) {
     if (m.role === "work") {
       var wnode = h("div", "ezx-msg work ezx-work");
@@ -710,6 +1017,8 @@
       }
       return snode;
     }
+    /* 영수증형 답변 → 전용 카드 (스트리밍 중에는 기존 말풍선 유지) */
+    if (m.role === "ai" && !m.streaming && rcptOf(m)) return buildReceiptNode(m);
     var node = h("div", "ezx-msg " + (m.role === "user" ? "user" : m.role === "err" ? "err" : "ai"));
     var bubble = h("div", "ezx-bubble");
     if (m.role === "user") bubble.textContent = m.text;
@@ -844,6 +1153,14 @@
     if (aiMode() === "offline" && window.TXAgent && window.TXAgent.intentFor) {
       var scnKey = null;
       try { scnKey = window.TXAgent.intentFor(userText); } catch (e) { /* ignore */ }
+      /* "오늘 점심 뭐 먹지"가 /오늘/ 한 단어로 home 브리핑 카드에 삼켜지던 오검출 차단 (G4).
+         범용 home 라우팅은 홈·브리핑을 명시했을 때만 인정하고, 나머지는 의도 분기로 넘긴다. */
+      if (scnKey === "home" && !/(브리핑|홈\s|^홈|홈으로|홈 |처음\s*화면|오늘\s*(할|일정|업무|브리핑))/.test(String(userText))) scnKey = null;
+      /* 자기 데이터를 묻는 질문은 대본 시나리오가 가로채지 않는다 — "내 목표 진척"에
+         데모 체크인 카드를 띄우면 실제 수치를 물은 사람에게 각본을 답으로 주는 셈이다.
+         시나리오는 제안 칩이나 명시적 요청("시나리오/데모/워크스페이스")으로 실행한다. */
+      if (scnKey && /(^|\s)(내|나의|제|저의)\s*\S*(목표|KR|핵심\s*성과|진척|체크인|등급|평가|피드백|근거)/.test(String(userText))
+          && !/(시나리오|데모|워크스페이스|허브)/.test(String(userText))) scnKey = null;
       if (scnKey) { runScenarioInChat(scnKey, userText); return; }
     }
     // guard: manager/executive needs a subject
@@ -878,7 +1195,7 @@
     if (ids.actor_emp_id) body.actor_emp_id = ids.actor_emp_id;
 
     if (agentReady) agentRespond(body, aiMsg);
-    else streamChat(body, aiMsg);
+    else streamChat(body, aiMsg, userText);   /* 오프라인 의도 분기는 원문 질문이 필요 (G4) */
   }
 
   function finishStreaming() {
@@ -1005,9 +1322,9 @@
     });
   }
 
-  function streamChat(body, aiMsg) {
+  function streamChat(body, aiMsg, userText) {
     var m = aiMode();
-    if (m === "offline") { offlineRespond(body, aiMsg); return; }
+    if (m === "offline") { offlineRespond(body, aiMsg, userText); return; }
     if (m === "direct") { directRespond(body, aiMsg); return; }
     var url = API_BASE + "/api/chat";
     fetch(url, {
@@ -1042,91 +1359,474 @@
     });
   }
 
-  /* ---------------- Offline mockup responder ----------------
-     No backend → build a verifiable answer-receipt (as-of / 근거 트레이스 /
-     감사 / 가정) from TALENX_DATA and stream it in char-batches. */
+  /* ---------------- Offline mockup responder (G4) ----------------
+     키/백엔드 미설정 기본 배포 경로. 관점(perspective)만 보고 등급 영수증을
+     찍던 예전 동작을 폐기하고, 질문 텍스트의 의도를 읽어 분기한다.
+     - 도메인 의도면 EZTools로 로컬 목업 데이터를 실제 조회해 영수증으로 답한다.
+     - 화면 이동 요청이면 답변 대신 실제로 이동한다.
+     - 어떤 의도에도 맞지 않으면 가짜 영수증을 만들지 않고 "AI 미연결"을 알린다. */
   function evalOf(empId) {
     var evs = Array.isArray(DATA.evaluations) ? DATA.evaluations : [];
     return evs.find(function (e) { return e.emp_id === empId; }) || null;
   }
-  function objsOwnedBy(empId) {
-    var objs = Array.isArray(DATA.objectives) ? DATA.objectives : [];
-    return objs.filter(function (o) { return o.owner_emp_id === empId; });
+  /* (구 objsOwnedBy/krsOf 폴백은 EZTools.get_objectives 실조회로 대체돼 제거) */
+  /* --- 로컬 도구 실행 래퍼 — 오프라인이어도 목업 데이터는 로컬에 있다 --- */
+  function ezRun(name, input) {
+    if (!window.EZTools || !EZTools.run) return null;
+    try { return EZTools.run(name, input || {}); } catch (e) { return null; }
   }
-  function krsOf(objId) {
-    var krs = Array.isArray(DATA.keyResults) ? DATA.keyResults : [];
-    return krs.filter(function (k) { return k.objective_id === objId; });
+  function roleKey() {
+    try {
+      return (window.CU && CU._role) ||
+        (window.TXRoles && TXRoles.current && (TXRoles.current() || {}).key) || "member";
+    } catch (e) { return "member"; }
   }
-  function offlineReceipt(body) {
-    var p = body.perspective || "subject";
-    var subjName = (needsSubject(p) && state.subject) ? state.subject.name : CURRENT.name;
-    var subjId = body.emp_id || CURRENT.emp_id;
-    var ev = evalOf(subjId);
-    var grade = ev ? ev.grade : "B+";
-    var score = ev ? ev.weighted_score : 73.3;
-    var owned = objsOwnedBy(subjId);
-    var objCount = owned.length;
-    /* 기준 시점 단일 발급 (EZClock) — 드리프트 해소 (P6) */
-    var asof = window.EZKit && EZKit.clock ? "기준 " + EZKit.clock.asOf() : "기준 2026-07-16 06:00";
-    var md = "", recos = [];
+  function offSrc(kind, label) { return { kind: kind, label: label }; }
+  /* 영수증 카드 서술자 — 렌더는 buildReceiptNode (F15) */
+  function offRc(o) {
+    o = o || {};
+    return {
+      title: o.title || "확인 결과",
+      metrics: o.metrics || [],
+      srcs: o.srcs || [],
+      whatif: o.whatif || null,
+      offline: true
+    };
+  }
+  function pctOf(v) { return (v == null) ? "-" : v + "%"; }
 
-    if (p === "manager") {
-      md =
-        "**기준 시점** · " + asof + "\n\n" +
-        "**" + subjName + "**님 등급 초안은 **" + grade + "** (종합 " + score + "/100)입니다. 팀 대비 실행 일관성이 안정적입니다.\n\n" +
-        "**계산·근거**\n" +
-        "- `ERP` 목표 달성률 집계 → 종합 " + score + "/100 `평가기록 FY2026`\n" +
-        "- `평가규정 v3.1` 등급 매핑 · §12\n" +
-        "- `talenx` 팀 내 1:1·피어리뷰 대조\n\n" +
-        "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 우리 팀\n\n" +
-        "**가정** · 강제배분(상위 S~A ≤ 30%) 적용 시 팀 등급 분포를 재계산할 수 있습니다.\n\n" +
-        "> ⚠ 자동 확정 아님 — 승인/수정/보류는 조직장이 결정합니다.";
-    } else if (p === "hr") {
-      md =
-        "**기준 시점** · " + asof + "\n\n" +
-        "전사 평가 운영 관점 요약입니다. 관대화·미연결 신호를 먼저 보고합니다.\n\n" +
-        "**계산·근거**\n" +
-        "- `평가규정 v3.1` 등급 비율 규칙 · 강제배분 상한 30%\n" +
-        "- `talenx` 목표 정렬·가중치 합 검증 `가중치 합 규칙`\n" +
-        "- `ERP` 실적 대조 → 등급 상승폭 설명력 점검\n\n" +
-        "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 전사\n\n" +
-        "**가정** · 특정 본부에 강제배분 적용 시 전사 분포 변화를 재계산할 수 있습니다.\n\n" +
-        "> 민감 이슈(관대화·편향)는 재검토만 제안하며 자동 수정하지 않습니다.";
-    } else if (p === "executive") {
-      md =
-        "**기준 시점** · " + asof + "\n\n" +
-        "전사 성과 조망입니다. 목표 정렬 상태와 등급 분포 리스크를 요약합니다.\n\n" +
-        "**계산·근거**\n" +
-        "- `talenx` 전사 목표 트리 정렬 상태\n" +
-        "- `ERP` 전사 매출 달성률 대비 진척\n" +
-        "- `통계·분포` 본부 간 등급 분포 편차\n\n" +
-        "**감사** · 감사 로그 기록됨 · 탐색 범위: 전사\n\n" +
-        "**가정** · 목표 미연결 항목 정렬 시 전사 정렬률 지표 재계산.";
-    } else {
-      md =
-        "**기준 시점** · " + asof + "\n\n" +
-        subjName + "님 상반기 등급 초안은 **" + grade + "** (종합 " + score + "/100)입니다. 목표 달성률과 피어리뷰가 안정적입니다.\n\n" +
-        "**계산·근거**\n" +
-        "- `ERP` 목표 달성률 집계 → 종합 " + score + "/100 `평가기록 FY2026`\n" +
-        "- `평가규정 v3.1` 등급 매핑 (초과달성 120%↑) · §12\n" +
-        "- `talenx` 중간 1:1 기록 대조\n\n" +
-        "**감사** · 감사 로그 기록됨 · 탐색 범위: 권한 내 본인\n\n" +
-        "**가정** · 달성률 -10%p 가정 시 등급이 한 단계 하향될 수 있습니다(재계산 가능).\n\n" +
-        "현재 담당 목표 " + objCount + "건 기준입니다.";
-      owned.slice(0, 2).forEach(function (o) {
-        recos.push({
-          objective: o.title,
-          rationale: "진행률 " + (o.progress != null ? o.progress + "%" : "-") + " · " + (o.status || ""),
-          krs: krsOf(o.objective_id).slice(0, 2).map(function (k) {
-            return { name: k.name, target: k.target_value, weight: k.weight, difficulty: k.difficulty };
-          })
-        });
+  /* --- 의도 분기표 (배열 순서 = 우선순위) --- */
+  var OFF_INTENTS = [
+    ["whatif", /(만약|가정했|가정하|what\s*-?if|시뮬|재계산|바뀌면|떨어지면|올라가면|[-+]?\d+\s*%\s*p)/i],
+    /* org·team이 grade보다 앞 — "전사 등급 분포"가 개인 등급으로 새지 않게 */
+    ["org", /(전사|회사\s*전체|등급\s*분포|인원\s*현황|조직\s*현황|본부\s*별)/],
+    ["team", /(팀원|우리\s*팀|팀\s*현황|팀\s*상황|부서원|구성원\s*현황)/],
+    ["grade", /(등급|고과|평가\s*결과|평가\s*점수|종합\s*점수|내\s*평가|평가는|평가\s*근거)/],
+    ["checkin", /(체크인|주간\s*보고|진행\s*보고|블로커|막힌)/],
+    ["goal", /(목표|okr|\bkr\b|진척|진행\s*상황|달성률|달성도|진도)/i],
+    ["feedback", /(피드백|360|다면|상향\s*평가|상향\s*피드백)/],
+    ["oneonone", /(1\s*on\s*1|1\s*:\s*1|원온원|면담|일대일)/i],
+    ["job", /(직무|역량|스킬|과업|커리어|직무\s*기준)/],
+    ["work", /(근무|근태|출퇴근|휴가|연차|초과\s*근무|재택)/],
+    ["pay", /(급여|월급|명세서|연말\s*정산|수당|상여)/]
+  ];
+  var OFF_GREET = /^(안녕|하이|반가|고마|감사|수고|ㅎㅇ|헬로|hi|hello|hey|누구|뭐\s*해|뭐하|테스트|test)/i;
+  /* 약한 이동 동사 — "급여명세서 열어줘"처럼 화면 단어 없이 말한 경우 보강 판정 */
+  var OFF_NAV_VERB = /(열어|띄워|이동|가\s*줘|가줘|넘어가|바로\s*가)/;
+
+  function offlineIntent(text) {
+    var t = String(text || "").trim();
+    if (!t) return "unknown";
+    if (t.length <= 24 && OFF_GREET.test(t)) return "greet";
+    for (var i = 0; i < OFF_INTENTS.length; i++) {
+      if (OFF_INTENTS[i][1].test(t)) return OFF_INTENTS[i][0];
+    }
+    return "unknown";
+  }
+  function offlineNav(text) {
+    if (!window.EZNav || !EZNav.resolve) return null;
+    var t = String(text || "");
+    var hit = null;
+    try { hit = EZNav.resolve(t); } catch (e) { hit = null; }
+    if (hit) return hit;
+    if (!OFF_NAV_VERB.test(t)) return null;
+    /* 화면 단어를 보태 EZNav의 이동 의도 판정을 통과시킨 뒤 동일 라우팅표로 해석 */
+    try { return EZNav.resolve(t + " 화면으로") || null; } catch (e2) { return null; }
+  }
+
+  /* ---- 의도별 응답 빌더 — 모두 {text, recos?, receipt?} 또는 null ---- */
+  function offBlocked(sname, policy) {
+    return { text: sname + "님의 해당 기록은 열람 규칙에 따라 표시하지 않습니다.\n\n> " + (policy || "정책 v3.1") };
+  }
+
+  function offGoal(sid, sname) {
+    var r = ezRun("get_objectives", { emp_id: sid });
+    if (!r || r.error) return null;
+    if (r.blocked) return offBlocked(sname, r.policy);
+    var objs = r.objectives || [];
+    if (!objs.length) {
+      return { text: sname + "님 이름으로 등록된 목표가 로컬 데이터에 없습니다. 성과관리 › 목표 현황에서 새 목표를 만들 수 있습니다." };
+    }
+    var sum = 0;
+    objs.forEach(function (o) { sum += (o.progress || 0); });
+    var avg = Math.round(sum / objs.length * 10) / 10;
+    var krCount = 0;
+    objs.forEach(function (o) { krCount += (o.key_results || []).length; });
+    var md = sname + "님의 담당 목표는 **" + objs.length + "건**, 평균 진척 **" + avg + "%** 입니다.\n\n";
+    md += "| 목표 | 진척 | 상태 | KR |\n| --- | --- | --- | --- |\n";
+    objs.slice(0, 5).forEach(function (o) {
+      md += "| " + o.title + " | " + pctOf(o.progress) + " | " + (o.status || "-") + " | " + ((o.key_results || []).length) + "개 |\n";
+    });
+    var recos = objs.slice(0, 2).map(function (o) {
+      return {
+        objective: o.title,
+        rationale: "진행률 " + pctOf(o.progress) + " · " + (o.status || ""),
+        krs: (o.key_results || []).slice(0, 2).map(function (k) {
+          return { name: k.name, target: k.target, weight: k.weight };
+        })
+      };
+    });
+    return {
+      text: md, recos: recos,
+      receipt: offRc({
+        title: sname + " · 목표 진척",
+        metrics: [
+          { k: "담당 목표", v: objs.length + "건" },
+          { k: "평균 진척", v: avg + "%" },
+          { k: "KR", v: krCount + "개" }
+        ],
+        srcs: [offSrc("talenx", "talenx 목표·KR"), offSrc("erp", "체크인 진척 스냅샷")],
+        whatif: { emp_id: sid, name: sname }
+      })
+    };
+  }
+
+  function offCheckin(sid, sname) {
+    var r = ezRun("get_checkins", { emp_id: sid, limit: 5 });
+    if (!r || r.error) return null;
+    if (r.blocked) return offBlocked(sname, r.policy);
+    var cs = r.checkins || [];
+    if (!cs.length) return { text: sname + "님의 체크인 기록이 로컬 데이터에 없습니다." };
+    var blockers = cs.filter(function (c) { return !!c.blocker; });
+    var md = sname + "님의 최근 체크인 **" + cs.length + "건**입니다. 마지막 기록은 **" + (cs[0].date || "-") + "**.\n\n";
+    cs.forEach(function (c) {
+      md += "- **" + (c.date || "-") + "** · 진척 " + pctOf(c.progress) +
+        (c.delta != null ? " (" + (c.delta > 0 ? "+" : "") + c.delta + "%p)" : "") +
+        (c.confidence ? " · 확신 " + c.confidence : "") +
+        (c.blocker ? " · 블로커 " + c.blocker : "") +
+        (c.comment ? " — " + c.comment : "") + "\n";
+    });
+    return {
+      text: md,
+      receipt: offRc({
+        title: sname + " · 체크인 기록",
+        metrics: [
+          { k: "최근 체크인", v: cs.length + "건" },
+          { k: "마지막", v: cs[0].date || "-" },
+          { k: "블로커", v: blockers.length + "건" }
+        ],
+        srcs: [offSrc("erp", "체크인 원장"), offSrc("talenx", "talenx KR 연결")]
+      })
+    };
+  }
+
+  function offGrade(sid, sname) {
+    var r = ezRun("get_employee_profile", { emp_id: sid });
+    var ev = r && r.evaluation;
+    if (ev && ev.policy) return offBlocked(sname, ev.policy);
+    var raw = evalOf(sid);
+    if (!ev && !raw) return { text: sname + "님의 확정 평가 기록이 로컬 데이터에 없습니다." };
+    var grade = (ev && ev.grade) || (raw && raw.grade);
+    var score = (ev && ev.weighted_score) != null ? ev.weighted_score : (raw && raw.weighted_score);
+    var period = (ev && ev.period) || (raw && raw.period) || "";
+    var c = (raw && raw.components) || {};
+    var md = sname + "님 " + period + " 등급은 **" + grade + "** (종합 " + score + "/100)입니다.\n\n";
+    if (c.achievement_norm != null) {
+      md += "| 구성 요소 | 환산 점수 |\n| --- | --- |\n" +
+        "| 목표 달성 | " + c.achievement_norm + " |\n" +
+        "| 피어리뷰 | " + c.peer_strength_norm + " |\n" +
+        "| 실행 일관성 | " + c.exec_consistency_norm + " |\n";
+    }
+    if (raw && raw.rationale_summary) md += "\n" + raw.rationale_summary + "\n";
+    var rk = roleKey();
+    if (rk === "leader" || rk === "hr" || rk === "exec") {
+      md += "\n> 강제배분(상위 S~A 상한) 적용 여부에 따라 분포가 달라질 수 있습니다 — 아래 What-if로 재계산하세요.";
+    }
+    md += "\n> 확정 아님 — 승인·수정·보류는 사람이 결정합니다.";
+    return {
+      text: md,
+      receipt: offRc({
+        title: sname + " · 등급 산출",
+        metrics: [
+          { k: "등급", v: String(grade) },
+          { k: "종합 점수", v: score + "/100" },
+          { k: "기간", v: period || "-" }
+        ],
+        srcs: [offSrc("talenx", "평가기록 " + (period || "")), offSrc("rule", "평가규정 v3.1 §12"), offSrc("erp", "실적 대조")],
+        whatif: { emp_id: sid, name: sname }
+      })
+    };
+  }
+
+  function offTeam() {
+    var r = ezRun("get_team_status", {});
+    if (!r || r.error) return null;
+    var rows = r.members || [];
+    if (!rows.length) return { text: "직속 팀원 데이터가 로컬에 없습니다." };
+    var withP = rows.filter(function (m) { return m.avg_progress != null; });
+    var avg = withP.length ? Math.round(withP.reduce(function (s, m) { return s + m.avg_progress; }, 0) / withP.length * 10) / 10 : null;
+    var blk = rows.filter(function (m) { return !!m.blocker; });
+    var md = "팀원 **" + rows.length + "명** 현황입니다. 평균 진척 **" + (avg == null ? "-" : avg + "%") + "**.\n\n";
+    md += "| 이름 | 목표 | 평균 진척 | 마지막 체크인 | 등급 초안 |\n| --- | --- | --- | --- | --- |\n";
+    rows.slice(0, 10).forEach(function (m) {
+      md += "| " + m.name + " | " + m.objectives + "건 | " + pctOf(m.avg_progress) + " | " +
+        (m.last_checkin || "-") + " | " + (m.grade_draft || "비노출") + " |\n";
+    });
+    if (blk.length) {
+      md += "\n블로커가 보고된 팀원 " + blk.length + "명: " + blk.map(function (m) { return m.name + "(" + m.blocker + ")"; }).join(", ") + "\n";
+    }
+    return {
+      text: md,
+      receipt: offRc({
+        title: "팀 현황",
+        metrics: [
+          { k: "팀원", v: rows.length + "명" },
+          { k: "평균 진척", v: (avg == null ? "-" : avg + "%") },
+          { k: "블로커", v: blk.length + "명" }
+        ],
+        srcs: [offSrc("talenx", "talenx 팀 목표"), offSrc("erp", "체크인 대조"), offSrc("rule", "열람 규칙 v3.1")]
+      })
+    };
+  }
+
+  function offOrg() {
+    var r = ezRun("get_org_overview", {});
+    if (!r || r.error) return null;
+    var dist = r.grade_distribution || {};
+    var keys = Object.keys(dist).sort();
+    var total = 0;
+    keys.forEach(function (k) { total += dist[k]; });
+    var top = (dist.S || 0) + (dist.A || 0);
+    var topPct = total ? Math.round(top * 1000 / total) / 10 : 0;
+    var md = (r.company || "전사") + " 인원 **" + r.employees + "명** 기준 등급 분포입니다.\n\n";
+    md += "| 등급 | 인원 | 비율 |\n| --- | --- | --- |\n";
+    keys.forEach(function (k) {
+      md += "| " + k + " | " + dist[k] + "명 | " + (total ? Math.round(dist[k] * 1000 / total) / 10 : 0) + "% |\n";
+    });
+    var cobj = r.company_objectives || [];
+    if (cobj.length) {
+      md += "\n전사 목표 " + cobj.length + "건\n";
+      cobj.slice(0, 4).forEach(function (o) {
+        md += "- " + o.title + " · 진척 " + pctOf(o.progress) + " · " + (o.status || "") + "\n";
       });
     }
-    return { text: md, recos: recos };
+    return {
+      text: md,
+      receipt: offRc({
+        title: "전사 성과 조망",
+        metrics: [
+          { k: "인원", v: r.employees + "명" },
+          { k: "상위등급(S+A)", v: topPct + "%" },
+          { k: "전사 목표", v: cobj.length + "건" }
+        ],
+        srcs: [offSrc("talenx", "전사 평가기록"), offSrc("rule", "강제배분 상한 30%"), offSrc("erp", "사업 실적")],
+        whatif: { cap_pct: 30 }
+      })
+    };
   }
-  function offlineRespond(body, aiMsg) {
-    var built = offlineReceipt(body);
+
+  function offFeedback(sid, sname) {
+    var rk = roleKey();
+    if (rk === "leader" || rk === "hr" || rk === "exec") {
+      var uf = ezRun("get_upward_feedback", {});
+      if (uf && uf.items && uf.items.length) {
+        var md0 = "상향 피드백 **" + uf.items.length + "건**입니다 (응답자 보호 · 익명 집계).\n\n";
+        uf.items.forEach(function (it) {
+          if (it.note) { md0 += "- " + (it.period || "") + " — " + it.note + "\n"; return; }
+          md0 += "- **" + (it.period || "") + "** · 응답 " + (it.respondents || 0) + "명 · " +
+            (it.themes || []).map(function (t) { return (t.label || t.theme || t.name || t); }).join(" · ") + "\n";
+        });
+        return {
+          text: md0,
+          receipt: offRc({
+            title: "상향 피드백",
+            metrics: [{ k: "기록", v: uf.items.length + "건" }],
+            srcs: [offSrc("talenx", "상향 피드백"), offSrc("rule", "응답자 보호 정책 v3.1")]
+          })
+        };
+      }
+    }
+    var pc = ezRun("get_prev_cycle", { emp_id: sid });
+    if (pc && pc.blocked) return offBlocked(sname, pc.policy);
+    var fb = (pc && pc.feedback) || [];
+    if (!fb.length) return { text: sname + "님에게 축적된 피드백 기록이 로컬 데이터에 없습니다." };
+    var md = sname + "님에게 남은 피드백 **" + fb.length + "건**입니다.\n\n";
+    fb.forEach(function (f) {
+      md += "- **" + (f.period || "") + "** · " + (f.source_type || "") + " — " + (f.summary || "") + "\n";
+    });
+    return {
+      text: md,
+      receipt: offRc({
+        title: sname + " · 피드백 이력",
+        metrics: [{ k: "피드백", v: fb.length + "건" }],
+        srcs: [offSrc("talenx", "피드백 이력")]
+      })
+    };
+  }
+
+  function offOneOnOne(sname) {
+    var list = [];
+    if (window.EZLedger && EZLedger.list) {
+      try {
+        list = (EZLedger.list() || []).filter(function (it) { return it && it.type === "oneonone"; });
+      } catch (e) { list = []; }
+    }
+    if (!list.length) {
+      return { text: "로컬에 저장된 1:1 기록이 없습니다. 성과관리 › 1:1 미팅에서 기록을 남기면 이후 답변의 근거로 쓰입니다." };
+    }
+    var md = sname + "님과 연결된 1:1 기록 **" + list.length + "건**입니다.\n\n";
+    list.slice(0, 5).forEach(function (it) {
+      md += "- **" + (it.at || "") + "** " + it.title + (it.summary ? " — " + it.summary : "") + "\n";
+    });
+    return {
+      text: md,
+      receipt: offRc({
+        title: "1:1 기록",
+        metrics: [{ k: "기록", v: list.length + "건" }],
+        srcs: [offSrc("talenx", "성과 기록 원장")]
+      })
+    };
+  }
+
+  function offJob(sid, sname) {
+    var r = ezRun("get_job_profile", { emp_id: sid });
+    if (!r || r.error) return { text: (r && r.error) || (sname + "님의 직무 프로파일을 찾지 못했습니다.") };
+    var p = r.profile || {};
+    var md = sname + "님의 직무는 **" + (p.title || r.jobTitle || "-") + "** (" + (p.group || "") + (p.series ? " · " + p.series : "") + ")입니다.\n\n";
+    if (p.mission) md += p.mission + "\n\n";
+    var areas = p.task_areas || [];
+    if (areas.length) {
+      md += "주요 과업\n";
+      areas.slice(0, 3).forEach(function (a) {
+        md += "- **" + a.area + "** — " + (a.tasks || []).slice(0, 3).join(" / ") + "\n";
+      });
+      md += "\n";
+    }
+    var comps = p.competency_profile || [];
+    if (comps.length) {
+      md += "직무 기준 역량\n";
+      comps.forEach(function (c) { md += "- " + c.name + " · 가중 " + c.weight + "\n"; });
+      md += "\n";
+    }
+    var sk = (p.skills || []).slice(0, 8).map(function (s) { return s.name; });
+    if (sk.length) md += "기대 스킬 — " + sk.join(", ") + "\n";
+    return {
+      text: md,
+      receipt: offRc({
+        title: sname + " · 직무 기준",
+        metrics: [
+          { k: "과업 영역", v: areas.length + "개" },
+          { k: "기준 역량", v: comps.length + "종" },
+          { k: "기대 스킬", v: (p.skills || []).length + "종" }
+        ],
+        srcs: [offSrc("talenx", "직무 프로파일 " + (p.job_id || "")), offSrc("rule", "역량 사전")]
+      })
+    };
+  }
+
+  function offWhatIf(sid, sname, text) {
+    var t = String(text || "");
+    var delta = null, cap = null;
+    var dm = /([+-]?\d+(?:\.\d+)?)\s*%\s*p/i.exec(t);
+    if (dm) delta = Number(dm[1]);
+    if (delta == null) {
+      var dm2 = /(달성률|달성도|실적|진척)[^0-9+-]{0,8}([+-]?\d+(?:\.\d+)?)/.exec(t);
+      if (dm2) delta = Number(dm2[2]);
+    }
+    var cm = /(상한|강제\s*배분|배분|캡|cap)[^0-9]{0,8}(\d+(?:\.\d+)?)/i.exec(t);
+    if (cm) cap = Number(cm[2]);
+    if (delta != null && /하락|떨어|하향|감소|낮아/.test(t) && delta > 0) delta = -delta;
+    if (delta == null && cap == null) delta = -10;
+    var wi = { emp_id: sid, name: sname };
+    if (delta != null) wi.achievement_delta = delta;
+    if (cap != null) wi.cap_pct = cap;
+    var md = sname + "님 기준으로 " +
+      (delta != null ? "달성률 **" + delta + "%p**" : "") +
+      (delta != null && cap != null ? " · " : "") +
+      (cap != null ? "상위등급 상한 **" + cap + "%**" : "") +
+      " 가정의 재계산을 준비했습니다. 아래 **[↺ What-if 재계산]**을 누르면 로컬 엔진이 실계산합니다.\n\n" +
+      "> 읽기 전용 — 실제 평가 데이터는 변경되지 않습니다.";
+    return {
+      text: md,
+      receipt: offRc({
+        title: sname + " · What-if 가정",
+        metrics: [
+          { k: "달성률 가정", v: (delta == null ? "-" : delta + "%p") },
+          { k: "배분 상한", v: (cap == null ? "미적용" : cap + "%") }
+        ],
+        srcs: [offSrc("rule", "평가규정 v3.1 등급컷"), offSrc("talenx", "현재 평가기록")],
+        whatif: wi
+      })
+    };
+  }
+
+  function offNoData(kind) {
+    var m = (kind === "pay")
+      ? { label: "급여관리", what: "급여 명세·연말정산" }
+      : { label: "근무관리", what: "근무·휴가 기록" };
+    return {
+      text: "AI 미연결 상태입니다 — " + m.what + " 원천 데이터는 이 데모의 로컬 데이터셋에 없어 수치로 답할 수 없습니다. 지어내지 않겠습니다.\n\n" +
+        "지금 확인 가능한 것\n" +
+        "- **" + m.label + " 화면**에서 직접 조회 — \"" + m.label + " 화면으로 가줘\"라고 하면 이동합니다\n" +
+        "- 목표·체크인·평가 등급·팀 현황·직무 기준은 로컬 데이터로 바로 답할 수 있습니다"
+    };
+  }
+
+  function offGreet() {
+    return {
+      text: "안녕하세요, " + CURRENT.name + "님. elizax입니다.\n\n" +
+        "지금은 **AI 미연결** 상태라 로컬 데이터 조회로만 답합니다. 목표 진척 · 체크인 · 평가 등급 · 팀 현황 · 직무 기준 · What-if 재계산을 물어보세요."
+    };
+  }
+
+  function offUnknown() {
+    return {
+      text: "AI 미연결 상태입니다 — 이 질문은 연결 후 답할 수 있습니다 (헤더 ⚙에서 연결).\n\n" +
+        "지금 확인 가능한 것\n" +
+        "- 내 목표·KR 진척 — \"내 목표 진척 알려줘\"\n" +
+        "- 최근 체크인·블로커 — \"최근 체크인 보여줘\"\n" +
+        "- 평가 등급과 산출 근거 — \"내 등급 근거가 뭐야\"\n" +
+        "- 팀 현황 / 전사 등급 분포 — 조직장·HR 권한\n" +
+        "- 직무 기준·기대 역량 — \"내 직무 기준 알려줘\"\n" +
+        "- What-if 재계산 — \"달성률 -10%p면 등급 어떻게 돼?\"\n" +
+        "- 화면 이동 — \"급여 화면으로 가줘\""
+    };
+  }
+
+  /* 질문 의도 → 로컬 데이터 조회 → 영수증. 미매칭이면 가짜 영수증 대신 정직한 안내. */
+  function offlineReceipt(body, userText) {
+    var p = body.perspective || "subject";
+    var sid = body.emp_id || CURRENT.emp_id;
+    var sname = (needsSubject(p) && state.subject) ? state.subject.name : CURRENT.name;
+    var q = String(userText || "");
+    var intent = offlineIntent(q);
+    var out = null;
+    if (intent === "greet") out = offGreet();
+    else if (intent === "whatif") out = offWhatIf(sid, sname, q);
+    else if (intent === "grade") out = offGrade(sid, sname);
+    else if (intent === "checkin") out = offCheckin(sid, sname);
+    else if (intent === "goal") out = offGoal(sid, sname);
+    else if (intent === "team") out = offTeam();
+    else if (intent === "org") out = offOrg();
+    else if (intent === "feedback") out = offFeedback(sid, sname);
+    else if (intent === "oneonone") out = offOneOnOne(sname);
+    else if (intent === "job") out = offJob(sid, sname);
+    else if (intent === "work") out = offNoData("work");
+    else if (intent === "pay") out = offNoData("pay");
+    if (!out) { out = offUnknown(); intent = "unknown"; }
+    return {
+      text: out.text,
+      recos: out.recos || [],
+      receipt: out.receipt || null,
+      intent: intent
+    };
+  }
+
+  function offlineRespond(body, aiMsg, userText) {
+    /* ① 화면 이동 요청 — EZNav 1차 판정이 놓친 약한 표현("…열어줘")까지 실제 이동 */
+    var nav = offlineNav(userText);
+    if (nav) {
+      aiMsg.text = "화면 전환 · **" + nav.label + "**(으)로 이동합니다.";
+      aiMsg.streaming = false;
+      aiMsg.note = "AI 미연결 · 화면 이동은 로컬에서 처리";
+      finishStreaming();
+      renderMessages();
+      setTimeout(function () {
+        try { EZNav.go(nav.s, nav.p); } catch (e) { console.warn("[elizax nav]", e); }
+      }, 320);
+      return;
+    }
+    var built = offlineReceipt(body, userText);
     var full = built.text;
     var idx = 0;
     var step = Math.max(6, Math.round(full.length / 40));
@@ -1140,7 +1840,15 @@
       } else {
         aiMsg.streaming = false;
         if (built.recos && built.recos.length) aiMsg.recos = built.recos;
-        aiMsg.note = "오프라인 예시 응답 · 실시간 AI 미연결";
+        aiMsg.receipt = built.receipt || null;
+        if (built.receipt) {
+          if (!aiMsg.meta) aiMsg.meta = {};
+          aiMsg.meta.receipt = built.receipt;   /* 세션 복원 후에도 카드로 남도록 */
+        }
+        aiMsg.note = built.receipt
+          ? "AI 미연결 · 로컬 데이터 조회 결과"
+          : (built.intent === "unknown" ? "AI 미연결 — 연결 후 답변 가능" : "AI 미연결 · 로컬 확인 결과");
+        aiMsg.noteWarn = built.intent === "unknown";
         finishStreaming();
         renderMessages();
       }

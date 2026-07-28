@@ -4,7 +4,7 @@
        thin hollow ring gauges, initial-circle avatars, working sort/filter.
      • 360 피드백 요청/생성  → full-page routed overlay form (back ←).
      • 결과 확인             → full-page routed 결과 screen (back ←) with 문항 cards,
-       per-question text answers, 응답 비율 토글, AI 감정분석, 역량 radar.
+       per-question text answers, 응답 비율 토글, 응답 집계(산술)+elizax 서술 요약(실AI), 역량 radar.
    Overrides the wrong content (3-field modal / side drawer) wired in tx_revive.js by
    cloning the buttons (strip listeners) + binding direct handlers that stopPropagation
    to defeat the bubble-phase delegated revive handler.
@@ -133,8 +133,8 @@
         ringSVG(c.pct) +
         '<div class="mbody">' +
         '<div class="mtitle">' + esc(c.type) + ' <span class="badge b-org">종료</span>' +
-        /* v2 §11: 발견성 — 결과에 감정분석이 있음을 목록에서 표기 */
-        (c.answers && c.answers.length ? ' <span style="font-size:11px;font-weight:700;color:#356CB5;background:rgba(31,122,240,.08);border-radius:999px;padding:2px 9px">✦ 감정분석 제공</span>' : '') +
+        /* v2 §11: 발견성 — 결과에 무엇이 있는지 목록에서 표기 (집계=산술 / 요약=AI, 섞지 않는다) */
+        (c.answers && c.answers.length ? ' <span style="font-size:11px;font-weight:700;color:#356CB5;background:rgba(31,122,240,.08);border-radius:999px;padding:2px 9px">응답 집계 · ✦ AI 요약</span>' : '') +
         '</div>' +
         '<div class="msub">' + esc(c.reason) + '</div>' +
         '<div class="mppl">' +
@@ -335,30 +335,76 @@
         '<div class="txf-mlab" style="margin-top:18px">응답 마감 시각</div><div class="txf-box">' + kdate(c.deadline) + '</div>' +
         '</div>';
 
-      // sentiment
+      /* ============================================================
+         F8 — 응답 집계 / AI 서술 요약 분리 (정직화)
+         ① 응답 집계: a.s 라벨을 그대로 세는 산술 계산이다. AI 판정이 아니므로
+            "감정분석" 배지를 떼고 집계 방식·모집단(N)을 함께 표기한다.
+         ② AI 서술 요약: EZAI 실호출 결과만 싣는다. 미연결이면 문단을 만들지
+            않는다(예시 문단·지어낸 인용 금지). 근거 칩은 실제로 프롬프트에
+            넣은 문항·응답자 그룹만 표기한다.
+         ③ 응답자 보호: 익명 응답(평가자 목록 비공개)인데 응답자가
+            EZPolicy.ANON_MIN 미만이면 집계·요약 모두 비공개.
+         ============================================================ */
       var pos = 0, neu = 0, neg = 0;
       c.answers.forEach(function (a) { if (a.s === 'pos') pos++; else if (a.s === 'neg') neg++; else neu++; });
       var tot = c.answers.length || 1;
       var score = Math.round((pos + neu * 0.5) / tot * 100);
-      /* v2 §7 커버리지 의무 첫 적용: AI 산출물 표면은 최소 EZAsOf+EZSource. 마커 "AI"배지→✦ */
+      /* v2 §7 커버리지 의무: 산출물 표면은 최소 EZAsOf+EZSource */
       var K = window.EZKit;
+      var ANON_MIN = (window.EZPolicy && window.EZPolicy.ANON_MIN) || 3;
+      var namedRaters = (c.anon === '공개');   /* 평가자 목록 공개 = 기명 → 익명 임계 미적용 */
+      var suppressed = !namedRaters && c.resp < ANON_MIN;
       var sentTrust = K
         ? '<span class="txf-sent-trust" data-astryx-theme="talenx" style="display:inline-flex;gap:6px;margin-left:auto;font-weight:500">' +
           K.asof() + K.src('talenx', '360 응답 ' + c.answers.length + '건') + '</span>'
         : '<span style="margin-left:auto;font-size:11px;color:var(--ink-3);font-weight:600">기준 2026-07-16 06:00 · 360 응답 ' + c.answers.length + '건</span>';
-      var sentHTML = c.answers.length ?
-        ('<div class="txf-card txf-sent">' +
-          '<div class="txf-sent-h" style="display:flex;align-items:center;gap:6px"><span class="txf-ai" style="background:transparent;color:var(--blue,#1F7AF0)">✦</span> 감정분석' + sentTrust + '</div>' +
-          '<div class="txf-sent-bars">' +
-          sentBar('긍정', pos, tot, 'var(--blue)') + sentBar('중립', neu, tot, 'var(--ink-4)') + sentBar('부정', neg, tot, 'var(--red)') +
-          '</div>' +
-          '<p class="txf-sent-txt">전체 응답 ' + tot + '건 중 긍정 ' + pos + '건, 중립 ' + neu + '건, 부정 ' + neg + '건으로 분석되었습니다. ' +
-          '“책임감”, “기한 내 전달”, “도움” 등 협업 태도·자료 전달의 신뢰성에 대한 긍정 표현이 반복적으로 나타났으며, ' +
-          '개선 제안은 “진행 상황 중간 공유”와 “우선순위 명확화”에 집중되어 있습니다. ' +
-          '종합 감정 점수는 <b>' + score + '점(긍정 우세)</b>이며, 즉각적인 리스크 신호는 확인되지 않았습니다.</p>' +
-          '</div>') :
-        ('<div class="txf-card txf-sent"><div class="txf-sent-h"><span class="txf-ai" style="background:transparent;color:var(--blue,#1F7AF0)">✦</span> 감정분석</div>' +
-          '<p class="txf-sent-txt txf-muted">아직 응답이 없어 감정분석 결과를 제공할 수 없습니다. 평가자 응답이 접수되면 자동으로 분석됩니다.</p></div>');
+
+      /* ---- ① 응답 집계 (산술) ---- */
+      var aggHTML =
+        '<div class="txf-card txf-sent" data-txf-agg>' +
+        '<div class="txf-sent-h">응답 집계' + sentTrust + '</div>' +
+        '<div class="txf-sent-bars">' +
+        sentBar('긍정', pos, tot, 'var(--blue)') + sentBar('중립', neu, tot, 'var(--ink-4)') + sentBar('부정', neg, tot, 'var(--red)') +
+        '</div>' +
+        '<div class="txf-sent-meta">' +
+        '<b>집계 방식</b> 응답 등록 시 각 답변에 부여된 <b>긍정/중립/부정 라벨을 그대로 센 산술 집계</b>입니다 — AI가 문장을 읽고 판정한 값이 아닙니다.<br>' +
+        '<b>모집단 N</b> 문항 답변 ' + tot + '건 (응답자 ' + c.resp + ' / 대상 ' + c.total + '명' + (namedRaters ? ' · 기명' : ' · 익명') + ')<br>' +
+        '<b>종합 점수</b> (긍정 ' + pos + ' + 중립 ' + neu + '×0.5) ÷ ' + tot + ' × 100 = <b>' + score + '점</b> — 가중 평균일 뿐 별도 척도가 아닙니다.' +
+        '</div></div>';
+
+      /* ---- ② AI 서술 요약 (실호출 전용 · 스냅샷/이전 버전/재생성) ---- */
+      var aiLive = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready());
+      var aiBadge = K
+        ? (aiLive ? K.status('suggest') + '<span class="txf-livechip">● elizax 연결됨</span>'
+                  : '<span class="txf-offchip">○ elizax 미연결</span>')
+        : (aiLive ? '<span class="txf-livechip">● elizax 연결됨</span>' : '<span class="txf-offchip">○ elizax 미연결</span>');
+      var aiHTML =
+        '<div class="txf-card txf-sent" data-txf-ai>' +
+        '<div class="txf-sent-h"><span class="txf-ai" style="background:transparent;color:var(--blue,#1F7AF0)">✦</span> elizax 서술 요약' +
+        '<span class="txf-aibadge" data-astryx-theme="talenx">' + aiBadge + '</span></div>' +
+        '<div class="txf-sent-txt" data-txf-aibody>' +
+        (aiLive
+          ? '<span class="txf-muted">응답 원문을 읽고 요약을 생성합니다.</span>'
+          : '<span class="txf-muted">elizax 미연결 — 서술 요약을 생성하지 않았습니다. 위 <b>응답 집계</b>는 AI 없이 계산된 값이며, 연결 전에는 예시 문단을 대신 채우지 않습니다.</span>') +
+        '</div>' +
+        '<div class="txf-cites" data-txf-cite hidden></div>' +
+        '<div class="txf-sent-acts" data-txf-acts></div>' +
+        '</div>';
+
+      /* ---- ③ 소수 응답 비공개 ---- */
+      var suppHTML =
+        '<div class="txf-card txf-sent" data-txf-supp>' +
+        '<div class="txf-sent-h">응답 집계 · 비공개</div>' +
+        '<p class="txf-sent-txt txf-muted">응답자 <b>' + c.resp + '명</b> — 익명 임계 <b>' + ANON_MIN + '명</b> 미만이라 집계와 서술 요약을 모두 비공개합니다. ' +
+        '소수 응답은 집계 수치만으로도 누가 무엇을 썼는지 짐작될 수 있기 때문입니다.</p>' +
+        '<p class="txf-sent-txt txf-muted" style="margin-top:8px">문항별 응답 원문은 이 요청의 공개 범위(' + esc(c.scope) + ') 설정을 따릅니다 — 익명 임계가 적용되는 대상은 집계·요약입니다.</p>' +
+        '<button class="txf-btn-ghost txf-sm" style="margin-top:10px" data-txf-policy>기록 보관·열람 규칙 보기</button>' +
+        '</div>';
+
+      var sentHTML = !c.answers.length
+        ? ('<div class="txf-card txf-sent"><div class="txf-sent-h">응답 집계</div>' +
+           '<p class="txf-sent-txt txf-muted">아직 응답이 없어 집계할 값이 없습니다. 평가자 응답이 접수되면 집계가 표시되고, elizax 연결 시 서술 요약이 생성됩니다.</p></div>')
+        : (suppressed ? suppHTML : aggHTML + aiHTML);
 
       // question cards
       var qHTML = c.qs.map(function (q, i) {
@@ -395,25 +441,97 @@
       if (tg) tg.addEventListener('change', function () {
         pg.querySelectorAll('.txf-ratio').forEach(function (r) { r.hidden = !tg.checked; });
       });
-      /* Claude 연결 시: 실제 응답 텍스트를 넘겨 감정분석 문단을 실시간 생성 */
+      var pb = pg.querySelector('[data-txf-policy]');
+      if (pb) pb.addEventListener('click', function () { if (window.EZPolicy && EZPolicy.open) EZPolicy.open(); else toast('정책 화면을 불러올 수 없습니다.'); });
+
+      /* ---- AI 서술 요약 실행기: 스냅샷 누적 → [이전 버전] 되돌리기 · [재생성] ---- */
       (function liveSentiment() {
-        var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready());
-        var p = pg.querySelector('.txf-sent .txf-sent-txt');
-        if (!live || !p || !c.answers.length) return;
-        var stat = '긍정 ' + pos + ' · 중립 ' + neu + ' · 부정 ' + neg + ' (총 ' + tot + '건, 종합 ' + score + '점)';
-        p.insertAdjacentHTML('beforeend', ' <em style="color:var(--ink-4);font-style:normal">· elizax가 원문 재분석 중…</em>');
-        window.EZAI.agent({
-          maxTurns: 2, maxTokens: 400,
-          system: '당신은 elizax — HR 360 피드백 감정분석가입니다. 주어진 실제 응답 원문만 근거로 3~4문장 분석을 씁니다. 반복 키워드는 따옴표로 인용, 마지막에 리스크 신호 유무 한 줄. 다른 텍스트·머리말 금지. 도구 호출 불필요.',
-          messages: [{ role: 'user', content:
-            '집계: ' + stat + '\n응답 원문:\n' +
-            c.answers.map(function (a, i) { return (i + 1) + '. [' + a.s + '] ' + a.t; }).join('\n') }],
-          onDone: function (text) {
-            if (text && text.trim()) p.innerHTML = esc(text.trim()).replace(/\n+/g, '<br>') +
-              ' <em style="color:var(--ink-4);font-style:normal">· Claude 실시간 분석</em>';
-          },
-          onError: function () { var em = p.querySelector('em'); if (em) em.remove(); }
-        });
+        var body = pg.querySelector('[data-txf-aibody]');
+        var cite = pg.querySelector('[data-txf-cite]');
+        var acts = pg.querySelector('[data-txf-acts]');
+        if (!body || !acts || suppressed || !c.answers.length) return;
+        var versions = [];        /* {text, at} — 덮어쓰기 금지, 항상 누적 */
+        var viewIdx = -1;         /* 현재 화면에 그려진 버전 index */
+        var busy = false;
+        var failed = false;       /* 실패/로딩 화면일 때도 직전 스냅샷으로 되돌아갈 수 있게 */
+
+        /* 프롬프트에 실제로 넣은 것만 근거 칩으로 노출 — 없는 근거는 만들지 않는다 */
+        function citeHTML() {
+          var chips = c.answers.map(function (a, i) {
+            return '<span class="txf-cite" title="' + esc(c.qs[i] || '') + '">문항 ' + (i + 1) + '</span>';
+          });
+          chips.push('<span class="txf-cite">' + (namedRaters
+            ? '응답자 ' + esc(c.raters.map(nt).join(', '))
+            : '익명 응답자 ' + c.resp + '명') + '</span>');
+          chips.push('<span class="txf-cite">집계 ' + tot + '건 기반</span>');
+          return '<span class="txf-cite-lab">인용 근거</span>' + chips.join('');
+        }
+        function renderActs() {
+          var h = '';
+          if (aiLive) h += '<button class="txf-btn-ghost txf-sm" data-txf-regen' + (busy ? ' disabled' : '') + '>재생성</button>';
+          if (versions.length > 1 || (failed && versions.length)) {
+            h += '<button class="txf-btn-ghost txf-sm" data-txf-prev>' +
+              (failed ? '직전 버전 복원' : (viewIdx > 0 ? '최신 버전' : '이전 버전')) + '</button>';
+          }
+          if (versions.length && !failed) h += '<span class="txf-vermeta">버전 ' + (viewIdx + 1) + ' / ' + versions.length +
+            ' · ' + esc(versions[viewIdx].at) + (viewIdx === versions.length - 1 ? '' : ' · 이전 버전 보는 중') + '</span>';
+          if (!aiLive) h += '<button class="txf-btn-ghost txf-sm" data-txf-conn>AI 연결 설정</button>';
+          acts.innerHTML = h;
+          var rg = acts.querySelector('[data-txf-regen]');
+          if (rg) rg.addEventListener('click', function () { run(); });
+          var pv = acts.querySelector('[data-txf-prev]');
+          if (pv) pv.addEventListener('click', function () {
+            if (failed) viewIdx = versions.length - 1;                 /* 실패 화면 → 직전 스냅샷 복원 */
+            else viewIdx = (viewIdx > 0) ? viewIdx - 1 : versions.length - 1;
+            show();
+          });
+          var cn = acts.querySelector('[data-txf-conn]');
+          if (cn) cn.addEventListener('click', function () {
+            if (window.EZAI && EZAI.openSettings) EZAI.openSettings(); else toast('elizax 설정을 열 수 없습니다.');
+          });
+        }
+        function show() {
+          var v = versions[viewIdx];
+          if (!v) return;
+          failed = false;
+          body.innerHTML = esc(v.text).replace(/\n+/g, '<br>');
+          if (cite) { cite.innerHTML = citeHTML(); cite.hidden = false; }
+          renderActs();
+        }
+        function fail(msg) {
+          busy = false; failed = true;
+          body.innerHTML = '<span class="txf-muted">생성 실패 — ' + esc(msg || '응답을 받지 못했습니다.') +
+            (versions.length ? ' 이전 버전은 아래 버튼으로 볼 수 있습니다.' : ' 지어낸 요약으로 대체하지 않습니다.') + '</span>';
+          renderActs();
+        }
+        function run() {
+          if (busy || !aiLive) return;
+          busy = true;
+          body.innerHTML = '<span class="txf-muted">elizax가 응답 원문 ' + tot + '건을 읽는 중…</span>';
+          renderActs();
+          var stat = '긍정 ' + pos + ' · 중립 ' + neu + ' · 부정 ' + neg + ' (문항 답변 ' + tot + '건, 산술 종합 ' + score + '점)';
+          window.EZAI.agent({
+            maxTurns: 2, maxTokens: 400,
+            system: '당신은 elizax — HR 360 피드백 요약가입니다. 주어진 실제 응답 원문만 근거로 3~4문장 요약을 씁니다. ' +
+              '반복 키워드는 따옴표로 인용하고, 원문에 없는 사실·수치는 절대 만들지 마세요. 마지막 줄에 리스크 신호 유무를 한 줄로 씁니다. ' +
+              '머리말·다른 텍스트 금지. 도구 호출 불필요.',
+            messages: [{ role: 'user', content:
+              '라벨 집계(산술): ' + stat + '\n응답 원문:\n' +
+              c.answers.map(function (a, i) { return (i + 1) + '. [' + a.s + '] ' + a.t; }).join('\n') }],
+            onDone: function (text) {
+              busy = false;
+              if (!document.body.contains(body)) return;
+              var t = String(text || '').trim();
+              if (!t) { fail('빈 응답'); return; }
+              versions.push({ text: t, at: (K && K.clock ? K.clock.asOf() : new Date().toLocaleString('ko-KR')) });
+              viewIdx = versions.length - 1;
+              show();
+            },
+            onError: function (e) { if (document.body.contains(body)) fail(e && e.message ? e.message : String(e || '')); }
+          });
+        }
+        renderActs();
+        if (aiLive) run();
       })();
       pg.querySelectorAll('[data-noop]').forEach(function (b) { b.addEventListener('click', function () { toast('평가자를 수정합니다.'); }); });
     }
@@ -650,6 +768,18 @@
         '.txf-sb-h{display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:5px}' +
         '.txf-sb-t{height:8px;border-radius:5px;background:var(--soft);overflow:hidden}.txf-sb-t i{display:block;height:100%;border-radius:5px}' +
         '.txf-sent-txt{font-size:13.5px;color:var(--ink-2);line-height:1.7;margin:0}.txf-sent-txt b{color:var(--ink)}' +
+        /* F8 정직화: 집계 방식 각주 · AI 배지 · 인용 근거 칩 · 버전 액션 */
+        '.txf-sent-meta{font-size:11.5px;line-height:1.75;color:var(--ink-3);background:var(--soft);border-radius:9px;padding:10px 13px}' +
+        '.txf-sent-meta b{color:var(--ink-2);font-weight:700}' +
+        '.txf-aibadge{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-weight:500}' +
+        '.txf-livechip{font-size:10.5px;font-weight:700;color:#15803D;background:rgba(21,128,61,.08);border:1px solid rgba(21,128,61,.28);border-radius:999px;padding:2px 9px}' +
+        '.txf-offchip{font-size:10.5px;font-weight:700;color:var(--ink-3);background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:2px 9px}' +
+        '.txf-cites{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:11px}' +
+        '.txf-cite-lab{font-size:10.5px;font-weight:700;color:var(--ink-3);margin-right:2px}' +
+        '.txf-cite{font-size:10.5px;font-weight:600;color:var(--blue);background:rgba(31,122,240,.07);border:1px solid rgba(31,122,240,.25);border-radius:999px;padding:2px 8px}' +
+        '.txf-sent-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}' +
+        '.txf-sent-acts:empty{display:none}' +
+        '.txf-vermeta{font-size:11px;color:var(--ink-3);font-weight:600}' +
         /* competency */
         '.txf-radarwrap{display:flex;gap:26px;align-items:center;flex-wrap:wrap}' +
         '.txf-radar{flex:none}' +

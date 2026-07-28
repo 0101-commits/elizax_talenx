@@ -44,7 +44,7 @@
     try {
       var sc = document.createElement('script');
       sc.id = 'txf-ezdraft-js';
-      sc.src = 'js/tx_ai_draft.js?v=20260728c';
+      sc.src = 'js/tx_ai_draft.js?v=20260728e';
       sc.defer = true;
       document.head.appendChild(sc);
     } catch (e) { /* 로드 실패 시 템플릿 폴백 경로만 동작 */ }

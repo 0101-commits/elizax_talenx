@@ -2103,6 +2103,11 @@
       var draftNote = aiDraft
         ? '핵심 성과별 최근 체크인 추세와 목표값까지의 남은 격차를 기준으로 진척값 초안을 채웠습니다. (elizax 제안 — 값은 직접 고칠 수 있습니다)'
         : '';
+      /* 1:1에서 넘어온 합의는 코멘트 첫 줄로 착지시킨다 — 한 번 쓰고 비운다 */
+      if (pendingAgreement) {
+        draftNote = '1:1 합의 — ' + pendingAgreement + (draftNote ? '\n' + draftNote : '');
+        pendingAgreement = '';
+      }
       TX.modal({
         title: '체크인 — ' + o.title,
         wide: true,
@@ -2314,6 +2319,25 @@
         var cur = gdOv.getAttribute('data-oid');
         if (cur && (!oid || cur === oid)) openGoalDetail(cur);
       }
+    });
+
+    /* ---------- 1:1 합의 → 체크인 초안 착지 (tx_1on1 → ez:1on1-agreement) ----------
+       detail = { emp_id, objective_id, text }. 1:1에서 합의한 내용이 대화 기록에만
+       남고 끝나지 않도록, 해당 목표의 체크인 모달을 합의 문구가 담긴 채로 연다.
+       objective_id가 비어 있으면 본인 목표 중 첫 건으로 착지한다. */
+    var pendingAgreement = '';
+    document.addEventListener('ez:1on1-agreement', function (ev) {
+      var d = (ev && ev.detail) || {};
+      var text = String(d.text || '').trim();
+      if (!text) return;
+      var mine = myObjectives();
+      var o = null, oid = d.objective_id || '';
+      if (oid) o = mine.filter(function (x) { return x.objective_id === oid; })[0]
+                 || (objByOwner[d.emp_id] || []).filter(function (x) { return x.objective_id === oid; })[0];
+      if (!o) o = mine[0];
+      if (!o) { if (TX.toast) TX.toast('합의를 연결할 목표를 찾지 못했습니다.', 'warn'); return; }
+      pendingAgreement = text;
+      openCheckinModal(o, false);
     });
 
     /* ============================================================= *

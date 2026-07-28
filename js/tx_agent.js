@@ -33,6 +33,31 @@
     var cu = CU();
     return (D().objectives || []).filter(function (o) { return o.owner_emp_id === cu.emp_id; });
   }
+  /* 대상자 단일 원천 — 인계 컨텍스트(openHub(screen,{empId}))가 있으면 그 직원,
+     없으면 조직원은 본인 / 조직장·HR은 팀 첫 인원. 화면마다 이름을 하드코딩하지 않는다. */
+  /* 명시 컨텍스트가 없으면 지금 열려 있는 평가관리 상세 패널의 대상자를 그대로 이어받는다
+     (tx_fix_appr.js의 [data-txdr-panel][data-emp] — 읽기만 하고 수정하지 않음) */
+  function inferEmpFromScreen() {
+    try {
+      var p = document.querySelector("[data-txdr-panel][data-emp]");
+      var id = p && p.getAttribute("data-emp");
+      return id || null;
+    } catch (e) { return null; }
+  }
+  function targetEmp() {
+    var id = (state.ctx && state.ctx.empId) || inferEmpFromScreen();
+    if (id) {
+      var e = (D().employees || []).filter(function (x) { return x.emp_id === id; })[0];
+      if (e) return e;
+    }
+    if (role().key === "member") return CU();
+    return team()[0] || CU();
+  }
+  function targetNote() {
+    var src = state.ctx && state.ctx.source;
+    if (src) return " · " + src + "에서 인계";
+    return (!(state.ctx && state.ctx.empId) && inferEmpFromScreen()) ? " · 평가관리 화면에서 인계" : "";
+  }
 
   /* ---------------- helpers ---------------- */
   function h(tag, cls, html) {
@@ -55,6 +80,8 @@
   var state = {
     open: false,
     screen: null,
+    ctx: null,          // 인계 컨텍스트 {empId, source} — openHub(screen, ctx)
+    stack: [],          // 화면 히스토리 (뒤로 가기)
     timers: [],
     audit: [],          // {at, actor, act, target, ref}
     assets: [],         // {at, kind, title, screen}
@@ -182,9 +209,11 @@
     calib:   { title: "등급 조정 심의 회의", nav: "등급 조정 심의", mode: "human_approve", group: "평가관리" },
     review:  { title: "리뷰 초안 함께 쓰기",       nav: "리뷰 초안 작성",      mode: "human_approve", group: "평가관리" },
     connmap: { title: "연결 지도 · 전략–목표–직무–역량–평가", nav: "연결 지도", mode: "suggest", group: "연결·계보" },
-    procmap: { title: "결정 흐름",                nav: "결정 흐름",           mode: "human_approve", group: "연결·계보" },
-    assets:  { title: "산출물",                   nav: "산출물",             mode: null,            group: "산출물" },
-    audit:   { title: "감사 로그",                nav: "감사 로그",           mode: null,            group: "감사 로그" }
+    /* procmap = 화면이 아니라 EZJourney(결정 흐름)로 가는 리다이렉트 별칭.
+       허브 내비/홈 카드에는 노출하지 않고(showScreen에서 즉시 전환), 명령·팔레트 라우팅만 유지한다. */
+    procmap: { title: "결정 흐름",                nav: "결정 흐름",           mode: null,            group: "연결·계보", redirect: "journey" },
+    assets:  { title: "산출물 · 기록 보관함",       nav: "산출물",             mode: null,            group: "산출물·감사" },
+    audit:   { title: "감사 로그",                nav: "감사 로그",           mode: null,            group: "산출물·감사" }
   };
   var NAV_ORDER = ["home", "chat", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "connmap", "procmap", "assets", "audit"];
 
@@ -200,12 +229,13 @@
     { key: "qw4",    chip: "내 성과 근거 타임라인 보여줘",       desc: "달성·프로젝트·피드백·1:1 기록이 발생 시점에 자동으로 기록된 1년치 근거 타임라인입니다.",                        roles: ["member"],        heavy: true,  mode: "suggest" },
     { key: "qw6",    chip: "피드백 문장 다듬어줘",              desc: "SBI 구조로 피드백 문장을 정제합니다. 의도는 유지하고 전달 방식만 다듬습니다.",                              roles: ["leader"],        heavy: false, mode: "suggest" },
     { key: "qw3",    chip: "평가 코멘트 초안 써줘",             desc: "ERP 실적·직무군 분포·평가규정을 대조해 문장별 출처가 붙은 코멘트 초안을 만듭니다.",                          roles: ["leader"],        heavy: false, mode: "human_approve" },
-    { key: "hold",   chip: "박지훈 등급 초안 만들어줘",          desc: "근거가 부족하면 추정하지 않고 정지 후 질문합니다. 보강 경로를 고르면 재개됩니다.",                            roles: ["leader"],        heavy: false, mode: "suggest" },
+    /* 칩에서 특정 이름을 빼고 대상자는 인계 컨텍스트(targetEmp)가 정한다 — 데이터에 없는 이름 고정 금지 */
+    { key: "hold",   chip: "등급 초안 만들어줘",       desc: "근거가 부족하면 추정하지 않고 정지 후 질문합니다. 보강 경로를 고르면 재개됩니다.",                            roles: ["leader"],        heavy: false, mode: "suggest" },
     { key: "qw5",    chip: "평가 편향 점검해줘",                desc: "본부별 등급 분포·근거량을 대조해 관대화·중심화 의심을 플래그와 근거로만 제시합니다.",                        roles: ["hr", "exec"],    heavy: true,  mode: "suggest" },
     { key: "calib",  chip: "등급 조정 심의 열어줘",       desc: "4개 관점 에이전트가 조정 논거를 교차 심의하고, 가정 슬라이더로 상한을 즉시 재산출합니다.",                 roles: ["hr"],            heavy: true,  mode: "human_approve" },
     { key: "review", chip: "리뷰 초안 같이 쓰자",               desc: "AI가 근거를 인용해 초안 문장을 제안하고, 사용자가 문장 단위로 반영·무시합니다.",                             roles: ["leader", "hr"],  heavy: true,  mode: "human_approve" },
     { key: "connmap", chip: "연결 지도 보여줘 (전략–목표–직무–역량)", desc: "사업전략·조직목표·개인목표·직무 R&R·스킬·역량·평가가 어떻게 이어지는지 한 장으로 보여주고, 데이터에 없는 연결은 AI가 근거로 잇습니다. 직무 연결률도 표시합니다.", roles: ["hr", "exec", "leader"], heavy: true, mode: "suggest" },
-    { key: "procmap", chip: "이 등급이 나온 과정(결정 흐름) 보여줘", desc: "목표수립→중간점검→평가→피드백 각 단계의 결정과 근거를 시간순 계보로 묶고, 앞 근거가 다음 단계로 인용되는 흐름과 차년도 승계를 보여줍니다.", roles: ["leader", "hr", "member"], heavy: true, mode: "human_approve" }
+    { key: "procmap", chip: "이 등급이 나온 과정(결정 흐름) 보여줘", desc: "목표수립→중간점검→평가→피드백 각 단계의 결정과 근거를 시간순 계보로 묶고, 앞 근거가 다음 단계로 인용되는 흐름과 차년도 승계를 보여줍니다.", roles: ["leader", "hr", "member"], heavy: true, mode: null }
   ];
   function scenarioOf(key) {
     for (var i = 0; i < SCENARIOS.length; i++) if (SCENARIOS[i].key === key) return SCENARIOS[i];
@@ -213,12 +243,23 @@
   }
   /* heavy 시나리오 스텁의 핵심 숫자 미리보기 */
   var STUB_NUMS = {
-    calib:  "S 8%→6% · A 32%→25% 조정안",
     qw7:    "8건 스캔 · 문장 품질 3건 · 운영 신호 5건",
     qw4:    "근거 24건 기록",
     qw5:    "4본부 스캔 · 편향 플래그 2",
     review: "5/12 작성 · AI 보조 ON"
   };
+  /* calib 미리보기는 상수가 아니라 실집계 재산출값 (simulateCalib은 함수 선언 → 호이스팅) */
+  function stubNum(key) {
+    if (key !== "calib") return STUB_NUMS[key] || "";
+    try {
+      var s = simulateCalib({});
+      if (s.error) return "기준 분포 없음 — 평가 기록 필요";
+      var mv = s.gradeChange.filter(function (g) { return g.delta_pp !== 0; });
+      return (mv.length
+        ? mv.map(function (g) { return g.grade + " " + g.before_pct + "%→" + g.after_pct + "%"; }).join(" · ")
+        : "상한 " + s.cap_pct + "% 이내 — 조정 불필요") + " · 모집단 " + s.basis.population_n + "명";
+    } catch (e) { return ""; }
+  }
 
   /* ---------------- 채팅 임베드 실행 ---------------- */
   function runScenario(key, host) {
@@ -231,7 +272,7 @@
         '<div class="hd"><b class="tt">' + esc(s.title) + "</b>" + (sc.mode ? autonomyBadge(sc.mode) : "") +
         '<span class="agh-auditchip">⛨ 감사 기록됨</span></div>' +
         "<p>" + esc(sc.desc) + "</p>" +
-        '<div class="num">' + esc(STUB_NUMS[key] || "") + "</div>" +
+        '<div class="num">' + esc(stubNum(key)) + "</div>" +
         '<div class="acts"><button class="agh-btn primary" data-scn-full="' + esc(key) + '">⛶ 전체화면에서 열기</button></div></div>';
     } else if (RENDER[key]) {
       RENDER[key](host);
@@ -245,6 +286,10 @@
     var q = String(text == null ? "" : text);
     if (!q) return null;
     if (/HOLD|홀드/i.test(q)) return "hold";
+    /* 자기 카탈로그 칩 전수 라우팅 — hold 칩("등급 초안 만들어줘")이 null로 빠지던 문제 수정.
+       '등급 조정 심의'(calib)와 겹치지 않도록 초안/작성 동사를 함께 요구한다 */
+    if (/등급/.test(q) && /초안|만들|작성|산출/.test(q) && !/조정|심의|캘리/.test(q)) return "hold";
+    if (/근거 ?부족|정지|멈춰|모르면/.test(q)) return "hold";
     if (/체크인|진척/.test(q)) return "qw1";
     if (/목표/.test(q) && /초안|추천|수립/.test(q)) return "qw2";
     if (/정합|정렬|중복/.test(q)) return "qw7";
@@ -253,12 +298,31 @@
     if (/평가/.test(q) && /코멘트|초안/.test(q)) return "qw3";
     if (/코멘트|근거초안/.test(q)) return "qw3";
     if (/편향|관대화/.test(q)) return "qw5";
-    if (/캘리|calibration|심의/i.test(q)) return "calib";
+    if (/캘리|calibration|심의|등급 ?조정/i.test(q)) return "calib";
     if (/리뷰|총평/.test(q)) return "review";
     if (/연결 ?지도|연결률|전략.*목표.*직무|직무.*연결/.test(q)) return "connmap";
     if (/계보|프로세스 ?맵|어떤 과정|왜 이 등급|결정 ?흐름/.test(q)) return "procmap";
+    /* 공통 화면도 라우팅 대상 — runCmd에 흩어져 있던 규칙을 여기로 통합 */
+    if (/감사|감사 ?로그|누가 ?결정/.test(q)) return "audit";
+    if (/산출물|보관함|자산/.test(q)) return "assets";
+    if (/오늘|브리핑|홈|처음 ?화면/.test(q)) return "home";
     return null;
   }
+
+  /* 역할 필터 단일 원천 — 내비·홈 카드·명령 라우팅이 같은 판정을 쓴다.
+     (홈이 NAV_ORDER 전체를 그려 내비와 목록이 어긋나던 문제의 근본 원인) */
+  function allowedScreen(key) {
+    var sc = scenarioOf(key);
+    if (!sc) return true;                       /* home·chat·assets·audit 등 공통 화면 */
+    return sc.roles.indexOf(role().key) >= 0;
+  }
+  function visibleKeys() {
+    return NAV_ORDER.filter(function (k) {
+      var s = SCREENS[k];
+      return s && !s.redirect && allowedScreen(k);
+    });
+  }
+  function navLabel(k) { return SCREENS[k].nav || SCREENS[k].title; }
 
   /* 역할별 기본 화면 (역할 주체 자동 연동) */
   function defaultScreen() {
@@ -310,6 +374,7 @@
     bar.setAttribute("data-astryx-media", "dark");
     bar.innerHTML =
       '<div class="agh-gl"><span class="agh-logo">✦</span><b>elizax</b><span class="agh-brand-sub">워크스페이스</span>' +
+      '<button class="agh-gitem" data-agh-back title="이전 화면으로 (Esc)" style="display:none">‹ 뒤로</button>' +
       '<span class="agh-rolechip" data-agh-role></span></div>' +
       '<div class="agh-gr">' +
       '<button class="agh-gitem" data-agh-alerts>🔔 알림 <b data-agh-alertcnt>3</b></button>' +
@@ -354,10 +419,8 @@
 
     /* events */
     bar.querySelector("[data-agh-close]").addEventListener("click", closeHub);
-    bar.querySelector("[data-agh-dock]").addEventListener("click", function () {
-      closeHub();
-      if (window.Elizax && window.Elizax.open) window.Elizax.open();
-    });
+    bar.querySelector("[data-agh-back]").addEventListener("click", goBack);
+    bar.querySelector("[data-agh-dock]").addEventListener("click", dockHandoff);
     bar.querySelector("[data-agh-alerts]").addEventListener("click", showAlerts);
     /* 컨텍스트 패널은 필요할 때만 — 수동 토글 + 라이브 이벤트 시 자동 오픈 */
     bar.querySelector("[data-agh-ctxtoggle]").addEventListener("click", function () {
@@ -378,8 +441,14 @@
         return;
       }
     });
+    /* Esc는 단계적으로 — 열린 모달 → 팔레트 → 화면 뒤로 → 허브 닫기.
+       (한 번에 허브가 닫혀 작업이 사라지지 않게) */
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && state.open) closeHub();
+      if (e.key !== "Escape" || !state.open) return;
+      if (document.querySelector(".tx-back")) return;   /* 모달이 자기 핸들러로 먼저 닫힌다 */
+      if (palEl) { closePalette(); return; }
+      if (state.stack.length) { e.preventDefault(); goBack(); return; }
+      closeHub();
     });
 
     renderNav();
@@ -406,18 +475,25 @@
 
   /* ---------------- 내비 — 오늘 / 제안(역할 맞춤 자연어 칩) / 기록 ---------------- */
   function navItem(key, label, mode) {
-    return '<button class="agh-nitem' + (state.screen === key ? " on" : "") + '" data-agh-nav="' + esc(key) + '">' +
+    var s = SCREENS[key] || {};
+    return '<button class="agh-nitem' + (state.screen === key ? " on" : "") + '" data-agh-nav="' + esc(key) + '"' +
+      ' title="' + esc(s.title || label) + '">' +
       esc(label) + (mode ? autonomyBadge(mode) : "") + "</button>";
   }
+  /* 내비 = SCREENS[].group 섹션 구조 + 짧은 명사형 제목(자연어 칩 문장 폐기).
+     group이 없는 home·chat은 '오늘' 섹션으로 묶는다. */
   function renderNav() {
-    var rk = role().key;
     var html = '<div class="agh-newchat"><button class="agh-btn primary wide" data-agh-newchat>＋ 새 채팅</button></div>';
-    html += '<div class="agh-ngroup">오늘</div>' + navItem("home", "오늘 브리핑", null) + navItem("chat", "💬 대화 이어가기", null);
-    html += '<div class="agh-ngroup">제안</div>';
-    SCENARIOS.forEach(function (sc) {
-      if (sc.roles.indexOf(rk) >= 0) html += navItem(sc.key, sc.chip, sc.mode);
+    var order = [], byGroup = {};
+    visibleKeys().forEach(function (k) {
+      var g = SCREENS[k].group || "오늘";
+      if (!byGroup[g]) { byGroup[g] = []; order.push(g); }
+      byGroup[g].push(k);
     });
-    html += '<div class="agh-ngroup">산출물·감사</div>' + navItem("assets", "산출물", null) + navItem("audit", "감사 로그", null);
+    order.forEach(function (g) {
+      html += '<div class="agh-ngroup">' + esc(g) + "</div>";
+      byGroup[g].forEach(function (k) { html += navItem(k, navLabel(k), SCREENS[k].mode); });
+    });
     el.nav.innerHTML = html;
   }
 
@@ -445,33 +521,62 @@
   function ctxAppendIf(host, html) { if (host === el.canvas) ctxAppend(html); }
 
   /* ---------------- 화면 전환 ---------------- */
-  function showScreen(key) {
+  function roleNames(sc) {
+    var R = (window.TXRoles && TXRoles.ROLES) || {};
+    return sc.roles.map(function (k) { return (R[k] && R[k].label) || k; }).join("/");
+  }
+  function showScreen(key, opts) {
+    opts = opts || {};
     if (!SCREENS[key]) key = "home";
-    /* 롤 가드 — 딥링크(openHub)로 상위 롤 전용 화면 우회 진입 차단. renderNav와 동일한 sc.roles/role().key 사용 */
-    var sc = scenarioOf(key);
-    if (sc && sc.roles.indexOf(role().key) < 0) {
-      var R = (window.TXRoles && TXRoles.ROLES) || {};
-      var names = sc.roles.map(function (k) { return (R[k] && R[k].label) || k; }).join("/");
-      toast("이 기능은 " + names + " 권한에서 열람할 수 있습니다.");
+    /* ⑤ procmap 폐기 — 결정 흐름은 EZJourney 단일 화면으로 리다이렉트 (롤 가드보다 먼저) */
+    if (SCREENS[key].redirect === "journey") { openJourney(); return; }
+    /* 롤 가드 — 딥링크(openHub)로 상위 롤 전용 화면 우회 진입 차단. renderNav와 동일한 판정(allowedScreen) */
+    if (!allowedScreen(key)) {
+      toast("이 기능은 " + roleNames(scenarioOf(key)) + " 권한에서 열람할 수 있습니다.");
       key = defaultScreen();
     }
     clearTimers();
     /* 대화 스크린을 떠나면 렌더 서피스를 FAB로 반납 */
     if (state.screen === "chat" && key !== "chat" && window.Elizax && Elizax.detachSurface) Elizax.detachSurface();
+    /* 화면 스택 — 뒤로 가기용. 되돌아가는 이동(push:false)은 쌓지 않는다 */
+    if (opts.push !== false && state.screen && state.screen !== key) {
+      state.stack.push(state.screen);
+      if (state.stack.length > 20) state.stack.shift();
+    }
     state.screen = key;
     renderNav();
+    syncBack();
     var fn = RENDER[key] || RENDER.home;
     fn();
+  }
+  function syncBack() {
+    if (!el.root) return;
+    var b = el.root.querySelector("[data-agh-back]");
+    if (b) b.style.display = state.stack.length ? "" : "none";
+  }
+  function goBack() {
+    if (!state.stack.length) { closeHub(); return; }
+    showScreen(state.stack.pop(), { push: false });
   }
 
   /* ============================================================
      각 화면 렌더러 + 라이브 시뮬레이션
      — 모든 렌더러는 host(컨테이너)를 받는다. 무인자 호출 시 허브 캔버스.
      ============================================================ */
+  /* 실AI vs 데모 대본 명시 — EZKit.status 계열 배지(ezk-chip). 어떤 화면이 실호출인지 감춘 채
+     "라이브"라고 말하지 않는다. */
+  function liveBadge() {
+    var live = aiLive();
+    var lab = live ? "실AI 응답" : "데모 시나리오";
+    var tip = live ? "elizax가 실제 데이터를 조회해 응답합니다" : "AI 미연결 — 준비된 예시 흐름입니다(실호출 없음)";
+    var mk = (window.EZKit && EZKit.marker) || "✦";
+    return '<span class="ezk-chip ezk-status" data-mode="' + (live ? "auto" : "suggest") +
+      '" title="' + esc(tip) + '">' + mk + " " + lab + "</span>";
+  }
   function screenHead(key) {
     var s = SCREENS[key];
     return '<div class="agh-shead"><div><h2>' + esc(s.title) + "</h2>" +
-      (s.mode ? autonomyBadge(s.mode) : "") +
+      (s.mode ? autonomyBadge(s.mode) : "") + liveBadge() +
       '<span class="agh-auditchip">⛨ 감사 기록됨</span></div>' +
       '<span class="agh-asof2">기준 시점 · ' + esc(AS_OF) + " ▾</span></div>";
   }
@@ -482,10 +587,11 @@
   RENDER.home = function (host) {
     host = host || el.canvas;
     var r = role();
-    var cards = NAV_ORDER.filter(function (k) { return SCREENS[k].mode; }).map(function (k) {
+    /* 홈 카드도 내비와 같은 역할 필터 — 권한 없는 카드를 눌러 토스트+리다이렉트되던 문제 해소 */
+    var cards = visibleKeys().filter(function (k) { return SCREENS[k].mode; }).map(function (k) {
       var s = SCREENS[k];
       return '<button class="agh-qwcard" data-agh-nav="' + k + '">' + autonomyBadge(s.mode) +
-        "<b>" + esc(s.title) + "</b><small>" + esc(s.group) + " · 클릭하면 라이브 시뮬 실행</small></button>";
+        "<b>" + esc(s.title) + "</b><small>" + esc(s.group || "") + "</small></button>";
     }).join("");
     host.innerHTML =
       '<div class="agh-shead"><div><h2>오늘은 어떤 도움을 드릴까요?</h2>' +
@@ -701,7 +807,9 @@
       var pendNote = (carry.pendKrs && carry.pendKrs.length)
         ? " 미완 KR " + carry.pendKrs.length + "건은 이월 후보로 표시했습니다."
         : "";
-      v.innerHTML = '<span class="conf">신뢰도 0.86</span> ' + esc(lastYear) + "와 피드백을 이어받아 백지가 아닌 <b>초안 3안</b>을 구성했습니다. " +
+      /* 근거 없는 "신뢰도 0.86" 폐기 — 실제로 인용한 근거 건수만 표기(산출 근거 있음) */
+      var cited = [carry.prevEval, carry.fb, carry.taskArea, carry.grade].filter(function (x) { return !!x; }).length;
+      v.innerHTML = '<span class="conf" title="초안 작성에 실제 인용된 기록 수">인용 근거 ' + cited + "건</span> " + esc(lastYear) + "와 피드백을 이어받아 백지가 아닌 <b>초안 3안</b>을 구성했습니다. " +
         fbAxis + "을 <b>KR2</b>로 반영했고, " + esc(jobBase) + "을 근거로 <b>KR1</b>을 구성했습니다." + pendNote + " " +
         "가중치 합 105%·목표3 미연결이 확인돼 <b>15%→10% 하향 또는 KR4 연결</b> 중 택일을 제안합니다. " +
         srcChip("rule", "원칙 · 전사 정렬") + srcChip("talenx", "맥락 · H1 조직개편") + '<span class="agh-auditchip">⛨ 감사 기록됨</span>';
@@ -909,8 +1017,93 @@
      AI 연결 시(EZAI.ready) 원문을 실제로 정제해 교체한다. 오프라인이면 대본 유지. */
   var QW6_SRC = "문서 정리가 계속 늦어요. 여러 번 얘기했는데 개선이 안 보이네요. 좀 더 신경 써 주세요.";
   function aiLive() { return !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready()); }
-  function qw6Refine(host, tone) {
+
+  /* 확인된 사실 — 상수 문장 폐기. EZTools 도구 조회(get_objectives·get_checkins·get_context_ledger)
+     결과에서만 사실을 만든다. 아무것도 못 찾으면 ok:false → 화면은 정지 원칙대로 멈춘다. */
+  function qw6Facts(emp) {
+    var out = { ok: false, why: "", facts: [], best: null, low: null, blocker: null, target: emp || null };
+    if (!(window.EZTools && EZTools.run)) { out.why = "도구 모듈(EZTools)이 로드되지 않았습니다"; return out; }
+    var id = emp && emp.emp_id;
+    var blocked = false;
+    try {
+      var ob = EZTools.run("get_objectives", { emp_id: id }) || {};
+      if (ob.blocked) blocked = true;
+      var objs = ob.objectives || [];
+      objs.forEach(function (o) {
+        var p = Math.round(o.progress || 0);
+        if (!out.best || p > out.best.p) out.best = { t: o.title, p: p, period: o.period };
+        if (!out.low || p < out.low.p) out.low = { t: o.title, p: p, period: o.period };
+      });
+      if (out.best) out.facts.push({ t: "「" + out.best.t + "」 진척 " + out.best.p + "%", kind: "talenx", lab: "목표·KR 기록" });
+      if (out.low && out.best && out.low.t !== out.best.t) out.facts.push({ t: "「" + out.low.t + "」 진척 " + out.low.p + "%", kind: "talenx", lab: "목표·KR 기록" });
+
+      var ck = EZTools.run("get_checkins", { emp_id: id, limit: 6 }) || {};
+      if (ck.blocked) blocked = true;
+      (ck.checkins || []).forEach(function (c) {
+        if (!out.blocker && c.blocker) out.blocker = { d: c.date, b: c.blocker };
+      });
+      if (out.blocker) out.facts.push({ t: out.blocker.d + " 체크인 블로커 「" + out.blocker.b + "」", kind: "erp", lab: "체크인 기록" });
+      else if (ck.count) out.facts.push({ t: "최근 체크인 " + ck.count + "건 기록됨", kind: "erp", lab: "체크인 기록" });
+
+      var lg = EZTools.run("get_context_ledger", { emp_id: id, limit: 3 }) || {};
+      (lg.items || []).slice(0, 2).forEach(function (it) {
+        if (it && it.title) out.facts.push({ t: "성과 기록 「" + it.title + "」", kind: "rule", lab: "성과 기록 원장" });
+      });
+    } catch (e) { out.why = "도구 조회 중 오류: " + (e && e.message ? e.message : e); return out; }
+    if (!out.facts.length) {
+      out.why = blocked
+        ? "열람 규칙으로 이 대상자의 목표·체크인 기록에 접근할 수 없습니다"
+        : "이 대상자의 목표·체크인·성과 기록이 조회되지 않았습니다";
+      return out;
+    }
+    out.ok = true;
+    return out;
+  }
+  /* 민감 케이스 안전장치 — "등급 하락"을 단정하지 않고 evalHistory 실기록으로 판정 */
+  function gradeDropNote(emp) {
+    var ORD = { S: 5, A: 4, B: 3, C: 2, D: 1 };
+    try {
+      var hs = ((D().evalHistory || []).filter(function (x) { return x.emp_id === emp.emp_id; })[0] || {}).history || [];
+      if (hs.length >= 2) {
+        var prev = hs[hs.length - 2], last = hs[hs.length - 1];
+        if (ORD[last.grade] < ORD[prev.grade]) {
+          return "<b>저성과 민감 케이스 안전장치</b> — 최근 등급 하락(" + esc(prev.grade) + "→" + esc(last.grade) + " · " +
+            esc(last.period || "") + ") 기록이 확인됩니다. 단정·비교 표현을 걸러 사실·행동 중심으로만 정제했고, <b>전송 전 HR 1:1 가이드 확인</b>을 권합니다. " +
+            srcChip("talenx", "등급 이력");
+        }
+      }
+    } catch (e) {}
+    return "<b>민감 표현 안전장치</b> — 등급 하락 기록은 확인되지 않았습니다. 그래도 단정·비교 표현은 걸러 사실·행동 중심으로 정제합니다. " +
+      srcChip("talenx", "등급 이력");
+  }
+  function factChips(f) {
+    return f.facts.slice(0, 4).map(function (x) { return srcChip(x.kind, x.lab); }).join("");
+  }
+  /* 조회된 사실만으로 SBI 정제문을 구성 — 데이터에 없는 문장은 만들지 않는다 */
+  function qw6ScriptText(f) {
+    var best = f.best, low = f.low, bl = f.blocker;
+    var s = "";
+    /* 인정 — 조회된 최고 진척 목표가 있을 때만 */
+    if (best) s += "「" + esc(best.t) + "」는 진척 " + best.p + "%로 계획대로 밀고 있습니다<b>(인정)</b>. ";
+    /* 상황·행동 — 조회된 사실(저진척 목표 / 체크인 블로커)만 조합 */
+    var sit = "";
+    if (low && (!best || low.t !== best.t)) {
+      sit = (best ? "다만 " : "") + "「" + esc(low.t) + "」는 진척 " + low.p + "%에 머물러 있고, " +
+        (bl ? bl.d + " 체크인에 「" + esc(bl.b) + "」가 기록됐습니다" : "이후 진척 기록이 갱신되지 않았습니다");
+    } else if (bl) {
+      sit = (best ? "다만 " : "") + bl.d + " 체크인에 「" + esc(bl.b) + "」가 기록됐습니다";
+    } else if (low) {
+      sit = (best ? "다만 " : "") + "진척이 " + low.p + "%에 머물러 있습니다";
+    }
+    if (sit) s += sit + "<b>(상황·행동)</b>. ";
+    s += "이대로면 " + esc((low && low.period) || (best && best.period) || "이번 주기") + " 마감 기준으로 후속 검토가 밀립니다<b>(영향)</b>. ";
+    s += "막힌 지점부터 이번 주 1:1에서 같이 정리해볼까요?";
+    return s;
+  }
+
+  function qw6Refine(host, tone, facts) {
     if (!aiLive()) return false;
+    if (!facts || !facts.ok) return false;
     var p = host.querySelector("[data-agh-refined]");
     if (!p) return false;
     var old = p.querySelector("[data-agh-aiload]");
@@ -921,7 +1114,9 @@
       maxTurns: 2, maxTokens: 500,
       system: "당신은 elizax — 피드백 문장 정제 도우미입니다. 매니저의 피드백 원문을 SBI(상황→행동→영향) 구조로 정제합니다. " +
         "성과 인정을 먼저 넣고, 단정·비교 표현을 걸러 사실·행동 중심의 제안형 문장으로 끝냅니다. " +
-        "확인된 사실: 공유 문서 3건이 마감 하루 뒤 제출됨(스프린트 보드) · 릴리스 노트는 팀 내 참고도가 가장 높음. " +
+        /* 확인된 사실은 상수가 아니라 도구 조회 결과 — 여기 없는 사실은 쓰지 않는다 */
+        "확인된 사실(talenx 목표·체크인·성과 기록 조회 결과, 이 목록에 없는 사실은 절대 쓰지 마세요): " +
+        facts.facts.map(function (x) { return x.t; }).join(" · ") + ". " +
         "요청된 톤을 반영하되 의도는 유지합니다. 정제문 한 단락만 출력 — 머리말·설명 금지. 도구 호출 불필요.",
       messages: [{ role: "user", content: "톤: " + (tone || "직설") + "\n원문: " + QW6_SRC }],
       onDone: function (text) {
@@ -941,7 +1136,11 @@
   RENDER.qw6 = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
+    var tgt = targetEmp();
+    var facts = qw6Facts(tgt);
     host.innerHTML = screenHead("qw6") +
+      '<div class="agh-scanline">대상 <b>' + esc(tgt.name || tgt.emp_id) + "</b>" + esc(targetNote()) +
+      " · 확인된 사실 <b>" + facts.facts.length + "건</b> 조회 " + (facts.ok ? factChips(facts) : '<span class="agh-flag">근거 없음</span>') + "</div>" +
       '<div class="agh-tones">' +
       ["톤", "담백", "따뜻", "직설"].map(function (t, i) {
         return i === 0 ? '<span class="lab">' + t + "</span>" : '<button class="agh-tone' + (i === 2 ? " on" : "") + '" data-tone="' + esc(t) + '">' + esc(t) + "</button>";
@@ -953,30 +1152,41 @@
       '<div class="agh-dcol out"><div class="lab">정제안 · 성과 인정 먼저 → 실행 제안형</div>' +
       '<p data-agh-refined><i class="agh-spin"></i> 정제 중…</p>' +
       '<div class="flags" data-agh-refchips style="display:none"></div></div></div>' +
-      '<div class="agh-safety" data-agh-safety style="display:none"><b>저성과 민감 케이스 안전장치</b> — 최근 2분기 등급 하락(B→C) 대상자입니다. 단정·비교 표현을 자동으로 걸러 사실·행동 중심으로만 정제했고, <b>전송 전 HR 1:1 가이드 확인</b>을 권합니다.</div>' +
+      '<div class="agh-safety" data-agh-safety style="display:none">' + gradeDropNote(tgt) + "</div>" +
       gateHTML("qw6", ["반영", "직접 수정", "무시(원문 유지)"]);
     ctxPanelIf(host, [
-      { tag: "무엇을 왜 바꿨나", title: "구조·사실·톤", body: "<b>구조</b> 개선점 나열 → 인정→SBI→제안 순서 재배열<br><b>사실</b> '계속·여러 번' 대신 보드에서 확인된 <b>지연 3건</b>으로 특정<br><b>톤</b> 지시형 명령을 <b>제안형 질문</b>으로(따뜻 유지). 감정·의도는 그대로 — 문장의 주인은 매니저입니다." }
+      { tag: "무엇을 왜 바꿨나", title: "구조·사실·톤", body: "<b>구조</b> 개선점 나열 → 인정→SBI→제안 순서 재배열<br><b>사실</b> '계속·여러 번' 대신 조회된 기록으로 특정 — " +
+        (facts.ok ? facts.facts.map(function (x) { return esc(x.t); }).join(" · ") : "조회 실패 시 정제하지 않고 멈춥니다") +
+        "<br><b>톤</b> 지시형 명령을 <b>제안형 질문</b>으로(따뜻 유지). 감정·의도는 그대로 — 문장의 주인은 매니저입니다." }
     ], "");
     T(function () {
       var p = host.querySelector("[data-agh-refined]");
-      /* 실AI 결과가 이미 도착했으면 오프라인 대본으로 덮지 않는다 */
-      if (p && !p.getAttribute("data-ai-final")) p.innerHTML =
-        "지난 스프린트 릴리스 노트는 팀에서 가장 참고가 많이 됐어요<b>(인정)</b>. 다만 공유 문서 3건이 마감 하루 뒤 올라와<b>(상황·행동)</b> 후속 리뷰가 밀렸습니다<b>(영향)</b>. 다음엔 마감 반나절 전 초안 공유부터 같이 잡아볼까요?";
       var rc = host.querySelector("[data-agh-refchips]");
-      rc.style.display = ""; rc.innerHTML = '<span class="agh-flag ok">S·B·I 구조 채움</span>' + srcChip("talenx", "근거 · 스프린트 보드 3건");
+      /* 근거를 못 찾으면 정지 원칙 — 문장을 지어내지 않는다 */
+      if (!facts.ok) {
+        if (p) p.innerHTML = "⛔ <b>근거를 찾지 못해 멈췄습니다.</b> " + esc(facts.why) +
+          " — 정제문을 추정으로 만들지 않습니다. 목표·체크인 기록을 연결한 뒤 다시 실행하세요.";
+        if (rc) { rc.style.display = ""; rc.innerHTML = '<span class="agh-flag">근거 0건 · 정지</span>'; }
+        logAudit("판단 정지", "피드백 정제 · " + facts.why, "qw6.no-evidence");
+        ctxAppendIf(host, '<div class="agh-live warn">근거 조회 실패 — 정제를 진행하지 않았습니다.</div>');
+        return;
+      }
+      /* 실AI 결과가 이미 도착했으면 조회 기반 대본으로 덮지 않는다 */
+      if (p && !p.getAttribute("data-ai-final")) p.innerHTML = qw6ScriptText(facts);
+      if (rc) { rc.style.display = ""; rc.innerHTML = '<span class="agh-flag ok">S·B·I 구조 채움</span>' + factChips(facts); }
       host.querySelector("[data-agh-safety]").style.display = "";
-      /* AI 연결 시 원문을 실제로 정제해 교체 — 오프라인이면 no-op */
-      if (p && !p.getAttribute("data-ai-final")) qw6Refine(host, "직설");
+      /* AI 연결 시 조회된 사실만으로 실제 정제 — 오프라인이면 no-op */
+      if (p && !p.getAttribute("data-ai-final")) qw6Refine(host, "직설", facts);
     }, 1400);
     host.addEventListener("click", function (e) {
       var t = e.target.closest("[data-tone]");
       if (!t) return;
       Array.prototype.forEach.call(host.querySelectorAll("[data-tone]"), function (b) { b.classList.toggle("on", b === t); });
       var tone = t.getAttribute("data-tone");
-      /* AI 연결 시 선택 톤으로 실제 재정제, 오프라인이면 기존 안내만 */
-      if (qw6Refine(host, tone)) toast("톤 '" + tone + "' 기준으로 다시 정제하는 중 — 전달 방식만 바뀌고 의도는 유지됩니다.");
-      else toast("톤 '" + tone + "' 기준으로 재정제했습니다. 전달 방식만 바뀌고 의도는 유지됩니다.");
+      if (!facts.ok) { toast("근거를 찾지 못해 정제를 멈췄습니다 — 톤만 바꿀 수 없습니다."); return; }
+      /* AI 연결 시 선택 톤으로 실제 재정제, 오프라인이면 조회 기반 대본 유지 */
+      if (qw6Refine(host, tone, facts)) toast("톤 '" + tone + "' 기준으로 다시 정제하는 중 — 전달 방식만 바뀌고 의도는 유지됩니다.");
+      else toast("AI 미연결 — 조회된 근거 기준 정제문을 그대로 둡니다. 톤 반영은 연결 후 가능합니다.");
     });
   };
 
@@ -986,9 +1196,7 @@
      오프라인 대본의 서술 초안을 교체한다. 오프라인·오류 시 대본 유지. */
   function qw3Draft(host) {
     if (!aiLive() || !(window.EZTools && EZTools.schemas)) return;
-    var tgt = team()[0] || CU();
-    var who = host.querySelector(".agh-workpanel .who");
-    if (who) who.textContent = tgt.name + " · 실행력";
+    var tgt = targetEmp();   /* 인계 컨텍스트 우선 — 화면마다 이름을 하드코딩하지 않는다 */
     var wlBox = host.querySelector("[data-agh-wl]");
     if (wlBox) wlBox.insertAdjacentHTML("beforeend",
       '<div class="wl" data-agh-qw3live><span class="ck">◐</span><span>elizax 실AI — 실제 데이터 조회 중… <b data-agh-qw3tool></b></span></div>');
@@ -1031,8 +1239,9 @@
   RENDER.qw3 = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
+    var tgt = targetEmp();
     host.innerHTML = screenHead("qw3") +
-      '<div class="agh-workpanel"><div class="lab">⏳ 작업 중 <span class="who">김도현 · 실행력</span></div>' +
+      '<div class="agh-workpanel"><div class="lab">⏳ 작업 중 <span class="who">' + esc(tgt.name || tgt.emp_id) + " · 실행력" + esc(targetNote()) + "</span></div>" +
       '<div class="agh-worklines" data-agh-wl>' +
       [["ERP 실적을 확인하는 중…", "목표3 달성률 125% 확인"], ["동일 직무군 분포 대조 중 —", "상위 32%"], ["평가규정 §4.2 등급 기준을 대조하는 중…", ""]].map(function (l, i) {
         return '<div class="wl" data-wl="' + i + '"><span class="ck">○</span><span>' + esc(l[0]) + ' <b data-wlb></b></span></div>';
@@ -1072,8 +1281,10 @@
   RENDER.hold = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
+    var tgt = targetEmp();
+    var who = tgt.name || tgt.emp_id;
     host.innerHTML = screenHead("hold") +
-      '<div class="agh-workpanel"><div class="lab">⏳ 작업 중 <span class="who">박지훈 · 등급 초안</span></div>' +
+      '<div class="agh-workpanel"><div class="lab">⏳ 작업 중 <span class="who">' + esc(who) + " · 등급 초안" + esc(targetNote()) + "</span></div>" +
       '<div class="agh-worklines" data-agh-wl>' +
       [["KR1 체크인 기록 확인 중…", ""], ["KR2 실적 근거 탐색 중…", ""], ["KR3 실적 근거 탐색 중…", ""]].map(function (l, i) {
         return '<div class="wl" data-wl="' + i + '"><span class="ck">○</span><span>' + esc(l[0]) + ' <b data-wlb></b></span></div>';
@@ -1106,7 +1317,7 @@
     });
     T(function () {
       host.querySelector("[data-agh-hold]").style.display = "";
-      logAudit("판단 정지", "박지훈 등급 초안 — KR2·KR3 근거 부족", "hold.no-evidence");
+      logAudit("판단 정지", who + " 등급 초안 — KR2·KR3 근거 부족", "hold.no-evidence");
       ctxAppendIf(host, '<div class="agh-live warn">수행 중 정지 — 근거 2건 부족. 사용자 응답 대기.</div>');
     }, 2700);
     host.addEventListener("click", function (e) {
@@ -1202,6 +1413,10 @@
     } catch (e) {}
     return { rows: rows, dist: dist, basisTot: basisTot, basisHas: basisHas, sNoBasis: sNoBasis };
   }
+  /* 근거 없는 S 난이도 건수 — 심의 요약에서 재사용 */
+  function dcalibSNoBasis() {
+    try { return calibDiffData().sNoBasis || 0; } catch (e) { return 0; }
+  }
   function calibDiffHTML() {
     var dd = calibDiffData();
     if (!dd.rows.length) return "";
@@ -1228,7 +1443,7 @@
     var T = timerFor(host);
     host.innerHTML = screenHead("calib") +
       '<div class="agh-callayout"><div class="agh-round">' +
-      '<div class="lab">Roundtable 에이전트 4종 <span class="live" data-agh-live>● LIVE 실시간 심의</span></div>' +
+      '<div class="lab">Roundtable 에이전트 4종 <span class="live" data-agh-live>● 심의 진행 중</span></div>' +
       '<div class="agh-rgraph"><div class="agh-orch" data-agh-orch>조정<br>진행자<small data-agh-orchst>조율 중</small></div>' +
       [["증거검증", "자기평가·실적 대조", "tl"], ["정치배제", "관대화·강제배분 감사", "tr"], ["편향필터", "난이도 편차 보정", "bl"], ["전략기여", "전사목표 연계 검증", "br"]].map(function (a, i) {
         return '<div class="agh-ragent ' + a[2] + '" data-ra="' + i + '"><b>' + esc(a[0]) + "</b><small>" + esc(a[1]) + "</small><span class=\"rel\" data-rel></span></div>";
@@ -1238,7 +1453,7 @@
       '<div class="agh-whatif"><div class="lab">가정 · 강제배분 상한 <b data-agh-cap>30%</b></div>' +
       '<input type="range" min="20" max="40" step="5" value="30" data-agh-capslider>' +
       "<small>같은 계산 규칙에서 상한만 바꿔 즉시 재산출 · 계산 규칙 재적용</small></div>" +
-      '<div class="agh-sumbox" data-agh-calsum style="display:none"><b>심의 결과 요약</b><ul><li>강제배분 상한 준수 → A 25%</li><li>이상치 3건 → 0건으로 해소</li></ul></div></div></div>' +
+      '<div class="agh-sumbox" data-agh-calsum style="display:none"><b>심의 결과 요약</b><div data-agh-calsumbody></div></div></div></div>' +
       calibDiffHTML() +
       gateHTML("calib", ["조정안 승인", "수정", "보류"]);
     ctxPanelIf(host, [
@@ -1272,6 +1487,23 @@
       var o = host.querySelector("[data-agh-orchst]"); if (o) o.textContent = "합의 수렴";
       var lv = host.querySelector("[data-agh-live]"); if (lv) { lv.textContent = "● 심의 수렴"; lv.classList.add("done"); }
       host.querySelector("[data-agh-calsum]").style.display = "";
+      /* 요약도 실집계 재산출값으로 — 하드코딩된 "A 25%" 폐기 */
+      var sim = simulateCalib({ cap_pct: +slider.value });
+      var body = host.querySelector("[data-agh-calsumbody]");
+      if (body) {
+        if (sim.error) body.innerHTML = "<p>" + esc(sim.error) + "</p>";
+        else {
+          var moves = sim.gradeChange.filter(function (g) { return g.delta_pp !== 0; });
+          body.innerHTML = "<ul>" +
+            "<li>상한 " + sim.basis.cap_grades + " ≤ " + sim.cap_pct + "% 적용 → " +
+            (moves.length
+              ? moves.map(function (g) { return g.grade + " " + g.before_pct + "%→" + g.after_pct + "%"; }).join(" · ")
+              : "현재 분포가 이미 상한 이내 — 조정 없음") + "</li>" +
+            "<li>이동 폭 <b>" + sim.moved_pp + "%p</b> · 모집단 <b>" + sim.basis.population_n + "명</b> 실집계 기준</li>" +
+            (dcalibSNoBasis() ? "<li>근거 없는 S 난이도 <b>" + dcalibSNoBasis() + "건</b> — 심의 안건</li>" : "") +
+            "</ul>" + calibBasisHTML(sim);
+        }
+      }
       renderDist(host, +slider.value, true);
     }, 4500);
   };
@@ -1292,40 +1524,182 @@
          people:      [ { name, coef, before, after } ]  // 난이도 보정계수(coef) × (원점수+델타)
        }
      EZCalc.calibDiff() → 난이도 보정 원자료 { rows, dist, basisTot, basisHas, sNoBasis } */
+  var GRADES = ["S", "A", "B", "C", "D"];
+  /* 기준 분포 — 하드코딩 {S:8,A:32,B:44,C:12,D:4} 폐기.
+     단일 원천 = TALENX_DATA.evaluations 실 집계(모집단 N 포함). 집계가 비면 null →
+     호출부는 "기준 분포를 만들 수 없다"고 정직하게 멈춘다(추정 금지). */
+  function baseDistribution() {
+    var cnt = { S: 0, A: 0, B: 0, C: 0, D: 0 }, n = 0, period = null;
+    (D().evaluations || []).forEach(function (v) {
+      if (cnt[v.grade] == null) return;
+      cnt[v.grade]++; n++;
+      if (!period && v.period) period = v.period;
+    });
+    if (!n) return null;
+    /* 최대잔여법 — 반올림 오차로 합계가 100%를 벗어나지 않게 */
+    var raw = {}, pct = {}, sum = 0;
+    GRADES.forEach(function (g) { raw[g] = cnt[g] / n * 100; pct[g] = Math.floor(raw[g]); sum += pct[g]; });
+    var rest = GRADES.slice().sort(function (a, b) { return (raw[b] - pct[b]) - (raw[a] - pct[a]); });
+    for (var i = 0; i < 100 - sum && rest.length; i++) pct[rest[i % rest.length]]++;
+    return { pct: pct, count: cnt, n: n, period: period || "현재 평가 주기" };
+  }
+  /* 등급컷·강제배분 규칙 — 데이터/정책에 있으면 그것을, 없으면 상수를 쓰되 출처를 화면에 밝힌다 */
+  function capRule() {
+    var d = D();
+    var p = (d.meta && d.meta.gradePolicy) || d.gradePolicy || null;
+    if (p && p.cap_grades && p.cap_pct != null) {
+      return { grades: p.cap_grades, source: p.source || "talenx 평가정책", fromData: true };
+    }
+    return {
+      grades: ["S", "A"], fromData: false,
+      source: "데모 가정 — talenx 데이터에 등급 분포 정책이 없어 상위등급(S+A) 상한을 화면 슬라이더로 가정합니다"
+    };
+  }
   function simulateCalib(params) {
     params = params || {};
     var cap = (params.cap_pct == null) ? state.whatifCap : +params.cap_pct;
     var delta = +(params.achievement_delta || 0) || 0;
-    var base = { S: 8, A: 32, B: 44, C: 12, D: 4 };
-    var adjS = Math.min(base.S, Math.round(cap * 0.2));
-    var adj = { S: adjS, A: Math.min(base.A, cap - adjS) };
-    adj.B = base.B + (base.S - adj.S) + (base.A - adj.A) - 2;
-    adj.C = base.C + 2;
-    adj.D = base.D;
-    var gradeChange = ["S", "A", "B", "C", "D"].map(function (g) {
+    var bd = baseDistribution(), rule = capRule();
+    if (!bd) {
+      return {
+        error: "평가 기록이 없어 기준 분포를 만들 수 없습니다 — 추정하지 않습니다.",
+        cap_pct: cap, achievement_delta: delta
+      };
+    }
+    var base = bd.pct, top = rule.grades;
+    var lower = GRADES.filter(function (g) { return top.indexOf(g) < 0; });
+    var topSum = 0, lowSum = 0;
+    top.forEach(function (g) { topSum += base[g] || 0; });
+    lower.forEach(function (g) { lowSum += base[g] || 0; });
+    var adj = {}; GRADES.forEach(function (g) { adj[g] = base[g] || 0; });
+    var moved = 0;
+    if (topSum > cap) {
+      /* 상한 초과분은 상위등급을 기존 비중대로 축소해 만든다 (매직넘버 없음) */
+      var used = 0;
+      top.forEach(function (g, i) {
+        adj[g] = (i === top.length - 1) ? Math.max(0, cap - used) : Math.max(0, Math.round(base[g] / topSum * cap));
+        used += adj[g];
+      });
+      moved = topSum - used;
+      /* 내려온 몫은 하위등급의 기존 비중에 비례 배분 — 비중이 0이면 최하위 바로 위 등급으로 */
+      var placed = 0;
+      if (lowSum > 0) {
+        lower.forEach(function (g, i) {
+          var add = (i === lower.length - 1) ? (moved - placed) : Math.round(moved * (base[g] || 0) / lowSum);
+          adj[g] = (base[g] || 0) + add; placed += add;
+        });
+      } else if (lower.length) {
+        adj[lower[0]] = (base[lower[0]] || 0) + moved;
+      }
+    }
+    var gradeChange = GRADES.map(function (g) {
       return { grade: g, before_pct: base[g], after_pct: adj[g], delta_pp: adj[g] - base[g] };
     });
     var people = calibDiffData().rows.map(function (r) {
       var b = Math.round((r.before + delta) * 10) / 10;
       return { name: r.name, coef: r.coef, before: b, after: Math.round(b * r.coef * 10) / 10 };
     });
-    return { cap_pct: cap, achievement_delta: delta, before: base, after: adj, gradeChange: gradeChange, people: people };
+    return {
+      cap_pct: cap, achievement_delta: delta, before: base, after: adj,
+      gradeChange: gradeChange, people: people, moved_pp: moved,
+      basis: {
+        population_n: bd.n, counts: bd.count, period: bd.period,
+        cap_grades: top.join("+"),
+        base_source: "talenx 평가 기록 " + bd.n + "명 실집계 · " + bd.period,
+        cap_rule_source: rule.source, cap_rule_from_data: rule.fromData
+      }
+    };
   }
-  window.EZCalc = { simulate: simulateCalib, calibDiff: calibDiffData };
+  window.EZCalc = { simulate: simulateCalib, calibDiff: calibDiffData, baseDistribution: baseDistribution };
+
+  /* 산출 근거 한 줄 — 모집단 N·기준 분포 출처·상한 규칙 출처 */
+  function calibBasisHTML(sim) {
+    if (!sim || !sim.basis) return "";
+    var b = sim.basis;
+    return '<div class="agh-prow" style="margin-top:6px;font-size:11.5px;line-height:1.6">' +
+      "기준: <b>" + esc(b.base_source) + "</b> (S " + b.counts.S + " · A " + b.counts.A + " · B " + b.counts.B + " · C " + b.counts.C + " · D " + b.counts.D + "명) " +
+      srcChip("talenx", "평가 기록 집계") + "<br>" +
+      "상한 규칙: <b>" + esc(b.cap_grades) + " ≤ " + sim.cap_pct + "%</b> · " + esc(b.cap_rule_source) + " " +
+      srcChip("rule", b.cap_rule_from_data ? "평가정책" : "데모 가정") + "</div>";
+  }
 
   function renderDist(root, cap, after) {
     var host = root.querySelector("[data-agh-dist]");
     if (!host) return;
     var sim = simulateCalib({ cap_pct: cap });
+    if (sim.error) {
+      host.innerHTML = '<div class="agh-prow bad">' + esc(sim.error) + "</div>";
+      return;
+    }
     host.innerHTML = sim.gradeChange.map(function (gc) {
       var b = gc.before_pct, a2 = after ? gc.after_pct : b, d = a2 - b;
       return '<div class="agh-drow"><b>' + gc.grade + '</b><div class="tr"><i style="width:' + b * 2 + 'px"></i></div><span>' + b + "%</span><em>→</em>" +
         '<div class="tr af"><i style="width:' + a2 * 2 + 'px"></i></div><span>' + a2 + "%</span>" +
         '<small class="' + (d < 0 ? "neg" : d > 0 ? "pos" : "") + '">' + (d > 0 ? "+" : "") + d + "%p</small></div>";
-    }).join("");
+    }).join("") + calibBasisHTML(sim);
   }
 
-  /* ---------- 리뷰 초안 co-writing ---------- */
+  /* ---------- 리뷰 초안 co-writing ----------
+     [data-agh-revgo]는 원래 숨긴 문단을 다시 보여줄 뿐인 no-op였다.
+     이제 입력한 지시(data-agh-revin)를 실제로 반영해 제안 문단을 재생성한다.
+     AI 연결 시 EZAI 실호출(도구로 실데이터 인용), 미연결이면 재작성했다고 말하지 않고
+     "AI 미연결 — 지시를 반영하려면 연결 필요"를 명시한다. */
+  function reviewRegen(host, instr) {
+    var p = host.querySelector("[data-agh-prop]");
+    if (!p) return;
+    var hl = p.querySelector(".hl");
+    var note = p.querySelector("[data-agh-revnote]");
+    if (!note) {
+      p.insertAdjacentHTML("afterbegin", '<div data-agh-revnote class="agh-flag" style="display:block;margin-bottom:6px"></div>');
+      note = p.querySelector("[data-agh-revnote]");
+    }
+    p.style.display = "";
+    if (!instr) {
+      note.textContent = "지시문이 비어 있습니다 — 무엇을 어떻게 고칠지 적어주세요.";
+      return;
+    }
+    logAudit("지시", "리뷰 co-writing · " + instr, "rev.instr");
+    if (!aiLive()) {
+      note.innerHTML = "⚠ <b>AI 미연결 — 지시를 반영하려면 연결이 필요합니다.</b> 받은 지시: 「" + esc(instr) +
+        "」 · 아래 제안 문단은 <b>재작성된 것이 아니라 기존 제안 그대로</b>입니다.";
+      ctxAppendIf(host, '<div class="agh-live warn">지시 수신 — AI 미연결이라 재작성하지 못했습니다. 기존 제안을 유지합니다.</div>');
+      return;
+    }
+    var tgt = targetEmp();
+    var cur = "";
+    var doc = host.querySelector("[data-agh-doc]");
+    if (doc) cur = (doc.textContent || "").trim();
+    note.innerHTML = '<i class="agh-spin"></i> 지시를 반영해 다시 쓰는 중 — 「' + esc(instr) + "」";
+    if (hl) hl.setAttribute("data-prev", hl.textContent || "");
+    EZAI.agent({
+      maxTurns: 6, maxTokens: 700,
+      system: "당신은 elizax — 성과 리뷰 co-writer입니다. 사용자의 자연어 지시대로 '핵심 성과' 문단에 넣을 제안 문장을 다시 씁니다. " +
+        "반드시 도구(get_objectives, get_checkins, 필요 시 get_context_ledger)로 대상자의 실데이터를 먼저 조회하고, 조회된 수치·사실만 인용합니다. " +
+        "근거가 조회되지 않으면 지어내지 말고 '근거를 찾지 못해 멈췄습니다'라고만 씁니다. " +
+        "출력은 제안 문장 1~2문장만 — 머리말·설명·따옴표 금지.",
+      messages: [{
+        role: "user",
+        content: "대상자: " + tgt.name + " (" + tgt.emp_id + ")\n현재 문단: " + cur + "\n지시: " + instr
+      }],
+      onTool: function (name) {
+        note.innerHTML = '<i class="agh-spin"></i> ' + esc((window.EZTools && EZTools.labelOf) ? EZTools.labelOf(name) : name) + "…";
+      },
+      onDone: function (text) {
+        var t = (text || "").trim();
+        if (!t) {
+          note.textContent = "AI가 빈 응답을 보냈습니다 — 기존 제안을 유지합니다.";
+          return;
+        }
+        if (hl) hl.textContent = t;
+        note.innerHTML = "✓ 지시 「" + esc(instr) + "」를 반영해 재작성했습니다 · elizax 실시간 생성";
+        logAudit("초안 재작성", "리뷰 · " + t.slice(0, 40), "rev.regen");
+        ctxAppendIf(host, '<div class="agh-live ok">지시를 반영해 제안 문장을 다시 썼습니다. 반영/무시는 문장 단위로 선택하세요.</div>');
+      },
+      onError: function () {
+        note.textContent = "AI 호출에 실패했습니다 — 기존 제안을 유지합니다.";
+      }
+    });
+  }
   RENDER.review = function (host) {
     host = host || el.canvas;
     var T = timerFor(host);
@@ -1352,10 +1726,14 @@
     T(function () { host.querySelector("[data-agh-prop]").style.display = ""; ctxAppendIf(host, '<div class="agh-live">talenx, Slack, ERP 데이터를 인용해 \'핵심 성과\' 문단에 2문장을 제안했습니다.</div>'); }, 1300);
     host.addEventListener("click", function (e) {
       if (e.target.closest("[data-rev-apply]")) {
+        /* 하드코딩 문장이 아니라 지금 제안 박스에 떠 있는 문장을 그대로 반영 */
+        var hl = host.querySelector("[data-agh-prop] .hl");
+        var txt = hl ? (hl.textContent || "").trim() : "";
+        if (!txt) { toast("반영할 제안 문장이 없습니다."); return; }
         var doc = host.querySelector("[data-agh-doc]");
-        doc.insertAdjacentHTML("beforeend", '<p class="ins">분기 중 3개 유관부서(마케팅본부, 컨설팅본부, UX 디자인팀)와의 연동 과제를 무중단으로 완료해 대규모 업그레이드 배포 안정성을 높임.</p>');
+        doc.insertAdjacentHTML("beforeend", '<p class="ins">' + esc(txt) + "</p>");
         host.querySelector("[data-agh-prop]").style.display = "none";
-        logAudit("문장 반영", "리뷰 · 핵심 성과 +2문장", "rev.ins.2");
+        logAudit("문장 반영", "리뷰 · 핵심 성과 — " + txt.slice(0, 40), "rev.ins");
         toast("문서에 반영 — 변경 근거가 기록되었습니다.", "ok");
       }
       if (e.target.closest("[data-rev-skip]")) {
@@ -1364,9 +1742,8 @@
         toast("제안을 무시했습니다. 원문이 유지됩니다.");
       }
       if (e.target.closest("[data-agh-revgo]")) {
-        var p = host.querySelector("[data-agh-prop]");
-        p.style.display = "";
-        ctxAppendIf(host, '<div class="agh-live">자연어 지시 수신 — 문서를 재작성하고 근거를 다시 인용했습니다.</div>');
+        var inp = host.querySelector("[data-agh-revin]");
+        reviewRegen(host, inp ? (inp.value || "").trim() : "");
       }
     });
     /* 지시 입력창 Enter로도 실행 */
@@ -1453,16 +1830,19 @@
     var q = (input.value || "").trim();
     if (!q) return;
     input.value = "";
-    /* 의도 라우팅: 시나리오 키워드 매칭 → 해당 시뮬 실행 */
+    /* 의도 라우팅: 시나리오 키워드 매칭 → 해당 화면 실행 (규칙은 intentFor 단일 원천) */
     var k = intentFor(q);
-    if (!k) {
-      if (/감사|로그/.test(q)) k = "audit";
-      else if (/산출물|자산/.test(q)) k = "assets";
-    }
     if (k && SCREENS[k]) {
+      /* 롤 가드는 라우팅 '전에' — 권한 없는 지시가 실행된 것처럼 감사 로그를 오염시키지 않는다 */
+      if (!allowedScreen(k)) {
+        toast("이 기능은 " + roleNames(scenarioOf(k)) + " 권한에서 열람할 수 있습니다.");
+        logAudit("지시 거절 · 권한 없음", q + " → " + SCREENS[k].title + " (실행 안 함)", "cmd.denied");
+        return;
+      }
+      logAudit("지시", q + " → " + SCREENS[k].title, "cmd");
       showScreen(k);
+      if (SCREENS[k].redirect) return;   /* 결정 흐름 등 외부 화면으로 넘어간 경우 */
       ctxAppend('<div class="agh-live">지시 수신 · "' + esc(q) + '" → ' + esc(SCREENS[k].title) + " 실행</div>");
-      logAudit("지시", q, "cmd");
       return;
     }
     /* 시나리오 키워드가 아니면 공유 대화 스레드로 라우팅 —
@@ -1522,14 +1902,14 @@
   /* ============================================================
      open / close / init
      ============================================================ */
-  function openHub(screen) {
+  /* openHub(screen, ctx) — ctx {empId, source}로 대상자·진입 출처를 인계받는다.
+     (평가관리에서 열면 그 화면에서 보던 직원이 qw3·hold·qw6의 대상자가 된다) */
+  function openHub(screen, ctx) {
     buildHub();
     state.open = true;
-    /* 블러 백드롭(패딩 영역) 클릭 시 닫기 */
-    if (!el.root._ezBackdrop) {
-      el.root._ezBackdrop = true;
-      el.root.addEventListener("click", function (e) { if (e.target === el.root) closeHub(); });
-    }
+    /* 인계 컨텍스트는 열 때마다 갱신 — 이전 진입의 대상자가 남아 오염되지 않게 */
+    state.ctx = (ctx && (ctx.empId || ctx.source)) ? { empId: ctx.empId || null, source: ctx.source || "" } : null;
+    /* 백드롭 클릭으로 닫지 않는다 — 작성 중인 지시·초안이 사라지는 사고 방지(닫기는 ✕ 또는 Esc) */
     el.root.classList.add("on");
     var rc = el.root.querySelector("[data-agh-role]");
     if (rc) rc.textContent = role().label + " 관점 · " + CU().name;
@@ -1544,7 +1924,51 @@
       ai.style.color = rdy ? "var(--agh-ok,#15803D)" : md === "offline" ? "" : "var(--agh-warn,#B45309)";
     }
     document.body.style.overflow = "hidden";
-    showScreen(screen || defaultScreen());
+    state.stack = [];                 /* 새로 열 때 히스토리 초기화 */
+    showScreen(screen || defaultScreen(), { push: false });
+  }
+
+  /* ⑤ 결정 흐름 — 허브 자체 procmap 화면 폐기 후 EZJourney로 단일화 */
+  function openJourney() {
+    if (!(window.EZJourney && EZJourney.open)) {
+      toast("결정 흐름 화면(EZJourney)을 불러오지 못했습니다.");
+      return false;
+    }
+    var id = (state.ctx && state.ctx.empId) || null;
+    logAudit("결정 흐름 열기", "EZJourney" + (id ? " · " + id : " · 기본 대상"), "journey.open");
+    closeHub();
+    try { EZJourney.open(id || undefined); } catch (e) { toast("결정 흐름을 여는 중 오류가 발생했습니다."); return false; }
+    return true;
+  }
+
+  /* ④ 도킹으로 전환 — 지금 보던 시나리오 요약을 대화에 인계한다 */
+  function handoffText() {
+    var k = state.screen, s = SCREENS[k];
+    if (!s) return "";
+    var lines = ["✦ 전체화면 워크스페이스에서 이어옵니다 — <b>" + esc(s.title) + "</b> · " + esc(AS_OF)];
+    if (state.ctx && state.ctx.empId) {
+      var t = targetEmp();
+      lines.push("· 대상자 " + esc(t.name || t.emp_id) + esc(targetNote()));
+    }
+    var dec = gateDec(k);
+    if (dec) lines.push("· 결정 게이트: " + esc(dec.act) + (dec.note ? " — " + esc(dec.note) : ""));
+    var v = el.canvas && el.canvas.querySelector("[data-agh-verdict]");
+    var vt = v && v.textContent ? v.textContent.trim() : "";
+    if (vt) lines.push("· 요약: " + esc(vt.length > 180 ? vt.slice(0, 180) + "…" : vt));
+    lines.push("이어서 물어보시면 이 맥락 위에서 답합니다.");
+    return lines.join("<br>");
+  }
+  function dockHandoff() {
+    var note = handoffText();
+    closeHub();
+    if (note && window.EZChat && EZChat.push) {
+      try {
+        EZChat.push({ role: "ai", text: note.replace(/<br>/g, "\n").replace(/<\/?b>/g, ""), meta: { hubHandoff: true } });
+        logAudit("인계", "허브 → 도킹 대화 · " + (SCREENS[state.screen] ? SCREENS[state.screen].title : ""), "hub.handoff");
+      } catch (e) { /* 스토어 오류 무시 */ }
+    }
+    if (window.Elizax && window.Elizax.open) window.Elizax.open();
+    if (window.Elizax && window.Elizax.refresh) window.Elizax.refresh();
   }
   function closeHub() {
     if (!state.open) return; /* 허브 미오픈 시 clearTimers로 도킹 카드를 건드리지 않음 */
@@ -1566,7 +1990,11 @@
     scheduleProactive();
     /* 디버그/스크린샷용 자동 오픈: index.html#ez=hub */
     var hubM = window.location.href.match(/[?#&]ez=hub(?::([a-z0-9]+))?/);
-    if (hubM) setTimeout(function () { openHub(hubM[1] || undefined); }, 700);
+    /* 딥링크로 대상자도 인계 — #ez=hub:qw3&emp=EMP-0123 */
+    var empM = window.location.href.match(/[?#&]emp=(EMP-[0-9]+)/i);
+    if (hubM) setTimeout(function () {
+      openHub(hubM[1] || undefined, empM ? { empId: empM[1].toUpperCase(), source: "딥링크" } : null);
+    }, 700);
     if (/[?#&]ez=panel/.test(window.location.href)) setTimeout(function () { if (window.Elizax) Elizax.open(); }, 700);
   }
   if (document.readyState === "complete") setTimeout(init, 400);
@@ -1663,69 +2091,28 @@
   };
 
   /* ============================================================
-     결정 흐름 · 결정의 계보 — 목표수립→중간점검→평가→피드백 결정 타임라인
-     피드백 반영: 흩어진 근거 통합 · 난이도 근거 · 측정불가 KR 경고 · 작년→올해 승계
+     [폐기] 결정 흐름(procmap) 화면 — EZJourney로 단일화 (F13)
+     허브가 자체 계보 화면을 또 그리면서 (a) EZJourney와 두 갈래로 갈라지고
+     (b) 대상자가 "evaluations를 가진 첫 직원"이라 조직원이 타인 계보를 보게 되는
+     문제가 있었다. SCREENS.procmap.redirect="journey" → showScreen()이 즉시
+     window.EZJourney.open(ctx.empId)으로 넘긴다. 내비/홈 카드에는 노출하지 않는다.
+
+     ── 인수인계 메모 (tx_journey.js 담당자에게 · 이 파일에서는 삭제됨) ──
+     여기 있던 procmap 고유 자산 3종을 EZJourney 노드 패널로 이관 요청:
+       ① What-if 버튼 "중간점검 근거 제외하고 재구성"
+          → 중간점검 노드를 빼면 평가 코멘트의 '과정 근거'가 사라져
+            '결과만 있는 평가'가 된다는 것을 보여주는 근거-연결 가치 데모.
+            (참조 라벨: rule-exec.lineage)
+       ② 난이도 근거 경고 (목표수립 노드)
+          → keyResults[].difficulty_basis 필드가 비어 있는 KR에 대해
+            "난이도 S/A 판단의 근거 필드가 없어 평가 시 분쟁 소지" 경고.
+            원자료는 EZCalc.calibDiff().sNoBasis / basisHas 로 이미 계산돼 있음.
+       ③ 측정 불가 KR 검사 (목표수립 노드)
+          → kr.name·target_value에 정량 기호(숫자·%·억·건·명·점)가 하나도 없으면
+            "평가 시점 분쟁 위험 — 작성 시점에 지표화 권고" 경고를 띄우던 검사.
+            (동일 규칙 엔진이 EZLint에도 있으니 EZLint.lint(name,"goal") 재사용 권장)
+     계보 노드의 감사 표기는 원장 실 id가 있을 때만 — 위조 GA-번호 생성 금지(기존 합의).
      ============================================================ */
-  RENDER.procmap = function (host) {
-    host = host || el.canvas;
-    /* 위조 GA-번호 생성기 폐지 — 계보 노드는 원장 실 id가 있을 때만 ID를 표시한다 */
-    var d = D(), emps = d.employees || [], evals = d.evaluations || [], hist = d.evalHistory || [], krs = d.keyResults || [], objs = d.objectives || [];
-    var cu = CU();
-    var subj = emps.filter(function (e) { return evals.some(function (v) { return v.emp_id === e.emp_id; }); })[0] || emps[0] || { name: cu.name, emp_id: cu.emp_id };
-    var ev = evals.filter(function (v) { return v.emp_id === subj.emp_id; })[0] || {};
-    var hrow = ((hist.filter(function (x) { return x.emp_id === subj.emp_id; })[0]) || {}).history || [];
-    var myObj = objs.filter(function (o) { return o.owner_emp_id === subj.emp_id; })[0] || {};
-    var myKr = krs.filter(function (k) { return k.objective_id === (myObj.objective_id || ""); });
-    var hardKr = myKr.filter(function (k) { return /A|S/.test(k.difficulty || ""); })[0] || myKr[0] || {};
-    var vagueKr = myKr.filter(function (k) { return !/[\d%]|억|건|명|점/.test(k.name || "") && !/[\d%]/.test(k.target_value || ""); })[0];
-    var prev = hrow.length ? hrow[hrow.length - 1] : null;
-
-    function node(stage, code, title, st, asof, evid, cite, warn) {
-      return '<div class="agh-pmnode ' + st + '" data-pm-node>' +
-        '<div class="agh-pmstage">' + esc(stage) + '</div>' +
-        '<div class="agh-pmtitle">' + esc(title) + ' <span class="agh-pmst">' + (st === "ok" ? "✓ 승인됨" : st === "wait" ? "⏳ 승인 대기" : "● 진행") + '</span></div>' +
-        '<div class="agh-pmasof">◷ ' + esc(asof) + '</div>' +
-        '<div class="agh-pmev">' + evid + '</div>' +
-        (warn || '') +
-        (cite ? '<div class="agh-pmcite">↳ ' + cite + '</div>' : '') +
-        /* 위조 GA-번호 폐지 — 단계별 원장 실 id가 없는 데모 계보는 정직하게 "기록 전" */
-        '<span class="agh-auditchip" data-pm-ga="' + esc(code) + '">⛨ 기록 전 — 결정 게이트 확정 시 원장 기록</span></div>';
-    }
-
-    host.innerHTML = screenHead("procmap") +
-      '<div class="agh-cmbar"><span class="agh-chip asof">◷ 기준 시점 · ' + esc(AS_OF) + '</span><span class="agh-auditchip">⛨ 대상 ' + esc(subj.name || "") + ' · 권한 내 조회</span></div>' +
-      '<div class="agh-pmflow">' +
-        node("목표수립", "pm1", "목표·가중치 확정", "ok", "1월 · 확정 스냅샷",
-          'KR ' + myKr.length + '건 · 가중치 합 검증 · 핵심 KR <b>난이도 ' + esc(hardKr.difficulty || "-") + '</b> ' + srcChip("talenx", "okr.tree"),
-          "평가 단계의 '어려운 목표였다' 판단 근거로 인용됨",
-          '<div class="agh-pmwarn">난이도 근거(신설 제안): "' + esc(hardKr.name || "핵심 KR") + '"은 작년 실적 대비 상향폭이 커 ' + esc(hardKr.difficulty || "A") + '로 판단 — 지금은 근거 필드가 없어 평가 시 분쟁 소지</div>' +
-          (vagueKr ? '<div class="agh-pmwarn crit">⚠ 측정 가능성 경고: "' + esc(vagueKr.name) + '"은 정량 기준이 없어 평가 시점 분쟁 위험 — 작성 시점에 지표화 권고(POC 검증됨)</div>' : '')) +
-        node("중간점검", "pm2", "중간점검 요약 확정", "ok", "6월 · 6/30 마감",
-          '체크인·1:1 기록을 종합한 진척 요약 ' + srcChip("talenx", "checkins") + srcChip("talenx", "1:1 로그"),
-          "평가 코멘트의 '과정 근거'로 이 요약이 인용됨", null) +
-        node("평가", "pm3", "등급 초안 → 캘리브레이션 조정", "wait", "7월 · 평가 시즌",
-          '자기·상사·피어 종합 <b>' + esc(ev.grade || "-") + '</b> (종합 ' + (ev.weighted_score != null ? ev.weighted_score : "-") + ') ' + srcChip("erp", "실적") + srcChip("rule", "평가규정 v3.1"),
-          "중간점검 요약(6월) + 목표수립 난이도를 근거로 인용", null) +
-        node("피드백", "pm4", "리뷰 확정 · 차년도 이월", "wait", "8월 · 피드백 면담",
-          '근거 인용 리뷰 초안 + 개선계획 ' + srcChip("talenx", "review.draft"),
-          '작년 <b>' + (prev ? esc(prev.grade) + "등급(" + esc(prev.period) + ")" : "평가·피드백") + '</b> → 올해 목표수립 초안으로 <b>승계</b> (매년 백지에서 시작하지 않음)', null) +
-      '</div>' +
-      '<div class="agh-verdict">이 계보 한 장이 "왜 이 등급인가"를 설명하고 <b>AI 관여 고지·이의제기 대응</b>의 실체가 됩니다. 앞 단계 근거가 다음 단계로 인용선(↳)으로 이어지고, 마지막 확정은 차년도 목표수립으로 승계됩니다. 새로 만드는 것이 아니라 <b>흩어진 근거(트레이스·맥락 기록·감사 로그)를 프로세스 순서로 묶는 일</b>. ' + srcChip("talenx", "context.timeline") + '</div>' +
-      '<div class="agh-linkrow"><button class="agh-btn" data-pm-wf>What-if · 중간점검 근거 제외하고 재구성</button><span data-pm-wfout class="agh-cmwfout"></span></div>' +
-      gateHTML("procmap", ["계보 확정", "근거 보강", "보류"]);
-    ctxPanelIf(host, [
-      { tag: "통합", title: "흩어진 근거를 한 장으로", body: "답변 단위 계산 트레이스·시간순 맥락 기록·감사 로그·1:1 지원 범위 맵을 프로세스 순서로 재배열. 이미 쌓인 데이터를 묶는 일에 가까움." },
-      { tag: "영속성", title: "다음 단계 숙제", body: "데모 기록은 브라우저 저장·80건 초과 삭제됨. 실서비스는 무엇을 얼마나 보관하고 누가 볼 수 있는지 규칙 정의 필요(상태 저장소)." }
-    ]);
-    var pw = host.querySelector("[data-pm-wf]");
-    if (pw) pw.addEventListener("click", function () {
-      var out = host.querySelector("[data-pm-wfout]");
-      if (out) out.innerHTML = " → 중간점검 근거 제외 시 평가 코멘트의 <b>과정 근거</b>가 사라져 '결과만 있는 평가'가 됩니다 — 근거 연결의 가치 확인. " + srcChip("rule", "rule-exec.lineage");
-    });
-    Array.prototype.forEach.call(host.querySelectorAll("[data-pm-node]"), function (nd) {
-      nd.addEventListener("click", function (e) { if (e.target.closest(".agh-btn")) return; nd.classList.toggle("open"); });
-    });
-  };
 
   /* ---------------- ⌘K 팔레트 — 슬래시/의도 라우터와 동일 레지스트리(SCREENS·SCENARIOS) 재사용 ---------------- */
   var palEl = null;

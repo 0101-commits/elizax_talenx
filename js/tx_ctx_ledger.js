@@ -62,6 +62,7 @@
 
   var items = null;          /* lazy-loaded 배열 */
   var filterType = "";       /* 패널 type 필터 ("" = 전체) */
+  var detailId = null;       /* 상세 뷰 대상 항목 id ("" = 목록) */
   var renderTimer = null;
   var streamingOn = false;
   var seq = 0;
@@ -188,18 +189,36 @@
   }
 
   /* ================= 스토어 ================= */
+  /* v1 스토어 호환 — 구버전 시드에는 seed 플래그가 없고 usedCount가 선탑재돼 있다.
+     시드 ts는 seedTs()가 만든 정각(초·밀리초 0), 실사용 기록은 Date.now()라 사실상 겹치지 않는다.
+     → 예시 배지가 붙도록 플래그를 채우고, 지어낸 인용 횟수는 0으로 되돌린다 (F15). */
+  function backfillSeedFlags(list) {
+    var changed = false;
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (it.seed || !it.ts || it.ts % 60000 !== 0) continue;
+      it.seed = 1;
+      if (it.usedCount) it.usedCount = 0;
+      changed = true;
+    }
+    return changed;
+  }
+
   function loadStore() {
     if (items) return items;
     items = [];
+    var migrated = false;
     try {
       var raw = localStorage.getItem(KEY);
       if (raw) {
         var obj = JSON.parse(raw);
         if (obj && Object.prototype.toString.call(obj.items) === "[object Array]") {
           items = obj.items.filter(function (it) { return it && it.id && it.type && it.title; });
+          if ((obj.v || 1) < 2) migrated = backfillSeedFlags(items);
         }
       }
     } catch (e) { items = []; }
+    if (migrated) saveStore();
     /* [Phase1 IA] 시드는 데모 플래그로 격리 — "미스터리 숫자" 해소 (Phase 1 ⑥) */
     if (!items.length && seedOn()) {
       items = buildSeeds();
@@ -232,7 +251,7 @@
         }
         items = kept;
       }
-      localStorage.setItem(KEY, JSON.stringify({ v: 1, items: items }));
+      localStorage.setItem(KEY, JSON.stringify({ v: 2, items: items }));
     } catch (e) { /* storage 불가 환경 무시 */ }
   }
   function sorted() {
@@ -400,7 +419,7 @@
       list.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
       list = list.slice(list.length - MAX_ITEMS);
     }
-    try { localStorage.setItem(key, JSON.stringify({ v: 1, items: list })); } catch (e2) { /* storage 불가 무시 */ }
+    try { localStorage.setItem(key, JSON.stringify({ v: 2, items: list })); } catch (e2) { /* storage 불가 무시 */ }
     return e;
   }
 
@@ -484,7 +503,31 @@
       "background:var(--color-background-purple);border:1px solid var(--color-border-purple);border-radius:var(--radius-inner);padding:1.5px 6px;}",
       ".ezl-used{font-size:10px;color:var(--color-text-secondary);}",
       ".ezl-used.hot{color:var(--color-success);font-weight:700;}",
+      ".ezl-item{cursor:pointer;}",
+      ".ezl-item:hover{border-color:var(--color-border-emphasized);}",
       ".ezl-item.ezl-hl{animation:ezkFlash 1.8s ease-out 2;}",
+      /* ---- 예시(시드) 배지 — 실사용 축적분과 구분 (F15) ---- */
+      ".ezl-seedb{font-size:9px;font-weight:700;color:var(--color-text-secondary);background:var(--color-background-muted);",
+      "border:1px dashed var(--color-border-emphasized);border-radius:var(--radius-inner);padding:1px 5px;}",
+      /* ---- 열람 제한 사유 한 줄 ---- */
+      ".ezl-why{font-size:10.5px;line-height:1.5;color:var(--color-text-secondary);background:var(--color-background-muted);",
+      "border:1px dashed var(--color-border-emphasized);border-radius:var(--radius-element);padding:6px 9px;margin:2px 0 8px;}",
+      /* ---- 항목 상세 ---- */
+      ".ezl-back{font:inherit;font-size:11px;font-weight:700;cursor:pointer;color:var(--color-accent);background:var(--color-background-surface);",
+      "border:1px solid var(--color-border-emphasized);border-radius:var(--radius-full);padding:3px 10px;margin-bottom:10px;}",
+      ".ezl-back:hover{background:var(--color-overlay-hover);}",
+      ".ezl-dt{font-size:14px;font-weight:700;line-height:1.45;margin:6px 0 4px;letter-spacing:-.02em;}",
+      ".ezl-dsum{font-size:12px;line-height:1.65;color:var(--color-text-primary);background:var(--color-background-card);",
+      "border:1px solid var(--color-border);border-radius:var(--radius-container);padding:10px 12px;margin-bottom:10px;white-space:pre-wrap;word-break:break-word;}",
+      ".ezl-drow{display:flex;gap:8px;font-size:11.5px;line-height:1.55;margin:5px 0;}",
+      ".ezl-drow label{flex:none;width:74px;color:var(--color-text-secondary);font-weight:600;}",
+      ".ezl-drow div{min-width:0;word-break:break-all;}",
+      ".ezl-dhead{font-size:11px;font-weight:700;color:var(--color-text-secondary);margin:14px 0 6px;}",
+      ".ezl-cite{display:block;width:100%;text-align:left;font:inherit;font-size:11.5px;line-height:1.5;cursor:pointer;margin-bottom:6px;",
+      "color:var(--color-text-primary);background:var(--color-background-card);border:1px solid var(--color-border);border-radius:var(--radius-container);padding:8px 10px;}",
+      ".ezl-cite:hover{border-color:var(--color-accent);}",
+      ".ezl-cite small{display:block;font-size:10px;color:var(--color-text-secondary);margin-top:3px;}",
+      ".ezl-cite .gs{color:var(--color-text-orange);font-weight:700;}",
       ".ezl-empty{padding:30px 8px;text-align:center;color:var(--color-text-secondary);font-size:12px;}",
       ".ezl-foot{flex:none;padding:11px 18px;border-top:1px solid var(--color-border);background:var(--color-background-muted);",
       "font-size:11px;line-height:1.55;color:var(--color-text-secondary);}",
@@ -572,7 +615,8 @@
       var title = lv === "anon" ? "익명 집계" : all[i].title;
       rows += '<div class="ezx-rec-row" data-ezl-open="' + esc(all[i].id) + '" style="--ezl-c:' + meta.color + '">'
         + '<span class="dot"></span><div class="tt">' + esc(title)
-        + "<small>" + esc(meta.label) + " · " + esc(all[i].at || "") + "</small></div></div>";
+        + "<small>" + esc(meta.label) + " · " + esc(all[i].at || "")
+        + (all[i].seed ? " · 예시" : "") + "</small></div></div>";
       shown++;
     }
     container.innerHTML = shown
@@ -635,28 +679,124 @@
         + "</div>";
     }
     var pin = isPinned(it) ? '<span class="ezl-pin">평가 인용됨 · 보존 대상</span>' : "";
-    return '<div class="ezl-item' + (hl ? " ezl-hl" : "") + '" data-ezl-id="' + esc(it.id) + '" style="--ezl-c:' + meta.color + '">'
+    return '<div class="ezl-item' + (hl ? " ezl-hl" : "") + '" data-ezl-id="' + esc(it.id) + '" title="클릭하면 원문·출처·인용 이력을 봅니다" style="--ezl-c:' + meta.color + '">'
       + '<div class="ezl-row1"><span class="ezl-tb">' + esc(meta.label) + "</span>"
+      + (it.seed ? '<span class="ezl-seedb">예시</span>' : "")
       + '<span class="ezl-at">' + esc(it.at || "") + "</span>"
       + '<span class="ezl-w" title="판단 기여도 ' + it.weight + "/3\">" + weightDots(it.weight || 1) + "</span></div>"
       + '<div class="ezl-it-title">' + esc(it.title) + "</div>"
       + (it.summary ? '<div class="ezl-it-sum">' + esc(it.summary) + "</div>" : "")
       + '<div class="ezl-row2">'
       + (lv === "summ"
-        ? '<span class="ezl-lvchip">요약 열람 — 원문·출처 비노출</span>'
+        ? '<span class="ezl-lvchip" title="타인 기록이라 열람 규칙상 요약까지만 제공됩니다">요약까지 열람 — 타인 기록</span>'
         : '<span class="ezl-src">' + esc(it.source || "") + "</span>")
       + '<span class="ezl-used' + (used > 0 ? " hot" : "") + '">답변 인용 ' + used + "회</span>" + pin + "</div>"
       + "</div>";
   }
 
+  /* ================= 항목 상세 (F15) =================
+     data-ezl-id 클릭 → 원문 전체·출처·인용 이력 + 그 기록을 인용한 답변으로 역추적. */
+
+  /* 이 기록을 인용한 AI 답변 찾기 — 전 세션 스캔(EZChat.exportAll) */
+  function citingAnswers(id) {
+    var out = [];
+    if (!window.EZChat || !EZChat.exportAll) return out;
+    var sess;
+    try { sess = EZChat.exportAll() || []; } catch (e) { return out; }
+    for (var i = 0; i < sess.length; i++) {
+      var s = sess[i], msgs = s.messages || [];
+      for (var j = 0; j < msgs.length; j++) {
+        var m = msgs[j];
+        if (!m || m.role !== "ai" || !m.meta) continue;
+        var refs = m.meta.ctxRefs;
+        if (Object.prototype.toString.call(refs) !== "[object Array]") continue;
+        if (refs.indexOf(id) < 0) continue;
+        out.push({
+          sid: s.id, title: s.title || "새 대화", at: s.at || "",
+          text: shorten(m.text || "", 70), cited: m.meta.ctxCited === true
+        });
+      }
+    }
+    return out;
+  }
+
+  function detailHtml(it, lv) {
+    var meta = TYPES[it.type] || TYPES.org;
+    var back = '<button type="button" class="ezl-back" data-ezl-back="1">&#8592; 목록으로</button>';
+    var head = '<div class="ezl-row1" style="--ezl-c:' + meta.color + '"><span class="ezl-tb">' + esc(meta.label) + "</span>"
+      + (it.seed ? '<span class="ezl-seedb">예시</span>' : "")
+      + '<span class="ezl-at">' + esc(it.at || "") + "</span>"
+      + '<span class="ezl-w" title="판단 기여도 ' + (it.weight || 1) + '/3">' + weightDots(it.weight || 1) + "</span></div>";
+
+    /* 열람 제한 — 차단 시 이유를 한 줄로 밝힌다 (숨김이 아니라 요약 우선) */
+    if (lv === "anon") {
+      return back + head + '<div class="ezl-dt">익명 집계</div>'
+        + '<div class="ezl-why">응답자 보호 정책에 따라 이 기록은 익명 집계로만 제공됩니다 — 원문·출처는 열람 대상이 아닙니다 (보관·열람 규칙 v3.1).</div>';
+    }
+    var restricted = (lv === "summ");
+    var cites = citingAnswers(it.id);
+    var used = it.usedCount || 0;
+
+    var rows = '<div class="ezl-drow"><label>기록 시각</label><div>' + esc(it.at || "-") + "</div></div>"
+      + '<div class="ezl-drow"><label>출처</label><div>'
+      + (restricted ? "타인 기록이라 출처는 비공개입니다" : '<span class="ezl-src">' + esc(it.source || "-") + "</span>")
+      + "</div></div>"
+      + '<div class="ezl-drow"><label>판단 기여도</label><div>' + (it.weight || 1) + " / 3</div></div>"
+      + '<div class="ezl-drow"><label>보존</label><div>'
+      + (isPinned(it) ? "평가에 인용됨 · 롤링 삭제 대상 제외" : "임시 기록 · 80건 롤링 보관 대상") + "</div></div>"
+      + (it.hash
+        ? '<div class="ezl-drow"><label>기록 체인</label><div><span class="ezl-src">#' + esc(it.chainSeq || "-") + " · " + esc(it.hash) + "</span></div></div>"
+        : "")
+      + (it.seed ? '<div class="ezl-why">데모용 예시 기록입니다 — 실제 사용으로 쌓인 기록과 구분됩니다.</div>' : "");
+
+    var citeBody;
+    if (!window.EZChat || !EZChat.exportAll) {
+      citeBody = '<div class="ezl-why">대화 저장소를 불러올 수 없어 역추적할 수 없습니다.</div>';
+    } else if (!cites.length) {
+      citeBody = '<div class="ezl-why">이 기록을 인용한 답변이 아직 없습니다' + (used ? " (인용 카운트 " + used + "회 — 이전 세션 정리분)" : "") + ".</div>";
+    } else {
+      citeBody = cites.map(function (c) {
+        return '<button type="button" class="ezl-cite" data-ezl-goto="' + esc(c.sid) + '">'
+          + esc(c.text)
+          + "<small>" + esc(c.title) + (c.at ? " · " + esc(c.at) : "")
+          + (c.cited ? " · AI 실인용" : ' · <span class="gs">추측 매칭</span>') + "</small></button>";
+      }).join("");
+    }
+
+    return back + head
+      + '<div class="ezl-dt">' + esc(it.title) + "</div>"
+      + (it.summary ? '<div class="ezl-dsum">' + esc(it.summary) + "</div>" : "")
+      + (restricted ? '<div class="ezl-why">타인 기록이라 열람 규칙상 요약까지만 제공됩니다 — 원문·출처는 비공개 (보관·열람 규칙 v3.1).</div>' : "")
+      + rows
+      + '<div class="ezl-dhead">인용 이력 · 답변 인용 ' + used + "회</div>"
+      + citeBody
+      + (window.EZJourney && EZJourney.openLedger
+        ? '<button type="button" class="ezl-foot-policy" data-ezl-journey="' + esc(it.id) + '" title="이 기록이 어느 단계의 결정으로 이어졌는지 봅니다" style="margin:10px 0 0">&#9672; 결정 흐름에서 보기</button>'
+        : "");
+  }
+
   /* 공통 렌더 코어 — 레거시 슬라이드 패널과 [기록] 탭이 같은 본문을 쓴다 */
   function renderCore(highlightId) {
     var all = sorted();
+    /* 상세 뷰 — 목록/필터 대신 단일 항목 전체를 보여준다 */
+    if (detailId) {
+      var d = byId(detailId);
+      var dlv = d ? polCheck(d) : "no";
+      if (!d || dlv === "no") {
+        detailId = null;
+      } else {
+        return {
+          total: all.length, strip: "",
+          body: '<div class="ezl-body">' + detailHtml(d, dlv) + "</div>",
+          foot: ""
+        };
+      }
+    }
     /* 열람 규칙 적용 — no는 목록에서 제외, anon/summ은 렌더 시 형태 변환 */
-    var arr = [], levels = [], i;
+    var arr = [], levels = [], hidden = 0, i;
     for (i = 0; i < all.length; i++) {
       var lv0 = polCheck(all[i]);
-      if (lv0 === "no") continue;
+      if (lv0 === "no") { hidden++; continue; }
       arr.push(all[i]);
       levels.push(lv0);
     }
@@ -678,6 +818,10 @@
       shown++;
     }
     if (!shown) list = '<div class="ezl-empty">해당 유형의 기록이 아직 없습니다.<br>기능을 사용하면 자동으로 기록됩니다.</div>';
+    /* 차단된 항목이 있으면 "왜 안 보이는지"를 한 줄로 밝힌다 (조용한 누락 금지) */
+    if (hidden) {
+      list = '<div class="ezl-why">타인·집계 기록 ' + hidden + "건은 보관·열람 규칙에 따라 표시되지 않습니다 — 내 기록은 모두 열람할 수 있습니다.</div>" + list;
+    }
 
     var strip = '<div class="ezl-strip">' + chips + "</div>";
     /* 시드 플래그 off + 빈 스토어 — EmptyState 카드 */
@@ -753,6 +897,7 @@
   }
 
   function openPanel(highlightId) {
+    detailId = null;   /* 외부 딥점프는 언제나 목록 + 하이라이트로 착지 */
     /* [Phase1 IA] 기본 경로: elizax 도킹 패널 [기록] 탭으로 착지.
        전체화면 허브가 떠 있으면 레거시 슬라이드 패널 유지(딥점프 폴백). */
     if (!document.querySelector(".agh-root.on") && window.Elizax && Elizax.showTab) {
@@ -787,6 +932,14 @@
     if (!pol || typeof pol !== "object") return "core";
     var lv = pol[roleKey()];
     return (lv === "trace" || lv === "logic" || lv === "core") ? lv : "core";
+  }
+  /* [F15] 수위 재정의 — "숨김"이 아니라 "요약 우선".
+     내 기록(self)은 역할과 무관하게 항상 추적 가능(원장 점프·출처 표기),
+     타인·집계 기록만 역할별 수위를 적용한다. */
+  function chipLevel(it) {
+    if (recRelation(it) === "self") return "trace";
+    var lv = evidenceLevel();
+    return lv === "logic" ? "trace" : lv;
   }
 
   /* 키워드 → type 가중 매핑 (규칙 기반, 오프라인 성립) */
@@ -869,10 +1022,14 @@
     return null;
   }
 
-  /* 감사 ID — EZKit 단일 생성기(GA-2026-NNNNN), 미로드 시 동일 포맷 폴백 */
-  function gaId(text) {
-    if (window.EZKit && EZKit.gaId) return EZKit.gaId(text);
-    return "GA-2026-" + ("00000" + (hashNum(text) % 100000)).slice(-5);
+  /* 감사 참조 — 답변 텍스트 해시로 GA-번호를 지어내지 않는다(위조 금지).
+     원장에 실제로 남은 대응 기록(ctx-… 실 id)이 있을 때만 반환, 없으면 null → "기록 전". */
+  function answerAuditRef(msg) {
+    var m = msg && msg.meta;
+    if (!m) return null;
+    var ref = m.auditRef || m.ledgerId || m.auditId || null;
+    if (!ref || String(ref).indexOf("ctx-") !== 0) return null;
+    return byId(ref) ? ref : null;
   }
 
   function renderStrip() {
@@ -954,44 +1111,54 @@
       try { if (window.EZChat && EZChat.persist) EZChat.persist(); } catch (e) { /* 무시 */ }
     }
 
-    /* 열람 규칙 적용 — no는 근거칩에서도 제외, anon은 익명 집계 칩으로 치환 */
-    var gated = [];
+    /* 열람 규칙 적용 — no는 근거칩에서도 제외(사유는 아래 한 줄로 고지), anon은 익명 집계 칩 */
+    var gated = [], blocked = 0;
     for (i = 0; i < picked.length; i++) {
       var glv = polCheck(picked[i]);
-      if (glv === "no") continue;
+      if (glv === "no") { blocked++; continue; }
       gated.push({ it: picked[i], lv: glv });
     }
-    if (!gated.length) return;
+    if (!gated.length && !blocked) return;
 
-    var level = evidenceLevel();
     /* 실인용(ctxCited)=기존 스타일, 추측=점선 칩 + 별도 캡션 — 인용 정직화 (F15) */
     var guessCls = cited ? "" : " guess";
     var html = '<span class="ezl-ev-cap' + guessCls + '">'
       + (cited ? "근거 · AI가 인용한 기록 " : "관련일 수 있는 기록 ") + gated.length + "건</span>";
+    var anyClick = false, summCnt = 0;
     for (i = 0; i < gated.length; i++) {
       var it2 = gated[i].it;
       var lv2 = gated[i].lv;
+      /* [F15] 칩 수위는 항목별 — 내 기록이면 member도 원장까지 추적 가능 */
+      var chLv = chipLevel(it2);
       var meta = TYPES[it2.type] || TYPES.org;
       if (lv2 === "anon") {
         html += '<span class="ezl-ev-chip' + guessCls + '" style="--ezl-c:var(--color-text-secondary)" title="응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)">'
           + '<span class="tb">' + esc(meta.label) + "</span>익명 집계</span>";
         continue;
       }
-      var clickable = level !== "core";
+      if (lv2 === "summ") summCnt++;
+      var clickable = chLv !== "core";
+      if (clickable) anyClick = true;
       html += '<span class="ezl-ev-chip' + guessCls + (clickable ? " click" : "") + '" style="--ezl-c:' + meta.color + '"'
-        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 보기"' : ' title="' + esc(it2.title) + '"') + ">"
+        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 원문·출처·인용 이력 보기"' : ' title="' + esc(it2.title) + ' — 타인 기록이라 요약까지만 제공됩니다"') + ">"
         + '<span class="tb">' + esc(meta.label) + "</span>" + esc(shorten(it2.title, 14))
-        + (level !== "core" && lv2 === "full" ? '<span class="sr">' + esc(it2.source || "") + "</span>" : "")
+        + (clickable && lv2 === "full" ? '<span class="sr">' + esc(it2.source || "") + "</span>" : "")
         + "</span>";
     }
     picked = gated.map(function (g) { return g.it; });
-    if (level !== "core") {
+    if (anyClick && picked.length) {
       html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">성과 기록에서 보기</button>';
-      html += '<button type="button" class="ezl-ev-link" data-ezl-journey="1" title="이 근거들이 성과 사이클 어느 단계의 결정으로 이어지는지 봅니다">&#9672; 프로세스 맵</button>';
+      html += '<button type="button" class="ezl-ev-link" data-ezl-journey="1" title="이 근거들이 성과 사이클 어느 단계의 결정으로 이어지는지 봅니다">&#9672; 결정 흐름</button>';
     }
-    if (level === "logic") {
-      html += '<button type="button" class="ezl-ev-logic" data-ezl-logic="1" data-ezl-refs="'
-        + esc(refs.join(",")) + '" data-ezl-ga="' + esc(gaId(String(msg.text || ""))) + '">산출 로직 보기</button>';
+    /* [F15] 산출 로직은 "이 답이 어떻게 만들어졌는가" = 본인 검증 동선 — 역할로 통째 차단하지 않는다 */
+    html += '<button type="button" class="ezl-ev-logic" data-ezl-logic="1" data-ezl-refs="'
+      + esc(refs.join(",")) + '" data-ezl-ga="' + esc(answerAuditRef(msg) || "") + '">산출 로직 보기</button>';
+    /* 제한이 걸린 경우에만 이유를 한 줄로 */
+    if (blocked || summCnt) {
+      var why = [];
+      if (blocked) why.push("타인·집계 기록 " + blocked + "건은 열람 규칙상 제외");
+      if (summCnt) why.push("타인 기록 " + summCnt + "건은 요약까지만");
+      html += '<span class="ezl-ev-cap guess" title="보관·열람 규칙 v3.1">' + esc(why.join(" · ")) + "</span>";
     }
 
     var wrap = document.createElement("div");
@@ -1017,13 +1184,17 @@
   function openLogicPop(btn) {
     closeLogicPop();
     var ids = (btn.getAttribute("data-ezl-refs") || "").split(",");
-    var ga = btn.getAttribute("data-ezl-ga") || "GA-2026-00000";
-    var cited = [], ruleSrcs = [], i, it;
+    var ga = norm(btn.getAttribute("data-ezl-ga") || "");
+    var cited = [], ruleSrcs = [], citedIds = [], restricted = 0, i, it;
     for (i = 0; i < ids.length; i++) {
       it = byId(ids[i]);
       if (!it) continue;
+      /* 열람 규칙 — 타인·집계 기록의 원문·출처는 로직 팝오버에도 노출하지 않는다 */
+      var lv = polCheck(it);
+      if (lv === "no" || lv === "anon") { restricted++; continue; }
       cited.push(it.title);
-      if (it.type === "rule") ruleSrcs.push(it.source);
+      citedIds.push(it.id);
+      if (it.type === "rule" && lv === "full") ruleSrcs.push(it.source);
     }
     if (!ruleSrcs.length) ruleSrcs = ["rule.asof.snapshot"];
     var citedTxt = cited.length
@@ -1043,7 +1214,14 @@
       + "<span>인용 기록 범위 안에서 요약·초안 생성 (범위 밖 추정 없음)</span></div></div>"
       + '<div class="ezl-step"><span class="n">4</span><div class="t"><b>검증</b>'
       + "<span>기준 시점 데이터 확인 · 승인 대기 — 승인 전 변경 없음</span></div></div>"
-      + '<div class="ezl-pop-ga">감사 기록됨 · <b>' + esc(ga) + "</b></div>";
+      /* 감사 참조는 원장 실 id만 — 대응 기록이 없으면 정직하게 "기록 전" */
+      + '<div class="ezl-pop-ga">'
+      + (ga
+        ? "⛨ 감사 기록됨 · <b>" + esc(ga) + "</b>"
+        : "⛨ 기록 전 — 이 답변은 아직 원장에 결정으로 기록되지 않았습니다 (결정 게이트 확정 시 기록)")
+      + (citedIds.length ? "<br>인용 기록 id · <b>" + esc(citedIds.join(", ")) + "</b>" : "")
+      + (restricted ? "<br>타인·집계 기록 " + restricted + "건은 열람 규칙에 따라 제외됨" : "")
+      + "</div>";
     document.body.appendChild(pop);
 
     /* 버튼 근처 배치 (뷰포트 밖으로 나가지 않게 보정) */
@@ -1059,7 +1237,7 @@
   /* ================= 내보내기 / 가져오기 (F4) ================= */
   function exportJson() {
     try {
-      var blob = new Blob([JSON.stringify({ v: 1, emp_id: CU.emp_id, exported_at: nowStamp(), items: loadStore() }, null, 2)],
+      var blob = new Blob([JSON.stringify({ v: 2, emp_id: CU.emp_id, exported_at: nowStamp(), items: loadStore() }, null, 2)],
         { type: "application/json" });
       var a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -1129,12 +1307,39 @@
       return;
     }
 
-    /* 프로세스 순서로 보기 (tx_journey.js) — 패널을 닫고 프로세스 맵을 연다 */
+    /* 상세 → 목록 되돌아가기 */
+    if (closestAttr(t, "data-ezl-back")) {
+      ev.preventDefault();
+      detailId = null;
+      refreshMounts(null);
+      return;
+    }
+
+    /* 인용한 답변으로 역추적 — 해당 세션으로 전환하고 대화 탭에 착지 */
+    var gt = closestAttr(t, "data-ezl-goto");
+    if (gt) {
+      ev.preventDefault();
+      var sid = gt.getAttribute("data-ezl-goto");
+      try { if (window.EZChat && EZChat.switchSession) EZChat.switchSession(sid); } catch (e0) { /* 세션 없음 */ }
+      detailId = null;
+      closePanel();
+      try {
+        if (window.Elizax && Elizax.showTab) { Elizax.open(); Elizax.showTab("chat"); }
+      } catch (e1) { /* 패널 미탑재 */ }
+      return;
+    }
+
+    /* 결정 흐름 (tx_journey.js) — 패널을 닫고 맵을 연다.
+       값이 원장 항목 id면 그 기록을 인용하는 노드로 딥링크 착지 */
     var jn = closestAttr(t, "data-ezl-journey");
     if (jn) {
       ev.preventDefault();
+      var jv = jn.getAttribute("data-ezl-journey");
       closePanel();
-      if (window.EZJourney && EZJourney.open) EZJourney.open();
+      if (window.EZJourney && EZJourney.open) {
+        if (jv && jv.indexOf("ctx-") === 0) EZJourney.open({ ledger: jv });
+        else EZJourney.open();
+      }
       return;
     }
 
@@ -1155,6 +1360,15 @@
     var op = closestAttr(t, "data-ezl-open");
     if (op) { ev.preventDefault(); openPanel(op.getAttribute("data-ezl-open") || null); return; }
 
+    /* 원장 항목 행 클릭 → 상세 (원문 전체·출처·인용 이력) */
+    var row = closestAttr(t, "data-ezl-id");
+    if (row) {
+      ev.preventDefault();
+      detailId = row.getAttribute("data-ezl-id") || null;
+      refreshMounts(null);
+      return;
+    }
+
     /* 산출 로직 팝오버 토글 */
     var lg = closestAttr(t, "data-ezl-logic");
     if (lg) {
@@ -1168,6 +1382,7 @@
   function onKeydown(ev) {
     if (ev.key !== "Escape" && ev.keyCode !== 27) return;
     if (document.getElementById("ezl-pop")) { closeLogicPop(); return; }
+    if (detailId) { detailId = null; refreshMounts(null); return; }   /* 상세 → 목록 */
     if (isPanelOpen()) closePanel();
   }
 

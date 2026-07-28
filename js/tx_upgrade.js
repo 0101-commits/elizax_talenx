@@ -6,7 +6,39 @@
       + 목표 스코프 측정 가능성 린트 (목표 생성 overlay 목표명·KR 지표 input 포함)
    A6 AI 관여 고지·이의제기  (EU AI Act 2026.8 · PIPA §37조의2)
    A1 1:1 미팅 코파일럿      (Lattice·15Five·SAP Joule 공통 투자 영역)
+   F6 인라인 결과 착지 표준  (window.EZApply — 아래 계약)
+   F10 역할 관점 주입        (member/leader/hr/exec 별 프롬프트·문구)
    전부 vanilla JS · .ezup-* 스코프 · 기존 화면 미간섭 · 목업 동작.
+
+   ------------------------------------------------------------
+   [계약] window.EZApply.popover(opts) → handle          (ez:apply 규약)
+   ------------------------------------------------------------
+   인라인 AI 트리거(✦ 정제·초안)가 결과를 채팅에 흘려보내지 않고, 원 필드
+   옆 미니 팝오버로 되돌려 [적용] 한 번에 필드에 반영시키기 위한 공용 API.
+   tx_fix_perf·tx_fix_appr·tx_meeting 등 다른 파일도 그대로 호출하면 된다.
+
+   opts (모두 선택, 단 field/fieldSel 또는 draft/run 중 하나는 필요)
+     field     : HTMLElement  결과가 착지할 input/textarea
+     fieldSel  : string       field 대신 CSS 선택자(적용 시점에 재조회 — 재렌더 안전)
+     anchor    : HTMLElement  위치 기준 요소 (기본 field)
+     original  : string       원문 (기본 field.value). 없으면 "초안" 단일행 모드
+     title     : string       팝오버 제목 (기본 "elizax 정제안")
+     note      : string       제목 아래 한 줄 설명 (역할 관점 등)
+     draft     : string       즉시 표시할 결과 (run 없이 쓸 때)
+     run       : fn(ctx)      결과 생성기. ctx.done(text) / ctx.fail(msg) 호출.
+                              지정 시 팝오버는 로딩 상태로 열리고 [재생성]이 붙는다
+     applyLabel: string       적용 버튼 라벨 (기본 "적용")
+     onApply   : fn(text, field) → false를 반환하면 기본 반영(값 대입) 생략
+     chat      : {label, prompt} | string
+                              "대화로 계속" 보조 링크. 기본 동작이 아니라 보조 링크로만 노출
+     audit     : {source, title, summary}  적용 시 ez:ctx(type:"audit") 실발행
+     onClose   : fn()
+   handle
+     { el, done(text), fail(msg), close() }
+   동작 규칙
+     · 팝오버는 화면에 항상 1개(단일 슬롯) — 새로 열면 이전 것은 닫힌다
+     · Esc·바깥 클릭·스크롤 이탈 시 닫힘. 적용 전에는 필드를 건드리지 않는다
+     · 실패는 감춘 채 통과시키지 않고 문구로 노출하며 [재생성]을 남긴다
    ============================================================ */
 (function () {
   "use strict";
@@ -85,7 +117,35 @@
     ".ezup-brief select{ width:100%; border:1px solid var(--line,#e0e0e0); border-radius:8px; padding:7px 10px; font:inherit; font-size:12.5px; margin-top:2px; }",
     ".ezup-spin{ display:inline-block; width:11px; height:11px; border:2px solid rgba(31,122,240,.25); border-top-color:var(--blue,#1F7AF0); border-radius:50%; animation:ezupSpin2 .8s linear infinite; vertical-align:-2px; margin-right:4px; }",
     "@keyframes ezupSpin2{ to{ transform:rotate(360deg); } }",
-    ".ezup-retry{ font:inherit; font-size:11px; font-weight:600; color:var(--blue-2,#1F7AF0); background:none; border:1px solid var(--blue,#1F7AF0); border-radius:999px; padding:2px 10px; cursor:pointer; margin-left:4px; }"
+    ".ezup-retry{ font:inherit; font-size:11px; font-weight:600; color:var(--blue-2,#1F7AF0); background:none; border:1px solid var(--blue,#1F7AF0); border-radius:999px; padding:2px 10px; cursor:pointer; margin-left:4px; }",
+
+    /* ---- F6 인라인 착지 팝오버 (EZApply) ---- */
+    ".ezup-ap{ position:fixed; z-index:calc(var(--z-badge, 900) + 5); width:380px; max-width:calc(100vw - 24px);",
+    "  font-family:var(--sans); background:var(--card,#fff); border:1px solid var(--line,#e0e0e0); border-radius:12px;",
+    "  box-shadow:0 14px 40px rgba(0,0,0,.14); padding:13px 15px 12px;",
+    "  opacity:0; transform:translateY(-6px); transition:opacity .14s ease, transform .14s cubic-bezier(.32,.72,.24,1); }",
+    ".ezup-ap.show{ opacity:1; transform:none; }",
+    ".ezup-ap-h{ display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:var(--ink,#1d1d1f); }",
+    ".ezup-ap-h .sp{ color:var(--blue,#1F7AF0); }",
+    ".ezup-ap-h .x{ margin-left:auto; border:none; background:none; color:var(--ink-4,#98A2B3); font-size:14px; cursor:pointer; line-height:1; padding:2px 4px; }",
+    ".ezup-ap-note{ font-size:11px; color:var(--ink-3,#7a7a7a); margin-top:3px; }",
+    ".ezup-ap-row{ margin-top:9px; }",
+    ".ezup-ap-lab{ font-size:10.5px; font-weight:700; color:var(--ink-4,#98A2B3); margin-bottom:3px; }",
+    ".ezup-ap-txt{ font-size:12.5px; line-height:1.6; color:var(--ink-2,#424245); background:var(--soft,#f5f5f7); border-radius:8px; padding:8px 11px; max-height:132px; overflow:auto; white-space:pre-wrap; }",
+    ".ezup-ap-row.new .ezup-ap-txt{ color:var(--ink,#1d1d1f); background:rgba(31,122,240,.06); border:1px solid rgba(31,122,240,.22); }",
+    ".ezup-ap-row.old .ezup-ap-txt{ text-decoration:none; opacity:.8; }",
+    ".ezup-ap-acts{ display:flex; align-items:center; gap:7px; margin-top:11px; }",
+    ".ezup-ap-btn{ font:inherit; font-size:12px; font-weight:700; border-radius:999px; padding:6px 14px; cursor:pointer; border:1px solid var(--line,#e0e0e0); background:var(--card,#fff); color:var(--ink,#1d1d1f); transition:transform .15s cubic-bezier(.32,.72,.24,1); }",
+    ".ezup-ap-btn.primary{ background:var(--blue,#1F7AF0); border-color:var(--blue,#1F7AF0); color:#fff; }",
+    ".ezup-ap-btn:disabled{ opacity:.5; cursor:default; }",
+    ".ezup-ap-btn:active:not(:disabled){ transform:scale(.96); }",
+    ".ezup-ap-chat{ margin-left:auto; font:inherit; font-size:11px; font-weight:600; color:var(--ink-3,#7a7a7a); background:none; border:none; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }",
+    ".ezup-ap-chat:hover{ color:var(--blue-2,#1F7AF0); }",
+
+    /* ---- 액션 영역 분리: subnav 탭과 섞이지 않게 하단 구분 블록 ---- */
+    ".ezup-navacts{ margin-top:14px; padding:12px 16px 6px; border-top:1px solid var(--line,#e8e8ed); display:flex; flex-direction:column; align-items:stretch; gap:8px; }",
+    ".ezup-navacts .ezup-navlab{ font-family:var(--sans); font-size:10.5px; font-weight:700; letter-spacing:.03em; color:var(--ink-4,#98A2B3); }",
+    ".ezup-navacts > button{ margin-left:0; width:100%; justify-content:center; }"
   ].join("\n");
   var st = document.createElement("style");
   st.id = "ezup-css";
@@ -187,6 +247,173 @@
   }, true);
 
   /* ============================================================
+     F10 — 역할 관점 (공통 롤키 → 프롬프트·문구 렌즈)
+     생성 계층이 역할 무관이면 leader가 팀 관점 문장을, hr이 전사 정합성
+     문장을 못 받는다. 프롬프트 앞단과 UI 문구에 같은 렌즈를 주입한다.
+     ============================================================ */
+  var ROLE_LENS = {
+    member: { label: "조직원", short: "본인", prompt: "관점: 본인(조직원). 내가 무엇을 했고 어떤 근거가 남았는지를 1인칭 기여 중심으로 정리한다." },
+    leader: { label: "조직장", short: "팀", prompt: "관점: 조직장(팀 리더). 팀 목표 정합·팀원 간 형평·리더가 할 개입을 기준으로 정리한다. 특정 팀원을 깎아내리는 표현은 쓰지 않는다." },
+    hr: { label: "HR", short: "전사 정합성", prompt: "관점: HR(전사). 전사 정합성·평가규정 준수·부서 간 형평과 재현 가능한 기준을 우선한다. 개인 신상 추측은 하지 않는다." },
+    exec: { label: "경영진", short: "전략", prompt: "관점: 경영진. 전략 정렬과 조직 단위 리스크를 우선하고 개인 단위 서술은 최소화한다." }
+  };
+  function roleLens() { return ROLE_LENS[upRole()] || ROLE_LENS.member; }
+
+  /* ============================================================
+     F6 — window.EZApply : 인라인 결과 착지 표준 (ez:apply 규약)
+     계약 전문은 파일 상단 주석 참조. 여기서는 단일 슬롯 팝오버 1개만 관리.
+     ============================================================ */
+  var apCur = null; /* 단일 슬롯 — 새 팝오버가 열리면 이전 것 닫힘 */
+  function apClose() {
+    if (!apCur) return;
+    var h = apCur;
+    apCur = null;
+    document.removeEventListener("keydown", h._key, true);
+    document.removeEventListener("mousedown", h._out, true);
+    window.removeEventListener("scroll", h._pos, true);
+    window.removeEventListener("resize", h._pos);
+    h.el.classList.remove("show");
+    setTimeout(function () { if (h.el.parentNode) h.el.remove(); }, 160);
+    if (h._onClose) { try { h._onClose(); } catch (e) {} }
+  }
+  function apPlace(el, anchor) {
+    if (!anchor || !anchor.getBoundingClientRect) return;
+    var r = anchor.getBoundingClientRect();
+    var w = el.offsetWidth || 380, hgt = el.offsetHeight || 200;
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    var top = r.bottom + 8;
+    if (top + hgt > window.innerHeight - 8) top = Math.max(8, r.top - hgt - 8);
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+  }
+  function popover(opts) {
+    opts = opts || {};
+    apClose();
+    var field = opts.field || (opts.fieldSel ? document.querySelector(opts.fieldSel) : null);
+    var anchor = opts.anchor || field;
+    if (!anchor) return null;
+    var original = opts.original != null ? opts.original : (field ? (field.value != null ? field.value : field.textContent) : "");
+    var el = document.createElement("div");
+    el.className = "ezup-ap";
+    el.setAttribute("data-astryx-theme", "talenx");
+    var K = window.EZKit;
+    el.innerHTML =
+      '<div class="ezup-ap-h"><span class="sp">' + ((K && K.marker) || "✦") + "</span>" + esc(opts.title || "elizax 정제안") +
+      (K && K.status ? '<span style="margin-left:6px;font-weight:500">' + K.status("suggest") + "</span>" : "") +
+      '<button type="button" class="x" aria-label="닫기">✕</button></div>' +
+      (opts.note ? '<div class="ezup-ap-note">' + esc(opts.note) + "</div>" : "") +
+      (original ? '<div class="ezup-ap-row old"><div class="ezup-ap-lab">원문</div><div class="ezup-ap-txt">' + esc(original) + "</div></div>" : "") +
+      '<div class="ezup-ap-row new"><div class="ezup-ap-lab">' + (original ? "정제안" : "초안") + '</div><div class="ezup-ap-txt" data-ap-new></div></div>' +
+      '<div class="ezup-ap-acts">' +
+      '<button type="button" class="ezup-ap-btn primary" data-ap-apply disabled>' + esc(opts.applyLabel || "적용") + "</button>" +
+      '<button type="button" class="ezup-ap-btn" data-ap-cancel>닫기</button>' +
+      (opts.run ? '<button type="button" class="ezup-ap-btn" data-ap-regen hidden>재생성</button>' : "") +
+      (opts.chat ? '<button type="button" class="ezup-ap-chat" data-ap-chat>' + esc((typeof opts.chat === "string" ? "대화로 계속" : (opts.chat.label || "대화로 계속"))) + "</button>" : "") +
+      "</div>";
+    document.body.appendChild(el);
+    var box = el.querySelector("[data-ap-new]");
+    var bApply = el.querySelector("[data-ap-apply]");
+    var bRegen = el.querySelector("[data-ap-regen]");
+    var text = "";
+
+    var h = {
+      el: el,
+      _onClose: opts.onClose,
+      _pos: function () { apPlace(el, anchor); },
+      _key: function (e) { if (e.key === "Escape") { e.stopPropagation(); apClose(); } },
+      _out: function (e) { if (!el.contains(e.target) && e.target !== anchor) apClose(); },
+      close: apClose,
+      done: function (t) {
+        text = String(t == null ? "" : t).trim();
+        if (!text) { h.fail("빈 응답"); return; }
+        box.textContent = text;
+        bApply.disabled = false;
+        if (bRegen) bRegen.hidden = false;
+        h._pos();
+      },
+      fail: function (msg) {
+        text = "";
+        box.textContent = "생성 실패 — " + (msg || "응답을 받지 못했습니다.") + (original ? " (원 문장은 그대로 둡니다)" : "");
+        bApply.disabled = true;
+        if (bRegen) bRegen.hidden = false;
+        h._pos();
+      }
+    };
+    apCur = h;
+
+    el.querySelector(".x").addEventListener("click", apClose);
+    el.querySelector("[data-ap-cancel]").addEventListener("click", apClose);
+    bApply.addEventListener("click", function () {
+      if (!text) return;
+      var tgt = opts.fieldSel ? document.querySelector(opts.fieldSel) : field; /* 재렌더 대비 재조회 */
+      var handled = false;
+      if (opts.onApply) handled = (opts.onApply(text, tgt) === false);
+      if (!handled && tgt) {
+        if ("value" in tgt) {
+          tgt.value = text;
+          tgt.dispatchEvent(new Event("input", { bubbles: true }));
+          tgt.dispatchEvent(new Event("change", { bubbles: true }));
+        } else tgt.textContent = text;
+        try { tgt.focus(); } catch (e) {}
+      }
+      if (opts.audit) {
+        try {
+          document.dispatchEvent(new CustomEvent("ez:ctx", { detail: {
+            type: "audit", source: opts.audit.source || "ez:apply", weight: 1,
+            title: opts.audit.title || "elizax 초안 적용",
+            summary: opts.audit.summary || String(text).slice(0, 80)
+          } }));
+        } catch (e) { /* 원장 미탑재 */ }
+      }
+      if (window.TX && TX.toast) TX.toast("적용했습니다 · 확정 전이며 되돌릴 수 있습니다", "ok");
+      apClose();
+    });
+    if (bRegen) bRegen.addEventListener("click", function () { start(); });
+    var chatBtn = el.querySelector("[data-ap-chat]");
+    if (chatBtn) chatBtn.addEventListener("click", function () {
+      var p = typeof opts.chat === "string" ? opts.chat : opts.chat.prompt;
+      try { if (window.Elizax && Elizax.open) Elizax.open(); } catch (e) {}
+      if (p) elizaxSend(p);
+      apClose();
+    });
+
+    function start() {
+      box.innerHTML = '<span class="ezup-spin"></span>elizax가 작성 중…';
+      bApply.disabled = true;
+      if (bRegen) bRegen.hidden = true;
+      try {
+        opts.run({ done: function (t) { if (apCur === h) h.done(t); }, fail: function (m) { if (apCur === h) h.fail(m); } });
+      } catch (e) { h.fail(e && e.message ? e.message : String(e)); }
+    }
+    if (opts.run) start();
+    else h.done(opts.draft || "");
+
+    document.addEventListener("keydown", h._key, true);
+    setTimeout(function () { document.addEventListener("mousedown", h._out, true); }, 0);
+    window.addEventListener("scroll", h._pos, true);
+    window.addEventListener("resize", h._pos);
+    requestAnimationFrame(function () { apPlace(el, anchor); el.classList.add("show"); });
+    return h;
+  }
+  window.EZApply = { popover: popover, close: apClose };
+
+  /* EZAI 단발 호출을 EZApply.run 규격으로 감싼 헬퍼 (이 파일 내부용) */
+  function aiRunner(system, user) {
+    return function (ctx) {
+      if (!(window.EZAI && EZAI.direct && EZAI.ready && EZAI.ready())) {
+        ctx.fail("elizax 미연결 — 아래 “대화로 계속”로 이어가거나 ⚙ 설정에서 키를 등록하세요.");
+        return;
+      }
+      window.EZAI.direct({
+        system: system,
+        messages: [{ role: "user", content: user }],
+        onDone: function (t) { ctx.done(t); },
+        onError: function (e) { ctx.fail(e && e.message ? e.message : String(e || "")); }
+      });
+    };
+  }
+
+  /* ============================================================
      A3 — 품질 린트 (스코프별 규칙)
      review: 평가·피드백 문장 편향 검사 (기존 4 규칙)
      goal:   목표/KR 측정 가능성 검사 — 목표 생성 overlay·KR 목록 안 필드.
@@ -285,22 +512,40 @@
       else hits.forEach(function (hi) {
         html += '<span class="ezup-lint-chip ' + hi.cls + '" title="' + esc(hi.tip) + '">' + esc(hi.tag) + (hi.word ? " · “" + esc(hi.word) + "”" : "") + "</span>";
       });
-      html += '<button type="button" class="ezup-lint-fix">✦ elizax로 정제</button>';
+      var lens = roleLens();
+      html += '<button type="button" class="ezup-lint-fix" title="' + esc(lens.label) + ' 관점으로 정제 — 결과는 이 필드 옆에서 [적용]">✦ elizax로 정제</button>';
       bar.innerHTML = html;
       var fix = bar.querySelector(".ezup-lint-fix");
+      /* F6 — 결과를 채팅에 흘리지 않고 이 필드 옆 팝오버로 착지시킨다.
+         F10 — 역할 렌즈를 프롬프트·문구 양쪽에 주입. */
       if (fix) fix.addEventListener("click", function () {
+        var lz = roleLens();
         var body = (field.value || "").slice(0, 500);
-        if (scope === "goal") {
-          var ctx = "";
-          if (krRow) {
-            var kr = krFromRow(krRow);
-            var MODES = ["달성률", "절대값", "구간", "여부"];
-            ctx = "\n(관리 방식: " + (MODES[kr.mode] || "미선택") + " · 난이도 " + (kr.diff || "-")
-              + (kr.basisVal ? " · 비교 근거: " + kr.basisVal : " · 비교 근거 없음") + ")";
-          }
-          elizaxSend("다음 목표/KR 문장을 측정 가능하게 바꿔줘 — 수치·기한·판정 기준 포함:\n" + body + ctx);
+        var tagList = hits.map(function (hi) { return hi.tag; }).join(", ") || "없음";
+        var ctx = "";
+        if (scope === "goal" && krRow) {
+          var kr = krFromRow(krRow);
+          var MODES = ["달성률", "절대값", "구간", "여부"];
+          ctx = "\n(관리 방식: " + (MODES[kr.mode] || "미선택") + " · 난이도 " + (kr.diff || "-")
+            + (kr.basisVal ? " · 비교 근거: " + kr.basisVal : " · 비교 근거 없음") + ")";
         }
-        else elizaxSend("다음 평가/피드백 문장을 SBI 구조로 정제하고 편향 표현을 제거해줘:\n" + body);
+        var ask = scope === "goal"
+          ? "다음 목표/KR 문장을 측정 가능하게 바꿔줘 — 수치·기한·판정 기준 포함:\n" + body + ctx
+          : "다음 평가/피드백 문장을 SBI 구조로 정제하고 편향 표현을 제거해줘:\n" + body;
+        popover({
+          field: field,
+          anchor: fix,
+          original: body,
+          title: "elizax 정제안",
+          note: lz.label + " 관점 · 지적된 항목: " + tagList,
+          run: aiRunner(
+            "당신은 elizax — HR 성과관리 문장 코치입니다. " + lz.prompt +
+            " 사용자가 준 문장 하나만 고쳐서 돌려줍니다. 설명·머리말·따옴표 없이 고친 문장만 출력합니다. " +
+            "원문에 없는 수치·사실은 만들지 말고, 채울 값이 필요하면 [   ] 자리표시자로 남깁니다.",
+            ask + "\n\n지적된 문제: " + tagList + "\n고친 문장만 한 줄로."),
+          chat: { label: "대화로 계속", prompt: ask },
+          audit: { source: "lint.apply", title: "품질 린트 정제안 적용", summary: (scope === "goal" ? "목표/KR" : "평가·피드백") + " 문장 정제 — " + lz.label + " 관점" }
+        });
       });
     }
     field.addEventListener("input", function () { clearTimeout(deb); deb = setTimeout(run, 350); });
@@ -350,11 +595,26 @@
       if (window.EZPolicy && EZPolicy.open) EZPolicy.open();
     });
   }
+  /* ④ .subnav는 세로 탭 목록(220px aside)이다 — 액션 버튼을 그대로 append하면 탭 사이에 섞인다.
+     구분선 + "AI 도구" 라벨이 붙은 전용 블록을 탭 목록 아래에 만들어 분리 배치한다.
+     subnav가 없는 화면은 기존 헤더 폴백을 유지. */
+  function actionHost(sec) {
+    var nav = sec.querySelector(".subnav");
+    if (!nav) return sec.querySelector("h1, h2, .page-title") || sec.firstElementChild;
+    var box = nav.querySelector(".ezup-navacts");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "ezup-navacts";
+      box.innerHTML = '<span class="ezup-navlab">AI 도구</span>';
+      nav.appendChild(box);
+    }
+    return box;
+  }
   function injectAiog() {
     ["#s-appr", "#s-perf"].forEach(function (sel) {
       var sec = document.querySelector(sel);
       if (!sec || sec.querySelector(".ezup-aiog")) return;
-      var head = sec.querySelector(".subnav") || sec.querySelector("h1, h2, .page-title") || sec.firstElementChild;
+      var head = actionHost(sec);
       if (!head) return;
       var b = document.createElement("button");
       b.type = "button";
@@ -376,6 +636,15 @@
     var D0 = window.TALENX_DATA || {};
     var cu = (D0.meta && D0.meta.currentUser) || {};
     return (cu._role) || (window.TXRoles && TXRoles.current && (TXRoles.current() || {}).key) || "member";
+  }
+  /* ④ 근거 화면 딥링크의 역할 매핑 — tx_agent SCENARIOS.roles가 단일 원천.
+     qw4("내 성과 근거 타임라인")는 roles:["member"]라 조직장·HR이 누르면 롤가드에 막혀
+     기본 화면으로 튕긴다. 역할별로 열리는 화면을 주거나, 없으면 버튼을 내린다. */
+  function timelineTarget() {
+    var r = upRole();
+    if (r === "member") return { key: "qw4", label: "근거 타임라인" };
+    if (r === "leader" || r === "hr") return { key: "procmap", label: "근거 계보 (결정 흐름)" };
+    return null; /* exec — 대응 화면 없음 → 버튼 미노출 */
   }
   function reportsOf() {
     var D0 = window.TALENX_DATA || {};
@@ -413,11 +682,12 @@
     } catch (e) { /* 원장 부재 — 표기 생략 */ }
     var isLeader = upRole() === "leader";
     var team = isLeader ? reportsOf() : [];
+    var tl = timelineTarget();
     var wrap = document.createElement("div");
     wrap.className = "ezup-brief";
-    var dr = TX.drawer({
+    TX.drawer({
       title: "✦ AI 미팅 브리핑",
-      subtitle: "1:1 미팅 전 자동 취합 · 기준 시점 오늘" + (audited ? " · 감사 기록됨" : ""),
+      subtitle: roleLens().label + " 관점 · 1:1 미팅 전 자동 취합 · 기준 시점 오늘" + (audited ? " · 감사 기록됨" : ""),
       width: "440px",
       body: wrap
     });
@@ -455,25 +725,57 @@
         '<div class="pt"><span class="n">1</span><span>진척 지연 목표의 장애물 — 리소스인지 우선순위인지 확인</span></div>' +
         '<div class="pt"><span class="n">2</span><span>피드백에서 확인된 강점을 다음 분기 목표와 연결</span></div>' +
         '<div class="pt"><span class="n">3</span><span>미완료 액션아이템 마감 재합의</span></div></div>' +
-        '<div class="acts"><button type="button" class="agh-btn primary" data-ezup-chat>elizax에서 이어서</button><button type="button" class="agh-btn" data-ezup-tl>근거 타임라인</button></div>';
+        '<div class="acts"><button type="button" class="agh-btn primary" data-ezup-draft>✦ 아젠다 초안</button>' +
+        (tl ? '<button type="button" class="agh-btn" data-ezup-tl>' + esc(tl.label) + "</button>" : "") + "</div>";
       var sel = wrap.querySelector("[data-ezup-emp]");
       if (sel) sel.addEventListener("change", function () {
         var id = sel.value, hit = null;
         team.forEach(function (x) { if (x.emp_id === id) hit = x; });
         renderBody(hit);
       });
-      var c = wrap.querySelector("[data-ezup-chat]"), t = wrap.querySelector("[data-ezup-tl]");
+      var c = wrap.querySelector("[data-ezup-draft]"), t = wrap.querySelector("[data-ezup-tl]");
+      /* F6 — 기본 동작은 드로어 안 착지(아젠다 섹션 삽입). 채팅은 팝오버 안 보조 링크로 강등. */
       if (c) c.addEventListener("click", function () {
+        var lz = roleLens();
         /* 현재 브리핑 요약(대상자명 + 목표 진척 라인)을 프롬프트에 포함 */
         var lines = d.objs.map(function (o) {
           return "- " + (o.title || "") + " · 진척 " + (o.progress != null ? o.progress : "?") + "%";
         }).join("\n");
-        try { if (window.Elizax && Elizax.open) Elizax.open(); } catch (e) { /* 미탑재 */ }
-        elizaxSend("1:1 미팅 아젠다 초안을 만들어줘.\n대상: " + (d.me.name || "") +
-          (d.me.emp_id ? " (" + d.me.emp_id + ")" : "") + "\n목표 진척:\n" + (lines || "- 등록된 목표 없음"));
-        dr.close();
+        var who = (d.me.name || "") + (d.me.emp_id ? " (" + d.me.emp_id + ")" : "");
+        var ask = "1:1 미팅 아젠다 초안을 만들어줘.\n대상: " + who + "\n목표 진척:\n" + (lines || "- 등록된 목표 없음");
+        popover({
+          anchor: c,
+          title: "1:1 아젠다 초안",
+          note: lz.label + " 관점 · 대상 " + (d.me.name || "본인") + " · 적용하면 브리핑에 삽입됩니다",
+          applyLabel: "브리핑에 삽입",
+          run: aiRunner(
+            "당신은 elizax — 1:1 미팅 코치입니다. " + lz.prompt +
+            " 아젠다 항목 4개 이내를 각 줄 하나씩, 번호·머리말 없이 출력합니다. " +
+            "주어진 목표 진척 데이터에 없는 수치·사실은 만들지 않습니다.",
+            ask),
+          chat: { label: "대화로 계속", prompt: ask },
+          onApply: function (text) {
+            if (!document.body.contains(wrap)) return false; /* 드로어가 이미 닫힘 */
+            var host = wrap.querySelector("[data-ezup-agenda]");
+            if (!host) {
+              var acts = wrap.querySelector(".acts");
+              host = document.createElement("div");
+              host.className = "bsec";
+              host.setAttribute("data-ezup-agenda", "1");
+              if (acts) wrap.insertBefore(host, acts); else wrap.appendChild(host);
+            }
+            host.innerHTML = "<b>미팅 아젠다 — elizax 초안 (" + esc(lz.label) + " 관점)</b>" +
+              String(text).split(/\r?\n/).filter(Boolean).slice(0, 6).map(function (ln, i) {
+                return '<div class="pt"><span class="n">' + (i + 1) + "</span><span>" + esc(ln.replace(/^\s*[-•\d.)]+\s*/, "")) + "</span></div>";
+              }).join("");
+            return false; /* 기본 필드 반영 생략 — 드로어에 직접 착지시켰다 */
+          },
+          audit: { source: "brief.agenda", title: "1:1 아젠다 초안 삽입", summary: (d.me.name || "본인") + " · " + lz.label + " 관점 아젠다 브리핑 반영" }
+        });
       });
-      if (t) t.addEventListener("click", function () { if (window.TXAgent && TXAgent.openHub) TXAgent.openHub("qw4"); });
+      if (t) t.addEventListener("click", function () {
+        if (window.TXAgent && TXAgent.openHub) TXAgent.openHub(tl.key);
+      });
       runBriefAI(d);
     }
     /* Claude 연결 시: 목표·체크인 실데이터 기반 논의 포인트 실시간 생성.
@@ -494,10 +796,12 @@
         if (rb) rb.addEventListener("click", start);
       }
       function start() {
-        setStatus('<span class="ezup-spin"></span>elizax가 목표·체크인 실데이터로 재구성 중…');
+        var lz = roleLens(); /* F10 — 같은 데이터라도 조직장은 팀 관점, HR은 전사 정합성 관점 */
+        setStatus('<span class="ezup-spin"></span>elizax가 목표·체크인 실데이터로 ' + esc(lz.label) + " 관점으로 재구성 중…");
         window.EZAI.agent({
           maxTurns: 4, maxTokens: 600,
           messages: [{ role: "user", content:
+            lz.prompt + "\n" +
             d.me.name + "(" + d.me.emp_id + ")의 목표와 최근 체크인을 도구로 조회한 뒤, 1:1 미팅에서 다룰 논의 포인트 3개를 추천해줘. " +
             "반드시 형식: 각 줄 하나의 포인트(번호·머리말 없이), 정확히 3줄. 각 포인트에 조회한 실데이터 근거(수치·블로커)를 포함해." }],
           onDone: function (text) {
@@ -518,7 +822,7 @@
   function injectBrief() {
     var sec = document.querySelector("#s-perf");
     if (!sec || sec.querySelector(".ezup-brief-btn")) return;
-    var head = sec.querySelector(".subnav");
+    var head = actionHost(sec);
     if (!head) return;
     var b = document.createElement("button");
     b.type = "button";
