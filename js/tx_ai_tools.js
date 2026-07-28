@@ -60,6 +60,31 @@
       });
   }
 
+  /* ---------------- 이어받은 출발점(carry-over) 파생 ----------------
+     evaluationsPrev(정본) 우선, 없으면 evalHistory/feedbackHistory/jobHistory에서
+     런타임 파생. tx_fix_perf.js의 목표 생성 폼과 get_prev_cycle 도구가 공용. */
+  function deriveCarry(empIdOrEmp) {
+    var e = (empIdOrEmp && empIdOrEmp.emp_id) ? empIdOrEmp : (findEmp(empIdOrEmp) || CU());
+    var out = { emp_id: e.emp_id, evaluation: null, undone_krs: [], feedback: [], job_change: null, first_cycle: false, derived: false };
+    var prev = arr("evaluationsPrev").filter(function (x) { return x.emp_id === e.emp_id; })[0] || null;
+    if (prev) {
+      out.evaluation = { evaluation_id: prev.evaluation_id, period: prev.period, grade: prev.grade, score: prev.score, rationale_summary: prev.rationale_summary || "", krs: prev.krs || [] };
+      out.undone_krs = (prev.krs || []).filter(function (k) { return !k.done; });
+    } else {
+      var hrec = arr("evalHistory").filter(function (h) { return h && h.emp_id === e.emp_id; })[0];
+      var hist = (hrec && hrec.history) || [];
+      var last = hist.length ? hist[hist.length - 1] : null;
+      if (last) {
+        out.evaluation = { evaluation_id: "EVAL-" + (last.period || "PREV") + "-" + e.emp_id, period: last.period, grade: last.grade, score: last.score, rationale_summary: "", krs: [] };
+        out.derived = true;
+      }
+    }
+    out.feedback = arr("feedbackHistory").filter(function (f) { return f.emp_id === e.emp_id; }).slice(0, 2);
+    out.job_change = ((e.jobHistory || [])[0]) || null;
+    out.first_cycle = !out.evaluation && !out.feedback.length && !out.job_change;
+    return out;
+  }
+
   /* ---------------- executors ---------------- */
   var EXEC = {
 
@@ -184,13 +209,82 @@
       var areas = Object.keys(jp.tasks || {}).map(function (a) {
         return { area: a, tasks: (jp.tasks[a] || []).slice(0, 5) };
       });
+      /* 직무 기준 역량 상위 5 (역량 사전에서 이름 결합) */
+      var compName = {};
+      arr("competencies").forEach(function (c) { if (c && c.dimension_id) compName[c.dimension_id] = c.name; });
+      var comps = (jp.competency_profile || []).slice(0, 5).map(function (c) {
+        return { dimension_id: c.dimension_id, name: compName[c.dimension_id] || c.dimension_id, weight: c.weight };
+      });
+      /* 기대 스킬 상세 — skillDict 참조 시 분류(category) 포함 */
+      var skillIdx = {};
+      arr("skillDict").forEach(function (s) { if (s && s.skill_id) skillIdx[s.skill_id] = s; });
+      var skillIds = jp.skill_ids || [];
+      var skills = (jp.skills || []).slice(0, 15).map(function (n, i) {
+        var rec = skillIds[i] ? skillIdx[skillIds[i]] : null;
+        return { name: n, skill_id: skillIds[i] || null, category: (rec && rec.category) || null };
+      });
       return {
         emp_id: e.emp_id, name: e.name, jobTitle: e.jobTitle,
         profile: {
           job_id: jp.job_id, title: jp.title, group: jp.group, series: jp.series,
-          mission: jp.mission, task_areas: areas, skills: (jp.skills || []).slice(0, 15)
+          mission: jp.mission, task_areas: areas, skills: skills,
+          competency_profile: comps
         }
       };
+    },
+
+    get_org_objectives: function (input) {
+      /* 소속 조직 체인(팀→본부→전사)의 조직 목표 — 새 목표의 상위 목표 후보 */
+      var e = findEmp(input.emp_id || input.name) || CU();
+      var lv = gate("goal_checkin", e.emp_id);
+      if (lv === "no") return { blocked: true, policy: BLOCK_NOTE };
+      var orgIdx = {};
+      arr("orgs").forEach(function (o) { orgIdx[o.org_id] = o; });
+      var inChain = {}, cId = e.org_id, g = 0;
+      while (cId && orgIdx[cId] && g++ < 20) { inChain[cId] = 1; cId = orgIdx[cId].parent_id; }
+      var list = arr("objectives").filter(function (o) { return o.type !== "개인" && inChain[o.org_id]; })
+        .map(function (o) {
+          var topKr = arr("keyResults").filter(function (k) { return k.objective_id === o.objective_id; })[0];
+          return {
+            objective_id: o.objective_id, title: o.title,
+            org_id: o.org_id, org_name: (orgIdx[o.org_id] || {}).name || null,
+            level: o.level, period: o.period, status: o.status, progress: o.progress,
+            strategy_theme_id: o.strategy_theme_id || null,
+            top_kr: topKr ? { name: topKr.name, target: topKr.target_value } : null
+          };
+        });
+      return {
+        owner: empBrief(e), count: list.length, objectives: list,
+        note: "새 목표의 parent_objective_id로 쓸 수 있는 조직 목표 목록입니다 (소속 조직 체인 기준)."
+      };
+    },
+
+    get_prev_cycle: function (input) {
+      /* 이어받은 출발점 — 전년 등급·평가 요지·미완 KR·피드백 요지·직무 변경 */
+      var e = findEmp(input.emp_id || input.name) || CU();
+      var lv = gate("history", e.emp_id);
+      if (lv === "no") return { blocked: true, policy: BLOCK_NOTE };
+      var c = deriveCarry(e);
+      if (lv === "anon") return { owner: { orgName: e.orgName }, has_prev: !!c.evaluation, policy: POLICY_NOTE };
+      if (c.first_cycle) return { owner: empBrief(e), first_cycle: true, note: "이전 사이클 기록이 없습니다 — 직무 기준(주요 과업·기대 스킬)을 출발점으로 설계하세요." };
+      return {
+        owner: empBrief(e), first_cycle: false, derived: c.derived,
+        prev_evaluation: c.evaluation ? {
+          evaluation_id: c.evaluation.evaluation_id, period: c.evaluation.period,
+          grade: c.evaluation.grade, score: c.evaluation.score,
+          rationale_summary: c.evaluation.rationale_summary || null
+        } : null,
+        undone_krs: c.undone_krs.map(function (k) { return { name: k.name, achievement_pct: k.achievement_pct }; }),
+        feedback: c.feedback.map(function (f) { return { fb_id: f.fb_id, period: f.period, source_type: f.source_type, summary: f.summary }; }),
+        job_change: c.job_change ? { prev_label: c.job_change.prev_label, new_label: c.job_change.new_label, period: c.job_change.period, note: c.job_change.note || null } : null
+      };
+    },
+
+    get_strategy_themes: function () {
+      var ts = arr("strategyThemes").map(function (t) {
+        return { id: t.theme_id, title: t.name, description: t.description || null, kpis: t.kpis || [] };
+      });
+      return { count: ts.length, themes: ts };
     },
 
     get_upward_feedback: function (input) {
@@ -336,11 +430,17 @@
       input_schema: { type: "object", properties: { manager_emp_id: { type: "string" }, name: { type: "string" } } } },
     { name: "get_org_overview", description: "전사 개요: 등급 분포·전사 목표 진척·본부 목록.",
       input_schema: { type: "object", properties: {} } },
-    { name: "get_job_profile", description: "직원의 직무 프로파일(미션·주요 과업·기대 스킬)을 조회한다. 목표/KR 추천의 직무 근거로 사용. emp_id 생략 시 현재 사용자.",
+    { name: "get_job_profile", description: "직원의 직무 프로파일을 조회한다: 미션·주요 과업(task_areas)·기대 스킬(skill_id·분류 포함)·직무 기준 역량 프로파일(competency_profile: dimension_id·name·weight). 목표/KR 추천 시 KR의 job_task_ref(과업)·competency_id(역량) 근거로 사용. emp_id 생략 시 현재 사용자.",
       input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" } } } },
+    { name: "get_org_objectives", description: "직원이 속한 조직 체인(팀→본부→전사)의 조직 목표 목록을 조회한다. 새 목표의 상위 목표(parent_objective_id) 후보와 정렬 근거로 사용. objective_id·title·org_name·strategy_theme_id·대표 KR을 반환. emp_id 생략 시 현재 사용자.",
+      input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" } } } },
+    { name: "get_prev_cycle", description: "이어받은 출발점 — 직전 사이클의 평가 등급·평가 요지, 미완 KR(달성률), 최근 피드백 요지, 직무 변경 이력을 조회한다. 새 목표 초안이 지난 사이클을 계승하도록 하는 근거. 기록이 없으면 first_cycle:true. emp_id 생략 시 현재 사용자.",
+      input_schema: { type: "object", properties: { emp_id: { type: "string" }, name: { type: "string" } } } },
+    { name: "get_strategy_themes", description: "전사 전략 테마와 KPI 목록을 조회한다. 목표가 어떤 전략에 기여하는지(strategy_theme_id) 판단하는 근거로 사용.",
+      input_schema: { type: "object", properties: {} } },
     { name: "get_upward_feedback", description: "조직장에 대한 상향 피드백(구성원→조직장)을 조회한다. 응답자 보호: 조직장 본인은 익명 집계(themes)만, 응답 3명 미만은 집계도 비공개. leader_emp_id 생략 시 현재 사용자.",
       input_schema: { type: "object", properties: { leader_emp_id: { type: "string" }, name: { type: "string" } } } },
-    { name: "get_context_ledger", description: "성과 히스토리 원장(맥락 원장) 항목을 조회한다. 목표·체크인·1on1·피드백·평가이력·조직/직무 기준·규칙 등 사용자가 기능을 쓰며 축적한 맥락. 반환된 항목 id는 답변 끝 [[ctx:ID1,ID2]] 인용 마커에 사용. emp_id 생략 시 현재 사용자 — 타인 원장은 열람 규칙에 따라 요약/집계만.",
+    { name: "get_context_ledger", description: "성과 기록(맥락 원장) 항목을 조회한다. 목표·체크인·1on1·피드백·평가이력·조직/직무 기준·규칙 등 사용자가 기능을 쓰며 축적한 맥락. 반환된 항목 id는 답변 끝 [[ctx:ID1,ID2]] 인용 마커에 사용. emp_id 생략 시 현재 사용자 — 타인 원장은 열람 규칙에 따라 요약/집계만.",
       input_schema: { type: "object", properties: { emp_id: { type: "string" }, type: { type: "string", description: "유형 필터: goal/checkin/oneonone/feedback/eval/org/job/rule" }, limit: { type: "number", description: "최근 N건 (기본 8, 최대 20)" } } } },
     { name: "simulate_whatif", description: "읽기 전용 what-if 시뮬레이션: 달성률 변화(achievement_delta, %p)나 강제배분 상한(cap_pct, %)을 가정했을 때 등급·종합점수·분포 변화를 실계산한다. 실제 데이터는 변경하지 않는다. 예: '달성률이 -10%p면 등급이 어떻게 되나'.",
       input_schema: { type: "object", properties: { achievement_delta: { type: "number", description: "달성률 변화 가정 (%p, 예: -10)" }, cap_pct: { type: "number", description: "상위등급(S+A) 강제배분 상한 % (예: 30)" }, emp_id: { type: "string", description: "대상 직원 (생략 시 현재 사용자)" } } } },
@@ -364,7 +464,12 @@
         case "get_team_status": return "팀원 " + result.team_size + "명 요약";
         case "get_org_overview": return "전사 " + result.employees + "명 · 등급분포 산출";
         case "get_job_profile": return "직무 프로파일 · " + result.profile.title;
-        case "get_context_ledger": return result.items ? "성과 히스토리 " + result.count + "건 조회" : "성과 히스토리 " + result.count + "건 · 집계만";
+        case "get_org_objectives": return "상위 목표 후보 " + result.count + "건 (조직 체인)";
+        case "get_prev_cycle": return result.first_cycle ? "이전 사이클 기록 없음 — 첫 사이클"
+          : "이어받은 출발점 · " + ((result.prev_evaluation && result.prev_evaluation.grade) || "등급 없음")
+            + " · 미완 KR " + ((result.undone_krs || []).length) + "건";
+        case "get_strategy_themes": return "전략 테마 " + result.count + "건";
+        case "get_context_ledger": return result.items ? "성과 기록 " + result.count + "건 조회" : "성과 기록 " + result.count + "건 · 집계만";
         case "simulate_whatif": return result.after ? "시뮬 " + result.before.grade + " → " + result.after.grade + " (" + result.after.weighted_score + "점)" : "시뮬레이션 완료";
         case "get_screen_context": return result.screen;
         case "navigate": return result.ok ? result.moved_to + " 이동" : "이동 실패";
@@ -377,18 +482,23 @@
     search_employee: "talenx", get_employee_profile: "talenx", get_objectives: "talenx",
     get_checkins: "ERP", get_team_status: "talenx", get_org_overview: "통계",
     get_screen_context: "맥락", navigate: "화면", get_job_profile: "talenx",
-    get_upward_feedback: "talenx", get_context_ledger: "원장", simulate_whatif: "시뮬"
+    get_upward_feedback: "talenx", get_context_ledger: "원장", simulate_whatif: "시뮬",
+    get_org_objectives: "talenx", get_prev_cycle: "talenx", get_strategy_themes: "전략"
   };
   var LABEL_OF = {
     search_employee: "직원 검색", get_employee_profile: "프로필·평가 조회", get_objectives: "목표·KR 조회",
     get_checkins: "체크인 기록 대조", get_team_status: "팀 현황 요약", get_org_overview: "전사 분포 스캔",
     get_screen_context: "현재 화면 확인", navigate: "화면 전환", get_job_profile: "직무 프로파일 조회",
     get_upward_feedback: "상향 피드백 조회 (익명 보호)",
-    get_context_ledger: "성과 히스토리 원장 조회", simulate_whatif: "What-if 시뮬레이션 (읽기 전용)"
+    get_context_ledger: "성과 기록 조회", simulate_whatif: "What-if 시뮬레이션 (읽기 전용)",
+    get_org_objectives: "상위 목표 후보 조회", get_prev_cycle: "이어받은 출발점 조회",
+    get_strategy_themes: "전략 테마·KPI 조회"
   };
 
   window.EZTools = {
     schemas: SCHEMAS,
+    /* 이어받은 출발점 런타임 파생 — tx_fix_perf.js 목표 생성 폼과 공용 (F3) */
+    deriveCarry: deriveCarry,
     run: function (name, input) {
       var fn = EXEC[name];
       if (!fn) return { error: "unknown tool: " + name };

@@ -82,7 +82,11 @@
     ".ezup-brief .pt .n{ flex:none; width:18px; height:18px; border-radius:50%; background:var(--soft,#f5f5f7); color:var(--blue-2,#1F7AF0); font-size:10.5px; font-weight:600; display:flex; align-items:center; justify-content:center; margin-top:2px; }",
     ".ezup-brief .acts{ display:flex; gap:8px; margin-top:12px; }",
     ".ezup-brief .bar{ height:5px; background:var(--soft,#f5f5f7); border-radius:3px; overflow:hidden; margin-top:4px; }",
-    ".ezup-brief .bar i{ display:block; height:100%; background:var(--blue,#1F7AF0); }"
+    ".ezup-brief .bar i{ display:block; height:100%; background:var(--blue,#1F7AF0); }",
+    ".ezup-brief select{ width:100%; border:1px solid var(--line,#e0e0e0); border-radius:8px; padding:7px 10px; font:inherit; font-size:12.5px; margin-top:2px; }",
+    ".ezup-spin{ display:inline-block; width:11px; height:11px; border:2px solid rgba(31,122,240,.25); border-top-color:var(--blue,#1F7AF0); border-radius:50%; animation:ezupSpin2 .8s linear infinite; vertical-align:-2px; margin-right:4px; }",
+    "@keyframes ezupSpin2{ to{ transform:rotate(360deg); } }",
+    ".ezup-retry{ font:inherit; font-size:11px; font-weight:600; color:var(--blue-2,#1F7AF0); background:none; border:1px solid var(--blue,#1F7AF0); border-radius:999px; padding:2px 10px; cursor:pointer; margin-left:4px; }"
   ].join("\n");
   var st = document.createElement("style");
   st.id = "ezup-css";
@@ -348,60 +352,153 @@
 
   /* ============================================================
      A1 — 1:1 미팅 코파일럿 (미팅 전 브리핑 드로어)
+     - 실데이터만 렌더: 피드백 시그널=D.feedbackHistory, 지난 액션아이템=
+       EZLedger.list()의 1on1/체크인 기록 파생. 없으면 섹션 비표시(더미 금지).
+     - leader면 팀원 select(reportsOf 패턴)로 대상자를 바꿔 재렌더.
+     - "감사 기록됨"은 드로어 오픈 시 실제 ez:ctx 발행 후에만 표기.
      ============================================================ */
-  function briefData() {
-    var D = window.TALENX_DATA || {};
-    var me = (D.meta && D.meta.currentUser) || { name: "사용자", emp_id: "EMP-0078" };
-    var objs = (Array.isArray(D.objectives) ? D.objectives : []).filter(function (o) { return o.owner_emp_id === me.emp_id; }).slice(0, 3);
-    return { me: me, objs: objs };
+  function upRole() {
+    var D0 = window.TALENX_DATA || {};
+    var cu = (D0.meta && D0.meta.currentUser) || {};
+    return (cu._role) || (window.TXRoles && TXRoles.current && (TXRoles.current() || {}).key) || "member";
+  }
+  function reportsOf() {
+    var D0 = window.TALENX_DATA || {};
+    var cu = (D0.meta && D0.meta.currentUser) || {};
+    return (D0.employees || []).filter(function (e) { return e.manager_id === cu.emp_id; });
+  }
+  function briefData(emp) {
+    var D0 = window.TALENX_DATA || {};
+    var me = emp || (D0.meta && D0.meta.currentUser) || { name: "사용자", emp_id: "EMP-0078" };
+    var objs = (Array.isArray(D0.objectives) ? D0.objectives : []).filter(function (o) { return o.owner_emp_id === me.emp_id; }).slice(0, 3);
+    var fbs = (D0.feedbackHistory || []).filter(function (f) { return f.emp_id === me.emp_id; }).slice(0, 2);
+    var acts = [];
+    try {
+      if (window.EZLedger && EZLedger.list) {
+        acts = (EZLedger.list() || []).filter(function (it) {
+          return it && (it.type === "oneonone" || it.type === "1on1" || it.type === "checkin");
+        }).slice(0, 3);
+      }
+    } catch (e) { /* 원장 미탑재 — 섹션 비표시 */ }
+    return { me: me, objs: objs, fbs: fbs, acts: acts };
   }
   function openMeetingBrief() {
     if (!TX.drawer) return;
-    var d = briefData();
-    var objHtml = d.objs.length ? d.objs.map(function (o) {
-      var pr = (o.progress != null ? o.progress : 60);
-      return "<div>" + esc(o.title || o.name || "목표") + ' <span class="src">talenx</span><div class="bar"><i style="width:' + Math.min(100, pr) + '%"></i></div></div>';
-    }).join("") : '<div>분기 목표 3건 · 평균 진척 64% <span class="src">talenx</span><div class="bar"><i style="width:64%"></i></div></div>';
-    TX.drawer({
-      title: "✦ AI 미팅 브리핑 — " + esc(d.me.name),
-      subtitle: "1:1 미팅 전 자동 취합 · 기준 시점 오늘 · 감사 기록됨",
+    var D0 = window.TALENX_DATA || {};
+    var me0 = (D0.meta && D0.meta.currentUser) || { name: "사용자" };
+    /* 부제의 "감사 기록됨"은 실제 발행이 성공했을 때만 표기 */
+    var audited = false;
+    try {
+      document.dispatchEvent(new CustomEvent("ez:ctx", { detail: {
+        type: "audit", source: "brief.open", weight: 1,
+        title: "1:1 미팅 브리핑 열람",
+        summary: (me0.name || "사용자") + " · 미팅 전 자동 취합 브리핑 조회"
+      } }));
+      audited = true;
+    } catch (e) { /* 원장 부재 — 표기 생략 */ }
+    var isLeader = upRole() === "leader";
+    var team = isLeader ? reportsOf() : [];
+    var wrap = document.createElement("div");
+    wrap.className = "ezup-brief";
+    var dr = TX.drawer({
+      title: "✦ AI 미팅 브리핑",
+      subtitle: "1:1 미팅 전 자동 취합 · 기준 시점 오늘" + (audited ? " · 감사 기록됨" : ""),
       width: "440px",
-      body: '<div class="ezup-brief">' +
-        '<div class="bsec"><b>목표 진척</b>' + objHtml + "</div>" +
-        '<div class="bsec"><b>최근 피드백 시그널</b>동료 피드백 2건 수신(협업 긍정) · 체크인 코멘트 감소 추세 <span class="src">talenx</span></div>' +
-        '<div class="bsec"><b>지난 1:1 액션아이템</b><div class="pt"><span class="n">✓</span><span>API 문서화 — 완료</span></div><div class="pt"><span class="n">…</span><span>온보딩 가이드 — 진행 중(70%)</span></div></div>' +
+      body: wrap
+    });
+    function renderBody(emp) {
+      var d = briefData(emp);
+      var selHtml = "";
+      if (isLeader && team.length) {
+        selHtml = '<div class="bsec"><b>브리핑 대상</b><select data-ezup-emp>' +
+          '<option value="">' + esc(me0.name || "본인") + " (본인)</option>" +
+          team.map(function (e) {
+            return '<option value="' + esc(e.emp_id) + '"' + (emp && emp.emp_id === e.emp_id ? " selected" : "") + ">" +
+              esc(e.name) + (e.jobTitle ? " · " + esc(e.jobTitle) : "") + "</option>";
+          }).join("") + "</select></div>";
+      }
+      var objHtml = d.objs.length ? d.objs.map(function (o) {
+        var pr = Math.min(100, o.progress != null ? o.progress : 0);
+        return "<div>" + esc(o.title || o.name || "목표") + ' <span class="src">talenx</span><div class="bar"><i style="width:' + pr + '%"></i></div></div>';
+      }).join("") : '<div style="color:var(--ink-3,#7a7a7a)">등록된 목표가 없습니다.</div>';
+      /* 실데이터 있을 때만 섹션 표시 — 더미·위장 배지 금지 */
+      var fbHtml = d.fbs.length ? '<div class="bsec"><b>최근 피드백 시그널</b>' +
+        d.fbs.map(function (f) {
+          return '<div class="pt"><span class="n">' + (f.source_type === "leader" ? "리" : "동") + "</span><span>" +
+            esc(f.summary) + ' <span class="src">talenx' + (f.fb_id ? " " + esc(f.fb_id) : "") + "</span></span></div>";
+        }).join("") + "</div>" : "";
+      var actHtml = d.acts.length ? '<div class="bsec"><b>지난 액션아이템</b>' +
+        d.acts.map(function (a, i) {
+          return '<div class="pt"><span class="n">' + (i + 1) + "</span><span>" + esc(a.title || "") +
+            (a.summary ? " — " + esc(String(a.summary).slice(0, 60)) : "") +
+            ' <span class="src">기록' + (a.at ? " " + esc(a.at) : "") + "</span></span></div>";
+        }).join("") + "</div>" : "";
+      wrap.innerHTML = selHtml +
+        '<div class="bsec"><b>목표 진척 — ' + esc(d.me.name || "") + "</b>" + objHtml + "</div>" +
+        fbHtml + actHtml +
         '<div class="bsec" data-ezup-pts><b>추천 논의 포인트</b>' +
         '<div class="pt"><span class="n">1</span><span>진척 지연 목표의 장애물 — 리소스인지 우선순위인지 확인</span></div>' +
-        '<div class="pt"><span class="n">2</span><span>최근 피드백의 협업 강점을 다음 분기 목표와 연결</span></div>' +
+        '<div class="pt"><span class="n">2</span><span>피드백에서 확인된 강점을 다음 분기 목표와 연결</span></div>' +
         '<div class="pt"><span class="n">3</span><span>미완료 액션아이템 마감 재합의</span></div></div>' +
-        '<div class="acts"><button type="button" class="agh-btn primary" data-ezup-chat>elizax에서 이어서</button><button type="button" class="agh-btn" data-ezup-tl>근거 타임라인</button></div>' +
-        "</div>"
-    });
-    setTimeout(function () {
-      var c = document.querySelector("[data-ezup-chat]"), t = document.querySelector("[data-ezup-tl]");
-      if (c) c.addEventListener("click", function () { elizaxSend("이번 1:1 미팅 아젠다 초안을 만들어줘"); });
+        '<div class="acts"><button type="button" class="agh-btn primary" data-ezup-chat>elizax에서 이어서</button><button type="button" class="agh-btn" data-ezup-tl>근거 타임라인</button></div>';
+      var sel = wrap.querySelector("[data-ezup-emp]");
+      if (sel) sel.addEventListener("change", function () {
+        var id = sel.value, hit = null;
+        team.forEach(function (x) { if (x.emp_id === id) hit = x; });
+        renderBody(hit);
+      });
+      var c = wrap.querySelector("[data-ezup-chat]"), t = wrap.querySelector("[data-ezup-tl]");
+      if (c) c.addEventListener("click", function () {
+        /* 현재 브리핑 요약(대상자명 + 목표 진척 라인)을 프롬프트에 포함 */
+        var lines = d.objs.map(function (o) {
+          return "- " + (o.title || "") + " · 진척 " + (o.progress != null ? o.progress : "?") + "%";
+        }).join("\n");
+        try { if (window.Elizax && Elizax.open) Elizax.open(); } catch (e) { /* 미탑재 */ }
+        elizaxSend("1:1 미팅 아젠다 초안을 만들어줘.\n대상: " + (d.me.name || "") +
+          (d.me.emp_id ? " (" + d.me.emp_id + ")" : "") + "\n목표 진척:\n" + (lines || "- 등록된 목표 없음"));
+        dr.close();
+      });
       if (t) t.addEventListener("click", function () { if (window.TXAgent && TXAgent.openHub) TXAgent.openHub("qw4"); });
-      /* Claude 연결 시: 목표·체크인 실데이터 기반 논의 포인트 실시간 생성 */
-      var pts = document.querySelector("[data-ezup-pts]");
+      runBriefAI(d);
+    }
+    /* Claude 연결 시: 목표·체크인 실데이터 기반 논의 포인트 실시간 생성.
+       3줄 파싱 실패·오류 시 "생성 실패 · 다시 시도"로 교체(로딩 문구 잔존 방지) */
+    function runBriefAI(d) {
+      var pts = wrap.querySelector("[data-ezup-pts]");
       var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
-      if (pts && live) {
-        pts.insertAdjacentHTML("beforeend", '<small style="display:block;margin-top:6px;color:#98A2B3">elizax가 목표·체크인 실데이터로 재구성 중…</small>');
+      if (!pts || !live) return;
+      function setStatus(html) {
+        var s = pts.querySelector("[data-ezup-ai]");
+        if (s) s.innerHTML = html;
+        else pts.insertAdjacentHTML("beforeend", '<small data-ezup-ai style="display:block;margin-top:6px;color:#98A2B3">' + html + "</small>");
+      }
+      function fail() {
+        if (!document.body.contains(pts)) return;
+        setStatus('생성 실패 · <button type="button" class="ezup-retry" data-ezup-retry>다시 시도</button>');
+        var rb = pts.querySelector("[data-ezup-retry]");
+        if (rb) rb.addEventListener("click", start);
+      }
+      function start() {
+        setStatus('<span class="ezup-spin"></span>elizax가 목표·체크인 실데이터로 재구성 중…');
         window.EZAI.agent({
           maxTurns: 4, maxTokens: 600,
           messages: [{ role: "user", content:
             d.me.name + "(" + d.me.emp_id + ")의 목표와 최근 체크인을 도구로 조회한 뒤, 1:1 미팅에서 다룰 논의 포인트 3개를 추천해줘. " +
             "반드시 형식: 각 줄 하나의 포인트(번호·머리말 없이), 정확히 3줄. 각 포인트에 조회한 실데이터 근거(수치·블로커)를 포함해." }],
           onDone: function (text) {
+            if (!document.body.contains(pts)) return;
             var lines = String(text || "").split(/\r?\n/).map(function (s) { return s.replace(/^\s*[-•\d.)]+\s*/, "").trim(); }).filter(Boolean).slice(0, 3);
-            if (lines.length !== 3 || !document.body.contains(pts)) return;
+            if (lines.length !== 3) { fail(); return; }
             pts.innerHTML = "<b>추천 논의 포인트</b>" + lines.map(function (ln, i) {
               return '<div class="pt"><span class="n">' + (i + 1) + "</span><span>" + esc(ln) + "</span></div>";
             }).join("") + '<small style="display:block;margin-top:6px;color:#98A2B3">Claude 실시간 생성 · talenx·ERP 근거</small>';
           },
-          onError: function () { var s = pts.querySelector("small"); if (s) s.remove(); }
+          onError: function () { fail(); }
         });
       }
-    }, 60);
+      start();
+    }
+    renderBody(null);
   }
   function injectBrief() {
     var sec = document.querySelector("#s-perf");

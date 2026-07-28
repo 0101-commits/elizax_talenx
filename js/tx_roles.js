@@ -435,7 +435,7 @@
     }).join("");
 
     /* 게이트: member=확인·이의·소명(피평가자 어휘), 그 외=승인·수정·보류 */
-    var gateLab = role === "member" ? "확인 게이트 · 확정 전에는 아무것도 반영되지 않음" : "결정 게이트 · 사람이 확정";
+    var gateLab = role === "member" ? "결정 게이트 · 사람이 확정 — 확정 전에는 아무것도 반영되지 않음" : "결정 게이트 · 사람이 확정";
     var gateBtns = gateDefs(role).map(function (df) {
       return '<button class="txr-btn' + (df.primary ? " primary" : "") + '" data-gate="' + esc(df.act) + '"' +
         (dec ? " disabled" : "") + (dec && dec.act === df.act ? ' data-chosen="1"' : "") + ">" + esc(df.act) + "</button>";
@@ -519,6 +519,14 @@
     saveDecision({ act: act, note: note || "", at: nowLabel(), audit: auditId(act), by: cu.name || "-" });
     rerenderReceipt();
     toast("'" + act + "' 결정이 감사 로그에 기록되었습니다.", (act === "승인" || act === "확인했습니다") ? "ok" : "");
+  }
+  /* 허브(TXAgent) 등 외부 모듈이 같은 게이트 저장소('txr_gate_'+role)를 쓰도록 공용 헬퍼 —
+     EZJourney가 읽는 결정 형식({act, note, at, audit, by})을 이 파일 한 곳에서 유지한다.
+     auditRef가 오면(원장 실 id) 그대로 기록하고, 없으면 기존 auditId 규칙을 쓴다. */
+  function recordGateDecision(act, note, auditRef) {
+    var cu = (D().meta && D().meta.currentUser) || {};
+    saveDecision({ act: act, note: note || "", at: nowLabel(), audit: auditRef || auditId(act), by: cu.name || "-" });
+    rerenderReceipt();
   }
   function rerenderReceipt() {
     var rc = document.querySelector("#s-appr .txr-receipt");
@@ -625,5 +633,5 @@
     pollReceipt();
   });
 
-  window.TXRoles = { current: curRole, switchTo: switchTo, ROLES: ROLES };
+  window.TXRoles = { current: curRole, switchTo: switchTo, ROLES: ROLES, recordGate: recordGateDecision };
 })();

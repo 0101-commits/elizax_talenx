@@ -240,16 +240,7 @@
         + ' <b class="cw">' + esc(c.weight) + '%</b></span>';
     }).join('') + '</div>';
   }
-  function carryOverHTML(emp) {
-    var h25 = histOf(emp.emp_id, 'FY2025');
-    var ev = evalOf(emp.emp_id);
-    if (!h25 && !ev) return '';
-    return '<div class="ezjc-carry"><div class="ct">지난 사이클 이어받기</div>'
-      + (h25 ? '<div class="cg">FY2025 등급 <b>' + esc(h25.grade) + '</b>'
-          + (h25.score != null ? ' · ' + esc(h25.score) + '점' : '') + '</div>' : '')
-      + (ev && ev.rationale_summary ? '<div class="cr">' + esc(ev.rationale_summary) + '</div>' : '')
-      + '<div class="cn">작년 기록과 직무 기준을 AI 추천의 근거로 사용합니다</div></div>';
-  }
+
 
   /* ============================================================
      1) 목표 생성 오버레이 패널 — window.EZJob.panelHTML(emp)
@@ -279,7 +270,8 @@
             ? '<div class="ezjc-sec">직무 기준 역량</div>' + compChips(jp, 3)
             : '');
     }
-    h += carryOverHTML(emp);
+    /* 지난 사이클 이어받기는 목표 생성 폼의 '이어받은 출발점' 패널이 단일 원천이다.
+       같은 정보를 여기서 다시 그리면 어느 쪽이 기능인지 알 수 없다 (F3). */
     h += '<div class="ezjc-foot"><a class="ezjc-link" data-ezjc="drawer" data-emp="' + esc(emp.emp_id || '') + '">전체 프로파일 보기 →</a></div>';
     h += '</div>';
     return h;
@@ -345,6 +337,9 @@
   ];
   var LEVEL_KR = { company: '전사', division: '본부', bu: 'BU', team: '팀', chapter: '챕터', individual: '개인' };
   var curPairs = [];
+  /* 과업명 + 역량id 합성 키의 구분자. 과업명에 등장하지 않는 문자여야 하고,
+     소스에서 눈에 보여야 한다 — 이전에는 불가시 제어문자라 빈 문자열로 오독됐다. */
+  var SEP = '§';
 
   function subjects() {
     var me = cu();
@@ -432,11 +427,12 @@
       if (ar) { linkedAreas[ar] = 1; curPairs.push(['kr:' + k.kr_id, 'a:' + ar, '#0E9F6E']); }
       if (k.competency_id) {
         linkedComps[k.competency_id] = 1;
-        if (ar) areaComp[ar + '' + k.competency_id] = 1;
+        if (ar) areaComp[ar + SEP + k.competency_id] = 1;
       }
     });
     Object.keys(areaComp).forEach(function (pk) {
-      var pp = pk.split('');
+      var pp = pk.split(SEP);
+      if (pp.length !== 2 || !pp[0] || !pp[1]) return;
       curPairs.push(['a:' + pp[0], 'c:' + pp[1], '#B45309']);
     });
     var ev = evalOf(e.emp_id);
@@ -512,7 +508,7 @@
       + (ev && ev.rationale_summary ? '<div class="sm">' + esc(ev.rationale_summary) + '</div>' : '')
       + '<div class="sm" style="color:#15803D">확정 근거로 연결</div></div>'
       + ((h24 || h25)
-          ? '<div class="ezjc-item"><div class="sm" style="margin:0">성과 히스토리</div>'
+          ? '<div class="ezjc-item"><div class="sm" style="margin:0">성과 기록</div>'
             + (h24 ? 'FY2024 ' + esc(h24.grade) : '') + (h24 && h25 ? ' → ' : '')
             + (h25 ? 'FY2025 ' + esc(h25.grade) : '') + '</div>'
           : '');

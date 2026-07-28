@@ -3,7 +3,12 @@
    the #s-appr section to match real talenx. Reads window.TALENX_DATA via TXFIX.
    IIFE · idempotent (marker-based, survives subnav/tab re-render) · no network.
    NOTE: real 평가 = stage pipeline (대상자→본인/상위자→2차 등급 조정→결과 확정);
-   탈렌트 세션 = 승급 심사 session cards. NO 9-box / axes / drag / calibration. */
+   탈렌트 세션 = 승급 심사 session cards. NO 9-box / axes / drag / calibration.
+   F4 (2026-07-27): 평가 작성 폼 × AI 근거초안 인스펙터(js/tx_ai_draft.js 동적
+   로드·window.EZDraft 소비) + 저장 실체화 — 제출=txf_eval_data:{empId} JSON,
+   임시저장=txf_eval_draft:{empId} 복원, 조정등급=txf_adj_grade:{empId},
+   제출 시 ez:ctx 발행. objsFor 해시 랜덤 폴백 제거, 역량 4항목=EZJob
+   competency_profile 상위 4(폴백 유지), hr 본인 셀 '작성' 오배치 제거. */
 (function () {
   'use strict';
   var F = window.TXFIX; if (!F) return;
@@ -18,6 +23,8 @@
   (D.evaluations || []).forEach(function (x) { evalIx[x.emp_id] = x; });
   function team(n) { return (byOrg[n] || []); }
   function evalOf(id) { return evalIx[id] || (D.evalByEmp && D.evalByEmp[id]) || null; }
+  /* F4: 2차 조정 등급 (세션 실저장) — 저장돼 있으면 표시 등급이 이를 따른다 */
+  function adjGradeOf(id) { return id ? (ssGet('txf_adj_grade:' + id) || null) : null; }
   function mgrOf(e) { return (e && F.emp(e.manager_id)) || CU; }
 
   /* ---------- 제출 상태 (실데이터) ----------
@@ -28,6 +35,20 @@
   (D.checkins || []).forEach(function (c) { ckByEmp[c.emp_id] = 1; });
   function ssGet(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return (window.__txfSS || {})[k] || null; } }
   function ssSet(k, v) { try { window.sessionStorage.setItem(k, v); } catch (e) { (window.__txfSS = window.__txfSS || {})[k] = v; } }
+  function ssDel(k) { try { window.sessionStorage.removeItem(k); } catch (e) { if (window.__txfSS) delete window.__txfSS[k]; } }
+
+  /* F4: 근거초안 모듈(tx_ai_draft.js) 동적 로드 — index.html 무변경 계약.
+     로드 전 클릭은 runDraft가 템플릿 폴백으로 안내한다. */
+  (function loadDraftModule() {
+    if (window.EZDraft || document.getElementById('txf-ezdraft-js')) return;
+    try {
+      var sc = document.createElement('script');
+      sc.id = 'txf-ezdraft-js';
+      sc.src = 'js/tx_ai_draft.js?v=20260728c';
+      sc.defer = true;
+      document.head.appendChild(sc);
+    } catch (e) { /* 로드 실패 시 템플릿 폴백 경로만 동작 */ }
+  })();
   function selfDone(id) {
     if (ssGet('txf_selfeval_done:' + id)) return true;
     if ((D.checkins || []).length) return !!ckByEmp[id];
@@ -165,7 +186,30 @@
       '.txfd-row .txf-linkbtn{margin-left:8px;flex:none}' +
       '.txfd-sech{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 10px}' +
       '.txfd-sech .txfd-sec{margin:0}' +
-      '.txfd-bar .go{width:150px;font-size:12px;font-weight:700;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
+      '.txfd-bar .go{width:150px;font-size:12px;font-weight:700;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      /* F4: 평가 작성 × 근거 초안 인스펙터 (2영역 레이아웃 + 우측 패널) */
+      /* tx-wide(680px)와 특이도가 같으면 로드 순서에 따라 져서 좌측 폼이 296px로 눌린다.
+         2영역 레이아웃은 폼과 근거 패널이 함께 읽혀야 성립하므로 특이도를 올린다. */
+      '.tx-modal.tx-wide.txdr-modal,.tx-modal.txdr-modal{width:min(1060px,94vw)}' +
+      '.txdr-wrap{display:flex;gap:18px;align-items:flex-start}' +
+      '.txdr-main{flex:1 1 auto;min-width:0}' +
+      '.txdr-side{width:320px;flex:none;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:14px}' +
+      '.txdr-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;font-weight:800;color:var(--ink);margin-bottom:10px}' +
+      '.txdr-tg{display:none;border:1px solid var(--line);background:var(--card);border-radius:6px;font-size:11.5px;font-weight:700;padding:3px 9px;cursor:pointer;color:var(--ink-2);font-family:inherit}' +
+      '.txdr-gen{width:100%;border:1px solid var(--blue);background:var(--card);color:var(--blue);border-radius:8px;padding:9px 0;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}' +
+      '.txdr-gen:disabled{opacity:.6;cursor:default}' +
+      '.txdr-prog{margin-top:10px;font-size:11.5px;color:var(--ink-3);line-height:1.5}' +
+      '.txdr-cards{margin-top:10px;display:flex;flex-direction:column;gap:8px}' +
+      '.txdr-card{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 12px}' +
+      '.txdr-card .tx{font-size:12.5px;line-height:1.6;color:var(--ink-2)}' +
+      '.txdr-card .ft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}' +
+      '.txdr-apply{border:1px solid var(--line);background:var(--card);border-radius:6px;font-size:11.5px;font-weight:700;padding:4px 10px;cursor:pointer;color:var(--ink-2);font-family:inherit;white-space:nowrap}' +
+      '.txdr-apply:disabled{opacity:.55;cursor:default}' +
+      '.txdr-warn{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);color:#B45309;font-size:11.5px;font-weight:700;border-radius:7px;padding:6px 10px;margin-top:10px}' +
+      '.txdr-chip-tpl{display:inline-block;font-size:10.5px;font-weight:700;border:1px dashed var(--line);border-radius:5px;padding:1px 7px;color:var(--ink-3);background:var(--card);white-space:nowrap}' +
+      '.txdr-note{margin-top:12px;font-size:11px;color:var(--ink-3);line-height:1.5}' +
+      '.txdr-empty{font-size:12px;color:var(--ink-3);padding:6px 0}' +
+      '@media(max-width:1100px){.txdr-wrap{flex-direction:column}.txdr-side{width:100%}.txdr-tg{display:inline-block}.txdr-side.closed [data-txdr-body],.txdr-side.closed .txdr-note{display:none}}';
     document.head.appendChild(s);
   }
 
@@ -220,7 +264,9 @@
       secondC = cell((mgrOf(CU) || hrRep()).name, F.teamName(mgrOf(CU) || hrRep()), { status: 'info' });
       resultC = cell(t.name, tn, { status: done ? 'done' : null, btn: resultBtn });
     } else {                                   // hr / exec
-      selfC = cell(t.name, tn, { status: done ? 'done' : 'delay', btn: done ? null : writeBtn });
+      // F4: 본인 평가 셀은 대상자 몫 — HR이 대상자의 자기평가를 대신 작성하는
+      // '작성' 버튼 오배치를 제거(열람만). HR 액션은 2차 조정·결과 확정 열.
+      selfC = cell(t.name, tn, { status: done ? 'done' : 'delay' });
       firstC = cell(mgr.name, mgrTeam, { status: done ? 'done' : 'info' });
       secondC = cell(CU.name, F.teamName(CU));
       resultC = cell(CU.name, F.teamName(CU), { status: done ? 'done' : null, btn: resultBtn });
@@ -311,7 +357,9 @@
       ? ' <span class="txfw-done">제출 완료</span>' : '';
     var pane0 = isSelf
       ? '<div class="txf-selfnote">아래는 <b>' + esc((CU && CU.name) || '본인') + '</b>님 본인 평가 작성입니다. 확정 등급·근거는 위 <b>검증 가능한 답변</b> 카드에서 확인하세요.' + doneBadge + '</div>' +
-        writeFormBody((CU && CU.emp_id) || '') +
+        /* F4: 인라인 자기평가 폼 + '내 성과 근거 모아보기' 패널 (동일 모듈) */
+        '<div class="txdr-wrap"><div class="txdr-main">' + writeFormBody((CU && CU.emp_id) || '') + '</div>' +
+        draftPanelHTML((CU && CU.emp_id) || '', 'self') + '</div>' +
         '<div class="txf-selfbar"><button class="ghost-btn" data-txf="self-save">임시저장</button><button class="hbtn" data-txf="self-submit">제출</button></div>'
       : (planProjects + moreBtn);
     var filterBtn = isSelf ? '' :
@@ -333,6 +381,11 @@
       '</div></div>' +
       (canOps ? '<div data-pane="3" style="display:none"><div class="txf-ops">' + dashBody() + '</div></div>' : '') +
       '</div>';
+    /* F4: 자기평가 임시저장·제출본 복원 (라디오·textarea 프리필) */
+    if (isSelf) {
+      var sf = container.querySelector('[data-pane="0"] .txfw-form');
+      if (sf) restoreForm(sf, (CU && CU.emp_id) || '');
+    }
   }
 
   /* ---------- 결과 확인 탭 (pane 1) — 역할별 인라인 ---------- */
@@ -343,7 +396,8 @@
     }
     if (rk === 'leader') {
       var rows = reportsOf(CU).slice(0, 8).map(function (e) {
-        var ev = evalOf(e.emp_id), g = ev ? ev.grade : '-';
+        var ev = evalOf(e.emp_id);
+        var g = adjGradeOf(e.emp_id) || (ev ? ev.grade : '-');   // F4: 2차 조정 반영
         return '<tr><td>' + esc(e.name) + '</td><td style="color:var(--ink-3)">' + esc(F.teamName(e)) + '</td>' +
           '<td><b style="color:' + (GC[g] || 'var(--ink-2)') + '">' + g + '</b></td>' +
           '<td>' + (ev && ev.weighted_score != null ? ev.weighted_score + '점' : '-') + '</td>' +
@@ -403,12 +457,14 @@
   function rcptBody(empId) {
     var e = F.emp(empId), ev = evalOf(empId);
     if (!ev) return '<div style="padding:24px 4px;text-align:center;color:var(--ink-3);font-size:13px">확정된 평가 결과가 없습니다.</div>';
-    var g = ev.grade, c = ev.components || {}, col = GC[g] || 'var(--ink-2)';
+    var adj = adjGradeOf(empId);                              // F4: 2차 조정 반영
+    var g = adj || ev.grade, c = ev.components || {}, col = GC[g] || 'var(--ink-2)';
     var r = function (k, v) { return '<div class="txf-rrow"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>'; };
     return '<div class="txf-rcpt">' +
       '<div class="rc-top"><span class="txf-gpill" style="background:' + col + '">' + g + '</span>' +
       '<div><div class="rc-score">종합 ' + (ev.weighted_score != null ? ev.weighted_score : '-') + '점</div>' +
-      '<div class="rc-sub">' + esc((e && e.name) || '') + ' · ' + esc(F.teamName(e)) + ' · ' + (ev.period || '') + '</div></div></div>' +
+      '<div class="rc-sub">' + esc((e && e.name) || '') + ' · ' + esc(F.teamName(e)) + ' · ' + (ev.period || '') +
+      (adj && adj !== ev.grade ? ' · <b style="color:var(--blue)">2차 조정 반영 (' + esc(ev.grade) + '→' + esc(adj) + ')</b>' : '') + '</div></div></div>' +
       r('목표 달성', (c.achievement_norm != null ? c.achievement_norm : '-') + ' / 100') +
       r('동료 평가', (c.peer_strength_norm != null ? c.peer_strength_norm : '-') + ' / 100') +
       r('실행 일관성', (c.exec_consistency_norm != null ? c.exec_consistency_norm : '-') + ' / 100') +
@@ -425,13 +481,27 @@
     var e = F.emp(empId) || {};
     var all = D.objectives || [];
     var objs = all.filter(function (o) { return o.owner_emp_id === empId; });
-    if (!objs.length) objs = all.filter(function (o) { return o.org_id === e.org_id; });
-    if (!objs.length && all.length) {
-      var h = 0, s = String(empId || ''), i;
-      for (i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 997;
-      objs = [all[h % all.length], all[(h + 1) % all.length], all[(h + 2) % all.length]];
-    }
+    /* F4: 해시 랜덤 폴백 제거 — 대상자와 무관한 목표가 평가폼에 노출되는 경로 차단.
+       조직 목표 폴백은 org_id가 실재할 때만(undefined===undefined 전량 매칭 방지). */
+    if (!objs.length && e.org_id != null) objs = all.filter(function (o) { return o.org_id === e.org_id; });
     return objs.slice(0, 3);
+  }
+  /* F4: 역량 항목 — 대상자 직무 competency_profile 상위 4 (없으면 공통 4항목 폴백) */
+  function compItemsFor(empId) {
+    var out = [];
+    try {
+      var e = F.emp(empId) || {};
+      var jp = (window.EZJob && EZJob.profileOf) ? EZJob.profileOf(e) : null;
+      var cp = (jp && Array.isArray(jp.competency_profile)) ? jp.competency_profile : [];
+      var nmIx = {};
+      (D.competencies || []).forEach(function (c) { if (c && c.dimension_id) nmIx[c.dimension_id] = c.name || c.dimension_id; });
+      cp.slice(0, 4).forEach(function (c) {
+        if (!c || !c.dimension_id) return;
+        out.push({ label: nmIx[c.dimension_id] || c.dimension_id, sub: '직무 기준 역량' + (c.weight != null ? ' · 가중치 ' + c.weight + '%' : '') });
+      });
+    } catch (e2) { out = []; }
+    if (!out.length) out = ['커뮤니케이션', '문제해결', '협업', '직무 전문성'].map(function (c) { return { label: c, sub: '공통 역량' }; });
+    return out;
   }
   function radioRow(name) {
     // 기본 미선택 — 앵커링 방지, 제출 시 미입력 검증
@@ -459,6 +529,8 @@
         '<td style="white-space:nowrap;color:var(--ink-2);font-weight:700">' + (o.progress != null ? o.progress + '%' : '-') + '</td>' +
         '<td style="white-space:nowrap">' + radioRow('txfw-g' + i) + '</td></tr>';
     }).join('');
+    /* F4: 목표 없음 = 빈 상태 명시 (무관 목표 랜덤 노출 금지) */
+    if (!goalRows) goalRows = '<tr><td colspan="3" style="padding:18px;text-align:center;color:var(--ink-3);font-size:12.5px">등록된 목표가 없습니다 — 성과 등급은 목표 등록 후 입력할 수 있습니다.</td></tr>';
     /* 난이도 보정 데모 — 원본 점수는 그대로, 화면 병기만 */
     var ev0 = evalOf(empId);
     var baseScore = ev0 ? (ev0.weighted_score != null ? ev0.weighted_score : (ev0.components && ev0.components.achievement_norm)) : null;
@@ -474,8 +546,9 @@
       coefBox = '<div class="txf-coefbox">난이도 보정 데모 — 달성 점수 <b>' + baseScore + '</b> → 난이도 반영 <b>' + adj + '</b>' +
         ' <span class="c">(데모 반영 비율 ×' + (Math.round(coef * 100) / 100) + ' · S 1.15 / A 1.0 / B 0.9 — 핵심 성과 난이도 평균, 원본 점수는 바뀌지 않습니다)</span></div>';
     }
-    var compRows = ['커뮤니케이션', '문제해결', '협업', '직무 전문성'].map(function (c, i) {
-      return '<tr><td>' + c + '</td><td style="color:var(--ink-3)">공통 역량</td>' +
+    /* F4: 직무 기준 역량 상위 4 (EZJob competency_profile) — 없으면 공통 4항목 */
+    var compRows = compItemsFor(empId).map(function (c, i) {
+      return '<tr><td>' + esc(c.label) + '</td><td style="color:var(--ink-3)">' + esc(c.sub) + '</td>' +
         '<td style="white-space:nowrap">' + radioRow('txfw-c' + i) + '</td></tr>';
     }).join('');
     return '<div class="txfw-form">' +
@@ -488,17 +561,183 @@
       '<div class="txf-fld" style="margin-top:16px"><span>종합의견</span><textarea class="txfw-op" rows="4" placeholder="평가 근거와 종합 의견을 입력하세요."></textarea></div>' +
       '</div>';
   }
+  /* ---------- F4: 폼 직렬화 · 복원 · 맥락 발행 ---------- */
+  function serializeForm(form, empId) {
+    var d = { empId: empId || '', at: new Date().toISOString(),
+      goals: {}, comps: {}, goalLabels: [], compLabels: [], opinion: '',
+      srcs: (form && form.__txfSrcs ? form.__txfSrcs : []).slice() };
+    if (form) {
+      [].forEach.call(form.querySelectorAll('input[type="radio"]:checked'), function (r) {
+        var mm = /^txfw-([gc])(\d+)$/.exec(r.name); if (!mm) return;
+        d[mm[1] === 'g' ? 'goals' : 'comps'][mm[2]] = r.value;
+      });
+      var ta = form.querySelector('.txfw-op'); d.opinion = ta ? ta.value : '';
+    }
+    objsFor(empId).forEach(function (o) { d.goalLabels.push((o && o.title) || '-'); });
+    compItemsFor(empId).forEach(function (c) { d.compLabels.push(c.label); });
+    return d;
+  }
+  function restoreForm(form, empId) {
+    if (!form || !empId) return;
+    var raw = ssGet('txf_eval_draft:' + empId) || ssGet('txf_eval_data:' + empId);
+    if (!raw) return;
+    var d; try { d = JSON.parse(raw); } catch (e) { return; }
+    if (!d) return;
+    function setRad(prefix, map) {
+      Object.keys(map || {}).forEach(function (k) {
+        var r = form.querySelector('input[name="txfw-' + prefix + k + '"][value="' + map[k] + '"]');
+        if (r) r.checked = true;
+      });
+    }
+    setRad('g', d.goals); setRad('c', d.comps);
+    var ta = form.querySelector('.txfw-op');
+    if (ta && d.opinion) ta.value = d.opinion;
+    form.__txfSrcs = (d.srcs || []).slice();
+  }
+  /* 제출 시 맥락 원장 발행 — tx_1on1.js ez:ctx 발행 패턴 */
+  function emitEvalCtx(title, source, d) {
+    var n = Object.keys(d.goals || {}).length + Object.keys(d.comps || {}).length;
+    var mCnt = (d.srcs || []).length;
+    try {
+      document.dispatchEvent(new CustomEvent('ez:ctx', {
+        detail: { type: 'eval', source: source, title: title,
+          summary: '등급 입력 ' + n + '건 · 근거 문장 ' + mCnt + '건', weight: 3 }
+      }));
+    } catch (e) { /* 수신자 없어도 발행만 — 구형 브라우저 무시 */ }
+  }
+
+  /* ---------- F4: 근거 초안 인스펙터 패널 (EZDraft 소비) ---------- */
+  var OFF_SENTS = [
+    { text: '상반기 등록 목표의 달성도 추이가 계획 대비 어떠했는지 기록으로 확인해 주세요.', srcKind: 'template', srcLabel: '템플릿 예시' },
+    { text: '체크인 기록의 진척 보고·블로커 공유가 일정했는지 살펴보고 근거로 인용해 주세요.', srcKind: 'template', srcLabel: '템플릿 예시' },
+    { text: '협업 요청·지원 이력 등 실제 기록에 남은 사실만 종합의견에 반영해 주세요.', srcKind: 'template', srcLabel: '템플릿 예시' }
+  ];
+  function draftPanelHTML(empId, mode) {
+    var title = mode === 'self' ? '✦ 내 성과 근거 모아보기' : '✦ 근거 초안';
+    return '<aside class="txdr-side" data-txdr-panel data-emp="' + esc(empId || '') + '" data-mode="' + (mode || 'eval') + '">' +
+      '<div class="txdr-h"><span>' + title + '</span><button class="txdr-tg" type="button" data-txdr="toggle">접기</button></div>' +
+      '<div data-txdr-body>' +
+      '<button class="txdr-gen" type="button" data-txdr="gen">✦ 근거 초안 생성</button>' +
+      '<div class="txdr-prog" data-txdr-prog style="display:none"></div>' +
+      '<div class="txdr-cards" data-txdr-cards></div>' +
+      '</div>' +
+      '<div class="txdr-note">ⓘ 이 패널은 근거만 요약합니다. 등급 판단은 평가자 몫입니다.</div>' +
+      '</aside>';
+  }
+  function insertAtCursor(ta, text) {
+    if (!ta) return;
+    var v = ta.value;
+    var st = (ta.selectionStart == null) ? v.length : ta.selectionStart;
+    var en = (ta.selectionEnd == null) ? st : ta.selectionEnd;
+    var pre = v.slice(0, st), post = v.slice(en);
+    var ins = (pre && !/\s$/.test(pre) ? ' ' : '') + text;
+    ta.value = pre + ins + post;
+    var pos = (pre + ins).length;
+    try { ta.focus(); ta.setSelectionRange(pos, pos); } catch (e) { /* 무해화 */ }
+  }
+  function renderCards(panel, sents) {
+    panel.__txdrSents = sents || [];
+    var cards = panel.querySelector('[data-txdr-cards]');
+    if (!cards) return;
+    cards.innerHTML = (sents || []).map(function (s, i) {
+      var chip = s.srcKind === 'template'
+        ? '<span class="txdr-chip-tpl">' + esc(s.srcLabel) + '</span>'
+        : (s.srcKind && window.EZDraft ? EZDraft.chipHtml(s.srcKind, s.srcLabel) : '');
+      return '<div class="txdr-card"><div class="tx">' + esc(s.text) + '</div>' +
+        '<div class="ft">' + chip + '<button class="txdr-apply" type="button" data-txdr="apply" data-i="' + i + '">문장 반영</button></div></div>';
+    }).join('') || '<div class="txdr-empty">생성된 문장이 없습니다.</div>';
+  }
+  /* 오프라인 폴백 — 은폐 금지: 경고 배지 + 정적 예시 문장 */
+  function renderOffline(panel) {
+    var prog = panel.querySelector('[data-txdr-prog]');
+    if (prog) { prog.style.display = ''; prog.innerHTML = '<div class="txdr-warn">템플릿 초안 — AI 미연결</div>'; }
+    renderCards(panel, OFF_SENTS.slice());
+  }
+  function runDraft(panel) {
+    var empId = panel.getAttribute('data-emp') || '';
+    var e = F.emp(empId) || CU || {};
+    var gen = panel.querySelector('[data-txdr="gen"]');
+    var prog = panel.querySelector('[data-txdr-prog]');
+    var cards = panel.querySelector('[data-txdr-cards]');
+    function reset(label) { if (gen) { gen.disabled = false; gen.textContent = label || '✦ 근거 초안 생성'; } }
+    if (!window.EZDraft) { renderOffline(panel); return; }
+    var items = objsFor(empId).map(function (o) {
+      o = o || {};
+      return { label: o.title || '-', context: o.progress != null ? '달성도 ' + o.progress + '%' : '' };
+    });
+    EZDraft.draftComment({
+      empId: empId, empName: e.name || empId, items: items,
+      onStart: function () {
+        if (gen) { gen.disabled = true; gen.textContent = '생성 중…'; }
+        if (prog) { prog.style.display = ''; prog.textContent = '확인한 데이터: —'; }
+        if (cards) cards.innerHTML = '';
+      },
+      onTool: function (name, label) { if (prog) prog.textContent = '확인한 데이터: ' + label + '…'; },
+      onToolResult: function (name, r, summary) { if (prog && summary) prog.textContent = '확인한 데이터: ' + summary; },
+      onText: function (text) {
+        renderCards(panel, EZDraft.splitSentences(text));
+        if (prog) prog.textContent = '초안 생성 완료 — 문장별 출처가 붙어 있습니다. 필요한 문장만 반영하세요.';
+        reset('✦ 다시 생성');
+      },
+      onError: function (err) {
+        if (prog) { prog.style.display = ''; prog.innerHTML = '<div class="txdr-warn">초안 생성 실패 — ' + esc(err) + '</div>'; }
+        reset();
+      },
+      onOffline: function () { renderOffline(panel); reset(); }
+    });
+  }
+  function applySentence(panel, i) {
+    var s = (panel.__txdrSents || [])[i]; if (!s) return;
+    var wrap = panel.closest('.txdr-wrap'); if (!wrap) return;
+    var form = wrap.querySelector('.txfw-form');
+    var ta = wrap.querySelector('.txfw-op');
+    insertAtCursor(ta, s.text);
+    if (form) (form.__txfSrcs = form.__txfSrcs || []).push({ text: s.text, kind: s.srcKind || 'template', label: s.srcLabel || '' });
+  }
+  /* 패널 클릭 위임 — 모달 body(#tx-overlay-root)와 #s-appr 인라인 양쪽에서 재사용 */
+  function draftDelegate(ev, scope) {
+    var el = ev.target.closest('[data-txdr]'); if (!el) return false;
+    var panel = el.closest('[data-txdr-panel]');
+    if (!panel || !scope.contains(panel)) return false;
+    ev.preventDefault(); ev.stopPropagation();
+    var act = el.getAttribute('data-txdr');
+    if (act === 'toggle') {
+      panel.classList.toggle('closed');
+      el.textContent = panel.classList.contains('closed') ? '펼치기' : '접기';
+    } else if (act === 'gen') { runDraft(panel); }
+    else if (act === 'apply') {
+      applySentence(panel, parseInt(el.getAttribute('data-i'), 10));
+      el.disabled = true; el.textContent = '반영됨';
+    }
+    return true;
+  }
+
   function openWrite(btn) {
     if (!TX.modal) return;
     var tr = btn.closest('tr');
     var empId = tr ? tr.getAttribute('data-emp') : null;
-    var body = writeFormBody(empId);
+    var body = '<div class="txdr-wrap"><div class="txdr-main">' + writeFormBody(empId) + '</div>' +
+      draftPanelHTML(empId || '', 'eval') + '</div>';
     var m = TX.modal({
       title: '평가 작성', wide: true, body: body, actions: [
-        { label: '임시저장', kind: 'ghost', onClick: function () { TX.toast && TX.toast('임시 저장되었습니다.', 'ok'); return false; } },
+        { label: '임시저장', kind: 'ghost', onClick: function () {
+          var form = m.body.querySelector('.txfw-form');
+          if (form && empId) ssSet('txf_eval_draft:' + empId, JSON.stringify(serializeForm(form, empId)));
+          TX.toast && TX.toast('임시 저장되었습니다.', 'ok'); return false; } },
         { label: '제출', kind: 'primary', onClick: function () {
+          var form = m.body.querySelector('.txfw-form');
+          /* F4: 빈 평가 제출 차단 — 자기평가와 동일한 미선택 검증을 평가자 경로에도 */
+          var miss = form ? missingRadios(form) : 0;
+          if (miss > 0) { TX.toast && TX.toast('성과·역량 등급을 모두 선택해 주세요. (미선택 ' + miss + '건)', 'warn'); return false; }
+          var e = F.emp(empId) || {};
+          var d = serializeForm(form, empId);
+          if (empId) {
+            ssSet('txf_eval_data:' + empId, JSON.stringify(d));   // F4: 저장 실체화
+            ssSet('txf_eval_done:' + empId, '1');                 // 재렌더에서도 완료 유지
+            ssDel('txf_eval_draft:' + empId);
+          }
+          emitEvalCtx('평가 제출 — ' + (e.name || empId || ''), 'appr.submit', d);
           TX.toast && TX.toast('평가를 제출했습니다.', 'ok');
-          if (empId) ssSet('txf_eval_done:' + empId, '1');   // 재렌더에서도 완료 유지
           if (tr && tr.children[1]) {
             var td = tr.children[1];
             var dot = td.querySelector('.sdot');
@@ -510,7 +749,11 @@
         } }
       ]
     });
+    if (m.box) m.box.classList.add('txdr-modal');    // F4: 2영역 레이아웃 폭 확보
+    var form0 = m.body.querySelector('.txfw-form');
+    if (form0 && empId) restoreForm(form0, empId);   // F4: 임시저장 복원
     m.body.addEventListener('click', function (ev) {
+      if (draftDelegate(ev, m.body)) return;         // F4: 근거초안 패널
       var b = ev.target.closest('[data-wtab]'); if (!b) return;
       var ti = b.getAttribute('data-wtab');
       [].forEach.call(m.body.querySelectorAll('[data-wtab]'), function (x) { x.classList.toggle('on', x === b); });
@@ -594,17 +837,30 @@
     var trs = wrap ? wrap.querySelectorAll('tbody tr') : [];
     var rowsHtml = '';
     [].forEach.call(trs, function (tr) {
-      var id = tr.getAttribute('data-emp'), e = F.emp(id), ev = evalOf(id);
-      var cur = ev ? ev.grade : 'B';
+      var id = tr.getAttribute('data-emp'); if (!id) return;
+      var e = F.emp(id), ev = evalOf(id);
+      var base = ev ? ev.grade : 'B';
+      var adj = adjGradeOf(id);           // F4: 저장된 조정 등급 복원
+      var cur = adj || base;
       var opts = ['S', 'A', 'B', 'C'].map(function (x) { return '<option' + (x === cur ? ' selected' : '') + '>' + x + '</option>'; }).join('');
       rowsHtml += '<tr><td>' + esc((e && e.name) || id) + '</td><td style="color:var(--ink-3)">' + esc(F.teamName(e)) + '</td>' +
-        '<td>' + cur + '</td><td><select>' + opts + '</select></td></tr>';
+        '<td>' + base + (adj && adj !== base ? ' <span style="color:var(--blue);font-size:11px;font-weight:800">→ ' + esc(adj) + ' 조정됨</span>' : '') + '</td>' +
+        '<td><select data-adj-emp="' + esc(id) + '">' + opts + '</select></td></tr>';
     });
     var body = '<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:12px">2차 등급 조정 — 대상자별 최종 조정 등급을 입력합니다.</div>' +
       '<table class="txf-adj"><thead><tr><th>대상자</th><th>소속</th><th>현재</th><th>조정 등급</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
     TX.modal({ title: '조정 등급 입력', body: body, actions: [
       { label: '취소', kind: 'ghost' },
-      { label: '저장', kind: 'primary', onClick: function () { TX.toast && TX.toast('조정 등급이 저장되었습니다.', 'ok'); } }
+      { label: '저장', kind: 'primary', onClick: function (box) {
+        /* F4: 조정 등급 실저장 + 결과 확인 탭 재렌더 반영 */
+        var n = 0;
+        [].forEach.call(box.querySelectorAll('select[data-adj-emp]'), function (sel) {
+          ssSet('txf_adj_grade:' + sel.getAttribute('data-adj-emp'), sel.value); n++;
+        });
+        var pane1 = document.querySelector('#txf-appr0 [data-pane="1"]');
+        if (pane1) pane1.innerHTML = resultPane();
+        TX.toast && TX.toast('조정 등급 ' + n + '건이 저장되었습니다.', 'ok');
+      } }
     ] });
   }
 
@@ -646,6 +902,8 @@
     if (root.dataset.txfBound) return;
     root.dataset.txfBound = '1';
     root.addEventListener('click', function (ev) {
+      // F4: 근거초안 패널 (인라인 자기평가 화면의 '내 성과 근거 모아보기')
+      if (draftDelegate(ev, root)) return;
       // inline 자기평가 폼 성과/역량 탭 (본인 평가 작성 화면)
       var wt = ev.target.closest('[data-wtab]');
       if (wt && root.contains(wt)) {
@@ -659,16 +917,27 @@
       /* these classes (.ap-btn/.ap-btn-o/.ts-join/.ap-filter) are also caught by the
          tx_revive document-level delegate — stop the event so only one UI opens */
       if (act === 'write' || act === 'result' || act === 'join' || act === 'filter') ev.stopPropagation();
-      if (act === 'self-save') { ev.preventDefault(); TX.toast && TX.toast('임시 저장되었습니다.', 'ok'); }
+      if (act === 'self-save') {
+        ev.preventDefault();
+        /* F4: 임시저장 실체화 — 동일 직렬화를 draft 키로 저장, 재오픈 시 복원 */
+        var svForm = root.querySelector('[data-pane="0"] .txfw-form');
+        var svId = (CU && CU.emp_id) || '';
+        if (svForm && svId) ssSet('txf_eval_draft:' + svId, JSON.stringify(serializeForm(svForm, svId)));
+        TX.toast && TX.toast('임시 저장되었습니다.', 'ok');
+      }
       else if (act === 'self-submit') {
         ev.preventDefault();
         var sform = root.querySelector('[data-pane="0"] .txfw-form');
         var miss = sform ? missingRadios(sform) : 0;
         if (miss > 0) { TX.toast && TX.toast('성과·역량 등급을 모두 선택해 주세요. (미선택 ' + miss + '건)', 'warn'); return; }
         var sid = (CU && CU.emp_id) || '';
+        /* F4: 제출 실체화 — 폼 직렬화(등급·의견·반영 문장 src 메타) 저장 + 맥락 발행 */
+        var sdata = serializeForm(sform, sid);
+        if (sid) { ssSet('txf_eval_data:' + sid, JSON.stringify(sdata)); ssDel('txf_eval_draft:' + sid); }
         ssSet('txf_selfeval_done:' + sid, '1');
         /* 계약: tx_roles.js 가 영수증 블러 해제에 사용 */
         try { document.dispatchEvent(new CustomEvent('txf:selfeval-submitted', { detail: { empId: sid } })); } catch (e3) { /* 구형 브라우저 무시 */ }
+        emitEvalCtx('본인 평가 제출 — ' + ((CU && CU.name) || ''), 'appr.self-submit', sdata);
         TX.toast && TX.toast('본인 평가를 제출했습니다.', 'ok');
         el.disabled = true; el.textContent = '제출 완료';
       }

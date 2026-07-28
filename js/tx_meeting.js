@@ -6,7 +6,9 @@
  *   → 회의 후 개인별 전달(ez:ctx 발행) + 반영 추적.
  * 원칙: 회의 기록은 제안·기록만 — 원본 목표(TALENX_DATA)는 절대 수정하지 않음.
  * 진입: #s-perf 목표 탭 헤더 "검토 회의" 버튼 / window.EZMeeting.open().
- * 저장: sessionStorage "ezmt_v1:<emp_id>" (합의·추적 상태만).
+ * 저장: localStorage "ezmt_v1:<emp_id>" (합의·추적 상태만 — 구 sessionStorage
+ *       값은 최초 로드 시 1회 이관). 개인별 전달은 ez:ctx detail.emp_id로
+ *       수신자 원장에 라우팅(tx_ctx_ledger 계약).
  * z-index 4200 (허브 4000 · ezpm 4100 위).
  * ========================================================================== */
 (function () {
@@ -99,10 +101,18 @@
   }
 
   /* 쟁점 추출 — EZLint 실검사(goal 규칙) + 구조 검사(S 난이도 근거·가중치 합·전략 연결) */
+  function shortHash(s) {
+    var h = 0, i;
+    s = String(s || "");
+    for (i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return (h >>> 0).toString(36);
+  }
   function collectIssues(m) {
-    var out = [], seq = 0;
+    var out = [];
     function push(objTitle, krName, tag, tip, sev) {
-      out.push({ id: m.emp.emp_id + "-i" + (++seq), emp_id: m.emp.emp_id, empName: m.emp.name,
+      /* ID = emp + 내용 해시 — 순번 시프트로 인한 합의 기록 오매칭 방지 */
+      out.push({ id: m.emp.emp_id + "-" + shortHash((krName || objTitle || "") + "|" + tag),
+                 emp_id: m.emp.emp_id, empName: m.emp.name,
                  objTitle: objTitle, kr: krName, tag: tag, tip: tip, sev: sev || "warn" });
     }
     m.objs.forEach(function (o) {
@@ -162,12 +172,18 @@
   }
 
   /* ============================================================
-     2. 합의 기록 상태 (sessionStorage — 원본 목표 비수정)
+     2. 합의 기록 상태 (localStorage 영속 — 원본 목표 비수정)
      ============================================================ */
-  function loadAgs() { try { return JSON.parse(sessionStorage.getItem(LS_KEY) || "[]"); } catch (e) { return []; } }
-  function saveAgs(a) { try { sessionStorage.setItem(LS_KEY, JSON.stringify(a)); } catch (e) { /* 무해화 */ } }
+  function loadAgs() {
+    try {
+      var v = localStorage.getItem(LS_KEY);
+      if (v == null) v = sessionStorage.getItem(LS_KEY); /* 구버전(session) 1회 이관 */
+      return JSON.parse(v || "[]");
+    } catch (e) { return []; }
+  }
+  function saveAgs(a) { try { localStorage.setItem(LS_KEY, JSON.stringify(a)); } catch (e) { /* 무해화 */ } }
 
-  var S = { step: 1, memberIdx: 0, model: null, ags: [] };
+  var S = { step: 1, memberIdx: 0, model: null, ags: [], ai: null, prefill: null };
 
   /* ============================================================
      3. 스타일 (자체 주입, .ezmt-*)
@@ -220,6 +236,8 @@
       ".ezmt-st.s1{background:#EFF6FF;color:#1D4ED8}.ezmt-st.s2{background:#FFF4E5;color:#B45309}.ezmt-st.s3{background:#EFFAF3;color:#15803D}" +
       ".ezmt-gate{color:#6B7280;font-size:12px;margin:4px 0 0;display:flex;align-items:center;gap:6px}" +
       ".ezmt-empty{color:#6B7280;font-size:13px;padding:14px 0}" +
+      ".ezmt-spin{display:inline-block;width:12px;height:12px;border:2px solid #C7DCFB;border-top-color:#1F7AF0;border-radius:50%;animation:ezmtSpin .8s linear infinite;vertical-align:-2px}" +
+      "@keyframes ezmtSpin{to{transform:rotate(360deg)}}" +
       "#ezmt-entry{display:inline-flex;align-items:center;gap:5px}";
     document.head.appendChild(st);
   }
@@ -271,7 +289,8 @@
       '<div class="ezmt-card"><h3>팀 목표 대비 개인 목표 합산 — 전략 테마 커버리지</h3>' + themes +
       (noLink ? '<div class="ezmt-gate">전략 연결이 없는 개인 목표 ' + noLink + "건 — 목표 정렬 점검 대상</div>" : "") + "</div>" +
       '<div class="ezmt-card"><h3>중복 후보</h3>' + dups + "</div>" +
-      "<h3 style='margin:4px 2px 10px;font-size:14px'>팀원별 쟁점 카드</h3>" + cards;
+      "<h3 style='margin:4px 2px 10px;font-size:14px'>팀원별 쟁점 카드</h3>" + cards +
+      renderAiCard();
   }
 
   function renderStep2(M) {
@@ -358,9 +377,11 @@
   function open() {
     if (roleKey() !== "leader") { toast("목표 검토 회의는 조직장 전용 기능입니다", "warn"); return; }
     injectCss();
-    if (document.getElementById("ezmt-ov")) { document.getElementById("ezmt-ov").style.display = "flex"; render(); return; }
+    /* 재오픈 시에도 model·합의를 항상 재구성 — 옛 쟁점 잔존 버그 수정 */
     S.model = buildModel();
     S.ags = loadAgs();
+    var exist = document.getElementById("ezmt-ov");
+    if (exist) { exist.style.display = "flex"; render(); return; }
     S.step = 1;
     var ov = document.createElement("div");
     ov.id = "ezmt-ov";
@@ -389,8 +410,116 @@
     return hit;
   }
 
+  /* 현재 화면(② 회의 중)의 가중치 입력값 중 원본과 달라진 것만 수집 */
+  function collectWeightEdits(m) {
+    var out = [];
+    var inputs = document.querySelectorAll("#ezmt-ov [data-ezmt-w]");
+    Array.prototype.forEach.call(inputs, function (inp) {
+      var p = inp.getAttribute("data-ezmt-w").split(":");
+      var o = m.objs[+p[0]], k = o && o.krs[+p[1]];
+      if (!k) return;
+      var v = parseFloat(inp.value);
+      if (isNaN(v) || v === pctNum(k.weight)) return;
+      out.push({ obj: o.title, kr: k.name, from: pctNum(k.weight), to: v });
+    });
+    return out;
+  }
+
+  /* ============================================================
+     5-1. 쟁점 요약 초안 — 오버레이 내부 착지 (step1 하단 접이식 카드)
+     ============================================================ */
+  function issueLines() {
+    return S.model.issues.map(function (it) {
+      return "- " + it.empName + " / " + (it.kr || it.objTitle) + " / " + it.tag +
+        " / 심각도 " + (it.sev === "bad" ? "높음" : "주의") + " / " + it.tip;
+    });
+  }
+  /* 폴백 — 규칙 기반: 팀원별 그룹핑 + 심각도(bad 우선) 정렬 정적 요약 */
+  function ruleSummary(label) {
+    var lines = [];
+    S.model.members.forEach(function (m) {
+      m.issues.slice()
+        .sort(function (a, b) { return (a.sev === "bad" ? 0 : 1) - (b.sev === "bad" ? 0 : 1); })
+        .forEach(function (it) {
+          lines.push({
+            text: m.emp.name + " — [" + (it.sev === "bad" ? "높음" : "주의") + "] " + it.tag +
+              " · " + (it.kr || it.objTitle) + " — " + it.tip,
+            empId: it.emp_id, issueId: it.id
+          });
+        });
+    });
+    return { status: "done", label: label, fallback: true, lines: lines };
+  }
+  function runIssueSummary() {
+    if (S.step !== 1) S.step = 1;
+    if (!S.model.issues.length) { S.ai = { status: "done", label: "", lines: [] }; render(); return; }
+    if (window.EZAI && EZAI.ready && EZAI.ready() && EZAI.agent) {
+      S.ai = { status: "loading" };
+      render();
+      EZAI.agent({
+        maxTurns: 1, maxTokens: 600,
+        messages: [{ role: "user", content:
+          "목표 검토 회의 준비 중입니다. 아래 쟁점 목록을 회의 안건 초안으로 요약해줘 — " +
+          "팀원별로 묶고 심각도 높은 순으로, 각 안건은 한 줄(번호·머리말 없이), 최대 8줄. " +
+          "각 줄은 팀원 이름으로 시작해.\n" + issueLines().join("\n") }],
+        onDone: function (text) {
+          var lines = String(text || "").split(/\r?\n/).map(function (s) {
+            return s.replace(/^\s*[-•\d.)]+\s*/, "").trim();
+          }).filter(Boolean);
+          if (!lines.length) { S.ai = ruleSummary("AI 응답 없음 — 규칙 기반 요약"); render(); return; }
+          S.ai = { status: "done", label: "✦ Claude 생성", lines: lines.map(function (ln) {
+            var empId = "";
+            S.model.members.forEach(function (m) { if (ln.indexOf(m.emp.name) >= 0) empId = empId || m.emp.emp_id; });
+            return { text: ln, empId: empId };
+          }) };
+          render();
+        },
+        onError: function () { S.ai = ruleSummary("AI 오류 — 규칙 기반 요약"); render(); }
+      });
+    } else {
+      S.ai = ruleSummary("AI 미연결 — 규칙 기반 요약");
+      render();
+    }
+  }
+  function renderAiCard() {
+    if (!S.ai) return "";
+    var inner;
+    if (S.ai.status === "loading") {
+      inner = '<div class="ezmt-empty"><span class="ezmt-spin"></span> elizax가 쟁점 ' +
+        S.model.issues.length + "건을 요약하는 중…</div>";
+    } else if (!S.ai.lines.length) {
+      inner = '<div class="ezmt-empty">요약할 쟁점이 없습니다.</div>';
+    } else {
+      inner = S.ai.lines.map(function (ln, i) {
+        return '<div class="ezmt-irow" style="display:flex;gap:10px;align-items:flex-start">' +
+          '<span style="flex:1;min-width:0">' + esc(ln.text) + "</span>" +
+          '<button class="ezmt-btn ghost" style="flex:none" data-ezmt-copy="' + i + '">안건 메모로 복사</button></div>';
+      }).join("");
+    }
+    return '<details class="ezmt-card" open><summary style="cursor:pointer;font-weight:800;font-size:14px">✦ 쟁점 요약 초안' +
+      (S.ai.label
+        ? (S.ai.fallback
+          ? ' <span class="ezmt-tag warn">' + esc(S.ai.label) + "</span>"
+          : ' <span class="ezmt-tag" style="background:#EFF6FF;color:#1D4ED8">' + esc(S.ai.label) + "</span>")
+        : "") +
+      "</summary>" + inner +
+      '<div class="ezmt-gate" style="margin-top:8px">' +
+      '<button class="ezmt-btn ghost" data-ezmt-chat="1">elizax 대화로 계속</button>' +
+      "패널이 열리면 이 회의 화면은 닫힙니다</div></details>";
+  }
+  /* [안건 메모로 복사] 착지 — ② 단계 해당 쟁점 합의 폼의 수정 방향 프리필 */
+  function applyPrefill() {
+    if (!S.prefill) return;
+    var inp = null;
+    if (S.prefill.issueId) inp = document.querySelector('#ezmt-ov [data-ezmt-iss="' + S.prefill.issueId + '"] .dir');
+    if (!inp) inp = document.querySelector("#ezmt-ov .ezmt-agform .dir");
+    if (inp) { inp.value = S.prefill.text; toast("안건 메모를 합의 폼에 채웠습니다"); }
+    else toast("빈 합의 폼이 없습니다 — 이미 기록된 쟁점일 수 있습니다", "warn");
+    S.prefill = null;
+  }
+
   function onClick(e) {
-    var t = e.target.closest ? e.target.closest("[data-ezmt-close],[data-ezmt-step],[data-ezmt-mem],[data-ezmt-goto],[data-ezmt-rec],[data-ezmt-send],[data-ezmt-done],[data-ezmt-ai]") : null;
+    var t = e.target.closest ? e.target.closest("[data-ezmt-close],[data-ezmt-step],[data-ezmt-mem],[data-ezmt-goto],[data-ezmt-rec],[data-ezmt-send],[data-ezmt-done],[data-ezmt-ai],[data-ezmt-copy],[data-ezmt-chat]") : null;
     if (!t) return;
     if (t.hasAttribute("data-ezmt-close")) { close(); return; }
     if (t.hasAttribute("data-ezmt-step")) { S.step = +t.getAttribute("data-ezmt-step"); render(); return; }
@@ -408,7 +537,8 @@
         issueId: iid, emp_id: found.it.emp_id, empName: found.it.empName,
         issue: found.it.tag + (found.it.kr ? " · " + found.it.kr : ""),
         dir: inps[0].value || "", owner: inps[1].value || found.it.empName,
-        due: inps[2].value || "", status: "합의"
+        due: inps[2].value || "", status: "합의",
+        weights: collectWeightEdits(found.m) /* 화면에서 편집한 가중치를 합의 기록에 포함 */
       });
       saveAgs(S.ags);
       toast("합의를 기록했습니다 · " + found.it.empName);
@@ -416,30 +546,40 @@
       return;
     }
 
-    if (t.hasAttribute("data-ezmt-send")) {          /* 개인별 전달 — ez:ctx 발행(시뮬) */
+    if (t.hasAttribute("data-ezmt-send")) {          /* 개인별 전달 — 수신자 원장 라우팅 */
       var byEmp = {};
       S.ags.forEach(function (a) {
         if (a.status !== "합의") return;
         (byEmp[a.emp_id] = byEmp[a.emp_id] || { name: a.empName, list: [] }).list.push(a);
       });
-      var n = 0;
+      var people = 0, sent = 0;
       Object.keys(byEmp).forEach(function (id) {
-        var g = byEmp[id];
-        n++;
+        var g = byEmp[id], ok = false;
         try {
           document.dispatchEvent(new CustomEvent("ez:ctx", {
             detail: {
               type: "goal", source: "meeting.agree",
+              emp_id: id, /* 수신자 emp_id — tx_ctx_ledger가 해당 팀원 원장으로 라우팅 */
               title: "목표 검토 회의 합의 · " + g.name,
-              summary: g.list.map(function (a) { return a.issue + (a.dir ? " → " + a.dir : "") + " (기한 " + a.due + ")"; }).join(" / "),
+              summary: g.list.map(function (a) {
+                return a.issue + (a.dir ? " → " + a.dir : "") + " (기한 " + a.due + ")" +
+                  (a.weights && a.weights.length
+                    ? " [가중치 조정: " + a.weights.map(function (w) { return w.kr + " " + w.from + "→" + w.to + "%"; }).join(", ") + "]"
+                    : "");
+              }).join(" / "),
               weight: 2
             }
           }));
-        } catch (err) { /* 원장 부재 — 발행만 시도 */ }
-        g.list.forEach(function (a) { a.status = "전달됨"; });
+          ok = true;
+        } catch (err) { /* 원장 부재 — 발행 실패 건은 전달 집계에서 제외 */ }
+        if (ok) {
+          people++;
+          g.list.forEach(function (a) { a.status = "전달됨"; sent++; });
+        }
       });
       saveAgs(S.ags);
-      toast("합의 사항을 " + n + "명에게 전달했습니다 (시뮬레이션) · 성과 히스토리에 기록됨");
+      if (sent) toast("합의 " + sent + "건을 " + people + "명에게 전달했습니다 · 성과 기록에 저장됨");
+      else toast("전달하지 못했습니다 — 성과 기록(원장)을 확인하세요", "warn");
       render();
       return;
     }
@@ -453,13 +593,28 @@
       return;
     }
 
-    if (t.hasAttribute("data-ezmt-ai")) {            /* elizax 쟁점 요약 초안 */
-      if (!(window.Elizax && Elizax.sendRaw)) { toast("elizax를 불러오지 못했습니다", "warn"); return; }
-      var lines = S.model.issues.map(function (it) {
-        return "- " + it.empName + " / " + (it.kr || it.objTitle) + " / " + it.tag;
-      });
-      Elizax.sendRaw("목표 검토 회의 준비 중입니다. 아래 쟁점 목록을 회의 안건 초안으로 요약해줘 (팀원별 묶음, 우선순위 표시):\n" + lines.join("\n"));
-      toast("elizax에 쟁점 요약 초안을 요청했습니다");
+    if (t.hasAttribute("data-ezmt-ai")) {            /* 쟁점 요약 초안 — 오버레이 내부 카드에 착지 */
+      runIssueSummary();
+      return;
+    }
+
+    if (t.hasAttribute("data-ezmt-copy")) {          /* 요약 항목 → 합의 폼 프리필 */
+      var ln = S.ai && S.ai.lines && S.ai.lines[+t.getAttribute("data-ezmt-copy")];
+      if (!ln) return;
+      S.model.members.forEach(function (m, i) { if (m.emp.emp_id === ln.empId) S.memberIdx = i; });
+      S.prefill = { issueId: ln.issueId || "", text: ln.text };
+      S.step = 2;
+      render();
+      applyPrefill();
+      return;
+    }
+
+    if (t.hasAttribute("data-ezmt-chat")) {          /* 보조 링크 — elizax 패널을 실제로 열고 이어가기 */
+      if (!(window.Elizax && Elizax.send)) { toast("elizax를 불러오지 못했습니다", "warn"); return; }
+      Elizax.send("목표 검토 회의 준비 중입니다. 아래 쟁점 목록을 회의 안건 초안으로 요약해줘 (팀원별 묶음, 심각도 우선):\n" + issueLines().join("\n"));
+      close();
+      toast("elizax 패널로 이동했습니다 — 회의 화면을 닫았습니다");
+      return;
     }
   }
 

@@ -28,9 +28,10 @@
  *      add + 토스트 + 배지 갱신. 신규 항목 at은 new Date 기반 "M/D HH:MM".
  *    - 근거칩: EZChat.on("messages") 수신 240ms 후(followups 패턴) 보이는
  *      대화 리스트의 마지막 AI 말풍선 아래 근거 스트립 주입.
- *      msg.meta.ctxRefs(id 배열) 있으면 그대로, 없으면 답변 텍스트를 규칙
- *      기반(키워드→type/제목 토큰 매칭) 상위 2~4건 선택 후 meta.ctxRefs 기록
- *      + EZChat.persist() + 해당 항목 usedCount 증가(최초 배정 시 1회만).
+ *      msg.meta.ctxRefs(id 배열)+ctxCited=실인용, 없으면 답변 텍스트를 규칙
+ *      기반(키워드→type/제목 토큰 매칭)으로 "추측" 선택(점선 칩·별도 캡션).
+ *      usedCount 증가·체인 승격은 실인용(ctxCited)만 — 추측은 카운트 금지,
+ *      키워드 매칭 0건이면 "뒷받침 기록 없음" 상태를 정직하게 표시.
  *    - 노출 수위는 window.EZEvidencePolicy[역할] (없으면 전부 "core"):
  *      core=요약칩+미니칩 / trace=+source 표기·"원장에서 보기"(openPanel(id))
  *      / logic=+"산출 로직 보기" 팝오버(①입력 수집 ②규칙 적용 ③모델 판단
@@ -74,9 +75,11 @@
     eval:     { label: "평가 이력", color: "#B42318" },
     org:      { label: "조직 기준", color: "#0E7490" },
     job:      { label: "직무 기준", color: "#334155" },
-    rule:     { label: "규칙",     color: "#166534" }
+    rule:     { label: "규칙",     color: "#166534" },
+    audit:    { label: "감사",     color: "#64748B" },  /* 허브 감사 로그 (hub.*) */
+    asset:    { label: "산출물",   color: "#0F766E" }   /* 허브 산출물 (hub.asset.*) */
   };
-  var TYPE_ORDER = ["goal", "checkin", "oneonone", "feedback", "eval", "org", "job", "rule"];
+  var TYPE_ORDER = ["goal", "checkin", "oneonone", "feedback", "eval", "org", "job", "rule", "audit", "asset"];
 
   /* ---------------- 유틸 ---------------- */
   function esc(s) {
@@ -192,11 +195,20 @@
         }
       }
     } catch (e) { items = []; }
-    if (!items.length) {
+    /* [Phase1 IA] 시드는 데모 플래그(ezx_seed, 기본 ON)로 제어 — '0'이면 빈 상태 유지 */
+    if (!items.length && seedOn()) {
       items = buildSeeds();
       saveStore();
     }
     return items;
+  }
+  function seedOn() {
+    try { return localStorage.getItem("ezx_seed") !== "0"; } catch (e) { return true; }
+  }
+  function hasSeed() {
+    var a = loadStore();
+    for (var i = 0; i < a.length; i++) { if (a[i].seed) return true; }
+    return false;
   }
   function saveStore() {
     try {
@@ -228,12 +240,13 @@
   function seedTs(mon, day, hh, mm) {
     return new Date(2026, mon - 1, day, hh, mm, 0, 0).getTime();
   }
-  function mkSeed(mon, day, hh, mm, type, source, title, summary, weight, used) {
+  /* 시드는 usedCount 선탑재 없이 전부 0 — 인용 횟수는 실제 인용으로만 쌓인다 (F15) */
+  function mkSeed(mon, day, hh, mm, type, source, title, summary, weight) {
     return {
       id: uid(), ts: seedTs(mon, day, hh, mm),
       at: mon + "/" + day + " " + z2(hh) + ":" + z2(mm),
       type: type, source: source, title: norm(title), summary: norm(summary),
-      weight: weight || 1, usedCount: used || 0
+      weight: weight || 1, usedCount: 0, seed: 1
     };
   }
 
@@ -252,20 +265,20 @@
       out.push(mkSeed(5, 4, 9, 30 + g, "goal", "perf.obj." + (o.objective_id || ("OWN-" + i)),
         o.title,
         (o.period || "FY2026-2Q") + " · " + (o.status || "진행중") + " · 진행률 " + (o.progress != null ? o.progress + "%" : "-"),
-        3, 2 - g));
+        3));
       g++;
     }
     if (g < 2 && objs[0] && objs[0].parent_objective_id) {
       var parent = (DATA.objectives || []).filter(function (p) { return p.objective_id === objs[0].parent_objective_id; })[0];
       if (parent) {
         out.push(mkSeed(5, 4, 9, 40, "goal", "perf.obj." + parent.objective_id,
-          "상위 정렬: " + parent.title, "개인 목표가 정렬된 상위 목표 · 진행률 " + (parent.progress != null ? parent.progress + "%" : "-"), 2, 1));
+          "상위 정렬: " + parent.title, "개인 목표가 정렬된 상위 목표 · 진행률 " + (parent.progress != null ? parent.progress + "%" : "-"), 2));
         g++;
       }
     }
     while (g < 2) {
       out.push(mkSeed(5, 4, 9, 45, "goal", "perf.obj.local." + g,
-        "FY2026-2Q " + jobTitle + " 핵심 목표", "분기 목표 수립 · KR 2건 · 가중치 합 100%", 3, 1));
+        "FY2026-2Q " + jobTitle + " 핵심 목표", "분기 목표 수립 · KR 2건 · 가중치 합 100%", 3));
       g++;
     }
 
@@ -287,50 +300,106 @@
         "perf.checkin." + z2(slot.mon) + z2(slot.day),
         "주간 체크인 (" + slot.mon + "/" + slot.day + ")",
         c ? c.comment + (c.confidence ? " · 확신도 " + c.confidence : "") : "진행률 업데이트 · 장애 요인 없음",
-        2, i === 0 ? 3 : 1));
+        2));
     }
 
     /* 1on1 노트 2 */
     out.push(mkSeed(5, 28, 15, 0, "oneonone", "1on1.rec.0528",
-      mgr + "와 1on1 (5/28)", "분기 목표 우선순위 재확인 · 협업 리소스 요청 1건 합의", 2, 1));
+      mgr + "와 1on1 (5/28)", "분기 목표 우선순위 재확인 · 협업 리소스 요청 1건 합의", 2));
     out.push(mkSeed(6, 30, 16, 30, "oneonone", "1on1.rec.0630",
-      mgr + "와 1on1 (6/30)", "리뷰 단계 병목 이슈 논의 · 7월 개선 액션 2건 합의", 2, 2));
+      mgr + "와 1on1 (6/30)", "리뷰 단계 병목 이슈 논의 · 7월 개선 액션 2건 합의", 2));
 
     /* 피드백 1 */
     out.push(mkSeed(6, 12, 11, 20, "feedback", "perf.fb.0612",
-      "동료 피드백 — 프로젝트 리뷰", "SBI: 검증 프로세스 설계가 협업 품질을 높였다는 동료 2인 피드백", 1, 1));
+      "동료 피드백 — 프로젝트 리뷰", "SBI: 검증 프로세스 설계가 협업 품질을 높였다는 동료 2인 피드백", 1));
 
     /* 직무 기대역량 1 */
     out.push(mkSeed(5, 2, 10, 0, "job", "job.profile." + (CU.job_id || "JOB"),
-      jobTitle + " 기대역량 기준", (CU.level_kr || "구성원") + " 레벨 기대치 · 핵심역량 5종 매핑", 2, 1));
+      jobTitle + " 기대역량 기준", (CU.level_kr || "구성원") + " 레벨 기대치 · 핵심역량 5종 매핑", 2));
 
     /* 평가 이력 1 */
     out.push(mkSeed(5, 10, 14, 0, "eval", "eval.FY2025H2." + CU.emp_id,
-      "FY2025 하반기 평가 이력", "종합 등급·리뷰 코멘트 · 강점: 실행력 / 보완: 위임", 3, 2));
+      "FY2025 하반기 평가 이력", "종합 등급·리뷰 코멘트 · 강점: 실행력 / 보완: 위임", 3));
 
     /* 규칙 1 */
     out.push(mkSeed(5, 1, 9, 0, "rule", "rule.weight.sum",
-      "rule.weight.sum — KR 가중치 합 100%", "목표 가중치 검증 규칙 · 위반 시 저장 차단 · 기준 시점 데이터 기준", 3, 3));
+      "rule.weight.sum — KR 가중치 합 100%", "목표 가중치 검증 규칙 · 위반 시 저장 차단 · 기준 시점 데이터 기준", 3));
 
     /* leader/hr/exec — 팀/전사 관점 1~2건 */
     if (role === "leader") {
       out.push(mkSeed(7, 7, 9, 10, "org", "org.team.checkin.wk27",
-        "팀 체크인 현황 주간 집계", "팀원 체크인 제출률 · 부진 2인 식별 · 진척 변화 요약", 2, 2));
+        "팀 체크인 현황 주간 집계", "팀원 체크인 제출률 · 부진 2인 식별 · 진척 변화 요약", 2));
       out.push(mkSeed(7, 14, 10, 0, "org", "org.align.map." + (CU.org_id || "ORG"),
-        (CU.orgName || "우리 조직") + " 목표 정렬 맵", "팀 목표-개인 목표 정렬 상태 · 미정렬 1건", 2, 1));
+        (CU.orgName || "우리 조직") + " 목표 정렬 맵", "팀 목표-개인 목표 정렬 상태 · 미정렬 1건", 2));
     } else if (role === "hr" || role === "exec") {
       out.push(mkSeed(7, 7, 9, 10, "org", "org.dist.FY2026H1",
-        "전사 평가 분포 기준선", "등급 분포 가이드 · 관대화/중심화 편향 모니터링 지표", 3, 2));
+        "전사 평가 분포 기준선", "등급 분포 가이드 · 관대화/중심화 편향 모니터링 지표", 3));
       out.push(mkSeed(7, 14, 10, 0, "rule", "rule.calibration.gate",
-        "rule.calibration.gate — 등급 조정 승인 단계", "조정은 심의 게이트 통과 후 확정 · 승인 전에는 반영되지 않음", 3, 1));
+        "rule.calibration.gate — 등급 조정 승인 단계", "조정은 심의 게이트 통과 후 확정 · 승인 전에는 반영되지 않음", 3));
     }
 
     return out;
   }
 
+  /* ---------------- 구독 (EZLedger.on) ---------------- */
+  var listeners = {};
+  function on(evt, fn) {
+    if (!evt || typeof fn !== "function") return;
+    if (!listeners[evt]) listeners[evt] = [];
+    listeners[evt].push(fn);
+  }
+  function emit(evt, payload) {
+    var fns = listeners[evt];
+    if (!fns) return;
+    for (var i = 0; i < fns.length; i++) {
+      try { fns[i](payload); } catch (e) { /* 구독자 오류 격리 */ }
+    }
+  }
+
   /* ---------------- add / dedup ---------------- */
+  /* 다른 구성원의 원장 키(elizax_ctx_v1:<emp_id>)로 직접 저장 —
+     회의 결정 "개인별 전달" 등 수신자 원장 라우팅. 메모리(items)는
+     현재 사용자 것이므로 건드리지 않고 localStorage만 갱신한다. */
+  function addEntryFor(empId, entry) {
+    var key = LS_PREFIX + empId;
+    var list = [];
+    try {
+      var raw = localStorage.getItem(key);
+      if (raw) {
+        var obj = JSON.parse(raw);
+        if (obj && Object.prototype.toString.call(obj.items) === "[object Array]") {
+          list = obj.items.filter(function (it) { return it && it.id && it.type && it.title; });
+        }
+      }
+    } catch (e) { list = []; }
+    var type = TYPES[entry.type] ? entry.type : "org";
+    var title = norm(entry.title);
+    var source = norm(entry.source || "app.event");
+    /* 60초 내 같은 source+title 재발화는 중복 축적하지 않음 */
+    for (var i = list.length - 1; i >= 0; i--) {
+      var it = list[i];
+      if (it.source === source && it.title === title && Date.now() - (it.ts || 0) < 60000) return it;
+    }
+    var w = parseInt(entry.weight, 10);
+    if (!(w >= 1 && w <= 3)) w = 1;
+    var e = {
+      id: uid(), ts: Date.now(), at: nowStamp(),
+      type: type, source: source, title: title,
+      summary: norm(entry.summary || ""), weight: w, usedCount: 0, emp_id: empId
+    };
+    list.push(e);
+    if (list.length > MAX_ITEMS) {
+      list.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+      list = list.slice(list.length - MAX_ITEMS);
+    }
+    try { localStorage.setItem(key, JSON.stringify({ v: 1, items: list })); } catch (e2) { /* storage 불가 무시 */ }
+    return e;
+  }
+
   function addEntry(entry) {
     if (!entry || !entry.title) return null;
+    /* emp_id가 붙어 있고 현재 사용자와 다르면 수신자 원장으로 라우팅 (개인별 전달 계약) */
+    if (entry.emp_id && CU.emp_id && entry.emp_id !== CU.emp_id) return addEntryFor(entry.emp_id, entry);
     loadStore();
     var type = TYPES[entry.type] ? entry.type : "org";
     var title = norm(entry.title);
@@ -350,7 +419,7 @@
     items.push(e);
     saveStore();
     updateBadge();
-    if (isPanelOpen()) renderPanelBody(null);
+    emit("add", e);
     return e;
   }
 
@@ -358,18 +427,15 @@
   function injectStyle() {
     if (document.getElementById("ezl-style")) return;
     var css = [
-      /* ---- 배지 pill ---- */
-      ".ezl-badge{position:fixed;right:18px;bottom:86px;z-index:898;cursor:pointer;",
-      "display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;",
-      "color:#1F7AF0;background:#fff;border:1px solid rgba(31,122,240,.35);border-radius:999px;",
-      "padding:4px 11px;box-shadow:0 4px 14px rgba(0,0,0,.12);user-select:none;",
-      "transition:transform .15s cubic-bezier(.32,.72,.24,1),box-shadow .15s;}",
-      ".ezl-badge:hover{box-shadow:0 6px 18px rgba(31,122,240,.25);}",
-      ".ezl-badge:active{transform:scale(.95);}",
-      ".ezl-badge .dot{width:6px;height:6px;border-radius:50%;background:#1F7AF0;}",
-      ".ezl-badge.bump{animation:ezlBump .4s cubic-bezier(.32,.72,.24,1);}",
+      /* ---- 기록 반응 (FAB bump) — 떠다니는 배지 pill은 Phase1 IA에서 제거 ---- */
+      ".ezx-fab.ezl-bump{animation:ezlBump .4s cubic-bezier(.32,.72,.24,1);}",
       "@keyframes ezlBump{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}",
-      ".ezx-root.ezx-open .ezl-badge{display:none;}",
+      /* ---- elizax 도킹 패널 [기록] 탭 임베드 ---- */
+      ".ezl-embed{background:#fff;color:#1d1d1f;color-scheme:light;font-size:13px;letter-spacing:-.01em;}",
+      ".ezl-tabhead{flex:none;padding:12px 16px 10px;border-bottom:1px solid #e8e8ed;}",
+      ".ezl-tabdef{font-size:11px;color:#7a7a7a;margin-top:3px;line-height:1.5;}",
+      ".ezl-demo{font-size:9.5px;font-weight:700;color:#7a7a7a;background:#f5f5f7;border:1px solid #d2d2d7;",
+      "border-radius:999px;padding:1.5px 7px;margin-left:6px;vertical-align:2px;}",
       /* ---- 패널 ---- */
       ".ezl-scrim{position:fixed;inset:0;z-index:" + (Z_PANEL - 1) + ";background:rgba(20,24,32,.34);",
       "opacity:0;transition:opacity .22s;pointer-events:none;}",
@@ -438,6 +504,11 @@
       ".ezl-ev-chip .sr{font-family:ui-monospace,Consolas,monospace;font-size:9px;color:#7a7a7a;}",
       ".ezl-ev-chip.click{cursor:pointer;}",
       ".ezl-ev-chip.click:hover{background:rgba(31,122,240,.13);border-color:#1F7AF0;}",
+      /* ---- 추측 인용(비실인용) 구분 — 점선 + 중립 톤 (F15) ---- */
+      ".ezl-ev-cap.guess{color:#7a7a7a;border-style:dashed;}",
+      ".ezl-ev-chip.guess{border-style:dashed;border-color:#c7c7cc;background:#fff;color:#5c5c61;}",
+      ".ezl-ev-none{font-size:10.5px;font-weight:700;color:#B45309;background:rgba(180,83,9,.06);",
+      "border:1px dashed rgba(180,83,9,.45);border-radius:999px;padding:3px 10px;}",
       ".ezl-ev-link,.ezl-ev-logic{font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;border-radius:999px;",
       "padding:3px 10px;border:1px solid #d2d2d7;background:#fff;color:#1F7AF0;transition:background .12s;}",
       ".ezl-ev-link:hover,.ezl-ev-logic:hover{background:#f5f5f7;border-color:#1F7AF0;}",
@@ -456,7 +527,7 @@
       "background:rgba(21,128,61,.07);border:1px solid rgba(21,128,61,.3);border-radius:4px;padding:0 4px;}",
       ".ezl-pop-ga{margin-top:9px;padding-top:8px;border-top:1px dashed #e0e0e0;font-size:10px;color:#7a7a7a;}",
       ".ezl-pop-ga b{color:#B45309;font-family:ui-monospace,Consolas,monospace;}",
-      "@media (prefers-reduced-motion:reduce){.ezl-panel,.ezl-scrim,.ezl-badge{transition:none !important;animation:none !important;}}"
+      "@media (prefers-reduced-motion:reduce){.ezl-panel,.ezl-scrim,.ezx-fab.ezl-bump{transition:none !important;animation:none !important;}}"
     ].join("");
     var st = document.createElement("style");
     st.id = "ezl-style";
@@ -464,26 +535,19 @@
     document.head.appendChild(st);
   }
 
-  /* ================= 배지 ================= */
-  function ensureBadge() {
-    var b = document.getElementById("ezl-badge");
-    if (b) return b;
-    b = document.createElement("button");
-    b.type = "button";
-    b.id = "ezl-badge";
-    b.className = "ezl-badge";
-    b.title = "성과 히스토리 열기";
-    var host = document.querySelector(".ezx-root") || document.body;
-    host.appendChild(b);
-    return b;
-  }
+  /* ================= 배지 — [Phase1 IA] 떠다니는 pill 제거 ================= */
+  /* 호출부 보존용 no-op — DOM을 만들지 않는다 */
+  function ensureBadge() { return null; }
+  /* 기록 변화 반영: 열린 마운트 재렌더 + (bump 시) FAB 미세 애니메이션 */
   function updateBadge(bump) {
-    var b = ensureBadge();
-    b.innerHTML = '<span class="dot"></span>히스토리 ' + loadStore().length;
+    refreshMounts(null);
     if (bump) {
-      b.classList.remove("bump");
-      void b.offsetWidth; /* reflow로 애니 재시작 */
-      b.classList.add("bump");
+      var f = document.querySelector(".ezx-fab");
+      if (f) {
+        f.classList.remove("ezl-bump");
+        void f.offsetWidth; /* reflow로 애니 재시작 */
+        f.classList.add("ezl-bump");
+      }
     }
   }
 
@@ -507,7 +571,7 @@
     p.id = "ezl-panel";
     p.className = "ezl-panel";
     p.setAttribute("role", "dialog");
-    p.setAttribute("aria-label", "성과 히스토리");
+    p.setAttribute("aria-label", "성과 기록");
     document.body.appendChild(p);
     return p;
   }
@@ -553,8 +617,8 @@
       + "</div>";
   }
 
-  function renderPanelBody(highlightId) {
-    var p = ensurePanel();
+  /* 공통 렌더 코어 — 레거시 슬라이드 패널과 [기록] 탭이 같은 본문을 쓴다 */
+  function renderCore(highlightId) {
     var all = sorted();
     /* 열람 규칙 적용 — no는 목록에서 제외, anon/summ은 렌더 시 형태 변환 */
     var arr = [], levels = [], i;
@@ -583,41 +647,89 @@
     }
     if (!shown) list = '<div class="ezl-empty">해당 유형의 기록이 아직 없습니다.<br>기능을 사용하면 자동으로 기록됩니다.</div>';
 
+    var strip = '<div class="ezl-strip">' + chips + "</div>";
+    /* 시드 플래그 off + 빈 스토어 — EmptyState 카드 */
+    if (!loadStore().length) {
+      strip = "";
+      list = '<div class="ezl-empty">아직 기록이 없습니다 — 목표·체크인·1:1이 확정될 때마다 여기에 쌓입니다</div>';
+    }
+
     var vc = verifyChain();
     var chainLine = vc.ok
       ? '<span class="ezl-chain ok">기록 체인 검증 ✓ (' + vc.count + "건 이상 없음)</span>"
       : '<span class="ezl-chain bad">⚠ 기록 체인 불일치 — 위·변조 또는 유실 의심 (' + vc.count + "건 대조)</span>";
 
-    p.innerHTML =
-      '<div class="ezl-head"><div class="ezl-head-top">'
-      + '<div class="ezl-title">성과 히스토리<small>Performance History</small></div>'
-      + '<button type="button" class="ezl-x" data-ezl-close="1" aria-label="닫기">×</button></div>'
-      + '<div class="ezl-sub"><span class="ezl-asof">기준 시점 2026 상반기 · ' + esc(nowStamp()) + " 기준</span>"
-      + "<span>총 <b>" + arr.length + "</b>건 기록</span></div></div>"
-      + '<div class="ezl-strip">' + chips + "</div>"
-      + '<div class="ezl-body">' + list + "</div>"
-      + '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 임시 기록만 80건까지 보관, 평가에 인용된 기록은 계속 보존 '
+    var foot = '<div class="ezl-foot">기능을 쓸수록 성과 기록이 쌓이고, 답변마다 어떤 기록을 인용했는지 남습니다. <b>기록은 자동, 인용은 투명.</b> · 임시 기록만 80건까지 보관, 평가에 인용된 기록은 계속 보존 '
       + '<button type="button" class="ezl-foot-policy" data-ezl-policy="1">🔒 보관·열람 규칙</button>'
       + (window.EZJourney && EZJourney.open
         ? '<button type="button" class="ezl-foot-policy" data-ezl-journey="1" title="이 기록들을 시간순이 아니라 프로세스 단계 순서로 봅니다">&#9672; 프로세스 순서로 보기</button>'
         : "")
       + '<div class="ezl-foot-row2">' + chainLine
-      + '<button type="button" class="ezl-foot-policy" data-ezl-export="1" title="성과 히스토리를 JSON 파일로 내려받습니다">⬇ 내보내기</button>'
+      + '<button type="button" class="ezl-foot-policy" data-ezl-export="1" title="성과 기록을 JSON 파일로 내려받습니다">⬇ 내보내기</button>'
       + '<button type="button" class="ezl-foot-policy" data-ezl-import="1" title="내보낸 JSON을 불러와 병합합니다 (중복 기록은 건너뜀)">⬆ 가져오기</button>'
       + "</div></div>";
 
-    if (highlightId) {
-      setTimeout(function () {
-        var node = p.querySelector('[data-ezl-id="' + highlightId + '"]');
-        if (node && node.scrollIntoView) {
-          try { node.scrollIntoView({ block: "center", behavior: "smooth" }); }
-          catch (e) { node.scrollIntoView(); }
-        }
-      }, 280);
-    }
+    return { total: arr.length, strip: strip, body: '<div class="ezl-body">' + list + "</div>", foot: foot };
+  }
+
+  function scrollToHl(container, highlightId) {
+    if (!highlightId) return;
+    setTimeout(function () {
+      var node = container.querySelector('[data-ezl-id="' + highlightId + '"]');
+      if (node && node.scrollIntoView) {
+        try { node.scrollIntoView({ block: "center", behavior: "smooth" }); }
+        catch (e) { node.scrollIntoView(); }
+      }
+    }, 280);
+  }
+
+  /* 레거시 슬라이드 패널 렌더 (딥점프 폴백용으로 유지) */
+  function renderPanelBody(highlightId) {
+    var p = ensurePanel();
+    var c = renderCore(highlightId);
+    p.innerHTML =
+      '<div class="ezl-head"><div class="ezl-head-top">'
+      + '<div class="ezl-title">성과 기록<small>Performance Record</small></div>'
+      + '<button type="button" class="ezl-x" data-ezl-close="1" aria-label="닫기">×</button></div>'
+      + '<div class="ezl-sub"><span class="ezl-asof">기준 시점 2026 상반기 · ' + esc(nowStamp()) + " 기준</span>"
+      + "<span>총 <b>" + c.total + "</b>건 기록</span></div></div>"
+      + c.strip + c.body + c.foot;
+    scrollToHl(p, highlightId);
+  }
+
+  /* ---- [Phase1 IA] elizax 도킹 패널 [기록] 탭 임베드 ---- */
+  var tabMount = null;
+  function renderInto(container, highlightId) {
+    if (!container) return;
+    injectStyle();
+    tabMount = container;
+    container.classList.add("ezl-embed");
+    var c = renderCore(highlightId);
+    container.innerHTML =
+      '<div class="ezl-tabhead">'
+      + '<div class="ezl-title">성과 기록' + (hasSeed() ? '<span class="ezl-demo">데모 데이터</span>' : "") + "</div>"
+      + '<div class="ezl-tabdef">elizax가 답변 근거로 쓰는 나의 성과 타임라인</div>'
+      + '<div class="ezl-sub"><span class="ezl-asof">기준 시점 2026 상반기 · ' + esc(nowStamp()) + " 기준</span>"
+      + "<span>총 <b>" + c.total + "</b>건</span></div></div>"
+      + c.strip + c.body + c.foot;
+    scrollToHl(container, highlightId);
+  }
+  /* 살아 있는 마운트(탭·레거시 패널) 일괄 재렌더 */
+  function refreshMounts(highlightId) {
+    if (tabMount && document.body.contains(tabMount)) renderInto(tabMount, highlightId || null);
+    if (isPanelOpen()) renderPanelBody(highlightId || null);
   }
 
   function openPanel(highlightId) {
+    /* [Phase1 IA] 기본 경로: elizax 도킹 패널 [기록] 탭으로 착지.
+       전체화면 허브가 떠 있으면 레거시 슬라이드 패널 유지(딥점프 폴백). */
+    if (!document.querySelector(".agh-root.on") && window.Elizax && Elizax.showTab) {
+      try {
+        Elizax.open();
+        Elizax.showTab("rec", highlightId || null);
+        return;
+      } catch (e) { /* 레거시 폴백 */ }
+    }
     injectStyle();
     var p = ensurePanel();
     renderPanelBody(highlightId || null);
@@ -680,13 +792,9 @@
       if (s > 0) scored.push({ it: it, s: s });
     }
     scored.sort(function (a, b) { return b.s - a.s || (b.it.ts || 0) - (a.it.ts || 0); });
-    /* 키워드 매칭이 전혀 없으면 weight 상위 2건 폴백 (근거 0건 답변 방지) */
+    /* 키워드 매칭이 전혀 없으면 빈 배열 — weight 폴백으로 근거를 지어내지 않는다 (F15) */
     var picked = [];
-    if (!scored.length) {
-      var byW = arr.slice().sort(function (a, b) { return (b.weight || 0) - (a.weight || 0) || (b.ts || 0) - (a.ts || 0); });
-      for (i = 0; i < byW.length && picked.length < 2; i++) picked.push(byW[i].id);
-      return picked;
-    }
+    if (!scored.length) return picked;
     var max = Math.min(4, Math.max(2, scored.length));
     for (i = 0; i < scored.length && picked.length < max; i++) picked.push(scored[i].it.id);
     return picked;
@@ -761,15 +869,16 @@
       }
     }
 
-    /* 근거 선택 — 마커 실인용(ctxRefs) 우선, 없으면 규칙 매칭 폴백 */
+    /* 근거 선택 — 마커 실인용(ctxRefs+ctxCited) 우선, 없으면 규칙 매칭(추측) 폴백 */
     var refs = (msg.meta && Object.prototype.toString.call(msg.meta.ctxRefs) === "[object Array]")
       ? msg.meta.ctxRefs.slice() : null;
+    var cited = !!(msg.meta && msg.meta.ctxCited);
     var fresh = false;
     if (!refs) {
       refs = pickRefs(String(msg.text || ""));
-      if (!refs.length) return;
       if (!msg.meta) msg.meta = {};
       msg.meta.ctxRefs = refs.slice();
+      cited = false;
       fresh = true;
     }
     var picked = [];
@@ -777,24 +886,35 @@
       var it = byId(refs[i]);
       if (it) picked.push(it);
     }
-    /* 마커 id가 전부 무효(원장에 없음)면 키워드 매칭 폴백으로 재선정 */
-    if (!picked.length && msg.meta && msg.meta.ctxCited) {
+    /* 마커 id가 전부 무효(원장에 없음)면 추측 매칭으로 강등 재선정 */
+    if (!picked.length && cited) {
       refs = pickRefs(String(msg.text || ""));
       msg.meta.ctxRefs = refs.slice();
       delete msg.meta.ctxCited;
+      cited = false;
       fresh = true;
       for (i = 0; i < refs.length; i++) {
         var it2f = byId(refs[i]);
         if (it2f) picked.push(it2f);
       }
     }
-    if (!picked.length) return;
+    if (fresh) {
+      try { if (window.EZChat && EZChat.persist) EZChat.persist(); } catch (eP) { /* 무시 */ }
+    }
+    if (!picked.length) {
+      /* 뒷받침 기록 0건 — 추측으로 채우지 않고 상태를 정직하게 표시 (F15) */
+      var none = document.createElement("div");
+      none.className = "ezl-ev-wrap";
+      none.innerHTML = '<span class="ezl-ev-none">⚠ 이 답변을 뒷받침하는 기록 없음</span>';
+      if (anchor.nextSibling) anchor.parentNode.insertBefore(none, anchor.nextSibling);
+      else anchor.parentNode.appendChild(none);
+      return;
+    }
 
-    /* usedCount 연동 — 규칙 배정 최초 1회 + 모델 실인용(ctxCited) 최초 1회 */
-    var needCount = fresh || (msg.meta && msg.meta.ctxCited && !msg.meta.ctxCounted);
-    if (needCount) {
+    /* usedCount·체인 승격은 모델 실인용(ctxCited===true)만 — 추측 refs는 카운트 금지 (F15) */
+    if (cited && msg.meta && msg.meta.ctxCited === true && !msg.meta.ctxCounted) {
       for (i = 0; i < picked.length; i++) picked[i].usedCount = (picked[i].usedCount || 0) + 1;
-      if (msg.meta && msg.meta.ctxCited) msg.meta.ctxCounted = true;
+      msg.meta.ctxCounted = true;
       saveStore();
       updateBadge();
       try { if (window.EZChat && EZChat.persist) EZChat.persist(); } catch (e) { /* 무시 */ }
@@ -810,27 +930,30 @@
     if (!gated.length) return;
 
     var level = evidenceLevel();
-    var html = '<span class="ezl-ev-cap">근거 · 기록 ' + gated.length + "건</span>";
+    /* 실인용(ctxCited)=기존 스타일, 추측=점선 칩 + 별도 캡션 — 인용 정직화 (F15) */
+    var guessCls = cited ? "" : " guess";
+    var html = '<span class="ezl-ev-cap' + guessCls + '">'
+      + (cited ? "근거 · AI가 인용한 기록 " : "관련일 수 있는 기록 ") + gated.length + "건</span>";
     for (i = 0; i < gated.length; i++) {
       var it2 = gated[i].it;
       var lv2 = gated[i].lv;
       var meta = TYPES[it2.type] || TYPES.org;
       if (lv2 === "anon") {
-        html += '<span class="ezl-ev-chip" style="--ezl-c:#7a7a7a" title="응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)">'
+        html += '<span class="ezl-ev-chip' + guessCls + '" style="--ezl-c:#7a7a7a" title="응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)">'
           + '<span class="tb">' + esc(meta.label) + "</span>익명 집계</span>";
         continue;
       }
       var clickable = level !== "core";
-      html += '<span class="ezl-ev-chip' + (clickable ? " click" : "") + '" style="--ezl-c:' + meta.color + '"'
-        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="히스토리에서 보기"' : ' title="' + esc(it2.title) + '"') + ">"
+      html += '<span class="ezl-ev-chip' + guessCls + (clickable ? " click" : "") + '" style="--ezl-c:' + meta.color + '"'
+        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 보기"' : ' title="' + esc(it2.title) + '"') + ">"
         + '<span class="tb">' + esc(meta.label) + "</span>" + esc(shorten(it2.title, 14))
         + (level !== "core" && lv2 === "full" ? '<span class="sr">' + esc(it2.source || "") + "</span>" : "")
         + "</span>";
     }
     picked = gated.map(function (g) { return g.it; });
     if (level !== "core") {
-      html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">히스토리에서 보기</button>';
-      html += '<button type="button" class="ezl-ev-link" data-ezl-journey="1" title="이 근거들이 성과 사이클 어느 단계의 결정으로 이어지는지 봅니다">&#9672; 프로세스 맵</button>';
+      html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">성과 기록에서 보기</button>';
+      html += '<button type="button" class="ezl-ev-link" data-ezl-journey="1" title="이 근거들이 성과 사이클 어느 단계의 결정으로 이어지는지 봅니다">&#9672; 결정 흐름</button>';
     }
     if (level === "logic") {
       html += '<button type="button" class="ezl-ev-logic" data-ezl-logic="1" data-ezl-refs="'
@@ -911,7 +1034,7 @@
       a.click();
       document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-      toast("성과 히스토리 " + loadStore().length + "건 내보냄");
+      toast("성과 기록 " + loadStore().length + "건 내보냄");
     } catch (e) { toast("내보내기 실패"); }
   }
   function importFile() {
@@ -942,7 +1065,6 @@
               added++;
             }
             if (added) { saveStore(); updateBadge(true); }
-            if (isPanelOpen()) renderPanelBody(null);
             toast(added ? "기록 " + added + "건 가져옴 (중복 제외)" : "가져올 새 기록이 없습니다");
           } catch (e) { toast("가져오기 실패 — JSON 형식을 확인하세요"); }
         };
@@ -960,13 +1082,6 @@
     var pop = document.getElementById("ezl-pop");
     if (pop && !pop.contains(t) && !closestAttr(t, "data-ezl-logic")) closeLogicPop();
 
-    /* 배지 → 패널 열기 (배지 내부 span 클릭 포함, 부모 체인 탐색) */
-    var n = t;
-    while (n && n !== document) {
-      if (n.id === "ezl-badge") { ev.preventDefault(); openPanel(); return; }
-      n = n.parentNode;
-    }
-
     /* 닫기 (X·스크림) */
     if (closestAttr(t, "data-ezl-close")) { ev.preventDefault(); closePanel(); return; }
 
@@ -976,7 +1091,7 @@
       ev.preventDefault();
       var ft = fc.getAttribute("data-ezl-filter") || "";
       filterType = (filterType === ft) ? "" : ft;
-      renderPanelBody(null);
+      refreshMounts(null);
       return;
     }
 
@@ -1028,7 +1143,7 @@
     var e = addEntry(d);
     if (e) {
       updateBadge(true);
-      toast("성과 히스토리에 기록됨 · " + shorten(e.title, 22));
+      toast("성과 기록에 저장됨 · " + shorten(e.title, 22));
     }
   }
 
@@ -1062,14 +1177,6 @@
     document.addEventListener("keydown", onKeydown, true);
     document.addEventListener("ez:ctx", onCtxEvent, false);
 
-    /* 배지 — .ezx-root(FAB 루트)가 늦게 뜰 수 있어 폴링, 실패 시 body 폴백 pill */
-    var tries = 0;
-    (function pollFab() {
-      if (document.querySelector(".ezx-root")) { updateBadge(); return; }
-      if (++tries >= 20) { updateBadge(); return; }  /* 폴백: body에 자체 pill */
-      setTimeout(pollFab, 300);
-    })();
-
     /* EZChat 폴링 결선 (300ms × 20회) */
     var ct = 0;
     (function pollChat() {
@@ -1082,9 +1189,11 @@
   /* ---------------- 공개 API ---------------- */
   window.EZLedger = {
     add: addEntry,
+    on: on,                   /* 구독: on("add", fn) — 항목 축적 시 알림 */
     list: function () { return sorted(); },
     openPanel: openPanel,
     closePanel: closePanel,
+    renderInto: renderInto,   /* [Phase1 IA] elizax [기록] 탭 임베드 렌더 */
     count: function () { return loadStore().length; },
     verifyChain: verifyChain,
     isPinned: isPinned

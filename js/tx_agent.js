@@ -70,13 +70,30 @@
   function laterLocal(fn, ms) { return setTimeout(fn, ms); }
   function timerFor(host) { return host === el.canvas ? later : laterLocal; }
 
+  /* 허브 기록을 성과 기록 원장(EZLedger)에도 발행 — 새로고침 복원의 단일 원천.
+     EZLedger가 있으면 직접 add(실 id 회수), 아직 안 떴으면 ez:ctx 이벤트 폴백 */
+  function ledgerPublish(detail) {
+    try {
+      if (window.EZLedger && EZLedger.add) {
+        var e = EZLedger.add(detail);
+        return e && e.id ? e.id : null;
+      }
+    } catch (e1) { /* 원장 오류 무시 */ }
+    try { document.dispatchEvent(new CustomEvent("ez:ctx", { detail: detail })); } catch (e2) { /* 무시 */ }
+    return null;
+  }
   function logAudit(act, target, ref) {
-    state.audit.unshift({ at: nowLabel(), actor: CU().name, act: act, target: target, ref: ref || ("GA-" + (26000 + state.audit.length)) });
+    /* 참조 ID는 원장 실 id — 호출부가 이미 원장 id(ctx-)를 넘겼으면 재발행하지 않는다.
+       GA-순번 위조 폐지: 원장 미가용이면 정직하게 "기록 전" 표시 */
+    var gid = (ref && String(ref).indexOf("ctx-") === 0) ? ref
+      : ledgerPublish({ type: "audit", source: "hub.audit", title: act + " — " + target, summary: "실행자 " + CU().name, weight: 1 });
+    state.audit.unshift({ at: nowLabel(), actor: CU().name, act: act, target: target, ref: gid || ref || "기록 전" });
     var b = document.querySelector("[data-agh-auditcnt]");
     if (b) b.textContent = state.audit.length;
   }
   function addAsset(kind, title, screen) {
-    state.assets.unshift({ at: nowLabel(), kind: kind, title: title, screen: screen });
+    var gid = ledgerPublish({ type: "asset", source: "hub.asset." + (screen || ""), title: title, summary: kind, weight: 1 });
+    state.assets.unshift({ at: nowLabel(), kind: kind, title: title, screen: screen, gid: gid });
   }
 
   /* ---------------- 자율성 배지 ---------------- */
@@ -111,8 +128,16 @@
   function decideGate(key, act, note) {
     state.decided[key] = { act: act, note: note || "" };
     var scr = SCREENS[key];
-    logAudit(act, (scr ? scr.title : key), null);
+    /* 게이트 결정을 원장에 발행(hub.gate)하고, 감사 로그 참조도 같은 실 id로 통일 */
+    var gid = ledgerPublish({
+      type: "audit", source: "hub.gate",
+      title: (scr ? scr.title : key) + " · " + act,
+      summary: (note ? note + " · " : "") + "결정자 " + CU().name, weight: 2
+    });
+    logAudit(act, (scr ? scr.title : key), gid);
     addAsset("결정", (scr ? scr.title : key) + " · " + act + (note ? " — " + note : ""), key);
+    /* 게이트 저장소 통일 — tx_roles의 'txr_gate_'+role 키에 기록해 EZJourney(결정맵)가 허브 결정을 반영 */
+    try { if (window.TXRoles && TXRoles.recordGate) TXRoles.recordGate(act, note || "", gid || null); } catch (eG) { /* 무시 */ }
     /* 같은 키의 게이트가 허브·채팅 카드 양쪽에 있을 수 있어 document 전역으로 모두 갱신 */
     Array.prototype.forEach.call(document.querySelectorAll('[data-gate="' + key + '"]'), function (g) {
       Array.prototype.forEach.call(g.querySelectorAll("[data-gact]"), function (b) {
@@ -141,8 +166,8 @@
     calib:   { title: "등급 조정 심의 회의", nav: "등급 조정 심의", mode: "human_approve", group: "평가관리" },
     review:  { title: "리뷰 초안 함께 쓰기",       nav: "리뷰 초안 작성",      mode: "human_approve", group: "평가관리" },
     connmap: { title: "연결 지도 · 전략–목표–직무–역량–평가", nav: "연결 지도", mode: "suggest", group: "연결·계보" },
-    procmap: { title: "프로세스 맵 · 결정의 계보",   nav: "결정의 계보",        mode: "human_approve", group: "연결·계보" },
-    assets:  { title: "산출물 · 기록 보관함",       nav: "산출물",             mode: null,            group: "자산" },
+    procmap: { title: "결정 흐름",                nav: "결정 흐름",           mode: "human_approve", group: "연결·계보" },
+    assets:  { title: "산출물",                   nav: "산출물",             mode: null,            group: "자산" },
     audit:   { title: "감사 로그",                nav: "감사 로그",           mode: null,            group: "자산" }
   };
   var NAV_ORDER = ["home", "chat", "qw2", "qw7", "qw1", "qw4", "qw6", "qw3", "hold", "qw5", "calib", "review", "connmap", "procmap", "assets", "audit"];
@@ -164,7 +189,7 @@
     { key: "calib",  chip: "등급 조정 심의 열어줘",       desc: "4개 관점 에이전트가 조정 논거를 교차 심의하고, 가정 슬라이더로 상한을 즉시 재산출합니다.",                 roles: ["hr"],            heavy: true,  mode: "human_approve" },
     { key: "review", chip: "리뷰 초안 같이 쓰자",               desc: "AI가 근거를 인용해 초안 문장을 제안하고, 사용자가 문장 단위로 반영·무시합니다.",                             roles: ["leader", "hr"],  heavy: true,  mode: "human_approve" },
     { key: "connmap", chip: "연결 지도 보여줘 (전략–목표–직무–역량)", desc: "사업전략·조직목표·개인목표·직무 R&R·스킬·역량·평가가 어떻게 이어지는지 한 장으로 보여주고, 데이터에 없는 연결은 AI가 근거로 잇습니다. 직무 연결률도 표시합니다.", roles: ["hr", "exec", "leader"], heavy: true, mode: "suggest" },
-    { key: "procmap", chip: "이 등급이 나온 과정(결정의 계보) 보여줘", desc: "목표수립→중간점검→평가→피드백 각 단계의 결정과 근거를 시간순 계보로 묶고, 앞 근거가 다음 단계로 인용되는 흐름과 차년도 승계를 보여줍니다.", roles: ["leader", "hr", "member"], heavy: true, mode: "human_approve" }
+    { key: "procmap", chip: "이 등급이 나온 과정(결정 흐름) 보여줘", desc: "목표수립→중간점검→평가→피드백 각 단계의 결정과 근거를 시간순 계보로 묶고, 앞 근거가 다음 단계로 인용되는 흐름과 차년도 승계를 보여줍니다.", roles: ["leader", "hr", "member"], heavy: true, mode: "human_approve" }
   ];
   function scenarioOf(key) {
     for (var i = 0; i < SCENARIOS.length; i++) if (SCENARIOS[i].key === key) return SCENARIOS[i];
@@ -215,7 +240,7 @@
     if (/캘리|calibration|심의/i.test(q)) return "calib";
     if (/리뷰|총평/.test(q)) return "review";
     if (/연결 ?지도|연결률|전략.*목표.*직무|직무.*연결/.test(q)) return "connmap";
-    if (/계보|프로세스 ?맵|어떤 과정|왜 이 등급|의사결정 흐름/.test(q)) return "procmap";
+    if (/계보|프로세스 ?맵|어떤 과정|왜 이 등급|결정 ?흐름/.test(q)) return "procmap";
     return null;
   }
 
@@ -375,7 +400,7 @@
     SCENARIOS.forEach(function (sc) {
       if (sc.roles.indexOf(rk) >= 0) html += navItem(sc.key, sc.chip, sc.mode);
     });
-    html += '<div class="agh-ngroup">기록</div>' + navItem("assets", "산출물", null) + navItem("audit", "감사 로그", null);
+    html += '<div class="agh-ngroup">산출물·감사</div>' + navItem("assets", "산출물", null) + navItem("audit", "감사 로그", null);
     el.nav.innerHTML = html;
   }
 
@@ -495,7 +520,7 @@
       EZChat.on("messages", onSwitch);
     }
     ctxPanelIf(host, [
-      { tag: "연동", title: "하나의 대화, 두 개의 화면", body: "도킹 대화창과 전체화면이 <b>같은 세션</b>을 읽고 씁니다. 어디서 묻든 기록·근거·감사가 성과 히스토리 하나에 남습니다. " + srcChip("talenx", "공유 대화 저장소") },
+      { tag: "연동", title: "하나의 대화, 두 개의 화면", body: "도킹 대화창과 전체화면이 <b>같은 세션</b>을 읽고 씁니다. 어디서 묻든 기록·근거·감사가 성과 기록 하나에 남습니다. " + srcChip("talenx", "공유 대화 저장소") },
       { tag: "전환", title: "◱ 도킹으로 / ⛶ 전체화면으로", body: "우상단 버튼으로 언제든 형태를 바꿔도 대화가 끊기지 않습니다." }
     ], "");
   };
@@ -1334,22 +1359,66 @@
     });
   };
 
+  /* ---------- 원장 복원 — 세션 메모리(state)에 없는 허브 발행분(hub.*)을 원장에서 되살린다 ---------- */
+  function ledgerHubItems(prefix, exclude) {
+    var out = [];
+    try {
+      if (!(window.EZLedger && EZLedger.list)) return out;
+      var have = {}, i;
+      for (i = 0; i < state.audit.length; i++) if (state.audit[i].ref) have[state.audit[i].ref] = 1;
+      for (i = 0; i < state.assets.length; i++) if (state.assets[i].gid) have[state.assets[i].gid] = 1;
+      var arr = EZLedger.list();
+      for (i = 0; i < arr.length; i++) {
+        var it = arr[i];
+        var src = String((it && it.source) || "");
+        if (src.indexOf(prefix) !== 0) continue;
+        if (exclude && src.indexOf(exclude) === 0) continue;
+        if (have[it.id]) continue;
+        out.push(it);
+      }
+    } catch (e) { /* 원장 미로드 무시 */ }
+    return out;
+  }
+
   /* ---------- 산출물 (자산화) ---------- */
   RENDER.assets = function (host) {
     host = host || el.canvas;
-    var rows = state.assets.length ? state.assets.map(function (a) {
-      return '<div class="agh-tli"><span class="dt">' + esc(a.at) + '</span><span class="agh-tag">' + esc(a.kind) + '</span><div class="bd">' + esc(a.title) + '</div><button class="agh-btn sm" data-agh-nav="' + esc(a.screen) + '">다시 열기</button></div>';
+    /* 이번 세션 기록 + 원장 복원분(hub.asset.*) 병합 — 새로고침에도 산출물이 남는다 */
+    var all = state.assets.slice();
+    var restored = ledgerHubItems("hub.asset.");
+    for (var ri = 0; ri < restored.length; ri++) {
+      var rit = restored[ri];
+      all.push({ at: rit.at, kind: rit.summary || "기록", title: rit.title, screen: String(rit.source).slice("hub.asset.".length), gid: rit.id });
+    }
+    var rows = all.length ? all.map(function (a) {
+      var nav = (a.screen && SCREENS[a.screen]) ? '<button class="agh-btn sm" data-agh-nav="' + esc(a.screen) + '">다시 열기</button>' : "";
+      return '<div class="agh-tli"><span class="dt">' + esc(a.at) + '</span><span class="agh-tag">' + esc(a.kind) + '</span><div class="bd">' + esc(a.title) + '</div>' + nav + '</div>';
     }).join("") : '<div class="agh-emptybox">아직 보관된 산출물이 없습니다. 과제 화면에서 결정 게이트를 통과하면 여기 보관됩니다 — 한 번 만든 근거와 결정이 사라지지 않고 남습니다.</div>';
     host.innerHTML = '<div class="agh-shead"><div><h2>산출물 · 기록 보관함</h2><span class="agh-exp">과정·판단·근거가 기록으로 남아 다음 사이클이 이어받습니다</span></div></div><div class="agh-tl">' + rows + "</div>";
     ctxPanelIf(host, [
-      { tag: "기록 보관", title: "왜 남기나", body: "지속되는 평가 사이클을 위한 성과 히스토리 — 목표/피드백/평가 근거가 휘발되지 않고 다음 사이클이 이어받는 기록으로 남습니다." }
+      { tag: "기록 보관", title: "왜 남기나", body: "지속되는 평가 사이클을 위한 성과 기록 — 목표/피드백/평가 근거가 휘발되지 않고 다음 사이클이 이어받는 기록으로 남습니다." }
     ], "");
   };
 
   /* ---------- 감사 로그 ---------- */
   RENDER.audit = function (host) {
     host = host || el.canvas;
-    var rows = state.audit.length ? state.audit.map(function (a) {
+    /* 이번 세션 기록 + 원장 복원분(hub.* — 산출물 제외) 병합 — 새로고침 복원 */
+    var all = state.audit.slice();
+    var restored = ledgerHubItems("hub.", "hub.asset.");
+    for (var ri = 0; ri < restored.length; ri++) {
+      var rit = restored[ri];
+      var t = String(rit.title || ""), ract = t, rtarget = "";
+      var p = t.indexOf(" — ");                                  /* hub.audit: "행위 — 대상" */
+      if (p >= 0) { ract = t.slice(0, p); rtarget = t.slice(p + 3); }
+      else {
+        var q = t.lastIndexOf(" · ");                            /* hub.gate: "대상 · 행위" */
+        if (q >= 0) { rtarget = t.slice(0, q); ract = t.slice(q + 3); }
+      }
+      var m = /(?:실행자|결정자)\s*(.+)$/.exec(String(rit.summary || ""));
+      all.push({ at: rit.at, actor: m ? m[1] : "-", act: ract, target: rtarget, ref: rit.id });
+    }
+    var rows = all.length ? all.map(function (a) {
       return '<tr><td>' + esc(a.at) + "</td><td>" + esc(a.actor) + "</td><td>" + esc(a.act) + "</td><td>" + esc(a.target) + '</td><td class="ref">' + esc(a.ref) + "</td></tr>";
     }).join("") : '<tr><td colspan="5" class="agh-emptycell">기록된 행위가 없습니다. 모든 결정·재계산·문장 반영이 여기에 남습니다.</td></tr>';
     host.innerHTML = '<div class="agh-shead"><div><h2>감사 로그</h2><span class="agh-exp">모든 행위를 추적할 수 있는 기록 — 승인·정책·감사가 모든 요청에 함께 남습니다</span></div></div>' +
@@ -1582,7 +1651,6 @@
      ============================================================ */
   RENDER.procmap = function (host) {
     host = host || el.canvas;
-    function gaId(seed) { var hh = 7; for (var i = 0; i < seed.length; i++) hh = (hh * 31 + seed.charCodeAt(i)) >>> 0; return "GA-2026-" + ("000" + (hh % 10000)).slice(-4); }
     var d = D(), emps = d.employees || [], evals = d.evaluations || [], hist = d.evalHistory || [], krs = d.keyResults || [], objs = d.objectives || [];
     var cu = CU();
     var subj = emps.filter(function (e) { return evals.some(function (v) { return v.emp_id === e.emp_id; }); })[0] || emps[0] || { name: cu.name, emp_id: cu.emp_id };
@@ -1602,7 +1670,8 @@
         '<div class="agh-pmev">' + evid + '</div>' +
         (warn || '') +
         (cite ? '<div class="agh-pmcite">↳ ' + cite + '</div>' : '') +
-        '<span class="agh-auditchip">⛨ ' + gaId(code + subj.emp_id) + ' 기록됨</span></div>';
+        /* 위조 GA-번호 폐지 — 단계별 원장 실 id가 없는 데모 계보는 정직하게 "기록 전" */
+        '<span class="agh-auditchip" data-pm-ga="' + esc(code) + '">⛨ 기록 전 — 결정 게이트 확정 시 원장 기록</span></div>';
     }
 
     host.innerHTML = screenHead("procmap") +
@@ -1627,7 +1696,7 @@
       '<div class="agh-linkrow"><button class="agh-btn" data-pm-wf>What-if · 중간점검 근거 제외하고 재구성</button><span data-pm-wfout class="agh-cmwfout"></span></div>' +
       gateHTML("procmap", ["계보 확정", "근거 보강", "보류"]);
     ctxPanelIf(host, [
-      { tag: "통합", title: "흩어진 근거를 한 장으로", body: "답변 단위 계산 트레이스·시간순 맥락 기록·감사 로그·1:1 커버리지 맵을 프로세스 순서로 재배열. 이미 쌓인 데이터를 묶는 일에 가까움." },
+      { tag: "통합", title: "흩어진 근거를 한 장으로", body: "답변 단위 계산 트레이스·시간순 맥락 기록·감사 로그·1:1 지원 범위 맵을 프로세스 순서로 재배열. 이미 쌓인 데이터를 묶는 일에 가까움." },
       { tag: "영속성", title: "다음 단계 숙제", body: "데모 기록은 브라우저 저장·80건 초과 삭제됨. 실서비스는 무엇을 얼마나 보관하고 누가 볼 수 있는지 규칙 정의 필요(상태 저장소)." }
     ]);
     var pw = host.querySelector("[data-pm-wf]");

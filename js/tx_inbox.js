@@ -18,11 +18,18 @@
  *      title?, prev?, krNames?}. fix18이 만든 실요청은 oid로 objectives /
  *      keyResults에서 소유자·현재값을 역추적, 시드는 필드를 자체 내장.
  *    - 목표 수정/가중치: `txf_ibreq_<id>` = {kind:'goal'|'weight', ...} 시드.
- *    - 승인해도 원본 TALENX_DATA는 건드리지 않는다(데모 원칙). 상태는
- *      sessionStorage에만 남는다 → "승인 전에는 아무것도 반영되지 않음".
+ *    - 체크인 승인 시 요청 KR 값을 세션 인메모리 TALENX_DATA에 실반영한다
+ *      (keyResults[].current_value 단위 보존 갱신 + progress 보정 +
+ *      objectives[].progress 가중 평균 재계산 — finishNewSave 방식: 원본
+ *      talenx_data.js 파일은 불변, 새로고침 시 초기화). 반영 후
+ *      CustomEvent "ez:checkin-applied" detail={objective_id} 발행 →
+ *      tx_fix_perf가 수신해 재렌더. 반려 시 데이터 불변.
+ *    - 시드 요청(seed:true)은 대상 목표가 데이터에 없어 반영 없이 상태만
+ *      바뀐다 — 목록·드로어에 "예시" 배지로 구분.
  *    - 감사: 결정 시 document에 CustomEvent "ez:ctx"
  *      detail={type:'checkin'|'goal', source:'inbox.approve'|'inbox.reject',
- *      title, summary, weight:2} 발행 → window.EZLedger가 수신·기록.
+ *      title, summary(실반영 수치 포함), weight:2} 발행 → window.EZLedger가
+ *      수신·기록.
  * ④ 엣지 케이스
  *    - member/exec 역할은 카드 자체를 만들지 않는다.
  *    - tx_fix_wf가 .wf-page[data-p="0"] innerHTML을 통째로 재작성하므로
@@ -99,7 +106,7 @@
     });
     // ② 목표 수정 요청 시드 1건
     if (!sget(IB_PREFIX + 'goal1')) sset(IB_PREFIX + 'goal1', {
-      kind: 'goal', owner_emp_id: 'EMP-0192',
+      seed: true, kind: 'goal', owner_emp_id: 'EMP-0192',
       title: '신규 리드 창출 파이프라인 구축',
       field: '목표 기간', cur: '2026 상반기', req: '2026 3분기까지 연장',
       comment: '핵심 파트너사 일정 지연으로 기간 조정이 필요합니다. 6/30 1:1에서 사전 합의된 내용입니다.',
@@ -107,7 +114,7 @@
     });
     // ③ 가중치 변경 요청 시드 1건
     if (!sget(IB_PREFIX + 'wt1')) sset(IB_PREFIX + 'wt1', {
-      kind: 'weight', owner_emp_id: 'EMP-0194',
+      seed: true, kind: 'weight', owner_emp_id: 'EMP-0194',
       title: '내부 프로세스 문서화 · 지식 자산화',
       field: '핵심 성과 가중치', cur: '문서화 30% · 자산화 70%', req: '문서화 20% · 자산화 80%',
       comment: '하반기 우선순위 조정에 따라 자산화 비중을 높이는 가중치 변경을 요청드립니다.',
@@ -160,7 +167,7 @@
       reqName: empName(owner), reqTeam: empTeam(owner),
       title: d.title || (o && o.title) || oid,
       summary: '진척값 ' + deltas.length + '건 변경' + (d.ai ? ' · ✦ AI 초안' : ''),
-      at: d.at || '', ago: daysAgo(d.at), status: d.status || '',
+      at: d.at || '', ago: daysAgo(d.at), status: d.status || '', seed: !!d.seed,
       deltas: deltas, comment: d.comment || '', src: d.src || '체크인 기록', data: d
     };
   }
@@ -170,7 +177,7 @@
       key: key, kind: d.kind, kindLabel: d.kind === 'weight' ? '가중치 변경 요청' : '목표 수정 요청',
       reqName: empName(d.owner_emp_id), reqTeam: empTeam(d.owner_emp_id),
       title: d.title || '', summary: (d.field || '') + ' 변경',
-      at: d.at || '', ago: daysAgo(d.at), status: d.status || '',
+      at: d.at || '', ago: daysAgo(d.at), status: d.status || '', seed: !!d.seed,
       deltas: [{ name: d.field || '요청 항목', cur: d.cur || '—', req: d.req || '—', delta: '' }],
       comment: d.comment || '', src: d.src || '요청 사유', data: d
     };
@@ -185,8 +192,12 @@
       : '<span class="ezib-ava">' + esc((name || '?').slice(-2)) + '</span>';
   }
 
+  function seedChip(it) {
+    return it.seed ? ' <span class="ezib-seed" title="데모 시드 — 승인해도 데이터에 반영되지 않습니다">예시</span>' : '';
+  }
+
   function rowHTML(it, idx) {
-    var chip = '<span class="ezib-chip k-' + esc(it.kind) + '">' + esc(it.kindLabel) + '</span>';
+    var chip = '<span class="ezib-chip k-' + esc(it.kind) + '">' + esc(it.kindLabel) + '</span>' + seedChip(it);
     return '<div class="ezib-row" data-ezib-row="' + idx + '">'
       + avatar(it.reqName)
       + '<div class="ezib-who"><b>' + esc(it.reqName) + '</b><small>' + esc(it.reqTeam) + '</small></div>'
@@ -203,7 +214,7 @@
     return '<div class="ezib-row done" data-ezib-row="' + idx + '">'
       + avatar(it.reqName)
       + '<div class="ezib-who"><b>' + esc(it.reqName) + '</b><small>' + esc(it.reqTeam) + '</small></div>'
-      + '<span class="ezib-chip k-' + esc(it.kind) + '">' + esc(it.kindLabel) + '</span>'
+      + '<span class="ezib-chip k-' + esc(it.kind) + '">' + esc(it.kindLabel) + '</span>' + seedChip(it)
       + '<div class="ezib-sum"><b>' + esc(it.title) + '</b></div>' + st + '</div>';
   }
 
@@ -249,7 +260,7 @@
     var body = '<div class="ezib-rcpt">'
       + '<div class="ezib-rhead">요청 근거</div>'
       + drKV('요청자', esc(it.reqName) + (it.reqTeam ? ' · ' + esc(it.reqTeam) : ''))
-      + drKV('유형', esc(it.kindLabel))
+      + drKV('유형', esc(it.kindLabel) + seedChip(it))
       + drKV('대상 목표', esc(it.title))
       + drKV('요청일', esc(it.at) + (it.ago ? ' (' + esc(it.ago) + ')' : ''))
       + '<div class="ezib-rsec">변경 사항 <small>현재값 → 요청값</small></div>' + deltaRows
@@ -272,24 +283,81 @@
     });
   }
 
-  /* ================= 결정: 상태 갱신 + 감사 + 토스트 ======================= */
+  /* ================= 결정: 상태 갱신 + 실반영 + 감사 + 토스트 ============== */
+  /* 단위 보존 — 기존 표기(예: "52%", "295.3억")의 숫자 부분만 교체 */
+  function fmtLike(sample, num) {
+    var s = String(sample == null ? '' : sample);
+    if (/-?\d+(\.\d+)?/.test(s)) return s.replace(/-?\d+(\.\d+)?/, String(num));
+    return String(num);
+  }
+  /* 승인된 체크인을 세션 인메모리 TALENX_DATA에 반영 (원본 파일 불변 —
+     finishNewSave 방식). 반환: {objective_id, applied:[..], progress} | null */
+  function applyCheckin(it, d) {
+    var oid = it.key.slice(CK_PREFIX.length);
+    // 인덱스는 로드 시점 스냅샷 — 세션 중 생성된 목표(OBJ-NEW-*)는 라이브 조회로 폴백
+    var o = objById[oid] || (D.objectives || []).filter(function (x) { return x.objective_id === oid; })[0];
+    if (!o) return null; // 시드·삭제된 목표 — 반영 대상 없음
+    var liveKrs = krByObj[oid] || (D.keyResults || []).filter(function (k) { return k.objective_id === oid; });
+    var vals = d.vals || {}, applied = [];
+    liveKrs.forEach(function (kr) {
+      if (vals[kr.kr_id] == null) return;
+      var nv = parseFloat(vals[kr.kr_id]);
+      if (isNaN(nv)) return;
+      var ov = parseFloat(kr.current_value);
+      if (isNaN(ov)) ov = 0;
+      kr.current_value = (typeof kr.current_value === 'number') ? nv : fmtLike(kr.current_value, nv);
+      // 진행률 보정 — 목표값 대비 증분 반영, 목표값 미파싱이면 %p로 간주.
+      // 리드타임·이탈률처럼 목표값이 현재값보다 낮은 KR은 값이 줄어드는 것이 개선이다.
+      // 부호를 뒤집지 않으면 6.5일→6.1일 단축이 후퇴로 집계된다.
+      var tgt = parseFloat(kr.target_value);
+      var delta = (tgt > 0 ? (nv - ov) / tgt * 100 : (nv - ov));
+      if (tgt > 0 && ov > tgt) delta = -delta;
+      var p = (kr.progress || 0) + delta;
+      kr.progress = Math.max(0, Math.min(100, Math.round(p * 10) / 10));
+      applied.push(kr.name + ' ' + ov + '→' + nv);
+    });
+    if (!applied.length) return null;
+    // objectives[].progress 재계산 — 기존 objProgress 산식(KR 가중 평균)과 동일
+    var s = 0, w = 0;
+    liveKrs.forEach(function (kr) {
+      var wt = parseFloat(kr.weight) || 0;
+      s += (kr.progress || 0) * wt; w += wt;
+    });
+    if (w) o.progress = Math.round(s / w * 10) / 10;
+    return { objective_id: oid, applied: applied, progress: o.progress };
+  }
+
   function decide(it, approve) {
     var d = sget(it.key) || it.data || {};
     d.status = approve ? 'approved' : 'rejected';
     d.decided_at = TODAY;
     sset(it.key, d);
+    // 승인 시 실반영 — 반려 시 데이터 불변
+    var applied = null;
+    if (approve && it.kind === 'checkin') applied = applyCheckin(it, d);
+    if (applied) {
+      try {
+        document.dispatchEvent(new CustomEvent('ez:checkin-applied', {
+          detail: { objective_id: applied.objective_id }
+        })); // tx_fix_perf가 수신해 목표 화면 재렌더
+      } catch (e) { /* ignore */ }
+    }
     // 감사 기록 — EZLedger(tx_ctx_ledger.js)가 ez:ctx 수신
     try {
       document.dispatchEvent(new CustomEvent('ez:ctx', { detail: {
         type: it.kind === 'checkin' ? 'checkin' : 'goal',
         source: approve ? 'inbox.approve' : 'inbox.reject',
         title: (approve ? '승인 · ' : '반려 · ') + it.kindLabel + ' — ' + it.title,
-        summary: it.reqName + ' 요청 · ' + it.summary + ' · 조직장이 확정',
+        summary: it.reqName + ' 요청 · ' + it.summary
+          + (applied ? ' · 반영: ' + applied.applied.join(', ') + ' · 목표 진척 ' + applied.progress + '%' : '')
+          + ' · 조직장이 확정',
         weight: 2
       } }));
     } catch (e) { /* ignore */ }
     toast(approve
-      ? '승인했습니다. 승인 내용이 기록되었습니다.'
+      ? (applied
+        ? '승인했습니다. 진척값이 목표에 반영되었습니다. (세션 한정 — 새로고침 시 초기화)'
+        : '승인했습니다. 승인 내용이 기록되었습니다.')
       : '반려했습니다. 요청자에게 사유와 함께 전달됩니다.', approve ? 'ok' : '');
     render();
   }
@@ -341,6 +409,7 @@
       + '.ezib-chip.k-checkin{background:rgba(31,122,240,.09);color:#1F7AF0}'
       + '.ezib-chip.k-goal{background:rgba(35,64,142,.09);color:#23408E}'
       + '.ezib-chip.k-weight{background:rgba(194,65,12,.09);color:#C2410C}'
+      + '.ezib-seed{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;color:var(--ink-3,#7A8494);background:var(--soft,#F6F8FB);border:1px dashed var(--ink-4,#A6AFBC)}'
       + '.ezib-sum{flex:1;min-width:0}'
       + '.ezib-sum b{display:block;font-size:13px;font-weight:600;color:var(--ink,#1B2430);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
       + '.ezib-sum small{display:block;font-size:11.5px;color:var(--ink-3,#7A8494)}'

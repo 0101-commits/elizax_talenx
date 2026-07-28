@@ -147,6 +147,67 @@
       '#s-perf .txf-src:hover{background:rgba(31,122,240,.16)}',
       '#s-perf .txf-carryai{width:100%;margin-top:11px;border:1.5px solid var(--purple,#7C3AED);color:var(--purple,#7C3AED);background:var(--card);font-size:12px;font-weight:700;padding:8px;border-radius:8px;cursor:pointer}',
       '#s-perf .txf-carryai:hover{background:var(--blue-soft)}',
+      '#s-perf .txf-carry.hl{border-color:var(--blue,#1F7AF0);box-shadow:0 0 0 3px rgba(31,122,240,.16)}',
+      /* F3: 항목별 체크박스 — carry 패널/검토 모달 공용(모달은 #s-perf 밖) */
+      '.txf-cvck{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--ink-3);margin-bottom:5px;cursor:pointer;user-select:none}',
+      '.txf-cvck input{width:14px;height:14px;accent-color:var(--blue,#1F7AF0);margin:0;flex:none}',
+      /* F3: 진입 배너 */
+      '#s-perf .txf-cbn{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(31,122,240,.06);border:1px solid rgba(31,122,240,.22);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--ink-2);line-height:1.5}',
+      '#s-perf .txf-cbn b{color:var(--ink)}',
+      '#s-perf .txf-cbn.first{background:var(--soft);border-color:var(--line);color:var(--ink-3)}',
+      '#s-perf .txf-cbn .cbtn{margin-left:auto;flex:none;border:1px solid var(--blue,#1F7AF0);color:var(--blue,#1F7AF0);background:var(--card);border-radius:7px;font-size:11.5px;font-weight:700;padding:5px 11px;cursor:pointer}',
+      '#s-perf .txf-cbn .cbtn:hover{background:var(--blue-soft)}',
+      /* F3 반응형: EZJob 패널(tx_jobcontext)과 동일 계약 — 좁은 화면에서는 숨기고 배너로 진입 */
+      '@media(max-width:1100px){#s-perf .txf-carry{display:none}}',
+      /* --- E: 가중치 합계 게이지 --- */
+      '#s-perf .txf-wsum{display:flex;align-items:center;gap:10px;margin-top:14px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--soft);font-size:12.5px}',
+      '#s-perf .txf-wsum .lb{font-weight:700;color:var(--ink-2);flex:none}',
+      '#s-perf .txf-wsum .tr{flex:1;min-width:60px;height:7px;border-radius:99px;background:var(--line);overflow:hidden}',
+      '#s-perf .txf-wsum .tr i{display:block;height:100%;background:var(--green,#2FA36B);transition:width .18s}',
+      '#s-perf .txf-wsum.bad .tr i{background:var(--red,#E23B3B)}',
+      '#s-perf .txf-wsum .vv{font-weight:800;color:var(--green,#2FA36B);flex:none}',
+      '#s-perf .txf-wsum.bad .vv{color:var(--red,#E23B3B)}',
+      '#s-perf .txf-wsum .eq{flex:none;border:1px solid var(--line);background:var(--card);border-radius:7px;font-size:11.5px;font-weight:700;color:var(--ink-2);padding:5px 10px;cursor:pointer}',
+      '#s-perf .txf-wsum .eq:hover{background:var(--card);border-color:var(--blue,#1F7AF0);color:var(--blue,#1F7AF0)}',
+      '#s-perf .txf-align{display:none;margin-top:8px;font-size:12px;color:var(--ink-2);background:rgba(31,122,240,.05);border:1px solid rgba(31,122,240,.18);border-radius:8px;padding:8px 11px;line-height:1.55}',
+      '#s-perf .txf-align b{color:var(--blue,#1F7AF0)}',
+      '#s-perf .txf-align .rs{margin-top:4px;color:var(--ink-3)}',
+      '#s-perf .txf-spin{display:inline-block;width:11px;height:11px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:txfspin .7s linear infinite;vertical-align:-1px}',
+      '@keyframes txfspin{to{transform:rotate(360deg)}}',
+      /* --- F2: elizax 목표 초안 시트 --- */
+      '#s-perf .txf-ds{position:fixed;left:0;right:0;bottom:0;z-index:80;background:var(--card);border-top:1px solid var(--line);box-shadow:0 -12px 34px rgba(16,24,40,.16);display:none;flex-direction:column;max-height:64vh}',
+      '#s-perf .txf-ds.open{display:flex}',
+      '#s-perf .txf-dsh{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:12px 22px;border-bottom:1px solid var(--line)}',
+      '#s-perf .txf-dsh .tt{font-size:14px;font-weight:800;color:var(--ink)}',
+      '#s-perf .txf-dsh .x{margin-left:auto;color:var(--ink-4);cursor:pointer;font-size:15px;flex:none}',
+      '#s-perf .txf-dschip{font-size:10.5px;font-weight:800;border-radius:5px;padding:2px 7px;color:#356CB5;background:rgba(31,122,240,.1)}',
+      '#s-perf .txf-dschip.tmpl{color:#B45309;background:#FFF4E5}',
+      '#s-perf .txf-dsh .tools{font-size:11.5px;color:var(--ink-3);flex-basis:100%;line-height:1.55}',
+      '#s-perf .txf-dsh .tools b{color:var(--ink-2);font-weight:700}',
+      '#s-perf .txf-dsb{overflow-y:auto;padding:14px 22px;flex:1}',
+      '#s-perf .txf-dsc{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:9px;cursor:pointer}',
+      '#s-perf .txf-dsc:hover{background:var(--soft)}',
+      '#s-perf .txf-dsc input[type=checkbox]{width:15px;height:15px;accent-color:var(--blue);margin-top:2px;flex:none}',
+      '#s-perf .txf-dsc .bd{flex:1;min-width:0}',
+      '#s-perf .txf-dsc .lb{font-size:11px;font-weight:800;color:var(--ink-3);margin-bottom:4px}',
+      '#s-perf .txf-dsc .vv{font-size:13px;font-weight:700;color:var(--ink);line-height:1.5}',
+      '#s-perf .txf-dsc .df{font-size:12px;line-height:1.6}',
+      '#s-perf .txf-dsc .df .o{display:block;color:var(--ink-3);text-decoration:line-through}',
+      '#s-perf .txf-dsc .df .n{display:block;color:var(--ink);font-weight:700}',
+      '#s-perf .txf-dsc .mt{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}',
+      '#s-perf .txf-dsc .mc{font-size:10.5px;font-weight:700;color:var(--ink-2);background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:1px 7px}',
+      '#s-perf .txf-dsc .mc.w{color:#356CB5;background:rgba(31,122,240,.08);border-color:rgba(31,122,240,.2)}',
+      '#s-perf .txf-dsc .why{font-size:11.5px;color:var(--ink-2);margin-top:6px;line-height:1.55}',
+      '#s-perf .txf-dsc .wn{font-size:11px;color:#B45309;background:#FFF4E5;border-radius:5px;padding:3px 8px;margin-top:6px;line-height:1.5}',
+      '#s-perf .txf-dsnote{font-size:12px;color:var(--ink-3);line-height:1.6;padding:6px 2px}',
+      '#s-perf .txf-dserr{font-size:12.5px;color:#B42318;background:#FEF3F2;border:1px solid #FECDCA;border-radius:9px;padding:11px 13px;line-height:1.6}',
+      '#s-perf .txf-dsf{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:11px 22px;border-top:1px solid var(--line);background:var(--soft)}',
+      '#s-perf .txf-dsf .sp{margin-left:auto;display:flex;gap:8px}',
+      '#s-perf .txf-dsk{height:13px;border-radius:6px;background:linear-gradient(90deg,var(--line),var(--soft),var(--line));background-size:220% 100%;animation:txfsk 1.1s linear infinite;margin-bottom:8px}',
+      '@keyframes txfsk{to{background-position:-220% 0}}',
+      '#s-perf .txf-undo{position:fixed;left:50%;transform:translateX(-50%);bottom:26px;z-index:90;display:none;align-items:center;gap:12px;background:#1D2939;color:#fff;border-radius:10px;padding:11px 16px;font-size:12.5px;box-shadow:0 10px 26px rgba(16,24,40,.28)}',
+      '#s-perf .txf-undo.open{display:flex}',
+      '#s-perf .txf-undo .ub{border:1px solid rgba(255,255,255,.4);background:transparent;color:#fff;border-radius:7px;font-size:12px;font-weight:700;padding:5px 11px;cursor:pointer}',
       /* --- overlays --- */
       '#s-perf .txf-ov{position:fixed;left:0;right:0;top:60px;bottom:0;background:var(--soft);z-index:60;display:none;overflow-y:auto}',
       '#s-perf .txf-ov.open{display:block}',
@@ -257,6 +318,20 @@
       '#s-perf .orgcard.txf-hide-ctrl .orgctrl{display:none}',
       '#s-perf .orgcard.txf-nobar .txf-mem .membar,#s-perf .orgcard.txf-nobar .txf-mem .p{display:none}',
       /* modal/drawer content lives outside #s-perf — unscoped */
+      '.txf-carry-modal .ch{font-size:13px;font-weight:800;color:var(--ink)}',
+      '.txf-carry-modal .ch .sub{display:block;font-size:11px;font-weight:600;color:var(--ink-3);margin-top:2px}',
+      '.txf-carry-modal .txf-cv{border:1px solid var(--line-2,#F1F2F5);border-radius:9px;padding:9px 11px;margin-top:9px}',
+      '.txf-carry-modal .cvb{font-size:12.5px;color:var(--ink)}',
+      '.txf-carry-modal .cvb .gr{font-size:15px;font-weight:800}',
+      '.txf-carry-modal .cvn{font-size:11.5px;color:var(--ink-2);line-height:1.55;margin-top:4px}',
+      '.txf-carry-modal .cvs{font-size:10.5px;color:var(--ink-4);margin-top:6px}',
+      '.txf-carry-modal .pd{font-size:11px;color:var(--ink-4)}',
+      '.txf-carry-modal .cvk{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--line-2,#F1F2F5)}',
+      '.txf-carry-modal .cvk .nm{flex:1;min-width:0;font-size:11.5px;color:var(--ink-2);line-height:1.4}',
+      '.txf-carry-modal .cvk .ach{font-size:11px;font-weight:800;color:#B45309;flex:none}',
+      '.txf-carry-modal .cvbtn{flex:none;border:1px solid var(--line);background:var(--card);border-radius:6px;font-size:10.5px;font-weight:700;color:var(--ink-2);padding:3px 7px;cursor:pointer}',
+      '.txf-carry-modal .txf-src{display:inline-block;font-size:10px;font-weight:800;color:#356CB5;background:rgba(31,122,240,.08);border-radius:4px;padding:0 5px;cursor:pointer}',
+      '.txf-carry-modal .txf-carryai{width:100%;margin-top:12px;border:1.5px solid var(--purple,#7C3AED);color:var(--purple,#7C3AED);background:var(--card);font-size:12px;font-weight:700;padding:8px;border-radius:8px;cursor:pointer}',
       '.txf-rr{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line-2);font-size:13.5px}',
       '.txf-rr .no{width:20px;color:var(--ink-3);font-weight:700;flex:none}',
       '.txf-rr .tt{flex:1;font-weight:600;min-width:0}',
@@ -288,10 +363,22 @@
       var org = mine.filter(function (o) { return o.type === '조직'; }).length;
       var per = mine.filter(function (o) { return o.type === '개인'; }).length;
       var avg = mine.length ? mine.reduce(function (a, o) { return a + objProgress(o); }, 0) / mine.length : 0;
-      // fix 5: objective-level weight roll-up (equal split → sums to 100) + sum guard
-      var n = mine.length, base = n ? Math.floor(100 / n) : 0;
-      var weights = mine.map(function (_, i) { return i === n - 1 ? 100 - base * (n - 1) : base; });
-      var wsum = weights.reduce(function (a, b) { return a + b; }, 0);
+      // ④: 저장된 목표 가중치가 단일 원천 — 없는 목표만 잔여분 균등 폴백
+      var stored = mine.map(function (o) {
+        var w = parseFloat(o.weight);
+        return (isFinite(w) && w >= 0) ? w : null;
+      });
+      var unset = 0, used = 0;
+      stored.forEach(function (w) { if (w == null) unset++; else used += w; });
+      var rem = Math.max(0, 100 - used);
+      var wbase = unset ? Math.floor(rem / unset) : 0;
+      var wextra = rem - wbase * unset, ui = 0;
+      var weights = stored.map(function (w) {
+        if (w != null) return w;
+        ui++;
+        return wbase + (ui === unset ? wextra : 0);
+      });
+      var wsum = Math.round(weights.reduce(function (a, b) { return a + b; }, 0) * 10) / 10;
       var rows = mine.map(function (o, i) {
         var p = objProgress(o);
         var ks = krByObj[o.objective_id] || [];
@@ -770,21 +857,50 @@
      *  목표 생성 (obj_new) overlay — fix 2                           *
      * ============================================================= */
     var newOv, krSeq = 0;
+    var MODE_LABELS = ['달성률', '절대값', '구간', '여부'];
+    var CMP_LABELS = { yoy: '전년 실적', peer: '동료·직군 평균', market: '시장·고객 기준' };
+    /* 신규 KR 행 기본 가중치 = 잔여분 (100 하드코딩 폐지) */
+    function krWeightSum() {
+      if (!newOv) return 0;
+      var s = 0;
+      Array.prototype.forEach.call(newOv.querySelectorAll('.txf-krw'), function (i) { s += parseFloat(i.value) || 0; });
+      return s;
+    }
+    function nextKRWeight() {
+      if (!newOv || !newOv.querySelectorAll('.txf-kr').length) return 100;
+      var rem = 100 - krWeightSum();
+      return rem > 0 ? Math.round(rem) : 0;
+    }
     function krRowHTML(data) {
       krSeq++; data = data || {};
-      var id = 'k' + krSeq, modes = ['달성률', '절대값', '구간', '여부'];
-      return '<div class="txf-kr" data-kr="' + id + '">'
+      var id = 'k' + krSeq, modes = MODE_LABELS;
+      var wv = (data.weight == null || data.weight === '') ? nextKRWeight() : data.weight;
+      var modeIx = (typeof data.mode === 'number' && data.mode >= 0) ? data.mode : 0;
+      var srcs = data.sources || [];
+      var srcHTML = srcs.length
+        ? ' ' + srcs.map(function (s) {
+            return '<span class="txf-src" data-txf="src" data-sid="' + esc(s) + '" title="출처 원본 보기">' + esc(s) + '</span>';
+          }).join(' ')
+        : '';
+      var whyBody = data.why || (data.whyText ? esc(data.whyText) : '');
+      return '<div class="txf-kr" data-kr="' + id + '"'
+        + ' data-why="' + esc(data.whyText || '') + '"'
+        + ' data-jobtask="' + esc(data.jobTask || '') + '"'
+        + ' data-comp="' + esc(data.competencyId || '') + '"'
+        + ' data-sources="' + esc(srcs.join(',')) + '">'
         + '<div class="kh">핵심 성과 <span class="krn">' + '</span><span class="x" data-txf="kr-x" data-kr="' + id + '">✕</span></div>'
         + '<div class="txf-sub">성과 지표 <span style="color:var(--red)">*</span></div>'
         + '<input class="txf-inp" placeholder="성과지표를 입력합니다." value="' + esc(data.name || '') + '">'
         + '<div class="txf-sub">설명</div>'
-        + '<div class="txf-rte"><div class="txf-rtebar"><b>B</b><b>U</b><span>Aa</span><span>A</span><span><i>i</i></span><span>S</span><span>≔</span><span>⋮</span><span>¶</span><span>🔗</span><span>▤</span></div><textarea placeholder="성과지표에 대한 설명을 입력합니다. (필수 항목 아님)"></textarea></div>'
+        + '<div class="txf-rte"><div class="txf-rtebar"><b>B</b><b>U</b><span>Aa</span><span>A</span><span><i>i</i></span><span>S</span><span>≔</span><span>⋮</span><span>¶</span><span>🔗</span><span>▤</span></div><textarea placeholder="성과지표에 대한 설명을 입력합니다. (필수 항목 아님)">' + esc(data.desc || '') + '</textarea></div>'
         + '<div class="txf-sub">관리 방식</div>'
         + '<div class="txf-radios">' + modes.map(function (m, i) {
-            return '<label><input type="radio" name="mode-' + id + '"' + ((data.mode || 0) === i ? ' checked' : '') + '> ' + m + '</label>';
+            return '<label><input type="radio" name="mode-' + id + '"' + (modeIx === i ? ' checked' : '') + '> ' + m + '</label>';
           }).join('') + '</div>'
+        + '<div class="txf-sub">목표값 <span style="color:var(--red)">*</span></div>'
+        + '<input class="txf-inp txf-krtv" placeholder="달성 판정 기준값 — 예: 90%, 12회, 5일 이내" value="' + esc(data.target || '') + '">'
         + '<div class="txf-sub">핵심 성과 가중치 <span style="color:var(--red)">*</span></div>'
-        + '<input class="txf-inp txf-krw" type="number" min="0" max="100" value="' + (data.weight != null ? data.weight : 100) + '">'
+        + '<input class="txf-inp txf-krw" type="number" min="0" max="100" value="' + wv + '">'
         + '<div class="txf-sub">난이도 · 난이도 근거</div>'
         + '<div class="txf-diffrow"><select class="txf-inp txf-krdiff">'
         + ['S', 'A', 'B'].map(function (d) {
@@ -798,8 +914,56 @@
         + '</select>'
         + '<input class="txf-inp txf-krdiffwhy" placeholder="난이도 근거 수치·설명 — 예: 전년 실적 대비 +30% 상향" value="' + esc(data.diffwhy || '') + '"></div>'
         + '<div class="txf-diffwhy">ⓘ 무엇과 비교해 어려운지(작년 실적·동료 수준) 남겨야 평가 시점의 난이도 반영이 가능합니다.</div>'
-        + (data.why ? '<div class="txf-krwhy">✦ 이 핵심 성과의 근거 — ' + data.why + '</div>' : '')
+        + ((whyBody || srcHTML) ? '<div class="txf-krwhy">✦ 이 핵심 성과의 근거 — ' + whyBody
+            + (data.jobTask ? ' <b>· 직무 과업 ' + esc(data.jobTask) + '</b>' : '')
+            + (data.competencyId ? ' <b>· 역량 ' + esc(data.competencyId) + '</b>' : '')
+            + srcHTML + '</div>' : '')
         + '</div>';
+    }
+    /* KR 행 DOM → 데이터 (krRowHTML의 입력 포맷과 동일 — 스냅샷·저장 공용) */
+    function readKRRow(row) {
+      function q(s) { var e = row.querySelector(s); return e ? e : null; }
+      var nameInp = q('input.txf-inp'), ta = q('textarea'), tv = q('.txf-krtv'), w = q('.txf-krw');
+      var d1 = q('.txf-krdiff'), d2 = q('.txf-krdiffbasis'), d3 = q('.txf-krdiffwhy');
+      var mode = 0;
+      Array.prototype.forEach.call(row.querySelectorAll('input[type="radio"]'), function (r, i) { if (r.checked) mode = i; });
+      return {
+        name: nameInp ? nameInp.value : '',
+        desc: ta ? ta.value : '',
+        target: tv ? tv.value : '',
+        mode: mode,
+        weight: w ? (parseFloat(w.value) || 0) : 0,
+        diff: d1 ? d1.value : 'A',
+        difftype: d2 ? d2.value : 'yoy',
+        diffwhy: d3 ? d3.value : '',
+        whyText: row.getAttribute('data-why') || '',
+        jobTask: row.getAttribute('data-jobtask') || '',
+        competencyId: row.getAttribute('data-comp') || '',
+        sources: (row.getAttribute('data-sources') || '').split(',').filter(Boolean)
+      };
+    }
+    function weightGaugeHTML() {
+      return '<div class="txf-wsum" data-txf-wsum><span class="lb">가중치 합계</span>'
+        + '<span class="tr"><i style="width:0%"></i></span><span class="vv">0%</span>'
+        + '<button class="eq" data-txf="kr-even">균등 배분</button></div>';
+    }
+    function refreshWeightGauge() {
+      if (!newOv) return;
+      var g = newOv.querySelector('[data-txf-wsum]'); if (!g) return;
+      var s = Math.round(krWeightSum() * 10) / 10;
+      var ok = s === 100;
+      g.classList.toggle('bad', !ok);
+      var i = g.querySelector('.tr i'); if (i) i.style.width = Math.max(0, Math.min(100, s)) + '%';
+      var v = g.querySelector('.vv'); if (v) v.textContent = s + '%' + (ok ? ' ✓' : ' (100% 필요)');
+    }
+    function evenWeights() {
+      if (!newOv) return 0;
+      var inps = newOv.querySelectorAll('.txf-krw');
+      var n = inps.length; if (!n) return 0;
+      var base = Math.floor(100 / n), rem = 100 - base * n;
+      Array.prototype.forEach.call(inps, function (inp, i) { inp.value = base + (i < rem ? 1 : 0); });
+      refreshWeightGauge();
+      return n;
     }
     function renumberKR() {
       if (!newOv) return;
@@ -807,20 +971,38 @@
       rows.forEach(function (r, i) { var n = r.querySelector('.krn'); if (n) n.textContent = (i + 1); });
       var stepKR = newOv.querySelector('[data-step="kr"]');
       if (stepKR) stepKR.firstChild && (stepKR.querySelector('.lbl').textContent = '핵심 성과 ' + rows.length);
+      refreshWeightGauge();
     }
     /* ---- 저장 게이트 (F2·F3) — bad 린트·근거 없는 S 난이도는 사유 없이 저장 불가 ---- */
     function gateIssues() {
       var out = [];
-      if (!window.EZLint || !newOv) return out;
+      if (!newOv) return out;
       var rows = newOv.querySelectorAll('.txf-kr');
-      Array.prototype.forEach.call(rows, function (row, i) {
-        var kr = EZLint.krFromRow(row);
-        if (!String(kr.name || '').trim()) return;
-        var bad = EZLint.lintKR(kr).filter(function (h) { return h.cls === 'bad'; });
-        if (kr.diff === 'S' && !String(kr.basisVal || '').trim())
-          bad.push({ id: 'diff-s', tag: 'S 난이도 근거 없음', tip: 'S 난이도는 비교 근거가 필요합니다', word: '난이도 S' });
-        if (bad.length) out.push({ idx: i + 1, name: kr.name, kr: kr, hits: bad });
+      if (window.EZLint) {
+        Array.prototype.forEach.call(rows, function (row, i) {
+          var kr = EZLint.krFromRow(row);
+          var tvEl = row.querySelector('.txf-krtv');
+          if (tvEl) kr.targetValue = tvEl.value;   // 전용 목표값 필드 신설 — name 폴백 대신 실제 값으로 린트
+          if (!String(kr.name || '').trim()) return;
+          var bad = EZLint.lintKR(kr).filter(function (h) { return h.cls === 'bad'; });
+          if (kr.diff === 'S' && !String(kr.basisVal || '').trim())
+            bad.push({ id: 'diff-s', tag: 'S 난이도 근거 없음', tip: 'S 난이도는 비교 근거가 필요합니다', word: '난이도 S' });
+          if (bad.length) out.push({ idx: i + 1, name: kr.name, kr: kr, hits: bad });
+        });
+      }
+      /* E: 가중치 합 검사 — 합계 100%가 아니면 저장 게이트로 */
+      var named = 0;
+      Array.prototype.forEach.call(rows, function (row) {
+        var n = row.querySelector('input.txf-inp');
+        if (n && n.value.trim()) named++;
       });
+      var sum = Math.round(krWeightSum() * 10) / 10;
+      if (named && sum !== 100) {
+        out.push({ idx: 0, name: '핵심 성과 가중치 합계 ' + sum + '%', kr: null, hits: [{
+          id: 'w-sum', tag: '가중치 합 100% 아님', word: sum + '%',
+          tip: '핵심 성과 가중치 합계는 100%여야 합니다 — [균등 배분] 버튼으로 맞출 수 있습니다'
+        }] });
+      }
       return out;
     }
     function finishNewSave(reason) {
@@ -840,21 +1022,43 @@
         var nmInp = newOv && newOv.querySelector('[data-txf="new-name"]');
         var title = nmInp ? nmInp.value.trim() : '';
         if (title) {
+          var dscEl = newOv.querySelector('[data-txf="new-desc"]');
+          var psEl = newOv.querySelector('[data-txf="new-parent"]');
+          var owEl = newOv.querySelector('[data-txf="new-objw"]');
+          var pid = psEl ? psEl.value : '';
+          var parent = pid ? objById[pid] : null;
           var oid = 'OBJ-NEW-' + Date.now();
-          var no = { objective_id: oid, title: title, owner_emp_id: CU.emp_id,
-                     org_id: cuEmp.org_id, progress: 0, status: '진행중', _session: true };
+          var no = { objective_id: oid, title: title,
+                     description: dscEl ? dscEl.value.trim() : '',
+                     owner_emp_id: CU.emp_id, org_id: cuEmp.org_id, type: '개인',
+                     parent_objective_id: pid || null,
+                     period: (parent && parent.period) || 'FY2026',
+                     strategy_theme_id: (parent && parent.strategy_theme_id) || cuEmp.strategy_theme_id || null,
+                     alignment_reason: (pid && pid === alignFor) ? alignReason : '',
+                     weight: owEl ? (parseFloat(owEl.value) || 0) : null,
+                     progress: 0, status: '진행중', _session: true };
+          if (cuEmp.jobProfileId) no.job_ref = { jobProfileId: cuEmp.jobProfileId, task_area: '' };
           objs.push(no); objById[oid] = no;
           (objByOwner[CU.emp_id] = objByOwner[CU.emp_id] || []).push(no);
           (objByOrg[no.org_id] = objByOrg[no.org_id] || []).push(no);
           var rows = newOv.querySelectorAll('.txf-kr');
           Array.prototype.forEach.call(rows, function (row, i) {
-            var kr = window.EZLint ? EZLint.krFromRow(row) : { name: '' };
-            if (!String(kr.name || '').trim()) return;
-            var wInp = row.querySelector('.txf-krw');
-            var nk = { kr_id: oid + '-KR' + (i + 1), objective_id: oid, name: kr.name,
-                       weight: (wInp ? (parseFloat(wInp.value) || 0) : 0) + '%',
-                       progress: 0, current_value: 0, difficulty: kr.diff || 'A',
-                       difficulty_basis: kr.basisVal || '' };
+            var d = readKRRow(row);
+            if (!String(d.name || '').trim()) return;
+            if (no.job_ref && !no.job_ref.task_area && d.jobTask) no.job_ref.task_area = d.jobTask;
+            var nk = { kr_id: oid + '-KR' + (i + 1), objective_id: oid, name: d.name,
+                       description: d.desc || '',
+                       target_value: d.target || '',
+                       mode: MODE_LABELS[d.mode] || MODE_LABELS[0],
+                       weight: d.weight + '%',
+                       progress: 0, current_value: 0, difficulty: d.diff || 'A',
+                       /* 목표 상세 렌더(.label/.note)와 정합 — 문자열이 아니라 객체 */
+                       difficulty_basis: { label: CMP_LABELS[d.difftype] || CMP_LABELS.yoy,
+                                           note: d.diffwhy || '', compare: d.difftype || 'yoy' },
+                       why: d.whyText || '',
+                       sources: d.sources || [],
+                       competency_id: d.competencyId || null };
+            if (d.jobTask) nk.job_task_ref = { task_area: d.jobTask };
             krs.push(nk);
             (krByObj[oid] = krByObj[oid] || []).push(nk);
           });
@@ -872,7 +1076,7 @@
         '<div style="font-weight:700;margin-bottom:9px">이 표현은 평가 시점에 측정할 수 없습니다</div>'
         + issues.map(function (it) {
             return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:7px;font-size:12.5px">'
-              + '<b>핵심 성과 ' + it.idx + '</b> · ' + esc(it.name)
+              + '<b>' + (it.idx ? '핵심 성과 ' + it.idx : '폼 전체') + '</b> · ' + esc(it.name)
               + '<div style="margin-top:4px">'
               + it.hits.map(function (h) {
                   return '<div style="color:var(--red)">· [' + esc(h.tag) + ']'
@@ -880,13 +1084,13 @@
                 }).join('')
               + '</div></div>';
           }).join('')
-        + '<div style="font-size:12px;color:var(--ink-3);margin:10px 0 5px">그대로 저장하려면 사유가 필요합니다 — 사유는 성과 히스토리에 기록되어 평가 시점에 함께 조회됩니다.</div>'
+        + '<div style="font-size:12px;color:var(--ink-3);margin:10px 0 5px">그대로 저장하려면 사유가 필요합니다 — 사유는 성과 기록에 저장되어 평가 시점에 함께 조회됩니다.</div>'
         + '<textarea class="txf-inp" data-gate-reason placeholder="그대로 저장하는 사유 (필수)" style="width:100%;min-height:58px;resize:vertical"></textarea>';
       TX.modal({
         title: '저장 전 확인 — 측정 가능성', body: body,
         actions: [
           { label: '✦ elizax로 정제', kind: 'ghost', onClick: function () {
-              var lines = issues.map(function (it) {
+              var lines = issues.filter(function (it) { return it.kr; }).map(function (it) {
                 return '- ' + it.name + ' (관리 방식: ' + (MODES[it.kr.mode] || '미선택') + ' · 난이도 ' + (it.kr.diff || '-')
                   + (it.kr.basisVal ? ' · 비교 근거: ' + it.kr.basisVal : ' · 비교 근거 없음') + ')';
               }).join('\n');
@@ -905,9 +1109,12 @@
     }
     /* ---- F6: 이어받은 출발점 — 작년 기록 실데이터 (currentUser 기준) ---- */
     var GR_COL = { S: '#C2410C', A: '#1F7AF0', B: '#4B5563', C: '#E23B3B' };
-    var prevEval = (D.evaluationsPrev || []).filter(function (x) { return x.emp_id === CU.emp_id; })[0] || null;
+    /* F3: 원본 레코드 우선, 없으면 EZTools.deriveCarry 파생분(전 직원 성립) */
+    var _c0 = safeCarry() || {};
+    var prevEval = (D.evaluationsPrev || []).filter(function (x) { return x.emp_id === CU.emp_id; })[0] || _c0.evaluation || null;
     var prevFbs = (D.feedbackHistory || []).filter(function (x) { return x.emp_id === CU.emp_id; }).slice(0, 2);
-    var jobChg = (cuEmp.jobHistory || [])[0] || null;
+    if (!prevFbs.length && _c0.feedback) prevFbs = _c0.feedback.slice(0, 2);
+    var jobChg = (cuEmp.jobHistory || [])[0] || _c0.job_change || null;
     var srcMap = {};   // 출처 ID → 원본 요약 (칩 클릭 시 표시)
     if (prevEval) srcMap[prevEval.evaluation_id] = 'FY2025 평가 — 등급 ' + prevEval.grade + (prevEval.score != null ? ' · ' + prevEval.score + '점' : '') + '. ' + (prevEval.rationale_summary || '');
     prevFbs.forEach(function (f) { srcMap[f.fb_id] = 'FY2025 피드백(' + (f.source_type === 'leader' ? '리더' : '동료') + ') — ' + f.summary; });
@@ -926,18 +1133,22 @@
         } }));
       } catch (e) { /* 원장 부재 — 무해화 */ }
     }
-    function carryPanelHTML() {
+    /* F3: 항목별 체크박스 — 체크된 항목만 [✦ AI 초안에 반영]의 컨텍스트로 들어간다 */
+    function cvCheck(key, label) {
+      return '<label class="txf-cvck"><input type="checkbox" data-carry="' + key + '" checked>' + esc(label) + '</label>';
+    }
+    function carryPanelHTML(cls) {
       if (!prevEval && !prevFbs.length && !jobChg) return '';
-      var h = '<div class="txf-carry"><div class="ch">↩ 이어받은 출발점<span class="sub">작년 기록 — 올해 목표의 재료</span></div>';
+      var h = '<div class="txf-carry' + (cls ? ' ' + cls : '') + '"><div class="ch">↩ 이어받은 출발점<span class="sub">작년 기록 — 올해 목표의 재료 · 체크한 항목만 AI 초안에 넣습니다</span></div>';
       if (prevEval) {
-        h += '<div class="txf-cv"><div class="cvt">작년 등급</div>'
+        h += '<div class="txf-cv">' + cvCheck('grade', '작년 등급')
           + '<div class="cvb"><b class="gr" style="color:' + (GR_COL[prevEval.grade] || 'var(--ink)') + '">' + esc(prevEval.grade) + '</b> '
           + (prevEval.score != null ? prevEval.score + '점' : '') + ' <span class="pd">' + esc(prevEval.period || '') + '</span></div>'
           + (prevEval.rationale_summary ? '<div class="cvn">' + esc(prevEval.rationale_summary) + '</div>' : '')
           + '<div class="cvs">출처' + srcChip(prevEval.evaluation_id) + '</div></div>';
         var und = undoneKRs();
         if (und.length) {
-          h += '<div class="txf-cv"><div class="cvt">미완 핵심 성과 ' + und.length + '건</div>'
+          h += '<div class="txf-cv">' + cvCheck('undone', '미완 핵심 성과 ' + und.length + '건')
             + und.map(function (k, i) {
                 return '<div class="cvk"><span class="nm">' + esc(k.name) + '</span><span class="ach">' + k.achievement_pct + '%</span>'
                   + '<button class="cvbtn" data-txf="carry-kr" data-ci="' + i + '">그대로 이월</button></div>';
@@ -946,51 +1157,690 @@
         }
       }
       if (prevFbs.length) {
-        h += '<div class="txf-cv"><div class="cvt">피드백 요지</div>'
+        h += '<div class="txf-cv">' + cvCheck('feedback', '피드백 요지 ' + prevFbs.length + '건')
           + prevFbs.map(function (f) { return '<div class="cvn">· ' + esc(f.summary) + srcChip(f.fb_id) + '</div>'; }).join('')
           + '</div>';
       }
       if (jobChg) {
-        h += '<div class="txf-cv"><div class="cvt">직무 변경</div>'
+        h += '<div class="txf-cv">' + cvCheck('jobchg', '직무 변경')
           + '<div class="cvb">' + esc(jobChg.prev_label) + ' → <b>' + esc(jobChg.new_label) + '</b> <span class="pd">' + esc(jobChg.period || '') + '</span></div>'
           + (jobChg.note ? '<div class="cvn">' + esc(jobChg.note) + '</div>' : '')
           + '<div class="cvs">출처' + srcChip('JOB-CHG', '직무 전환') + '</div></div>';
       }
-      h += '<button class="txf-carryai" data-txf="ai">✦ AI 초안에 반영</button></div>';
+      /* 상단 [✦ AI 목표 추천](data-txf="ai")=전체 컨텍스트 / 여기=체크한 carry 항목만 */
+      h += '<button class="txf-carryai" data-txf="ai-carry">✦ 체크한 항목만 AI 초안에 반영</button></div>';
       return h;
     }
+    /* F3: 진입 배너 — 이어받은 재료를 폼 최상단에서 먼저 알린다(조용한 증발 금지) */
+    function carryBannerHTML() {
+      var c = safeCarry();
+      var bits = [];
+      if (c && !c.first_cycle) {
+        if (c.evaluation) bits.push('등급 ' + c.evaluation.grade + (c.derived ? '(이력 파생)' : ''));
+        if (c.undone_krs && c.undone_krs.length) bits.push('미완 KR ' + c.undone_krs.length + '건');
+        if (c.feedback && c.feedback.length) bits.push('피드백 ' + c.feedback.length + '건');
+        if (c.job_change) bits.push('직무 변경 1건');
+      }
+      if (!bits.length) {
+        return '<div class="txf-cbn first">🌱 <b>첫 사이클</b> — 이어받을 작년 기록이 없어 직무 기준(주요 과업·기대 스킬)으로 시작합니다.</div>';
+      }
+      var per = (c.evaluation && c.evaluation.period) || 'FY2025';
+      return '<div class="txf-cbn">↩ <span><b>' + esc(per) + '</b>에서 이어받음 — ' + esc(bits.join(' · ')) + '</span>'
+        + '<button class="cbtn" data-txf="carry-review">출발점 검토</button></div>';
+    }
+    /* F3: 체크 상태 → carry 필터 (null이면 전체 컨텍스트) */
+    var carryFilter = null;
+    function carryPicksFrom() {
+      var out = { grade: true, undone: true, feedback: true, jobchg: true };
+      if (!newOv) return out;
+      ['grade', 'undone', 'feedback', 'jobchg'].forEach(function (key) {
+        var cb = newOv.querySelector('.txf-carry [data-carry="' + key + '"]');
+        if (cb) out[key] = !!cb.checked;
+      });
+      return out;
+    }
+    function filteredCarry() {
+      var c = safeCarry();
+      if (!c || !carryFilter) return c;
+      return {
+        first_cycle: c.first_cycle, derived: c.derived,
+        evaluation: carryFilter.grade ? c.evaluation : null,
+        undone_krs: carryFilter.undone ? (c.undone_krs || []) : [],
+        feedback: carryFilter.feedback ? (c.feedback || []) : [],
+        job_change: carryFilter.jobchg ? c.job_change : null,
+        filtered: true
+      };
+    }
+    /* F3: 출처 칩 → 원장 딥링크(있으면), 없으면 요약 토스트 폴백 */
+    function openSrc(sid) {
+      if (!sid) return;
+      var summary = srcMap[sid];
+      if (window.EZLedger && typeof EZLedger.openPanel === 'function') {
+        try {
+          EZLedger.openPanel(sid);
+          if (summary) TX.toast && TX.toast('[' + sid + '] ' + summary);
+          return;
+        } catch (e) { /* 원장 열기 실패 — 토스트 폴백 */ }
+      }
+      TX.toast && TX.toast(summary
+        ? '[' + sid + '] ' + summary
+        : '[' + sid + '] 원본 요약을 찾지 못했습니다 — 출처 ID는 감사 기록에 그대로 남습니다.');
+    }
+    /* F3: 미완 KR 그대로 이월 (진척 개념 없는 폼 — name 프리필) */
+    function carryTo(i) {
+      var und = undoneKRs();
+      var ck = und[i];
+      var list = newOv && newOv.querySelector('[data-txf="kr-list"]');
+      if (!ck || !list || !prevEval) return;
+      list.insertAdjacentHTML('beforeend', krRowHTML({
+        name: ck.name, weight: '', diff: 'A', difftype: 'yoy',
+        diffwhy: '작년 달성률 ' + ck.achievement_pct + '% — 미완 과제 이월',
+        why: '작년 미완 핵심 성과 이월 (달성률 ' + ck.achievement_pct + '%)' + srcChip(prevEval.evaluation_id)
+      }));
+      renumberKR();
+      emitGoalCtx('goal.carryover', '작년 미완 핵심 성과 이월 — ' + ck.name,
+        '출처 ' + prevEval.evaluation_id + ' · 작년 달성률 ' + ck.achievement_pct + '%');
+      TX.toast && TX.toast('작년 미완 핵심 성과를 이월했습니다. 출처가 함께 기록됩니다.', 'ok');
+    }
+    /* F3: 좁은 화면(≤1100px)에서 carry 패널이 숨겨졌을 때의 검토 경로 */
+    function openCarryReview() {
+      var panel = newOv && newOv.querySelector('.txf-carry');
+      if (panel && panel.offsetParent !== null) {
+        panel.scrollIntoView({ block: 'nearest' });
+        panel.classList.add('hl');
+        setTimeout(function () { panel.classList.remove('hl'); }, 1600);
+        return;
+      }
+      var html = carryPanelHTML('txf-carry-modal');
+      if (!html) { TX.toast && TX.toast('이어받을 작년 기록이 없습니다 — 직무 기준으로 시작합니다.'); return; }
+      var body = document.createElement('div');
+      body.innerHTML = '<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:10px">체크를 해제한 항목은 AI 초안 컨텍스트에서 제외됩니다.</div>'
+        + html;
+      var m = body.querySelector('.txf-carry');
+      if (m) { m.style.width = '100%'; m.style.border = 'none'; m.style.padding = '0'; }
+      /* 모달 체크 상태를 원본 패널에 동기화 — 필터의 단일 원천은 패널 */
+      body.addEventListener('change', function (e) {
+        var cb = e.target && e.target.closest ? e.target.closest('[data-carry]') : null;
+        if (!cb || !newOv) return;
+        var src = newOv.querySelector('.txf-carry:not(.txf-carry-modal) [data-carry="' + cb.getAttribute('data-carry') + '"]');
+        if (src) src.checked = cb.checked;
+      });
+      /* 모달은 #s-perf 밖 — sec 위임이 닿지 않으므로 여기서 직접 결선 */
+      var handle = null;
+      body.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('[data-txf]') : null;
+        if (!b) return;
+        var k = b.getAttribute('data-txf');
+        e.preventDefault();
+        if (k === 'src') { openSrc(b.getAttribute('data-sid')); return; }
+        if (k === 'carry-kr') { carryTo(parseInt(b.getAttribute('data-ci'), 10)); return; }
+        if (k === 'ai-carry') {
+          carryFilter = carryPicksFrom();
+          if (handle && handle.close) handle.close();
+          startDraft(true);
+          return;
+        }
+      });
+      handle = TX.modal && TX.modal({ title: '이어받은 출발점 검토', body: body, actions: [{ label: '닫기', kind: 'ghost' }] });
+    }
+    /* ============================================================= *
+     *  F1 · F2 — 구조화 JSON 초안 + 초안 시트(EzDraftSheet)            *
+     * ============================================================= */
+    /* ---- 상위 목표 후보: 사용자 조직 체인 스코프 (전사 무필터 해소) ---- */
+    function parentCandidates() {
+      var chain = ancestorOrgs(cuEmp.org_id);   // [본인 조직, 상위, ... 루트]
+      var list = objs.filter(function (o) { return o.type === '조직' && chain.indexOf(o.org_id) >= 0; });
+      list.sort(function (a, b) { return chain.indexOf(a.org_id) - chain.indexOf(b.org_id); });
+      return list;
+    }
+    function parentSelectHTML() {
+      var list = parentCandidates(), scoped = true;
+      if (!list.length) { list = objs.filter(function (o) { return o.type === '조직'; }).slice(0, 40); scoped = false; }
+      var html = '<option value="">상위 목표를 선택합니다.</option>'
+        + list.map(function (o) {
+            var og = orgById[o.org_id] || {};
+            return '<option value="' + o.objective_id + '">' + esc((og.name ? og.name + ' · ' : '') + o.title) + '</option>';
+          }).join('');
+      return { html: html, scoped: scoped, count: list.length };
+    }
+    var alignReason = '', alignFor = '';
+    function refreshAlignNote() {
+      if (!newOv) return;
+      var el = newOv.querySelector('[data-txf="new-align"]'); if (!el) return;
+      var ps = newOv.querySelector('[data-txf="new-parent"]');
+      var pid = ps ? ps.value : '';
+      if (!pid) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      var p = objById[pid] || {}, og = orgById[p.org_id] || {};
+      var showReason = alignReason && alignFor === pid;
+      el.style.display = '';
+      el.innerHTML = '<b>정렬 사유</b> · ' + esc(og.name || '상위 조직') + '의 「' + esc(p.title || pid) + '」에 연계됩니다.'
+        + (showReason ? '<div class="rs">✦ ' + esc(alignReason) + '</div>' : '');
+    }
+
+    /* ---- 폼 스냅샷 · 복원 (Undo) ---- */
+    function formSnapshot() {
+      if (!newOv) return null;
+      var nm = newOv.querySelector('[data-txf="new-name"]');
+      var ds = newOv.querySelector('[data-txf="new-desc"]');
+      var ps = newOv.querySelector('[data-txf="new-parent"]');
+      return {
+        name: nm ? nm.value : '', desc: ds ? ds.value : '', parent: ps ? ps.value : '',
+        align: alignReason, alignFor: alignFor,
+        krs: Array.prototype.map.call(newOv.querySelectorAll('.txf-kr'), readKRRow)
+      };
+    }
+    function restoreSnapshot(s) {
+      if (!s || !newOv) return;
+      var nm = newOv.querySelector('[data-txf="new-name"]');
+      var ds = newOv.querySelector('[data-txf="new-desc"]');
+      var ps = newOv.querySelector('[data-txf="new-parent"]');
+      if (nm) nm.value = s.name;
+      if (ds) ds.value = s.desc;
+      if (ps) ps.value = s.parent;
+      alignReason = s.align || ''; alignFor = s.alignFor || '';
+      var list = newOv.querySelector('[data-txf="kr-list"]');
+      if (list) list.innerHTML = (s.krs.length ? s.krs : [{ weight: 100 }]).map(function (d) { return krRowHTML(d); }).join('');
+      renumberKR();
+      refreshAlignNote();
+    }
+    var undoEl = null, undoTimer = null, undoSnap = null;
+    function showUndo(snap, n) {
+      if (!newOv) return;
+      undoSnap = snap;
+      if (!undoEl) { undoEl = document.createElement('div'); undoEl.className = 'txf-undo'; newOv.appendChild(undoEl); }
+      undoEl.innerHTML = '<span>초안 ' + n + '개 항목을 적용했습니다.</span>'
+        + '<button class="ub" data-txf="ds-undo">되돌리기</button>';
+      undoEl.classList.add('open');
+      if (undoTimer) clearTimeout(undoTimer);
+      undoTimer = setTimeout(function () { if (undoEl) undoEl.classList.remove('open'); undoSnap = null; }, 8000);
+    }
+    function hideUndo() { if (undoTimer) clearTimeout(undoTimer); if (undoEl) undoEl.classList.remove('open'); undoSnap = null; }
+
+    /* ---- 이어받은 출발점: 전 직원 런타임 파생 (EZTools.deriveCarry) ---- */
+    var _carry;
+    function safeCarry() {
+      if (_carry !== undefined) return _carry;
+      try { _carry = (window.EZTools && EZTools.deriveCarry) ? EZTools.deriveCarry(cuEmp) : null; }
+      catch (e) { _carry = null; }
+      return _carry;
+    }
+
+    /* ---- 파싱: 첫 { ~ 마지막 } 슬라이스 후 JSON.parse ---- */
+    function parseDraftJSON(text) {
+      var s = String(text == null ? '' : text);
+      var a = s.indexOf('{'), b = s.lastIndexOf('}');
+      if (a < 0 || b <= a) return null;
+      try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; }
+    }
+
+    /* ---- 검증 레이어 (순수 함수) — 적용 전 정규화 + 경고 수집 ---- */
+    function validateDraft(raw) {
+      var W = [];
+      raw = raw || {};
+      var o = raw.objective || {};
+      var obj = {
+        name: String(o.name == null ? '' : o.name).trim(),
+        description: String(o.description == null ? '' : o.description).trim(),
+        parent_objective_id: String(o.parent_objective_id == null ? '' : o.parent_objective_id).trim(),
+        alignment_reason: String(o.alignment_reason == null ? '' : o.alignment_reason).trim()
+      };
+      if (obj.parent_objective_id && !objById[obj.parent_objective_id]) {
+        W.push('제안한 상위 목표 ID(' + obj.parent_objective_id + ')가 데이터에 없어 무시했습니다.');
+        obj.parent_objective_id = '';
+      }
+      var list = (raw.keyResults || raw.key_results || []);
+      if (!Array.isArray(list)) list = [];
+      list = list.filter(function (k) { return k && String(k.name == null ? '' : k.name).trim(); });
+      if (list.length > 5) { W.push('핵심 성과 ' + list.length + '건 중 5건까지만 사용합니다.'); list = list.slice(0, 5); }
+      if (list.length && list.length < 3) W.push('핵심 성과가 ' + list.length + '건입니다 — 3~5건을 권장합니다.');
+      var krs = list.map(function (k) {
+        var w = [];
+        var mode = MODE_LABELS.indexOf(String(k.mode == null ? '' : k.mode).trim());
+        if (mode < 0) { if (k.mode) w.push('관리 방식 "' + k.mode + '"을(를) 인식하지 못해 달성률로 설정'); mode = 0; }
+        var diff = String(k.difficulty == null ? '' : k.difficulty).trim().toUpperCase();
+        if (['S', 'A', 'B'].indexOf(diff) < 0) { w.push('난이도 값이 없거나 규격 밖이라 A로 설정'); diff = 'A'; }
+        var basis = k.difficulty_basis || {};
+        var cmp = String(basis.compare == null ? '' : basis.compare).trim();
+        if (!CMP_LABELS[cmp]) cmp = 'yoy';
+        var note = String(basis.note == null ? '' : basis.note).trim();
+        if (!note) w.push('난이도 근거(비교 수치)가 비어 있습니다');
+        var tv = String(k.target_value == null ? '' : k.target_value).trim();
+        if (!tv) w.push('목표값이 없습니다 — 판정 기준 수치를 채워주세요');
+        var wt = parseFloat(k.weight);
+        if (!isFinite(wt) || wt < 0) wt = 0;
+        var srcs = Array.isArray(k.sources) ? k.sources.map(function (x) { return String(x).trim(); }).filter(Boolean) : [];
+        return {
+          name: String(k.name).trim(),
+          desc: String(k.description == null ? '' : k.description).trim(),
+          target: tv, mode: mode, weight: wt, diff: diff, difftype: cmp, diffwhy: note,
+          whyText: String(k.why == null ? '' : k.why).trim(),
+          jobTask: String(k.job_task_ref == null ? '' : k.job_task_ref).trim(),
+          competencyId: String(k.competency_id == null ? '' : k.competency_id).trim(),
+          sources: srcs, warnings: w
+        };
+      });
+      /* 가중치 합 100 비례 정규화 + 반올림 보정 */
+      if (krs.length) {
+        var sum = 0; krs.forEach(function (k) { sum += k.weight; });
+        var norm;
+        if (sum <= 0) {
+          var base = Math.floor(100 / krs.length), rem0 = 100 - base * krs.length;
+          norm = krs.map(function (_, i) { return base + (i < rem0 ? 1 : 0); });
+          W.push('가중치가 없어 균등 배분했습니다.');
+        } else {
+          norm = krs.map(function (k) { return Math.round(k.weight * 100 / sum); });
+          var got = 0; norm.forEach(function (n) { got += n; });
+          norm[norm.length - 1] = Math.max(0, norm[norm.length - 1] + (100 - got));
+          if (Math.round(sum) !== 100) W.push('가중치 합 ' + Math.round(sum) + '% → 100% 기준으로 정규화했습니다.');
+        }
+        krs.forEach(function (k, i) { k.weight = norm[i]; });
+      }
+      return { objective: obj, keyResults: krs, warnings: W };
+    }
+
+    /* ---- 폴백 템플릿 — AI 결과와 동일한 JSON 구조 (시트가 단일 포맷만 소비) ---- */
+    function cannedDraft() {
+      var jp = (window.EZJob && EZJob.profileOf) ? EZJob.profileOf(cuEmp)
+               : ((D.jobProfiles || {})[cuEmp.jobProfileId] || null);
+      var areas = jp ? Object.keys(jp.tasks || {}) : [];
+      function area(i) { return areas.length ? areas[i % areas.length] : (cuEmp.jobTitle || '담당 직무'); }
+      var topComp = (jp && jp.competency_profile && jp.competency_profile[0]) || null;
+      var compId = topComp ? topComp.dimension_id : '';
+      var c = filteredCarry();   // F3: carry 체크 필터 반영 (전체 컨텍스트면 필터 없음)
+      var evId = (c && c.evaluation && c.evaluation.evaluation_id) || '';
+      var fbId = (c && c.feedback && c.feedback[0] && c.feedback[0].fb_id) || '';
+      var ps = newOv && newOv.querySelector('[data-txf="new-parent"]');
+      var pid = ps ? ps.value : '';
+      var ptitle = (ps && pid && ps.options[ps.selectedIndex]) ? ps.options[ps.selectedIndex].text : '';
+      var undone = (c && c.undone_krs && c.undone_krs[0]) || null;
+      return {
+        objective: {
+          name: 'FY2026 ' + area(0) + ' 품질·리드타임 개선',
+          description: area(0) + ' 과업의 산출물 품질과 처리 속도를 수치로 관리하고, 분기 단위로 검증합니다.',
+          parent_objective_id: pid,
+          alignment_reason: ptitle ? ('상위 목표 「' + ptitle + '」의 실행 단위를 본인 직무 과업으로 분해했습니다.') : ''
+        },
+        keyResults: [
+          { name: (undone ? undone.name + ' (이월)' : '신규 기능 기획서 사용자 검증 통과율 90% 달성'),
+            description: '분기별 검증 회차 기준, 승인 건수 / 제출 건수로 산출합니다.',
+            target_value: '90%', mode: '달성률', weight: 40, difficulty: 'A',
+            difficulty_basis: { compare: 'yoy', note: '전년 통과율 실적 대비 +15%p 상향' },
+            why: '직무 과업 「' + area(0) + '」의 핵심 산출물 품질 지표' + (undone ? ' · 작년 미완 과제 이월(달성률 ' + undone.achievement_pct + '%)' : ''),
+            job_task_ref: area(0), competency_id: compId,
+            sources: [evId].filter(Boolean) },
+          { name: '기획 산출물 평균 리드타임 5일 이내 단축',
+            description: '요건 접수일 ~ 최종 산출물 승인일의 영업일 평균.',
+            target_value: '5일', mode: '절대값', weight: 30, difficulty: 'S',
+            difficulty_basis: { compare: 'peer', note: '동일 직군 평균 6.5일 대비 1.5일 단축' },
+            why: '직무 과업 「' + area(1) + '」 처리 속도' + (fbId ? ' · 작년 피드백 보완' : ''),
+            job_task_ref: area(1), competency_id: compId,
+            sources: [fbId].filter(Boolean) },
+          { name: '분기별 사용자 인터뷰 12회 실시 및 인사이트 공유',
+            description: '분기 3회 × 4분기, 회차별 요약을 팀 위키에 게시하면 완료로 판정합니다.',
+            target_value: '12회', mode: '여부', weight: 30, difficulty: 'B',
+            difficulty_basis: { compare: 'market', note: '전년 수준 유지 — 고객 접점 안정 운영' },
+            why: '직무 과업 「' + area(2) + '」 고객 이해 기반 확보',
+            job_task_ref: area(2), competency_id: compId, sources: [] }
+        ]
+      };
+    }
+
+    /* ---- 프롬프트 ---- */
+    var DRAFT_SYSTEM =
+      'You are elizax, 성과관리 코치. 반드시 도구로 실제 데이터를 확인한 뒤에만 제안한다. 추정·창작 금지. ' +
+      '사용 가능한 도구는 get_job_profile, get_org_objectives, get_prev_cycle, get_strategy_themes, get_objectives 뿐이며 그 외 도구는 호출하지 않는다. ' +
+      '최종 답변은 설명·머리말·마크다운 코드펜스 없이 JSON 객체 하나만 출력한다. 스키마: ' +
+      '{"objective":{"name","description","parent_objective_id","alignment_reason"},' +
+      '"keyResults":[{"name","description","target_value","mode","weight","difficulty","difficulty_basis":{"compare","note"},' +
+      '"why","job_task_ref","competency_id","sources"}]} — ' +
+      'mode는 "달성률"|"절대값"|"구간"|"여부" 중 하나, difficulty는 "S"|"A"|"B", difficulty_basis.compare는 "yoy"|"peer"|"market", ' +
+      'weight는 숫자이며 합계 100, keyResults는 3~5개. target_value에는 달성 판정 수치를 반드시 넣는다. ' +
+      'job_task_ref에는 조회한 직무 과업명을, competency_id에는 역량 ID를, sources에는 근거가 된 실제 레코드 ID(평가·피드백 ID)를 배열로 넣는다. ' +
+      '모든 문자열은 한국어로 쓴다.';
+    function draftPromptText() {
+      var ps = newOv && newOv.querySelector('[data-txf="new-parent"]');
+      var pid = ps ? ps.value : '';
+      var ptitle = (ps && pid && ps.options[ps.selectedIndex]) ? ps.options[ps.selectedIndex].text : '';
+      var nm = newOv && newOv.querySelector('[data-txf="new-name"]');
+      var ds = newOv && newOv.querySelector('[data-txf="new-desc"]');
+      var L = [];
+      L.push('대상: ' + (cuEmp.name || '') + ' (' + (CU.emp_id || '') + ') · ' + (cuEmp.jobTitle || '직무 미상')
+        + ' · ' + (cuEmp.orgName || (orgById[cuEmp.org_id] || {}).name || '조직 미상'));
+      L.push('역할 관점: ' + roleKey() + ' (member=본인 목표, leader=팀 성과 견인, hr/exec=전사 정합성 관점으로 문장 톤을 맞춰라)');
+      if (pid) L.push('선택된 상위 목표: 「' + ptitle + '」 (' + pid + ') — parent_objective_id에 이 ID를 그대로 쓰고, alignment_reason에 이 상위 목표와의 정렬 근거를 써라.');
+      else L.push('상위 목표 미선택 — get_org_objectives로 소속 조직 체인(팀→본부→전사)의 상위 목표 후보를 조회해 가장 적합한 것을 골라 parent_objective_id에 넣어라.');
+      L.push('get_job_profile로 내 직무의 주요 과업·역량·스킬을 조회하고, 각 KR의 job_task_ref에 실제 과업명, competency_id에 실제 역량 ID를 인용하라.');
+      L.push('get_strategy_themes로 전략 테마·KPI를 확인해 상위 정합성을 점검하라.');
+      var c = filteredCarry();   // F3: 체크된 carry 항목만 컨텍스트로 주입
+      var noCarry = !c || (!c.evaluation && !(c.undone_krs || []).length && !(c.feedback || []).length && !c.job_change);
+      if (noCarry) {
+        L.push('이어받은 기록: ' + ((c && c.filtered) ? '사용자가 이어받기 항목을 모두 해제함' : '없음(첫 사이클)')
+          + ' — 직무 기준(주요 과업·기대 스킬)을 출발점으로 설계하라.');
+      } else {
+        if (c.filtered) L.push('※ 사용자가 선택한 이어받기 항목만 아래에 제공한다 — 제공되지 않은 작년 기록은 추정하지 말 것.');
+        if (c.evaluation) L.push('작년 평가[' + c.evaluation.evaluation_id + '] 등급 ' + c.evaluation.grade
+          + (c.evaluation.score != null ? ' · ' + c.evaluation.score + '점' : '')
+          + (c.evaluation.rationale_summary ? ' · ' + c.evaluation.rationale_summary : '')
+          + (c.derived ? ' (이력에서 파생)' : ''));
+        if (c.undone_krs && c.undone_krs.length) L.push('작년 미완 핵심성과: '
+          + c.undone_krs.map(function (k) { return k.name + '(달성률 ' + k.achievement_pct + '%)'; }).join(' / ')
+          + ' — 이월 여부를 판단하고 이월 시 sources에 평가 ID를 넣어라.');
+        if (c.feedback && c.feedback.length) L.push('작년 피드백: '
+          + c.feedback.map(function (f) { return '[' + f.fb_id + '] ' + f.summary; }).join(' / ')
+          + ' — 보완 KR을 만들면 sources에 피드백 ID를 넣어라.');
+        if (c.job_change) L.push('직무 변경: ' + c.job_change.prev_label + ' → ' + c.job_change.new_label
+          + (c.job_change.note ? ' (' + c.job_change.note + ')' : '') + ' — 새 직무 적합성을 반영하라.');
+        L.push('반영 우선순위: ① 미완 과제 이월 ② 피드백 보완 ③ 새 직무 적합성.');
+      }
+      if (nm && nm.value.trim()) L.push('사용자가 이미 입력한 목표명: ' + nm.value.trim() + ' — 이 의도를 유지하며 다듬어라.');
+      if (ds && ds.value.trim()) L.push('사용자가 이미 입력한 목표 설명: ' + ds.value.trim());
+      var existing = [];
+      if (newOv) Array.prototype.forEach.call(newOv.querySelectorAll('.txf-kr'), function (row) {
+        var n = row.querySelector('input.txf-inp');
+        if (n && n.value.trim()) existing.push(n.value.trim());
+      });
+      if (existing.length) L.push('사용자가 이미 입력한 핵심성과: ' + existing.join(' / ') + ' — 중복 없이 보완하라.');
+      L.push('위 재료로 목표 1건과 핵심성과 3~5건의 초안을 JSON으로만 답하라.');
+      return L.join('\n');
+    }
+
+    /* ---- 초안 시트 ---- */
+    var dsEl = null, dsState = null;
+    function dsEnsure() {
+      if (dsEl && dsEl.parentNode) return dsEl;
+      dsEl = document.createElement('div');
+      dsEl.className = 'txf-ds';
+      dsEl.setAttribute('data-txf-ds', '1');
+      (newOv || sec).appendChild(dsEl);
+      return dsEl;
+    }
+    function dsClose() { if (dsEl) dsEl.classList.remove('open'); }
+    function dsOpen() { dsEnsure().classList.add('open'); dsRender(); }
+    function setAIBusy(on) {
+      if (!newOv) return;
+      Array.prototype.forEach.call(newOv.querySelectorAll('[data-txf="ai"],[data-txf="ai-carry"]'), function (b) {
+        b.disabled = !!on;
+        if (on) {
+          if (b.getAttribute('data-txf-lbl') == null) b.setAttribute('data-txf-lbl', b.innerHTML);
+          b.innerHTML = '<span class="txf-spin"></span> 초안 생성 중…';
+        } else if (b.getAttribute('data-txf-lbl') != null) {
+          b.innerHTML = b.getAttribute('data-txf-lbl');
+        }
+      });
+    }
+    function curFormVals() {
+      var nm = newOv && newOv.querySelector('[data-txf="new-name"]');
+      var ds = newOv && newOv.querySelector('[data-txf="new-desc"]');
+      var ps = newOv && newOv.querySelector('[data-txf="new-parent"]');
+      var names = [];
+      if (newOv) Array.prototype.forEach.call(newOv.querySelectorAll('.txf-kr'), function (row) {
+        var n = row.querySelector('input.txf-inp');
+        if (n && n.value.trim()) names.push(n.value.trim());
+      });
+      return {
+        name: nm ? nm.value.trim() : '', desc: ds ? ds.value.trim() : '',
+        parent: ps ? ps.value : '',
+        parentText: (ps && ps.value && ps.options[ps.selectedIndex]) ? ps.options[ps.selectedIndex].text : '',
+        krNames: names
+      };
+    }
+    function dsPick(id, def) {
+      if (dsState.picks[id] == null) dsState.picks[id] = def;
+      return !!dsState.picks[id];
+    }
+    function dsFieldCard(id, label, proposed, current) {
+      var diff = !!(current && current !== String(proposed));
+      var on = dsPick(id, !diff);   // 기존 값이 있으면 기본 미선택
+      return '<label class="txf-dsc" data-dsc="' + id + '">'
+        + '<input type="checkbox" data-dspick="' + id + '"' + (on ? ' checked' : '') + '>'
+        + '<div class="bd"><div class="lb">' + esc(label) + '</div>'
+        + (diff
+            ? '<div class="df"><span class="o">현재 · ' + esc(current) + '</span><span class="n">제안 · ' + esc(proposed) + '</span></div>'
+            : '<div class="vv">' + esc(proposed) + '</div>')
+        + '</div></label>';
+    }
+    function dsKRCard(i, k, dup) {
+      var id = 'kr-' + i;
+      var on = dsPick(id, !dup);
+      var chips = '<span class="mc w">가중치 ' + k.weight + '%</span>'
+        + '<span class="mc">목표값 ' + esc(k.target || '미입력') + '</span>'
+        + '<span class="mc">' + esc(MODE_LABELS[k.mode]) + '</span>'
+        + '<span class="mc">난이도 ' + esc(k.diff) + ' · ' + esc(CMP_LABELS[k.difftype]) + '</span>'
+        + (k.jobTask ? '<span class="mc">직무 과업 ' + esc(k.jobTask) + '</span>' : '')
+        + (k.competencyId ? '<span class="mc">역량 ' + esc(k.competencyId) + '</span>' : '')
+        + k.sources.map(function (s) { return '<span class="mc">출처 ' + esc(s) + '</span>'; }).join('');
+      return '<label class="txf-dsc" data-dsc="' + id + '">'
+        + '<input type="checkbox" data-dspick="' + id + '"' + (on ? ' checked' : '') + '>'
+        + '<div class="bd"><div class="lb">핵심 성과 ' + (i + 1) + (dup ? ' · 유사 항목이 이미 있습니다' : '') + '</div>'
+        + (dup
+            ? '<div class="df"><span class="o">현재 · ' + esc(dup) + '</span><span class="n">제안 · ' + esc(k.name) + '</span></div>'
+            : '<div class="vv">' + esc(k.name) + '</div>')
+        + '<div class="mt">' + chips + '</div>'
+        + (k.diffwhy ? '<div class="why">난이도 근거 · ' + esc(k.diffwhy) + '</div>' : '')
+        + (k.whyText ? '<div class="why">✦ ' + esc(k.whyText) + '</div>' : '')
+        + (k.warnings.length ? '<div class="wn">⚠ ' + k.warnings.map(esc).join(' · ') + '</div>' : '')
+        + '</div></label>';
+    }
+    function dsBodyHTML() {
+      if (dsState.busy) {
+        return '<div class="txf-dsk" style="width:62%"></div><div class="txf-dsk" style="width:88%"></div>'
+          + '<div class="txf-dsk" style="width:74%"></div>'
+          + '<div class="txf-dsnote">elizax가 직무 프로파일 · 상위 목표 · 작년 기록을 조회하는 중입니다.</div>';
+      }
+      if (dsState.error) {
+        return '<div class="txf-dserr"><b>생성 실패</b> · ' + esc(dsState.error)
+          + '<div style="margin-top:6px;color:var(--ink-3);font-weight:400">임의로 채우지 않았습니다 — 다시 시도하거나 템플릿 초안으로 이어갈 수 있습니다.</div></div>';
+      }
+      var d = dsState.draft;
+      if (!d) return '<div class="txf-dsnote">표시할 초안이 없습니다.</div>';
+      var cur = curFormVals();
+      var html = '';
+      if (d.objective.name) html += dsFieldCard('obj-name', '목표명', d.objective.name, cur.name);
+      if (d.objective.description) html += dsFieldCard('obj-desc', '목표 설명', d.objective.description, cur.desc);
+      if (d.objective.parent_objective_id && d.objective.parent_objective_id !== cur.parent) {
+        var po = objById[d.objective.parent_objective_id] || {};
+        html += dsFieldCard('obj-parent', '상위 목표 연계', po.title || d.objective.parent_objective_id, cur.parentText);
+      }
+      if (d.objective.alignment_reason) {
+        html += '<div class="txf-dsnote">🧭 정렬 사유 · ' + esc(d.objective.alignment_reason) + '</div>';
+      }
+      html += d.keyResults.map(function (k, i) { return dsKRCard(i, k, cur.krNames[i] || ''); }).join('');
+      if (d.warnings.length) html += '<div class="txf-dsnote">⚠ ' + d.warnings.map(esc).join('<br>⚠ ') + '</div>';
+      return html;
+    }
+    function dsFootHTML() {
+      if (dsState.busy) {
+        return '<span class="txf-dsnote" style="padding:0">근거를 확인하는 중…</span>'
+          + '<div class="sp"><button class="ghost-btn" data-txf="ds-stop">중지</button></div>';
+      }
+      if (dsState.error) {
+        return '<div class="sp"><button class="ghost-btn" data-txf="ds-close">닫기</button>'
+          + '<button class="ghost-btn" data-txf="ds-template">템플릿으로 계속</button>'
+          + '<button class="btn-blue" data-txf="ds-retry">다시 시도</button></div>';
+      }
+      var d = dsState.draft;
+      var n = 0, wsum = 0;
+      if (d) d.keyResults.forEach(function (k, i) {
+        if (dsState.picks['kr-' + i]) { n++; wsum += k.weight; }
+      });
+      ['obj-name', 'obj-desc', 'obj-parent'].forEach(function (id) { if (dsState.picks[id]) n++; });
+      var wok = !n || wsum === 100 || wsum === 0;
+      return '<span style="font-size:12px;color:' + (wok ? 'var(--ink-3)' : 'var(--red,#E23B3B)') + ';font-weight:700">'
+        + '적용 시 가중치 합 ' + wsum + '%' + (wok ? '' : ' — 적용 후 [균등 배분]으로 맞추세요') + '</span>'
+        + '<div class="sp"><button class="ghost-btn" data-txf="ds-close">닫기</button>'
+        + '<button class="ghost-btn" data-txf="ds-retry">✦ 다시 생성</button>'
+        + '<button class="ghost-btn" data-txf="ds-apply-all">전체 적용</button>'
+        + '<button class="btn-blue" data-txf="ds-apply-sel"' + (n ? '' : ' disabled') + '>선택 항목 적용 (' + n + ')</button></div>';
+    }
+    function dsRender() {
+      if (!dsEl || !dsState) return;
+      var chip = dsState.live
+        ? '<span class="txf-dschip">실AI 연결</span>'
+        : '<span class="txf-dschip tmpl">템플릿</span>';
+      var tools = dsState.tools.length
+        ? '<div class="tools">확인한 데이터: <b>' + dsState.tools.map(esc).join('</b> · <b>') + '</b></div>'
+        : (dsState.live ? '<div class="tools">확인한 데이터: 조회 대기 중…</div>' : '<div class="tools">확인한 데이터: 로컬 직무·작년 기록 (AI 미연결 — 템플릿 초안)</div>');
+      dsEl.innerHTML = '<div class="txf-dsh"><span class="tt">✦ elizax 목표 초안</span>' + chip
+        + '<span class="x" data-txf="ds-close">✕</span>' + tools + '</div>'
+        + '<div class="txf-dsb">' + dsBodyHTML() + '</div>'
+        + '<div class="txf-dsf">' + dsFootHTML() + '</div>';
+    }
+    function dsRefreshFoot() {
+      if (!dsEl || !dsState) return;
+      var f = dsEl.querySelector('.txf-dsf');
+      if (f) f.innerHTML = dsFootHTML();
+    }
+    function dsApply(all) {
+      var d = dsState && dsState.draft;
+      if (!d) return;
+      var snap = formSnapshot();
+      var applied = 0;
+      function want(id) { return all || !!dsState.picks[id]; }
+      if (d.objective.name && want('obj-name')) {
+        var nm = newOv.querySelector('[data-txf="new-name"]');
+        if (nm) { nm.value = d.objective.name; applied++; }
+      }
+      if (d.objective.description && want('obj-desc')) {
+        var ds2 = newOv.querySelector('[data-txf="new-desc"]');
+        if (ds2) { ds2.value = d.objective.description; applied++; }
+      }
+      if (d.objective.parent_objective_id && want('obj-parent')) {
+        var ps = newOv.querySelector('[data-txf="new-parent"]');
+        if (ps) {
+          var has = Array.prototype.some.call(ps.options, function (op) { return op.value === d.objective.parent_objective_id; });
+          if (!has) {
+            var po = objById[d.objective.parent_objective_id] || {};
+            var og = orgById[po.org_id] || {};
+            ps.insertAdjacentHTML('beforeend', '<option value="' + esc(po.objective_id) + '">'
+              + esc((og.name ? og.name + ' · ' : '') + (po.title || po.objective_id)) + '</option>');
+          }
+          ps.value = d.objective.parent_objective_id;
+          applied++;
+        }
+      }
+      if (d.objective.alignment_reason) {
+        var psx = newOv.querySelector('[data-txf="new-parent"]');
+        alignReason = d.objective.alignment_reason;
+        alignFor = psx ? psx.value : '';
+      }
+      refreshAlignNote();
+      var picked = d.keyResults.filter(function (k, i) { return all || dsState.picks['kr-' + i]; });
+      if (picked.length) {
+        var list = newOv.querySelector('[data-txf="kr-list"]');
+        if (list) {
+          /* 이름 없는 빈 행 제거 후 append — 추천이 핵심 성과 1부터 채워지도록 */
+          Array.prototype.forEach.call(list.querySelectorAll('.txf-kr'), function (row) {
+            var n2 = row.querySelector('input.txf-inp');
+            if (n2 && !n2.value.trim()) row.remove();
+          });
+          picked.forEach(function (k) { list.insertAdjacentHTML('beforeend', krRowHTML(k)); });
+          applied += picked.length;
+          renumberKR();
+        }
+      }
+      /* 원장 기록 — 조건 없이 항상 (carryCtx 게이팅 제거) */
+      var srcAll = [];
+      picked.forEach(function (k) { (k.sources || []).forEach(function (s) { if (srcAll.indexOf(s) < 0) srcAll.push(s); }); });
+      emitGoalCtx('goal.ai.draft',
+        'elizax 목표 초안 적용 — ' + applied + '개 항목 (핵심 성과 ' + picked.length + '건)',
+        (dsState.live ? '실AI' : '템플릿') + ' · 확인한 데이터: ' + (dsState.tools.join(', ') || '로컬 직무·작년 기록')
+          + (srcAll.length ? ' · 출처: ' + srcAll.join(' · ') : ''));
+      dsClose();
+      showUndo(snap, applied);
+      TX.toast && TX.toast('초안 ' + applied + '개 항목을 폼에 반영했습니다. 8초 안에 되돌릴 수 있습니다.', 'ok');
+    }
+    function startDraft(force) {
+      if (!newOv) return;
+      if (dsState && dsState.busy) { dsOpen(); return; }
+      if (!force && dsState && dsState.draft) { dsOpen(); return; }   // 재클릭 = 기존 시트 재오픈(중복 삽입 차단)
+      hideUndo();
+      var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
+      dsState = { busy: true, aborted: false, live: live, tools: [], draft: null, error: null, picks: {} };
+      setAIBusy(true);
+      dsOpen();
+      if (!live) {
+        setTimeout(function () {
+          if (!dsState || dsState.aborted) return;
+          dsState.busy = false;
+          dsState.draft = validateDraft(cannedDraft());
+          setAIBusy(false); dsRender();
+        }, 280);
+        return;
+      }
+      EZAI.agent({
+        maxTurns: 5, maxTokens: 1400,
+        system: DRAFT_SYSTEM,
+        messages: [{ role: 'user', content: draftPromptText() }],
+        onTool: function (name) {
+          if (!dsState || dsState.aborted) return;
+          var lb = (window.EZTools && EZTools.labelOf) ? EZTools.labelOf(name) : name;
+          if (dsState.tools.indexOf(lb) < 0) { dsState.tools.push(lb); dsRender(); }
+        },
+        onDone: function (text) {
+          if (!dsState || dsState.aborted) return;
+          dsState.busy = false; setAIBusy(false);
+          var raw = parseDraftJSON(text);
+          var v = raw ? validateDraft(raw) : null;
+          if (!v || !v.keyResults.length) {
+            dsState.error = raw ? 'JSON은 읽었지만 사용할 수 있는 핵심 성과가 없습니다.'
+                                : '응답을 목표 초안 형식(JSON)으로 읽지 못했습니다.';
+          } else dsState.draft = v;
+          dsRender();
+        },
+        onError: function (msg) {
+          if (!dsState || dsState.aborted) return;
+          dsState.busy = false; setAIBusy(false);
+          dsState.error = 'elizax 호출에 실패했습니다 — ' + (msg || '연결 오류');
+          dsRender();
+        }
+      });
+    }
+    function useTemplateDraft() {
+      if (!dsState) dsState = { busy: false, aborted: false, live: false, tools: [], draft: null, error: null, picks: {} };
+      dsState.busy = false; dsState.error = null; dsState.live = false;
+      dsState.picks = {};
+      dsState.draft = validateDraft(cannedDraft());
+      setAIBusy(false);
+      dsRender();
+    }
+
     function buildNewOverlay() {
       newOv = document.createElement('div');
       newOv.className = 'txf-ov'; newOv.setAttribute('data-txf-ov', 'new');
-      var objOpts = '<option value="">상위 목표를 선택합니다.</option>'
-        + objs.filter(function (o) { return o.type === '조직'; }).map(function (o) {
-            return '<option value="' + o.objective_id + '">' + esc(o.title) + '</option>';
-          }).join('');
+      var parentSel = parentSelectHTML();
       newOv.innerHTML =
         '<div class="txf-ovhead"><button class="bk" data-txf="new-close">←</button><h2>목표 생성</h2>'
         + '<div class="sp"><button class="ghost-btn" data-txf="new-close">취소</button>'
         + '<button class="ghost-btn" data-txf="new-temp">임시저장</button>'
         + '<button class="btn-blue" data-txf="new-save">생성</button></div></div>'
         + '<div class="txf-ovbody"><div class="txf-form"><div class="txf-fmain">'
+        + carryBannerHTML()
         + '<div class="txf-frow0">* 입력 필수 항목입니다.<div class="sp">'
         + '<label class="txf-ck" style="color:var(--ink-2);font-weight:600"><input type="checkbox" data-txf="new-adv"> 고급 설정</label>'
-        + '<button class="txf-ai" data-txf="ai">✦ AI 목표 추천</button></div></div>'
+        /* 라벨은 실제 동작과 일치해야 한다 — 이 버튼은 KR만 추천하지 않고
+           목표명·설명·KR을 모두 담은 초안을 만든다 */
+        + '<button class="txf-ai" data-txf="ai">✦ 초안 생성</button></div></div>'
         + '<div class="txf-fcard"><div class="txf-lb">상위 목표 연계 <span style="color:var(--ink-4)">?</span>'
         + '<span class="mm" data-txf="new-map">목표 맵</span></div>'
-        + '<select class="txf-inp" style="appearance:auto">' + objOpts + '</select>'
-        + '<div class="txf-help">ⓘ 목표 맵을 클릭할 경우 목표 맵을 확인하고 상위 목표를 선택할 수 있습니다.</div>'
+        + '<select class="txf-inp" data-txf="new-parent" style="appearance:auto">' + parentSel.html + '</select>'
+        + '<div class="txf-help">ⓘ ' + (parentSel.scoped
+            ? '내 소속 조직 체인(팀→본부→전사)의 상위 목표 ' + parentSel.count + '건만 표시합니다.'
+            : '소속 조직 체인에 조직 목표가 없어 전체 조직 목표를 표시합니다.')
+        + ' 목표 맵에서 상위 목표를 확인할 수 있습니다.</div>'
+        + '<div class="txf-align" data-txf="new-align"></div>'
         + '<div class="txf-lb" style="margin-top:20px">목표명 <span class="req">*</span></div>'
         + '<input class="txf-inp" data-txf="new-name" placeholder="목표 이름을 입력합니다.">'
         + '<div class="txf-lb" style="margin-top:20px">목표 설명</div>'
-        + '<div class="txf-rte"><div class="txf-rtebar"><b>B</b><b>U</b><span>Aa</span><span>A</span><span><i>i</i></span><span>S</span><span>≔</span><span>⋮</span><span>¶</span><span>🔗</span><span>▤</span></div><textarea placeholder="목표 설명을 입력합니다."></textarea></div>'
+        + '<div class="txf-rte"><div class="txf-rtebar"><b>B</b><b>U</b><span>Aa</span><span>A</span><span><i>i</i></span><span>S</span><span>≔</span><span>⋮</span><span>¶</span><span>🔗</span><span>▤</span></div><textarea data-txf="new-desc" placeholder="목표 설명을 입력합니다."></textarea></div>'
         + '</div>'
         + '<div class="txf-fcard"><div class="txf-lb">핵심 성과 <span class="req">*</span></div>'
         + '<label class="txf-ck" style="margin-bottom:6px"><input type="checkbox" checked> 핵심 성과 가중치를 설정합니다.</label>'
-        + '<div data-txf="kr-list">' + krRowHTML({ weight: 100 }) + '</div>'
-        + '<button class="txf-addkr" data-txf="add-kr">＋ 핵심 성과 추가</button></div>'
+        + '<div data-txf="kr-list">' + krRowHTML({}) + '</div>'
+        + '<button class="txf-addkr" data-txf="add-kr">＋ 핵심 성과 추가</button>'
+        + weightGaugeHTML() + '</div>'
         + '<div class="txf-fcard"><div class="txf-lb">목표 가중치 <span class="req">*</span></div>'
         + '<label class="txf-ck" style="margin-bottom:8px;color:var(--ink-3)"><input type="checkbox" checked disabled> 목표 가중치를 설정합니다.</label>'
-        + '<input class="txf-inp" type="number" placeholder="목표 가중치를 입력합니다." value="100"></div>'
+        + '<input class="txf-inp" data-txf="new-objw" type="number" min="0" max="100" placeholder="목표 가중치를 입력합니다." value="100"></div>'
         + '</div>'
         + '<div style="flex:none;display:flex;flex-direction:column;gap:14px">'
         + carryPanelHTML()
@@ -1006,36 +1856,96 @@
       sec.appendChild(newOv);
       // D: 상위 목표 연계 — 조직 상위 목표를 합리적 기본값으로 자동 선택(사용자가 변경 가능)
       var defParent = pickParentObjective();
-      if (defParent) {
-        var psel = newOv.querySelector('.txf-fcard select');
-        if (psel) psel.value = defParent.objective_id;
+      var psel = newOv.querySelector('[data-txf="new-parent"]');
+      if (defParent && psel) {
+        var ok = Array.prototype.some.call(psel.options, function (op) { return op.value === defParent.objective_id; });
+        if (ok) psel.value = defParent.objective_id;
       }
       renumberKR();
+      refreshAlignNote();
     }
     function openNew() { if (!newOv) buildNewOverlay(); newOv.classList.add('open'); }
-    function closeNew() { if (newOv) newOv.classList.remove('open'); }
+
+    /* ---------- ⑥: 직무 과업 → KR 행 추가 (tx_jobcontext.js가 렌더하는 [KR로] 버튼) ---------- */
+    function addKRFromTask(area, task) {
+      area = String(area == null ? '' : area).trim();
+      task = String(task == null ? '' : task).trim();
+      if (!area && !task) return;
+      openNew();   // 목표 생성 오버레이가 닫혀 있으면 먼저 연다
+      var list = newOv && newOv.querySelector('[data-txf="kr-list"]');
+      if (!list) return;
+      /* 이름 없는 빈 행은 치우고 append — 과업이 핵심 성과 1번부터 채워지도록 */
+      Array.prototype.forEach.call(list.querySelectorAll('.txf-kr'), function (row) {
+        var n = row.querySelector('input.txf-inp');
+        if (n && !n.value.trim()) row.remove();
+      });
+      list.insertAdjacentHTML('beforeend', krRowHTML({
+        name: task || area,
+        weight: '',                     // 잔여분 자동 배분(nextKRWeight)
+        diff: 'A', difftype: 'yoy',
+        jobTask: area,                  // 저장 시 job_task_ref.task_area로 보존
+        whyText: '직무 과업 「' + (task || area) + '」에서 도출 — 목표값·판정 기준을 채워야 저장됩니다'
+      }));
+      renumberKR();
+      var rows = list.querySelectorAll('.txf-kr');
+      var last = rows[rows.length - 1];
+      if (last) {
+        last.scrollIntoView({ block: 'nearest' });
+        var inp = last.querySelector('input.txf-inp');
+        if (inp) inp.focus();
+      }
+      emitGoalCtx('goal.jobtask.kr', '직무 과업에서 핵심 성과 추가 — ' + (task || area),
+        '직무 영역 ' + (area || '미상') + ' · 목표값·판정 기준은 사용자가 입력');
+      TX.toast && TX.toast('직무 과업을 핵심 성과 행으로 추가했습니다. 목표값·판정 기준을 채워주세요.', 'ok');
+    }
+    function closeNew() { if (newOv) newOv.classList.remove('open'); dsClose(); hideUndo(); }
 
     /* ============================================================= *
      *  목표 가중치 설정 modal — fix 12                                *
      * ============================================================= */
     function openWeightEditor() {
       var mine = myObjectives();
+      if (!mine.length) { TX.toast && TX.toast('가중치를 설정할 내 목표가 없습니다.', 'warn'); return; }
       var target = mine[0];
-      var ks = target ? (krByObj[target.objective_id] || []) : [];
       var body = document.createElement('div');
-      var rowsHTML = ks.map(function (k, i) {
-        return '<label class="tx-field"><span>' + esc(k.name) + '</span>'
-          + '<input type="number" class="txf-we" data-i="' + i + '" min="0" max="100" value="' + wnum(k) + '" style="text-align:right"></label>';
-      }).join('');
-      body.innerHTML = '<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:10px">'
-        + esc(target ? target.title : '목표') + ' — 핵심 성과 가중치는 합계 100%가 되어야 합니다.</div>'
-        + (rowsHTML || '<div style="color:var(--ink-3)">가중치를 설정할 핵심 성과가 없습니다.</div>')
-        + '<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px;font-weight:800">합계 <span class="txf-wsum">100</span>%</div>';
+      function sumNow() {
+        var s = 0;
+        body.querySelectorAll('.txf-we').forEach(function (i) { s += parseFloat(i.value) || 0; });
+        return Math.round(s * 10) / 10;
+      }
       function recalc() {
-        var s = 0; body.querySelectorAll('.txf-we').forEach(function (i) { s += parseFloat(i.value) || 0; });
-        var el = body.querySelector('.txf-wsum'); if (el) { el.textContent = s; el.style.color = s === 100 ? 'var(--green)' : 'var(--red)'; }
+        var s = sumNow();
+        var el = body.querySelector('.txf-wesum');
+        if (el) { el.textContent = s; el.style.color = s === 100 ? 'var(--green)' : 'var(--red)'; }
+      }
+      function rowsHTML() {
+        var ks = krByObj[target.objective_id] || [];
+        if (!ks.length) return '<div style="color:var(--ink-3);font-size:13px">가중치를 설정할 핵심 성과가 없습니다.</div>';
+        return ks.map(function (k) {
+          return '<label class="tx-field"><span>' + esc(k.name) + '</span>'
+            + '<input type="number" class="txf-we" data-kid="' + esc(k.kr_id) + '" min="0" max="100" value="' + wnum(k) + '" style="text-align:right"></label>';
+        }).join('');
+      }
+      function draw() {
+        body.innerHTML = '<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:8px">가중치를 설정할 목표를 선택하세요 — 핵심 성과 가중치는 합계 100%가 되어야 합니다.</div>'
+          + '<select class="txf-inp" data-we-obj style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit;font-size:13px;margin-bottom:12px;appearance:auto">'
+          + mine.map(function (o) {
+              return '<option value="' + esc(o.objective_id) + '"' + (o.objective_id === target.objective_id ? ' selected' : '') + '>'
+                + esc(o.title) + '</option>';
+            }).join('')
+          + '</select>'
+          + rowsHTML()
+          + '<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px;font-weight:800">합계 <span class="txf-wesum">0</span>%</div>';
+        recalc();
       }
       body.addEventListener('input', recalc);
+      body.addEventListener('change', function (e) {
+        var sel = e.target && e.target.closest ? e.target.closest('[data-we-obj]') : null;
+        if (!sel) return;
+        target = objById[sel.value] || target;
+        draw();
+      });
+      draw();
       TX.modal && TX.modal({
         title: '목표 가중치 설정', body: body,
         actions: [
@@ -1051,13 +1961,28 @@
               return false;
             } },
           { label: '저장', kind: 'primary', onClick: function () {
-              var s = 0; body.querySelectorAll('.txf-we').forEach(function (i) { s += parseFloat(i.value) || 0; });
+              var s = sumNow();
               if (s !== 100) { TX.toast && TX.toast('가중치 합계가 100%가 되어야 합니다. (현재 ' + s + '%)', 'warn'); return false; }
-              TX.toast && TX.toast('가중치를 저장했습니다.', 'ok');
+              /* ④: 토스트만 띄우던 자리 — 실제 KR 레코드에 기록('40%' 문자열 포맷 유지) */
+              var map = {};
+              (krByObj[target.objective_id] || []).forEach(function (k) { map[k.kr_id] = k; });
+              var n = 0;
+              body.querySelectorAll('.txf-we').forEach(function (inp) {
+                var k = map[inp.getAttribute('data-kid')];
+                if (!k) return;
+                k.weight = (parseFloat(inp.value) || 0) + '%';
+                n++;
+              });
+              renderGoalBody();
+              if (gdOv && gdOv.classList.contains('open') && gdOv.getAttribute('data-oid') === target.objective_id) {
+                openGoalDetail(target.objective_id);
+              }
+              emitGoalCtx('goal.weight.save', '핵심 성과 가중치 변경 — ' + target.title,
+                n + '개 항목 · 합계 100% (세션 반영 — 새로고침 시 초기화)');
+              TX.toast && TX.toast('가중치를 저장했습니다. (' + n + '개 항목 · 목표에 반영)', 'ok');
             } }
         ]
       });
-      setTimeout(recalc, 0);
     }
 
     /* ============================================================= *
@@ -1090,6 +2015,7 @@
       return out;
     }
     /* ---------- fix 18: 체크인 승인 플로우 (실앱 패턴) + AI 진척 감지 ---------- */
+    var TODAY = '2026-07-15';   // 데모 기준일 — 경과일·기록 시각의 단일 기준
     function ckKey(oid) { return 'txf_ckreq_' + oid; }
     function ckPending(oid) {
       try { var v = sessionStorage.getItem(ckKey(oid)); return v ? JSON.parse(v) : null; } catch (e) { return null; }
@@ -1100,23 +2026,78 @@
         else sessionStorage.removeItem(ckKey(oid));
       } catch (e) { /* ignore */ }
     }
+    /* ---------- ②: 숫자/단위 분리 · 방향 판정 · 추세 기반 제안 (하드코딩 증분 폐지) ---------- */
+    function parseNumUnit(v) {
+      if (v == null || v === '') return { num: null, unit: '' };
+      if (typeof v === 'number') return { num: v, unit: '' };
+      var s = String(v).trim();
+      var m = s.match(/-?\d+(?:\.\d+)?/);
+      if (!m) return { num: null, unit: s };
+      return { num: parseFloat(m[0]), unit: s.replace(m[0], '').trim() };
+    }
+    function decimalsOf(n) {
+      var s = String(n), i = s.indexOf('.');
+      return i < 0 ? 0 : Math.min(2, s.length - i - 1);
+    }
+    /* KR 1건의 체크인 제안값 — 목표값과의 방향·최근 추세로만 산출, 목표값 초과 금지 */
+    function krSuggest(k) {
+      var cu = parseNumUnit(k.current_value != null ? k.current_value : k.progress);
+      var tg = parseNumUnit(k.target_value);
+      var cur = (cu.num == null) ? 0 : cu.num;
+      var out = { cur: cur, unit: cu.unit || tg.unit || '', value: cur, basis: '' };
+      if (tg.num == null) {
+        out.basis = '목표값(' + (k.target_value || '미입력') + ')을 수치로 읽지 못해 현재값을 그대로 두었습니다 — 직접 입력해 주세요.';
+        return out;
+      }
+      var gap = tg.num - cur;
+      if (!gap) { out.basis = '이미 목표값에 도달해 현재값을 유지합니다.'; return out; }
+      var down = gap < 0;   // 목표값 < 현재값 = 낮을수록 좋은 지표(리드타임·이탈률 등)
+      var cks = (chkByKr[k.kr_id] || []).slice().sort(function (a, b) {
+        return String(a.checkin_date || '').localeCompare(String(b.checkin_date || ''));
+      });
+      var deltas = cks.map(function (c) { return Math.abs(parseFloat(c.progress_delta) || 0); })
+                      .filter(function (d) { return d > 0; });
+      var frac, why;
+      if (deltas.length >= 2) {
+        var recent = deltas.slice(-3);
+        var avg = recent.reduce(function (a, b) { return a + b; }, 0) / recent.length;
+        var remain = Math.max(1, 100 - (parseFloat(k.progress) || 0));
+        frac = Math.min(1, avg / remain);
+        why = '최근 체크인 ' + recent.length + '건 평균 진척 +' + (Math.round(avg * 10) / 10) + '%p 추세';
+      } else {
+        frac = 0.25;   // 추세 근거가 없을 때의 보수적 비율 — 남은 격차의 1/4
+        why = '추세 기록 ' + deltas.length + '건(2건 미만) — 남은 격차의 25% 기준';
+      }
+      var v = cur + gap * frac;
+      v = down ? Math.max(tg.num, v) : Math.min(tg.num, v);   // 목표값 클램프
+      var dg = Math.max(decimalsOf(cur), 1), pw = Math.pow(10, dg);
+      out.value = Math.round(v * pw) / pw;
+      out.basis = why + ' · 목표값 ' + tg.num + (out.unit || '')
+        + (down ? '이 현재값보다 낮아 감소' : ' 방향으로 증가') + ' 제안 (목표값 초과 없음)';
+      return out;
+    }
     function openCheckinModal(o, aiDraft) {
       var ks = krByObj[o.objective_id] || [];
-      var rows = ks.map(function (k, i) {
-        var cur = k.current_value != null ? k.current_value : Math.round((k.progress || 0));
-        var sug = aiDraft ? (parseFloat(cur) || 0) + 4 + (i % 3) : cur;
-        return '<div style="display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line-2)">'
+      var rows = ks.map(function (k) {
+        var s = krSuggest(k);
+        /* 비AI 입력칸 공백 버그 해소 — number 입력에는 숫자만, 단위는 접미사 텍스트로 */
+        var val = aiDraft ? s.value : s.cur;
+        return '<div style="padding:8px 2px;border-bottom:1px solid var(--line-2)">'
+          + '<div style="display:flex;align-items:center;gap:9px">'
           + '<span style="flex:1;font-size:13px;font-weight:600">' + esc(k.name) + '</span>'
-          + '<input type="number" data-ck-kr="' + esc(k.kr_id) + '" value="' + sug + '" style="width:92px;text-align:right;border:1px solid #D0D5DD;border-radius:7px;padding:6px 8px;font:inherit;font-size:13px">'
-          + '<span style="font-size:12px;color:var(--ink-3)">/ ' + esc(k.target_value || '100') + '</span></div>';
+          + '<input type="number" step="any" data-ck-kr="' + esc(k.kr_id) + '" value="' + val + '" style="width:92px;text-align:right;border:1px solid #D0D5DD;border-radius:7px;padding:6px 8px;font:inherit;font-size:13px">'
+          + (s.unit ? '<span style="font-size:12px;font-weight:700;color:var(--ink-2);flex:none">' + esc(s.unit) + '</span>' : '')
+          + '<span style="font-size:12px;color:var(--ink-3);flex:none">/ ' + esc(k.target_value || '미설정') + '</span></div>'
+          + (aiDraft && s.basis ? '<div style="font-size:11.5px;color:var(--ink-3);line-height:1.5;margin-top:4px">ⓘ ' + esc(s.basis) + '</div>' : '')
+          + '</div>';
       }).join('');
       var draftNote = aiDraft
-        ? '주간 업무보드 완료 3건과 6/30 1:1 합의사항 이행을 반영해 진척값을 업데이트합니다. (elizax 자동 감지 초안)'
+        ? '핵심 성과별 최근 체크인 추세와 목표값까지의 남은 격차를 기준으로 진척값 초안을 채웠습니다. (elizax 제안 — 값은 직접 고칠 수 있습니다)'
         : '';
       TX.modal({
         title: '체크인 — ' + o.title,
         wide: true,
-        body: (aiDraft ? '<div style="font-size:12px;color:#356CB5;background:rgba(31,122,240,.07);border:1px solid rgba(31,122,240,.25);border-radius:8px;padding:8px 11px;margin-bottom:10px">✦ <b>제안만</b> · elizax가 1:1 노트·업무보드에서 감지한 진척 신호로 초안을 채웠습니다. 값은 언제든 고칠 수 있고, 반영은 관리자 승인 후입니다.</div>' : '')
+        body: (aiDraft ? '<div style="font-size:12px;color:#356CB5;background:rgba(31,122,240,.07);border:1px solid rgba(31,122,240,.25);border-radius:8px;padding:8px 11px;margin-bottom:10px">✦ <b>제안만</b> · 각 핵심 성과의 <b>체크인 기록 추세</b>와 <b>목표값까지의 남은 격차</b>로 계산한 초안입니다. 값은 언제든 고칠 수 있고, 반영은 관리자 승인 후입니다.</div>' : '')
           + rows
           + '<div style="margin-top:11px"><div style="font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:5px">코멘트 <span style="color:var(--ink-4);font-weight:500">— 요청 사유를 남기면 관리자가 빠르게 판단할 수 있습니다</span></div>'
           + '<textarea data-ck-cm style="width:100%;min-height:76px;border:1px solid #D0D5DD;border-radius:8px;padding:9px;font:inherit;font-size:13px" placeholder="이번 체크인에서 반영한 변경 사항을 적어주세요.">' + esc(draftNote) + '</textarea></div>',
@@ -1126,12 +2107,71 @@
               var vals = {};
               box.querySelectorAll('[data-ck-kr]').forEach(function (inp) { vals[inp.getAttribute('data-ck-kr')] = inp.value; });
               var cm = box.querySelector('[data-ck-cm]');
-              ckSave(o.objective_id, { vals: vals, comment: cm ? cm.value : '', at: '2026-07-15', ai: !!aiDraft });
+              ckSave(o.objective_id, { vals: vals, comment: cm ? cm.value : '', at: TODAY, ai: !!aiDraft });
               openGoalDetail(o.objective_id);
               TX.toast && TX.toast('체크인 승인을 요청했습니다. 관리자 승인 후 진행률에 반영됩니다.', 'ok');
             } }
         ]
       });
+    }
+
+    /* ---------- ③: 진척 감지 카드 — 실제 신호가 있을 때만, 실제 레코드 id만 ---------- */
+    function daysSince(dateStr) {
+      var a = Date.parse(String(dateStr || '') + 'T00:00:00'), b = Date.parse(TODAY + 'T00:00:00');
+      if (isNaN(a) || isNaN(b)) return null;
+      return Math.round((b - a) / 86400000);
+    }
+    function sigKey(oid) { return 'txf_aisig_' + oid; }
+    function sigDismissed(oid) {
+      try { return !!sessionStorage.getItem(sigKey(oid)); } catch (e) { return false; }
+    }
+    function sigDismiss(oid) {
+      try { sessionStorage.setItem(sigKey(oid), '1'); } catch (e) { /* ignore */ }
+    }
+    /* 원장(EZLedger)에서 이 목표를 언급한 최근 항목 — 없으면 빈 배열 */
+    function ledgerEventsFor(o) {
+      var out = [];
+      try {
+        if (!(window.EZLedger && EZLedger.list)) return out;
+        var title = String(o.title || ''), oid = String(o.objective_id || '');
+        var cutoff = Date.now() - 14 * 86400000;
+        EZLedger.list().forEach(function (it) {
+          if (!it || !it.id || (it.ts || 0) < cutoff) return;
+          var hay = (it.title || '') + ' ' + (it.summary || '');
+          if ((title && hay.indexOf(title) >= 0) || (oid && hay.indexOf(oid) >= 0)) out.push(it);
+        });
+      } catch (e) { /* 원장 부재 — 무해화 */ }
+      return out.slice(0, 3);
+    }
+    function progressSignal(o) {
+      var cks = (chkByObj[o.objective_id] || []).slice().sort(function (a, b) {
+        return String(b.checkin_date || '').localeCompare(String(a.checkin_date || ''));
+      });
+      var last = cks[0] || null;
+      var days = last ? daysSince(last.checkin_date) : null;
+      var evs = ledgerEventsFor(o);
+      var stale = (days != null && days >= 7);
+      if (!stale && !evs.length) return null;   // 신호 요건 미충족 → 카드를 그리지 않는다
+      return { last: last, days: days, events: evs, stale: stale };
+    }
+    function signalCardHTML(o) {
+      var sig = progressSignal(o);
+      if (!sig) return '';
+      var lines = [];
+      if (sig.stale) lines.push('마지막 체크인(' + esc(sig.last.checkin_date) + ') 이후 ' + sig.days + '일이 지났습니다');
+      if (sig.events.length) lines.push('성과 기록에 이 목표를 언급한 항목 ' + sig.events.length + '건이 최근 쌓였습니다');
+      var ids = [];
+      if (sig.last && sig.last.checkin_id) ids.push('체크인 <b>' + esc(sig.last.checkin_id) + '</b>');
+      sig.events.forEach(function (it) { ids.push('성과 기록 <b>' + esc(it.id) + '</b>'); });
+      return '<div class="txf-fcard" style="border:1px solid rgba(31,122,240,.3);background:rgba(31,122,240,.03)">'
+        + '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'
+        + '<span style="font-size:10.5px;font-weight:800;color:#356CB5;background:rgba(31,122,240,.1);border-radius:4px;padding:2px 7px">● 제안만</span>'
+        + '<b style="font-size:13.5px">✦ elizax가 체크인 시점을 확인했습니다</b></div>'
+        + '<p style="font-size:12.5px;color:var(--ink-2);line-height:1.6;margin:7px 0 9px">' + lines.join(' · ')
+        + '. 기록된 추세로 체크인 초안을 만들어 드릴까요?'
+        + (ids.length ? ' <span style="color:var(--ink-4)">근거: ' + ids.join(' · ') + '</span>' : '') + '</p>'
+        + '<div style="display:flex;gap:7px"><button class="btn-blue" data-txf="gd-aick">체크인 초안 열기</button>'
+        + '<button class="ghost-btn" data-txf="gd-aidismiss">무시</button></div></div>';
     }
 
     /* 목표–직무–전략 연결 근거 — "직무 내용 없이 도출된 목표는 기초가 없다" */
@@ -1200,7 +2240,9 @@
       var isOwner = o.owner_emp_id === CU.emp_id;
       var pendPill = '';
       if (pend && pend.status === 'approved') {
-        pendPill = '<span style="display:inline-block;font-size:11px;font-weight:800;color:#067647;background:#ECFDF3;border:1px solid #ABEFC6;border-radius:999px;padding:3px 10px;margin-bottom:7px">✓ 체크인 승인됨 · 진행률 반영' + (pend.decided_at ? ' · ' + esc(pend.decided_at) : '') + '</span><br>';
+        /* ①: "진행률 반영"은 ez:checkin-applied로 실반영이 확인된 경우에만 — 그 외엔 "승인됨"까지 */
+        pendPill = '<span style="display:inline-block;font-size:11px;font-weight:800;color:#067647;background:#ECFDF3;border:1px solid #ABEFC6;border-radius:999px;padding:3px 10px;margin-bottom:7px">✓ 체크인 승인됨'
+          + (pend.applied ? ' · 진행률 반영' : '') + (pend.decided_at ? ' · ' + esc(pend.decided_at) : '') + '</span><br>';
       } else if (pend && pend.status === 'rejected') {
         pendPill = '<span style="display:inline-block;font-size:11px;font-weight:800;color:#B42318;background:#FEF3F2;border:1px solid #FECDCA;border-radius:999px;padding:3px 10px;margin-bottom:7px">체크인 반려됨 — 근거를 보완해 다시 요청할 수 있습니다</span><br>';
       } else if (pend) {
@@ -1210,15 +2252,7 @@
       var ckBtns = (pend && !ckDecided)
         ? '<button class="ghost-btn" data-txf="gd-ckcancel" style="color:#B42318;border-color:rgba(180,35,24,.35)">요청 취소</button>'
         : (isOwner ? '<button class="btn-blue" data-txf="gd-checkin">체크인</button>' : '');
-      var aiCard = (!pend && isOwner)
-        ? '<div class="txf-fcard" style="border:1px solid rgba(31,122,240,.3);background:rgba(31,122,240,.03)">'
-          + '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'
-          + '<span style="font-size:10.5px;font-weight:800;color:#356CB5;background:rgba(31,122,240,.1);border-radius:4px;padding:2px 7px">● 제안만</span>'
-          + '<b style="font-size:13.5px">✦ elizax가 진척 신호를 감지했습니다</b></div>'
-          + '<p style="font-size:12.5px;color:var(--ink-2);line-height:1.6;margin:7px 0 9px">주간 업무보드 완료 3건 · 6/30 1:1 합의사항 이행 확인 — 마지막 체크인 이후 12일이 지났습니다. 감지한 신호로 체크인 초안을 만들어 드릴까요? <span style="color:var(--ink-4)">근거: 업무보드 <b>tsk.wb-0715</b> · 1:1 노트 <b>memo.0630</b> · 감사 기록됨</span></p>'
-          + '<div style="display:flex;gap:7px"><button class="btn-blue" data-txf="gd-aick">체크인 초안 열기</button>'
-          + '<button class="ghost-btn" data-txf="gd-aidismiss">무시</button></div></div>'
-        : '';
+      var aiCard = (!pend && isOwner && !sigDismissed(o.objective_id)) ? signalCardHTML(o) : '';
       return '<div class="txf-ovhead"><button class="bk" data-txf="gd-close">←</button><h2>목표 상세</h2>'
         + '<div class="sp">' + ckBtns + '<button class="ghost-btn" data-txf="gd-close">닫기</button></div></div>'
         + '<div class="txf-ovbody"><div class="txf-gd">'
@@ -1252,6 +2286,26 @@
       gdOv.scrollTop = 0;
     }
     function closeGoalDetail() { if (gdOv) gdOv.classList.remove('open'); }
+
+    /* ---------- ①: 체크인 승인 실반영 수신 (tx_inbox → ez:checkin-applied) ----------
+       tx_inbox는 TALENX_DATA에 실제로 값을 반영한 경우에만 이 이벤트를 쏜다.
+       따라서 이 시점에만 "진행률 반영" 문구를 쓸 수 있다(그 전에는 "승인됨"까지). */
+    function ckMarkApplied(oid) {
+      var d = ckPending(oid);
+      if (!d) return;
+      d.applied = true;
+      if (!d.status) d.status = 'approved';
+      ckSave(oid, d);
+    }
+    document.addEventListener('ez:checkin-applied', function (ev) {
+      var oid = (ev && ev.detail && ev.detail.objective_id) || '';
+      if (oid) ckMarkApplied(oid);
+      try { renderGoalBody(); } catch (e) { /* 목표 페이지 미구성 */ }
+      if (gdOv && gdOv.classList.contains('open')) {
+        var cur = gdOv.getAttribute('data-oid');
+        if (cur && (!oid || cur === oid)) openGoalDetail(cur);
+      }
+    });
 
     /* ============================================================= *
      *  fix 16: 순서 변경 · 전체 열기 · 조직 카드 설정 · 리뷰 작성       *
@@ -1420,9 +2474,10 @@
             TX.toast && TX.toast('체크인 요청을 취소했습니다. 취소 이력도 감사 기록에 남습니다.');
             return;
           }
-          var aic = tag.closest('.txf-fcard');
-          if (aic) aic.style.display = 'none';
-          TX.toast && TX.toast('이번 신호는 무시했습니다. 다음 감지 시 다시 제안합니다.');
+          /* ③: 무시는 세션에 기억 — 재진입해도 되살아나지 않는다 */
+          sigDismiss(gdo.objective_id);
+          openGoalDetail(gdo.objective_id);
+          TX.toast && TX.toast('이 목표의 진척 감지 알림을 이번 세션 동안 끕니다.');
           return;
         }
         if (k === 'reorder') { openReorderModal(); return; }
@@ -1430,7 +2485,31 @@
         if (k === 'expandall') { toggleAllMembers(tag); return; }
         if (k === 'add-kr') {
           var list = newOv && newOv.querySelector('[data-txf="kr-list"]');
-          if (list) { list.insertAdjacentHTML('beforeend', krRowHTML({ weight: '' })); renumberKR(); }
+          if (list) { list.insertAdjacentHTML('beforeend', krRowHTML({})); renumberKR(); }
+          return;
+        }
+        if (k === 'kr-even') {
+          ev.preventDefault();
+          var cnt = evenWeights();
+          if (cnt) TX.toast && TX.toast('가중치를 균등 배분했습니다. (' + cnt + '개 항목 · 합계 100%)', 'ok');
+          return;
+        }
+        if (k === 'ds-close') { ev.preventDefault(); dsClose(); return; }
+        if (k === 'ds-stop') {
+          ev.preventDefault();
+          if (dsState) { dsState.aborted = true; dsState.busy = false; dsState.draft = null; }
+          setAIBusy(false); dsClose();
+          TX.toast && TX.toast('초안 생성을 중지했습니다. 도착하는 결과는 무시합니다.');
+          return;
+        }
+        if (k === 'ds-retry') { ev.preventDefault(); startDraft(true); return; }
+        if (k === 'ds-template') { ev.preventDefault(); useTemplateDraft(); return; }
+        if (k === 'ds-apply-sel') { ev.preventDefault(); dsApply(false); return; }
+        if (k === 'ds-apply-all') { ev.preventDefault(); dsApply(true); return; }
+        if (k === 'ds-undo') {
+          ev.preventDefault();
+          if (undoSnap) { restoreSnapshot(undoSnap); TX.toast && TX.toast('초안 적용을 되돌렸습니다.', 'ok'); }
+          hideUndo();
           return;
         }
         if (k === 'kr-x') {
@@ -1440,114 +2519,34 @@
           else TX.toast && TX.toast('핵심 성과는 최소 1개가 필요합니다.', 'warn');
           return;
         }
-        if (k === 'src') {   // 출처 칩 → 원본 요약 표시
-          var sid = tag.getAttribute('data-sid');
-          if (sid && srcMap[sid]) TX.toast && TX.toast('[' + sid + '] ' + srcMap[sid]);
+        if (k === 'src') {   // ⑤: 출처 칩 → 원장 딥링크(폴백 토스트)
+          ev.preventDefault();
+          openSrc(tag.getAttribute('data-sid'));
           return;
         }
-        if (k === 'carry-kr') {   // 미완 KR 그대로 이월 (진척 개념 없는 폼 — name 프리필)
-          var und2 = undoneKRs();
-          var ck = und2[parseInt(tag.getAttribute('data-ci'), 10)];
-          var list3 = newOv && newOv.querySelector('[data-txf="kr-list"]');
-          if (!ck || !list3 || !prevEval) return;
-          list3.insertAdjacentHTML('beforeend', krRowHTML({
-            name: ck.name, weight: '', diff: 'A', difftype: 'yoy',
-            diffwhy: '작년 달성률 ' + ck.achievement_pct + '% — 미완 과제 이월',
-            why: '작년 미완 핵심 성과 이월 (달성률 ' + ck.achievement_pct + '%)' + srcChip(prevEval.evaluation_id)
-          }));
-          renumberKR();
-          emitGoalCtx('goal.carryover', '작년 미완 핵심 성과 이월 — ' + ck.name,
-            '출처 ' + prevEval.evaluation_id + ' · 작년 달성률 ' + ck.achievement_pct + '%');
-          TX.toast && TX.toast('작년 미완 핵심 성과를 이월했습니다. 출처가 함께 기록됩니다.', 'ok');
+        if (k === 'carry-kr') {   // 미완 KR 그대로 이월
+          ev.preventDefault();
+          carryTo(parseInt(tag.getAttribute('data-ci'), 10));
           return;
         }
-        if (k === 'ai') {
-          var list2 = newOv && newOv.querySelector('[data-txf="kr-list"]');
-          if (list2) {
-            /* 근거 재료 — 내 직무 프로파일 과업 + 선택된 상위 목표 (근거 없는 추천 금지 원칙) */
-            var jp = (window.EZJob && EZJob.profileOf) ? EZJob.profileOf(cuEmp)
-                     : ((D.jobProfiles || {})[cuEmp.jobProfileId] || null);
-            var areas = jp ? Object.keys(jp.tasks || {}) : [];
-            var parentSel = newOv.querySelector('.txf-fcard select.txf-inp');
-            var parentTitle = (parentSel && parentSel.value && parentSel.options[parentSel.selectedIndex])
-              ? parentSel.options[parentSel.selectedIndex].text
-              : ((objs.filter(function (o) { return o.owner_emp_id === cuEmp.manager_id; })[0] || objs[0] || {}).title || '상위 조직 목표');
-            /* 직무 기준 역량(competency_profile) 1순위 — 근거 문구에 함께 인용 */
-            var topComp = (jp && jp.competency_profile && jp.competency_profile[0]) || null;
-            var compLabel = '';
-            if (topComp) {
-              var compRec = (D.competencies || []).filter(function (c) { return c.dimension_id === topComp.dimension_id; })[0];
-              compLabel = topComp.dimension_id + ' ' + ((compRec && compRec.name) || '');
-            }
-            var whyOf = function (i) {
-              var a = areas.length ? areas[i % areas.length] : (cuEmp.jobTitle || '내 직무');
-              return '직무 과업 <b>「' + esc(a) + '」</b> + 상위목표 <b>「' + esc(parentTitle) + '」</b>'
-                + (compLabel ? ' · 역량 <b>' + esc(compLabel) + '</b>' : '');
-            };
-            /* F6: 작년 기록 4컨텍스트 — 프롬프트 주입 + 출처 칩 재료 */
-            var carryCtx = '';
-            if (prevEval) {
-              var undNames = undoneKRs().map(function (x) { return x.name + '(달성률 ' + x.achievement_pct + '%)'; }).join(', ');
-              carryCtx += ' [작년 평가 ' + prevEval.evaluation_id + '] 등급 ' + prevEval.grade + ' · ' + prevEval.score + '점. 미완 KR: ' + (undNames || '없음') + '.';
-            }
-            if (prevFbs.length) carryCtx += ' [작년 피드백] ' + prevFbs.map(function (f) { return f.fb_id + ': ' + f.summary; }).join(' / ');
-            if (jobChg) carryCtx += ' [직무 변경] ' + jobChg.prev_label + ' → ' + jobChg.new_label + (jobChg.note ? ' (' + jobChg.note + ')' : '');
-            var carryChipsOf = function (i) {   // KR별 출처 칩 — 근거 표시 영역에 부착
-              if (i === 0 && prevEval) return srcChip(prevEval.evaluation_id);
-              if (i === 1 && prevFbs[0]) return srcChip(prevFbs[0].fb_id);
-              if (i === 2) return jobChg ? srcChip('JOB-CHG', '직무 전환') : (prevFbs[1] ? srcChip(prevFbs[1].fb_id) : '');
-              return '';
-            };
-            var canned = [
-              { name: '신규 기능 기획서 사용자 검증 통과율 90% 달성', mode: 0, weight: 40, diff: 'A', diffwhy: '전년 통과율 실적 대비 +15%p 상향', why: whyOf(0) + carryChipsOf(0) },
-              { name: '기획 산출물 평균 리드타임 5일 이내 단축', mode: 1, weight: 30, diff: 'A', diffwhy: '전년 평균 6.5일 대비 단축', why: whyOf(1) + carryChipsOf(1) },
-              { name: '분기별 사용자 인터뷰 12회 실시', mode: 3, weight: 30, diff: 'B', diffwhy: '전년 수준 유지 — 안정 운영', why: whyOf(2) + carryChipsOf(2) }
-            ];
-            var insertKRs = function (items, live) {
-              // C fix: drop still-empty (unnamed) KR rows first so the 1st 추천이 핵심 성과 1에 들어감
-              // (그대로 두면 초기 빈 KR1 위에 append → 추천이 핵심 성과 2부터 채워지던 off-by-one)
-              Array.prototype.forEach.call(list2.querySelectorAll('.txf-kr'), function (row) {
-                var nameInp = row.querySelector('.txf-inp');
-                if (nameInp && !nameInp.value.trim()) row.remove();
-              });
-              items.forEach(function (s) { list2.insertAdjacentHTML('beforeend', krRowHTML(s)); });
-              renumberKR();
-              if (carryCtx) {
-                emitGoalCtx('goal.ai.draft', '작년 기록 반영 AI 목표 초안 ' + items.length + '건 삽입',
-                  '출처 ' + [prevEval && prevEval.evaluation_id, prevFbs[0] && prevFbs[0].fb_id, jobChg && '직무 전환'].filter(Boolean).join(' · '));
-              }
-              TX.toast && TX.toast(live ? 'elizax가 직무 정보·상위 목표·작년 기록을 근거로 핵심 성과 3건을 추천했습니다.'
-                                        : 'AI가 직무 과업·상위 목표·작년 기록을 근거로 핵심 성과 3건을 추천했습니다.', 'ok');
-            };
-            /* Claude 연결 시: 직무·기존 목표 실데이터 기반 실제 추천 */
-            var live = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
-            if (live) {
-              TX.toast && TX.toast('elizax가 실제 데이터를 확인해 추천 중…');
-              window.EZAI.agent({
-                maxTurns: 3, maxTokens: 640,
-                messages: [{ role: 'user', content:
-                  '현재 사용자의 직무 프로파일(get_job_profile)과 기존 목표를 도구로 조회한 뒤, 새 목표에 넣을 핵심성과(KR) 3건을 추천해줘. ' +
-                  '반드시 아래 형식으로만 답해 — 각 줄 "KR명 | 가중치% | 근거" 형태 3줄, 그 외 텍스트 금지. 가중치 합 100. ' +
-                  '근거는 "직무 과업 ○○ · 상위목표 ○○" 형식으로 실제 과업명과 목표명을 인용해.' +
-                  (carryCtx ? ' 아래 작년 기록을 반영해 — 미완 과제 이월, 피드백 보완, 새 직무 적합성 순으로 고려:' + carryCtx : '') }],
-                onDone: function (text) {
-                  var items = [];
-                  String(text || '').split(/\r?\n/).forEach(function (ln) {
-                    var m2 = ln.match(/^\s*(?:\d+[.)]\s*)?(.+?)\s*\|\s*(\d{1,3})\s*%?\s*(?:\|\s*(.+?)\s*)?$/);
-                    if (m2 && items.length < 3) items.push({
-                      name: m2[1].trim(), mode: 0, weight: Number(m2[2]),
-                      diff: 'A', diffwhy: '전년 실적 대비 상향',
-                      why: (m2[3] ? esc(m2[3].trim()) : whyOf(items.length)) + carryChipsOf(items.length)
-                    });
-                  });
-                  insertKRs(items.length === 3 ? items : canned, items.length === 3);
-                },
-                onError: function () { insertKRs(canned, false); }
-              });
-            } else {
-              insertKRs(canned, false);
-            }
-          }
+        if (k === 'carry-review') { ev.preventDefault(); openCarryReview(); return; }
+        if (k === 'ai') {          // 상단 버튼 — 전체 컨텍스트
+          ev.preventDefault();
+          if (!newOv) return;
+          carryFilter = null;
+          startDraft(false);
+          return;
+        }
+        if (k === 'ai-carry') {    // ⑤: carry 패널 — 체크한 항목만 컨텍스트로
+          ev.preventDefault();
+          if (!newOv) return;
+          carryFilter = carryPicksFrom();
+          startDraft(true);
+          return;
+        }
+        if (k === 'job-kr') {      // ⑥: 직무 과업 → KR 행 추가 (tx_jobcontext 렌더)
+          ev.preventDefault();
+          addKRFromTask(tag.getAttribute('data-area'), tag.getAttribute('data-task'));
           return;
         }
         if (k === 'rv-open') { openReviewWrite(tag); return; }
@@ -1664,6 +2663,30 @@
       if (mapOv && (t.getAttribute && (t.getAttribute('data-txf') === 'map-excl' || t.getAttribute('data-txf') === 'map-period'))) {
         var cards = mapOv.querySelector('[data-txf="map-cards"]'); if (cards) cards.innerHTML = mapCardsHTML();
       }
+      if (!t.getAttribute) return;
+      // F2: 초안 시트 항목 선택 → 푸터(적용 개수·가중치 합) 갱신
+      var pk = t.getAttribute('data-dspick');
+      if (pk && dsState) { dsState.picks[pk] = !!t.checked; dsRefreshFoot(); return; }
+      // E: 상위 목표 변경 → 정렬 사유 영역 갱신
+      if (t.getAttribute('data-txf') === 'new-parent') { refreshAlignNote(); return; }
+      // E: 가중치 입력 변경 → 합계 게이지
+      if (t.classList && t.classList.contains('txf-krw')) refreshWeightGauge();
+    });
+
+    // E: 가중치 실시간 합계 (input 단위)
+    sec.addEventListener('input', function (ev) {
+      var t = ev.target;
+      if (t && t.classList && t.classList.contains('txf-krw')) refreshWeightGauge();
+    });
+
+    /* ⑥: #s-perf 밖(직무 프로파일 드로어 등)에서 온 [KR로] 클릭 폴백.
+       sec 위임은 data-txf 처리 시 stopPropagation하므로 중복 실행되지 않는다. */
+    document.addEventListener('click', function (ev) {
+      var t = ev.target;
+      var b = t && t.closest ? t.closest('[data-txf="job-kr"]') : null;
+      if (!b || b.closest('#s-perf')) return;
+      ev.preventDefault();
+      addKRFromTask(b.getAttribute('data-area'), b.getAttribute('data-task'));
     });
 
     /* re-apply after subnav clicks (goals page is static once built, but keep
