@@ -202,7 +202,9 @@ elizax_talenx/
 │   ├── enrich_prev_cycle.py       carry-over 실데이터(전기 평가·상향피드백·직무이력) mock 생성 (재실행 가능·멱등)
 │   └── enrich_assets/             job_profiles_new.json — 신규 직무 프로파일 병합 소스
 ├── docs/
-│   └── PLAN-11-walkthrough-upgrade.md   11차(plan11) 워크스루 피드백 6건 기획서
+│   ├── PLAN-11-walkthrough-upgrade.md   11차(plan11) 워크스루 피드백 6건 기획서
+│   ├── 성과관리Agent_신호근거행동_기획_260728.md   휴넬 내장 Agent 신호·근거·행동 설계 문법 (기준 문서)
+│   └── 성과관리Agent_신호카탈로그.xlsx           위 문법으로 채운 신호 목록 76건 (개발 인계용 산출물)
 ├── reference/                     실서비스(app.talenx.com) 크롤링 스크린샷 3계정분 (Playwright 산출물)
 │   ├── talenx_user_screens_20260714/
 │   ├── talenx_user_screens_minsoopark_20260714/
