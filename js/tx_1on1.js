@@ -292,7 +292,7 @@
 
   function barHTML() {
     var rk = roleKey();
-    var mapBtn = '<button class="ez1o-linkbtn" data-ez1o="map">&#128506; 전주기 지원 범위 맵</button>';
+    var mapBtn = '<button class="ez1o-linkbtn" data-ez1o="map">&#128506; 지원 범위 맵</button>';
     if (rk === "hr") {
       /* HR — 녹음 바 대신 실시율 요약 칩. ponytail: 실시율=시드 수치, 부서별 집계는 후속 */
       var n = 0, L = ledgerList();
@@ -307,7 +307,7 @@
     if (rk === "leader") {
       var tm = teamMembers();
       return '<div class="ez1o-bar" data-ez1o-bar>'
-        + '<button class="ez1o-btn" data-ez1o="start">&#9210; elizax 녹음·요약</button>'
+        + '<button class="ez1o-btn" data-ez1o="start">&#10022; elizax 녹음·요약</button>'
         + (tm.length ? memSelectHTML() : '<span class="ez1o-note">1:1 대상 팀원이 없습니다</span>')
         + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
         + '<span class="ez1o-note">팀원을 선택해 1:1을 주관하세요 · 기록 확정은 사람</span>'
@@ -316,10 +316,10 @@
     }
     var confirmed = !!loadState().confirmedAt;
     return '<div class="ez1o-bar" data-ez1o-bar>'
-      + '<button class="ez1o-btn" data-ez1o="start">&#9210; elizax 녹음·요약</button>'
+      + '<button class="ez1o-btn" data-ez1o="start">&#10022; elizax 녹음·요약</button>'
       + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9679; 제안만</span>'
       + '<span class="ez1o-note">녹음→받아쓰기→요약은 자동, 기록 확정은 사람</span>'
-      + (confirmed ? '<span class="ez1o-donetag">&#10003; 7/16 요약 확정됨 · 히스토리 기록</span>' : '')
+      + (confirmed ? '<span class="ez1o-donetag">&#10003; 7/16 요약 확정됨 · 성과 기록 저장</span>' : '')
       + mapBtn
       + '</div>'
       + '<div class="ez1o-panel" data-ez1o-panel></div>';
@@ -544,7 +544,7 @@
       + '</div>'
       + '<div class="ez1o-gate" data-ez1o-gate>'
       + '<span class="lab">결정 게이트 · 사람이 확정 (승인 전에는 아무것도 반영되지 않음)</span>'
-      + '<button class="ez1o-gbtn primary" data-ez1o-gact="confirm">기록 확정·히스토리 저장</button>'
+      + '<button class="ez1o-gbtn primary" data-ez1o-gact="confirm">기록 확정 · 성과 기록에 저장</button>'
       + '<button class="ez1o-gbtn" data-ez1o-gact="edit">수정</button>'
       + '<button class="ez1o-gbtn" data-ez1o-gact="drop">폐기</button>'
       + '</div>'
@@ -563,7 +563,7 @@
         body.setAttribute("contenteditable", "true");
         body.style.outline = "2px dashed rgba(31,122,240,.4)";
         body.style.borderRadius = "8px";
-        toast("수정 모드 — 요약을 직접 고친 뒤 [기록 확정·히스토리 저장]을 누르세요.", "");
+        toast("수정 모드 — 요약을 직접 고친 뒤 [기록 확정 · 성과 기록에 저장]을 누르세요.", "");
       }
       return;
     }
@@ -606,19 +606,19 @@
         if (bar && !bar.querySelector(".ez1o-donetag")) {
           var tag = document.createElement("span");
           tag.className = "ez1o-donetag";
-          tag.innerHTML = "&#10003; 7/16 요약 확정됨 · 히스토리 기록";
+          tag.innerHTML = "&#10003; 7/16 요약 확정됨 · 성과 기록 저장";
           var link = bar.querySelector(".ez1o-linkbtn");
           bar.insertBefore(tag, link || null);
         }
       }
-      toast("기록 확정 — 성과 히스토리에 기록되었습니다 (감사 기록 남김).", "ok");
+      toast("기록 확정 — 성과 기록에 저장되었습니다 (감사 기록 남김).", "ok");
     } else { /* drop */
       card.classList.add("ez1o-collapsed");
       var note = document.createElement("div");
       note.className = "ez1o-drop";
-      note.textContent = "폐기됨 — 성과 히스토리에 아무것도 남지 않았습니다. 확정되지 않은 요약은 기록에 섞이지 않습니다.";
+      note.textContent = "폐기됨 — 성과 기록에 아무것도 남지 않았습니다. 확정되지 않은 요약은 기록에 섞이지 않습니다.";
       card.appendChild(note);
-      toast("요약 폐기 — 성과 히스토리에는 기록되지 않았습니다.", "");
+      toast("요약 폐기 — 성과 기록에는 남지 않았습니다.", "");
     }
     var startBtn = document.querySelector('[data-ez1o="start"]');
     if (startBtn) startBtn.disabled = false;
@@ -677,7 +677,7 @@
     ov.innerHTML =
       '<div class="ez1o-map">'
       + '<div class="ez1o-maphead">'
-      + '<span class="tt">성과관리 전 주기 × elizax 기능 지원 범위</span>'
+      + '<span class="tt">지원 범위 맵 · 성과관리 전 주기 × elizax 기능 지원 범위</span>'
       + '<span class="ez1o-asof">기준 시점 ' + esc(AS_OF) + '</span>'
       + '<button class="ez1o-mapx" data-ez1o="mapclose" title="닫기">&#10005;</button>'
       + '<span class="principle">선정 원칙 — 초기엔 <b>기록 기여도 우선</b>: 기록이 충분히 쌓이면 <b>빈도 우선</b>으로 전환. '

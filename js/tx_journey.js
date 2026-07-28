@@ -360,7 +360,7 @@
               {
                 t: "rule", title: "기록 확정 절차",
                 ex: confirmed
-                  ? "본인 확정 완료 · 성과 히스토리에 기록됨 (확정 전에는 반영되지 않음)"
+                  ? "본인 확정 완료 · 성과 기록에 저장됨 (확정 전에는 반영되지 않음)"
                   : "확정 전에는 어디에도 기록되지 않습니다 (승인 대기)",
                 src: "1on1.gate.confirm"
               }
@@ -440,7 +440,7 @@
             evidence: [
               {
                 t: "eval", title: "사이클 확정 기록 이관",
-                ex: "확정 등급·코멘트·성과 히스토리가 다음 사이클 목표 초안의 인용 근거로 이어집니다",
+                ex: "확정 등급·코멘트·성과 기록이 다음 사이클 목표 초안의 인용 근거로 이어집니다",
                 src: "cycle.carry.FY2027"
               }
             ],
@@ -654,7 +654,7 @@
     var cols = stages.map(function (st, i) {
       var cnt = "";
       if (counts) {
-        cnt = '<button class="ezpm-cnt" data-ezpm-count="' + esc(st.key) + '" title="성과 히스토리에서 이 단계의 기록 보기">기록 '
+        cnt = '<button class="ezpm-cnt" data-ezpm-count="' + esc(st.key) + '" title="성과 기록에서 이 단계의 기록 보기">기록 '
           + counts[st.key] + "건</button>";
       }
       return '<div class="ezpm-col' + (st.cur ? " cur" : "") + '" data-ezpm-stage="' + esc(st.key) + '">'
@@ -734,7 +734,7 @@
       + (n.state === "done" ? '<span class="ezpm-evok">&#10003; 근거 확인 완료</span>' : "")
       + "</div>"
       + evidenceHTML(n.evidence)
-      + (m ? '<button class="ezpm-lbtn" data-ezpm-ledger="' + esc(m.id) + '">성과 히스토리에서 보기<span class="ezpm-lat">' + esc(m.at || "") + "</span></button>" : "");
+      + (m ? '<button class="ezpm-lbtn" data-ezpm-ledger="' + esc(m.id) + '">성과 기록에서 보기<span class="ezpm-lat">' + esc(m.at || "") + "</span></button>" : "");
     openPane(html);
   }
 
@@ -748,10 +748,10 @@
         + '<div class="evt">' + esc(e.title) + "</div>"
         + (e.summary ? '<div class="evx">' + esc(e.summary) + "</div>" : "")
         + '<span class="src">' + esc(e.source || "") + "</span><br>"
-        + '<button class="ezpm-lbtn" data-ezpm-ledger="' + esc(e.id) + '">성과 히스토리에서 보기</button>'
+        + '<button class="ezpm-lbtn" data-ezpm-ledger="' + esc(e.id) + '">성과 기록에서 보기</button>'
         + "</div>";
     }).join("") : '<div class="ezpm-empty">이 단계에 쌓인 성과 기록이 아직 없습니다. 체크인·1:1 확정 등 기능을 쓸수록 기록이 쌓입니다.</div>';
-    openPane('<div class="ph"><h3>성과 히스토리 · ' + esc(STAGE_NAME[stageKey] || stageKey) + " (" + entries.length + '건)</h3>'
+    openPane('<div class="ph"><h3>성과 기록 · ' + esc(STAGE_NAME[stageKey] || stageKey) + " (" + entries.length + '건)</h3>'
       + '<button class="px" data-ezpm-pane-close title="닫기">&#10005;</button></div>' + body);
   }
 
@@ -818,9 +818,9 @@
     ov.className = "ezpm-root";
     ov.setAttribute("data-ezpm-root", "1");
     ov.innerHTML =
-      '<div class="ezpm-card" role="dialog" aria-modal="true" aria-label="성과 프로세스 맵">'
+      '<div class="ezpm-card" role="dialog" aria-modal="true" aria-label="결정 흐름">'
       + '<div class="ezpm-head">'
-      + '<div class="tl"><h2>성과 프로세스 맵</h2><p>이번 사이클의 논의와 결정, 그 근거를 한 장으로 봅니다</p></div>'
+      + '<div class="tl"><h2>결정 흐름</h2><p>이번 사이클의 논의와 결정, 그 근거를 한 장으로 봅니다</p></div>'
       + '<span class="ezpm-asof">' + esc(AS_OF) + "</span>"
       + '<span data-ezpm-subjhost style="display:contents"></span>'
       + '<button class="ezpm-x" data-ezpm-close title="닫기">&#10005;</button>'
@@ -854,7 +854,7 @@
   function btnHTML(pad) {
     return '<button class="ghost-btn ezpm-openbtn" data-ezpm-btn data-ezpm-open'
       + (pad ? ' style="padding:9px 16px;font-size:13px"' : "")
-      + ">&#9672; 프로세스 맵</button>";
+      + ">&#9672; 결정 흐름</button>";
   }
   function tryInjectButtons() {
     /* (0) 역할 관점 바 — 사이클 현재 위치 상시 노출, 클릭 → 프로세스 맵 */

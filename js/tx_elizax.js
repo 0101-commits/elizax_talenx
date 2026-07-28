@@ -209,18 +209,26 @@
     /* perspective 스트립 제거 — 관점 자동전환 로직(setPerspective)은 유지, 시각 chrome만 삭제 */
     el.persp = null;
 
-    /* employee picker */
-    var picker = h("div", "ezx-picker");
-    var pin = h("input", "ezx-picker-in", { type: "text", placeholder: "대상 직원 검색 (이름)", "aria-label": "대상 직원 검색" });
-    var plist = h("div", "ezx-picker-list");
-    pin.addEventListener("input", function () { renderPickerList(pin.value); });
-    pin.addEventListener("focus", function () { renderPickerList(pin.value); });
-    document.addEventListener("click", function (e) {
-      if (!picker.contains(e.target)) plist.classList.remove("on");
-    });
-    picker.appendChild(pin); picker.appendChild(plist);
-    head.appendChild(picker);
-    el.pickerInput = pin; el.pickerList = plist;
+    /* employee picker — [Phase1 IA] leader/hr/exec 역할에만 렌더 (member는 대상 선택 없음) */
+    el.pickerInput = null; el.pickerList = null;
+    var rk0 = "member";
+    try {
+      rk0 = (window.CU && CU._role) ||
+        (window.TXRoles && TXRoles.current && (TXRoles.current() || {}).key) || "member";
+    } catch (e) { rk0 = "member"; }
+    if (rk0 === "leader" || rk0 === "hr" || rk0 === "exec") {
+      var picker = h("div", "ezx-picker");
+      var pin = h("input", "ezx-picker-in", { type: "text", placeholder: "대상 직원 검색 (이름)", "aria-label": "대상 직원 검색" });
+      var plist = h("div", "ezx-picker-list");
+      pin.addEventListener("input", function () { renderPickerList(pin.value); });
+      pin.addEventListener("focus", function () { renderPickerList(pin.value); });
+      document.addEventListener("click", function (e) {
+        if (!picker.contains(e.target)) plist.classList.remove("on");
+      });
+      picker.appendChild(pin); picker.appendChild(plist);
+      head.appendChild(picker);
+      el.pickerInput = pin; el.pickerList = plist;
+    }
 
     /* context chip row */
     var ctx = h("div", "ezx-ctx");
@@ -261,10 +269,42 @@
     foot.appendChild(comp); foot.appendChild(footRow);
     el.textarea = ta; el.send = send;
 
+    /* [Phase1 IA] 탭 스트립 — 대화 · 기록 · 알림 (헤더 바로 아래) */
+    var tabs = h("div", "ezx-tabs", { role: "tablist" });
+    tabs.innerHTML =
+      '<button type="button" class="ezx-tab on" data-ezx-tab="chat" role="tab">대화</button>' +
+      '<button type="button" class="ezx-tab" data-ezx-tab="rec" role="tab">기록 <span class="ic">◷</span></button>' +
+      '<button type="button" class="ezx-tab" data-ezx-tab="ntf" role="tab">알림<span class="ezx-tab-n" data-ezx-ntfn hidden>0</span></button>';
+    tabs.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-ezx-tab]");
+      if (b) showTab(b.getAttribute("data-ezx-tab"));
+    });
+    el.tabs = tabs;
+
+    /* 탭 패널 — 기록(EZLedger 임베드) · 알림(EZNotif 보관함) */
+    var paneRec = h("div", "ezx-tabpane ezx-pane-rec");
+    var paneNtf = h("div", "ezx-tabpane ezx-pane-ntf");
+    el.paneRec = paneRec; el.paneNtf = paneNtf;
+    paneNtf.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-ntf]");
+      if (!b || !window.EZNotif || !EZNotif.run) return;
+      var ent = EZNotif.run(b.getAttribute("data-ntf"));   /* "다시 실행" */
+      if (ent && ent.action) {
+        if (ent.action.type === "ask") showTab("chat");    /* 대화로 이어짐 */
+        else closePanel();                                 /* 허브·화면 이동은 패널 밖 */
+      } else {
+        renderNtfPane();                                   /* 읽음 표시만 갱신 */
+      }
+    });
+
     panel.appendChild(head);
+    panel.appendChild(tabs);
     panel.appendChild(ctx);
     panel.appendChild(list);
     panel.appendChild(foot);
+    panel.appendChild(paneRec);
+    panel.appendChild(paneNtf);
+    panel.setAttribute("data-ezx-tab", "chat");
 
     root.appendChild(fab);
     root.appendChild(panel);
@@ -300,6 +340,13 @@
         if (!msgs().length) renderMessages();
       });
     }
+    /* [Phase1 IA] 알림 보관함 변경 구독 — FAB·탭 배지 갱신 */
+    document.addEventListener("ezx:notif", function (ev) {
+      updateNtfBadges();
+      var reason = ev && ev.detail && ev.detail.reason;
+      if (reason === "add" && el.panel && el.panel.getAttribute("data-ezx-tab") === "ntf") renderNtfPane();
+    });
+    updateNtfBadges();
   }
 
   function autoGrow() {
@@ -329,7 +376,7 @@
   function syncSubjectUI() {
     var need = needsSubject(state.perspective);
     el.root.classList.toggle("ezx-need-subject", need);
-    if (need && !state.subject) {
+    if (need && !state.subject && el.pickerInput) {
       el.pickerInput.placeholder = "대상 직원 검색 (이름)";
     }
     if (need && state.subject && el.pickerInput && !el.pickerInput.value) {
@@ -339,6 +386,7 @@
   }
   function renderPickerList(q) {
     var list = el.pickerList;
+    if (!list) return;   /* member 역할 — picker 미렌더 */
     list.innerHTML = "";
     var query = (q || "").trim();
     var pool = EMPLOYEES;
@@ -689,7 +737,7 @@
     if (needsSubject(state.perspective) && !state.subject) {
       pushMessage({ role: "err", text: "이 관점에서는 대상 직원을 먼저 선택해 주세요." });
       renderMessages();
-      el.pickerInput.focus();
+      if (el.pickerInput) el.pickerInput.focus();
       return;
     }
     pushMessage({ role: "user", text: userText });
@@ -1121,13 +1169,78 @@
     syncPerspectiveFromRole();
     updateScreenChip();
     updateAiBadge();
+    updateNtfBadges();
     setTimeout(function () { try { el.textarea.focus(); } catch (e) {} }, 220);
   }
   function closePanel() {
     state.open = false;
     el.root.classList.remove("ezx-open");
-    el.pickerList.classList.remove("on");
+    if (el.pickerList) el.pickerList.classList.remove("on");
     try { el.fab.focus(); } catch (e) {}
+  }
+
+  /* ---------------- [Phase1 IA] 패널 탭 (대화 · 기록 · 알림) ---------------- */
+  function showTab(key, hl) {
+    if (!el.panel || !el.tabs) return;
+    if (key !== "chat" && key !== "rec" && key !== "ntf") key = "chat";
+    el.panel.setAttribute("data-ezx-tab", key);
+    var bs = el.tabs.querySelectorAll("[data-ezx-tab]");
+    for (var i = 0; i < bs.length; i++) {
+      bs[i].classList.toggle("on", bs[i].getAttribute("data-ezx-tab") === key);
+    }
+    if (key === "rec" && window.EZLedger && EZLedger.renderInto) {
+      try { EZLedger.renderInto(el.paneRec, hl || null); } catch (e) { /* 무해화 */ }
+    }
+    if (key === "ntf") {
+      renderNtfPane();                                       /* 미열람 bold 상태로 먼저 표시 */
+      if (window.EZNotif && EZNotif.markAllRead) {
+        try { EZNotif.markAllRead(); } catch (e) { /* 무해화 */ }  /* 탭 열람 = 모두 읽음 */
+      }
+    }
+  }
+
+  function fmtNtfTs(ts) {
+    var t = new Date(ts || Date.now());
+    function z(n) { return (n < 10 ? "0" : "") + n; }
+    return (t.getMonth() + 1) + "/" + t.getDate() + " " + z(t.getHours()) + ":" + z(t.getMinutes());
+  }
+
+  function renderNtfPane() {
+    var box = el.paneNtf;
+    if (!box) return;
+    var arr = [];
+    try { arr = (window.EZNotif && EZNotif.list && EZNotif.list()) || []; } catch (e) { arr = []; }
+    var html = '<div class="ezx-ntf-hd">알림<span>elizax가 보낸 선제 제안·감지 알림 보관함</span></div>';
+    if (!arr.length) {
+      html += '<div class="ezx-ntf-empty">아직 알림이 없습니다 — elizax의 선제 제안이 여기에 보관됩니다.</div>';
+    } else {
+      html += '<div class="ezx-ntf-list">';
+      arr.forEach(function (n) {
+        html += '<button type="button" class="ezx-ntf-row' + (n.read ? "" : " unread") + '" data-ntf="' + esc(n.id) + '">' +
+          '<span class="tx">' + esc(n.text) + "</span>" +
+          '<span class="mt">' + esc(fmtNtfTs(n.ts)) + " · " + esc(n.kind || "알림") +
+          (n.action ? ' <span class="go">다시 실행 ›</span>' : "") + "</span></button>";
+      });
+      html += "</div>";
+    }
+    box.innerHTML = html;
+  }
+
+  /* FAB·알림 탭의 미열람 카운트 배지 (0이면 숨김) */
+  function updateNtfBadges() {
+    var n = 0;
+    try { n = (window.EZNotif && EZNotif.unreadCount()) || 0; } catch (e) { n = 0; }
+    var label = n > 9 ? "9+" : String(n);
+    if (el.fab) {
+      var fb = el.fab.querySelector(".ezx-fab-n");
+      if (!fb) { fb = h("span", "ezx-fab-n"); el.fab.appendChild(fb); }
+      fb.textContent = label;
+      fb.hidden = !n;
+    }
+    if (el.tabs) {
+      var tb = el.tabs.querySelector("[data-ezx-ntfn]");
+      if (tb) { tb.textContent = label; tb.hidden = !n; }
+    }
   }
 
   /* ---------------- Public API ---------------- */
@@ -1151,6 +1264,7 @@
       renderMessages();
     },
     isStreaming: function () { return state.streaming; },
+    showTab: showTab,                   /* [Phase1 IA] 도킹 패널 탭 전환 ("chat"|"rec"|"ntf"[, highlightId]) */
     stopStreaming: stopStreaming,
     regenerate: regenerate,
     refresh: renderMessages,

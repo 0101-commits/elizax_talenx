@@ -174,7 +174,8 @@
         return "오늘 브리핑 준비됨 — 열어볼까요?";
       },
       need: function () { return !!(window.TXAgent && typeof window.TXAgent.openHub === "function"); },
-      run: function () { window.TXAgent.openHub(); }
+      run: function () { window.TXAgent.openHub(); },
+      act: function () { return { type: "hub" }; }
     },
     "s-perf:0": {
       ctxType: "checkin",
@@ -187,13 +188,17 @@
         openChatAndSend(rk === "leader"
           ? "체크인 지연 인원에게 보낼 리마인드 초안 만들어줘"
           : "주간 체크인 초안 만들어줘");
+      },
+      act: function (rk) {
+        return { type: "ask", payload: rk === "leader" ? "체크인 지연 인원에게 보낼 리마인드 초안 만들어줘" : "주간 체크인 초안 만들어줘" };
       }
     },
     "s-perf:1": {
       ctxType: "feedback",
       text: function () { return "최근 1:1 논의 기반으로 피드백 초안 어때요?"; },
       need: function () { return !!(window.Elizax && typeof window.Elizax.sendRaw === "function"); },
-      run: function () { openChatAndSend("최근 1:1 논의를 바탕으로 피드백 초안 만들어줘"); }
+      run: function () { openChatAndSend("최근 1:1 논의를 바탕으로 피드백 초안 만들어줘"); },
+      act: function () { return { type: "ask", payload: "최근 1:1 논의를 바탕으로 피드백 초안 만들어줘" }; }
     },
     "s-perf:2": {
       ctxType: "oneonone",
@@ -207,7 +212,8 @@
           try { window.EZOneOnOne.start(); return; } catch (e) { /* 폴백 */ }
         }
         openChatAndSend("1:1 미팅 녹음·요약을 도와줘");
-      }
+      },
+      act: function () { return { type: "ask", payload: "1:1 미팅 녹음·요약을 도와줘" }; }
     },
     "s-appr": {
       ctxType: "eval",
@@ -218,7 +224,8 @@
       need: function () { return !!(window.TXAgent && typeof window.TXAgent.openHub === "function"); },
       /* qw3=평가자(코멘트 근거초안) 시나리오 — 부하직원 등급 노출. member(피평가자)는
          평가자 화면 금지, 인자없는 openHub()로 역할 기본화면(member=qw2) 착지 */
-      run: function (rk) { window.TXAgent.openHub(rk === "member" ? undefined : "qw3"); }
+      run: function (rk) { window.TXAgent.openHub(rk === "member" ? undefined : "qw3"); },
+      act: function (rk) { return { type: "hub", payload: rk === "member" ? undefined : "qw3" }; }
     },
     "s-perf:3": {
       ctxType: "review",
@@ -231,6 +238,9 @@
         openChatAndSend(rk === "leader"
           ? "팀원 성과 리뷰 초안 정리해줘"
           : "내 성과 리뷰 초안 정리해줘");
+      },
+      act: function (rk) {
+        return { type: "ask", payload: rk === "leader" ? "팀원 성과 리뷰 초안 정리해줘" : "내 성과 리뷰 초안 정리해줘" };
       }
     }
   };
@@ -352,7 +362,7 @@
         '<button class="eze-ib" data-eze-close title="닫기" aria-label="닫기">×</button>' +
       "</div>" +
       '<button class="eze-txt" data-eze-act>' + esc(sg.text(rk)) + ' <span class="go">›</span></button>' +
-      '<div class="eze-src">근거: <b>화면 문맥</b> · <b>성과 히스토리</b></div>';
+      '<div class="eze-src">근거: <b>화면 문맥</b> · <b>성과 기록</b></div>';
     document.body.appendChild(pill);
     currentSg = { key: key, sg: sg };
 
@@ -362,8 +372,12 @@
 
     requestAnimationFrame(function () { pill.classList.add("eze-show"); });
     pillEl = pill;
-    /* 선제 알림 단일화: 이미 떠 있는 다른 선제 팝업(agh-popup/ctxchip)을 닫고 이 pill로 교체 */
-    if (window.EZProactive) EZProactive.claim("eze-pill", function () { dismissPill(true); });
+    /* 선제 알림 단일화: 이미 떠 있는 다른 선제 팝업(agh-popup/ctxchip)을 닫고 이 pill로 교체.
+       meta는 알림 보관함(EZNotif) 축적용 — 밀려나도 [알림] 탭에서 다시 실행 가능 */
+    if (window.EZProactive) {
+      EZProactive.claim("eze-pill", function () { dismissPill(true); },
+        { text: sg.text(rk), kind: "제안", action: (sg.act ? sg.act(rk) : null) });
+    }
     armAutoHide(AUTOHIDE_MS);
     return true;
   }
@@ -410,13 +424,13 @@
       items.push({ ic: "◎", label: "Agent 허브", run: function () { window.TXAgent.openHub(); } });
     }
     if (window.EZLedger && typeof window.EZLedger.openPanel === "function") {
-      items.push({ ic: "▤", label: "성과 히스토리", run: function () { window.EZLedger.openPanel(); } });
+      items.push({ ic: "▤", label: "성과 기록", run: function () { window.EZLedger.openPanel(); } });
     }
     if (window.EZJourney && typeof window.EZJourney.open === "function") {
-      items.push({ ic: "◈", label: "프로세스 맵", run: function () { window.EZJourney.open(); } });
+      items.push({ ic: "◈", label: "결정 흐름", run: function () { window.EZJourney.open(); } });
     }
     if (window.EZCycle && typeof window.EZCycle.openMap === "function") {
-      items.push({ ic: "◇", label: "전주기 커버리지 맵", run: function () { window.EZCycle.openMap(); } });
+      items.push({ ic: "◇", label: "지원 범위 맵", run: function () { window.EZCycle.openMap(); } });
     }
     if (window.EZJob && typeof window.EZJob.openLinkMap === "function") {
       items.push({ ic: "🧩", label: "목표–직무 연결 지도", run: function () { window.EZJob.openLinkMap(); } });
