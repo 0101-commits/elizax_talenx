@@ -7,8 +7,8 @@
    노출 형태 3종:
      ① 도킹 대화창  — elizax 패널이 TXAgent.runScenario(key, host)로
                       시나리오를 대화 안에 임베드 (host=.ezx-scnhost)
-     ② 알림 카드    — 메인 앱 위 단일 알림 표면 (scheduleProactive → EZSignalCard.slot,
-                      카드·엔진 미로드 시에만 .agh-popup 폴백)
+     ② 한 줄 권유   — 메인 앱 위 단일 알림 표면 (scheduleProactive → EZSignalCard.slot,
+                      권유 렌더러·엔진 미로드 시에만 .agh-popup 폴백)
      ③ 전체화면 딥워크 — Agent Hub 오버레이 (openHub/openFull)
 
    Exposes window.TXAgent = {
@@ -2746,20 +2746,36 @@
       return a && a.length ? a : [];                             // [] = 처리할 알림 없음
     } catch (e) { return null; }
   }
+  /* 알림 문구 한 문장. 신호 id에는 단계·주체 이름이 박혀 있어 화면에 쓰지 않는다(18-2차 R2).
+     분류 이름·식별자 제거는 EZSignalChat.scrub / EZSignalCard._scrub이 단일 원천. */
   function sigNotice(inst) {
     var s = (inst && inst.signal) || inst || {};
-    return s.notice || s.agent || s.id || "알림";
+    var t = s.notice || s.agent || "알림";
+    try {
+      if (window.EZSignalChat && EZSignalChat.scrub) return EZSignalChat.scrub(t) || "알림";
+      if (window.EZSignalCard && EZSignalCard._scrub) return EZSignalCard._scrub(t) || "알림";
+    } catch (e) { /* 무시 */ }
+    return t;
   }
   function alertCount() {
     var sig = sigPending();
     if (sig) return sig.length;
     try { return alertsNow().length; } catch (e) { return 0; }
   }
-  /* 신호 1건을 여는 유일한 경로 — 카드(우하단 슬롯) 또는 도킹 패널 [알림] 탭 */
+  /* 신호 1건을 여는 유일한 경로 — 18-2차부터 화면이 아니라 대화가 열린다(R6).
+     대화 진입점이 없으면 우하단 한 줄 권유 → 도킹 패널 순으로 내려간다. */
   function openSignal(inst) {
+    var s = (inst && inst.signal) || inst || {};
+    try {
+      if (s.id && window.EZSignalChat && EZSignalChat.ask) {
+        if (window.Elizax && Elizax.open) Elizax.open();
+        EZSignalChat.ask(s.id);
+        return;
+      }
+    } catch (e) { /* 아래로 폴백 */ }
     var C = window.EZSignalCard;
-    if (C && typeof C.slot === "function") { try { C.slot([inst]); return; } catch (e) { /* 아래로 폴백 */ } }
-    if (window.Elizax && Elizax.showTab) { try { Elizax.showTab("ntf"); } catch (e2) { /* 무해화 */ } }
+    if (C && typeof C.slot === "function") { try { C.slot([inst]); return; } catch (e2) { /* 아래로 폴백 */ } }
+    if (window.Elizax && Elizax.showTab) { try { Elizax.showTab("ntf"); } catch (e3) { /* 무해화 */ } }
   }
   function showAlerts() {
     if (!(window.TX && TX.menu)) return;
@@ -2778,7 +2794,7 @@
       return { label: "▲ " + a.title + " — " + a.body, onClick: function () { showScreen(a.screen); } };
     }));
   }
-  /* 메인 앱 위 알림 표면 — 하나만 뜬다(신호 카드). 카드/엔진 미로드 시에만 폴백 팝업. */
+  /* 메인 앱 위 알림 표면 — 하나만 뜬다(한 줄 권유). 렌더러/엔진 미로드 시에만 폴백 팝업. */
   var popupShown = false;
   function scheduleProactive() {
     if (popupShown) return;
@@ -2790,10 +2806,10 @@
       if (sig && C && typeof C.slot === "function") {
         if (!sig.length) return;                       /* 엔진이 "처리할 알림 없음"이라 답했다 */
         try {
-          C.slot(sig.slice(0, 2));                     /* 2건이면 카드가 "관련 2건"으로 묶는다 */
+          C.slot(sig);                                 /* 첫 건만 말하고 나머지는 "이 밖에 N건 더" 한 마디 */
           popupShown = true;
           return;
-        } catch (e) { /* 카드 렌더 실패 — 아래 폴백으로 내려간다 */ }
+        } catch (e) { /* 권유 렌더 실패 — 아래 폴백으로 내려간다 */ }
       }
       /* 폴백(신호 카드·엔진 미로드) — 알림을 잃지 않기 위해 기존 경로 유지 */
       var al = alertsNow();

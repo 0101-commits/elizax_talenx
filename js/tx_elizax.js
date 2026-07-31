@@ -108,7 +108,7 @@
 
   /* ---------------- DOM refs ---------------- */
   var el = {};
-  var DEFAULT_TAB = "ntf";   /* 18차 결정 ③ — 기본 진입 = 알림 탭 */
+  var DEFAULT_TAB = "chat";  /* 18-2차 R1 — 기본 진입 = 대화(빈 채팅창). 알림은 그 다음 */
   var curTab = DEFAULT_TAB;
   var pastOpen = false;      /* [알림] 탭 「지난 알림」 접힘 상태 */
   var pastTouched = false;   /* 사용자가 직접 접었다 → 자동 펼침(카드 0장 폴백)보다 우선 */
@@ -258,10 +258,11 @@
     top.appendChild(mark); top.appendChild(titles); top.appendChild(exbtn); top.appendChild(xbtn);
     head.appendChild(top);
 
-    /* 2탭 IA — 알림(기본 진입) / 대화 (18차 결정 ③. 기록 탭은 알림 탭 「지난 알림」으로 접음) */
+    /* 2탭 IA — 대화(기본 진입) / 알림 (18-2차 R6: 대화가 먼저, 알림이 그 다음.
+       기록 탭은 알림 탭 「지난 알림」으로 접음 — 18차 결정 ③ 유지) */
     var tabs = h("div", "ezx-tabs");
     el.tabBtns = {};
-    [["ntf", "알림"], ["chat", "대화"]].forEach(function (d) {
+    [["chat", "대화"], ["ntf", "알림"]].forEach(function (d) {
       var b = h("button", "ezx-tab" + (d[0] === DEFAULT_TAB ? " on" : ""), { type: "button", "data-tab": d[0] });
       b.innerHTML = "<span>" + d[1] + "</span><span class=\"ezx-tab-dot\" hidden></span>"
         + (d[0] === "ntf" ? "<span class=\"ezx-tab-n\" hidden></span>" : "");
@@ -393,9 +394,9 @@
     });
     /* 신호 엔진(W1)은 뒤늦게 로드될 수 있다 — 늦은 폴링으로 한 번만 구독 */
     subscribeSignals();
-    /* 기본 진입 탭 = 알림. setTab을 여기서 부르지 않는다(markAllRead가 배지를 미리 지움) */
+    /* 기본 진입 탭 = 대화(빈 채팅창). 배지는 알림 탭을 실제로 볼 때만 지워진다 */
     curTab = DEFAULT_TAB;
-    el.root.classList.toggle("ezx-mode-ntf", DEFAULT_TAB === "ntf");
+    el.root.classList.toggle("ezx-mode-ntf", curTab === "ntf");
     updateFabCount();
     updateStatus();
     /* 성과 기록 변경 → 「지난 알림」이 펼쳐져 있으면 즉시 재렌더, 아니면 알림 탭 도트 */
@@ -418,7 +419,7 @@
           window.EZSignalEngine.onChange(function () {
             updateFabCount();
             if (curTab === "ntf") renderNtf();
-            if (!msgs().length) renderMessages();   /* 웰컴 카드 3장 갱신 */
+            if (!msgs().length) renderMessages();   /* 추천 대화 버튼 갱신 */
           });
         } catch (e) { /* ignore */ }
         updateFabCount();
@@ -518,23 +519,29 @@
     });
   }
 
-  /* [알림] 탭 = 라이브 신호 카드 스택 + 접힌 「지난 알림」(EZNotif 행 + 성과 기록).
-     EZSignalEngine·EZSignalCard가 없으면 카드 구역을 비우고 「지난 알림」을 펼쳐
-     기존 EZNotif 목록이 그대로 보이게 폴백한다 — 어떤 경우에도 throw하지 않는다. */
+  /* [알림] 탭 = 한 줄 목록(18-2차 R6) + 접힌 「지난 알림」(EZNotif 행 + 성과 기록).
+     한 줄 = 알림 문구 한 문장뿐. 유형칩·단계칩·범위칩·근거·처리 버튼 전부 없다.
+     줄을 누르면 카드가 펼쳐지지 않고 대화가 열려 그 주제로 답이 온다.
+     엔진이 없으면 목록을 비우고 「지난 알림」을 펼쳐 폴백한다 — 어떤 경우에도 throw하지 않는다. */
   function renderNtf(hl) {
     var p = el.ntfPane;
     if (!p) return;
     p.innerHTML = "";
 
-    /* (1) 라이브 신호 카드 */
+    /* (1) 미처리 알림 — 한 줄 = 문장 하나 */
     var nLive = 0;
     var insts = signalPending();
-    if (insts && insts.length && window.EZSignalCard && EZSignalCard.stack) {
+    if (insts && insts.length) {
       var live = h("div", "ezx-sig-live");
-      try {
-        var node = EZSignalCard.stack(insts, "stack");
-        if (node) { live.appendChild(node); nLive = insts.length; }
-      } catch (e) { nLive = 0; }
+      insts.forEach(function (inst) {
+        var line = inst && (inst.notice || (inst.sig && inst.sig.notice));
+        if (!line) return;
+        var id = inst.id || "";
+        var row = h("button", "ezx-sig-row", { type: "button", text: String(line) });
+        row.addEventListener("click", function () { askSignal(id, String(line)); });
+        live.appendChild(row);
+        nLive++;
+      });
       if (nLive) p.appendChild(live);
     }
 
@@ -674,43 +681,29 @@
 
     /* 연결 상태 문구(● 연결됨 / AI 미연결 배너)는 컴포저 위 단일 폴백 줄(updateStatus)로 일원화 */
 
-    /* 역할별 라이브 알림 카드 3장 — 엔진·카드 렌더러가 없으면 기존 시나리오 칩으로 폴백 */
-    var welcomeCards = 0;
-    var winsts = signalPending();
-    if (winsts && winsts.length && window.EZSignalCard && EZSignalCard.render) {
-      var wbox = h("div", "ezx-sig-welcome");
-      winsts.slice(0, 3).forEach(function (inst) {
-        try {
-          var node = EZSignalCard.render(inst, "welcome");
-          if (node) { wbox.appendChild(node); welcomeCards++; }
-        } catch (e) { /* 카드 1장 실패는 전체를 막지 않는다 */ }
-      });
-      if (welcomeCards) {
-        wrap.appendChild(h("div", "ezx-scn-lab", { text: "지금 처리할 알림" }));
-        wrap.appendChild(wbox);
-        var link = h("button", "ezx-catlink", { type: "button", text: "카탈로그 전체 보기 (" + catalogCount() + "건)" });
-        link.addEventListener("click", openCatalog);
-        wrap.appendChild(link);
-      }
+    /* ── 18-2차 R3: 카드 폐기. 빈 채팅창 + 추천 대화 버튼 두 묶음뿐 ──
+       (1) 「지금 볼 만한 것」 = EZSignalChat.starters(role)가 미처리 신호를
+           사용자 말투 질문으로 바꾼 것 최대 3개. 분류명·유형·단계는 노출하지 않는다.
+       (2) 기존 일반 스타터 3개. 두 묶음의 버튼 모양은 동일(.ezx-starter). */
+    var sigQs = [];
+    if (window.EZSignalChat && EZSignalChat.starters) {
+      try {
+        var raw = EZSignalChat.starters(roleKey()) || [];
+        for (var qi = 0; qi < raw.length && sigQs.length < 3; qi++) {
+          var it = raw[qi];
+          if (it && it.q) sigQs.push({ q: String(it.q), id: it.id ? String(it.id) : "" });
+        }
+      } catch (e) { sigQs = []; }
     }
-    if (!welcomeCards) {
-      /* 폴백 — 기존 역할 기반 시나리오 칩 그대로 */
-      var scns = (window.TXAgent && window.TXAgent.SCENARIOS) || [];
-      var rk = "member";
-      try { rk = (window.TXRoles && TXRoles.current && TXRoles.current().key) || "member"; } catch (e) { /* ignore */ }
-      var mine = scns.filter(function (s) { return (s.roles || []).indexOf(rk) >= 0; }).slice(0, 5);
-      if (mine.length) {
-        var slab = h("div", "ezx-scn-lab", { text: "지금 도와드릴 수 있는 일" });
-        wrap.appendChild(slab);
-        var srow = h("div", "ezx-starters");
-        mine.forEach(function (s) {
-          var b = h("button", "ezx-starter scn", { type: "button" });
-          b.innerHTML = "✦ " + esc(s.chip);
-          b.addEventListener("click", function () { runScenarioInChat(s.key, s.chip); });
-          srow.appendChild(b);
-        });
-        wrap.appendChild(srow);
-      }
+    if (sigQs.length) {
+      wrap.appendChild(h("div", "ezx-scn-lab", { text: "지금 볼 만한 것" }));
+      var srow = h("div", "ezx-starters");
+      sigQs.forEach(function (it) {
+        var b = h("button", "ezx-starter", { type: "button", text: it.q });
+        b.addEventListener("click", function () { askSignal(it.id, it.q); });
+        srow.appendChild(b);
+      });
+      wrap.appendChild(srow);
     }
 
     var starters = h("div", "ezx-starters");
@@ -723,37 +716,14 @@
     return wrap;
   }
 
-  /* ---------------- 신호 카탈로그 열람 (웰컴 카드 아래 텍스트 링크) ---------------- */
-  function catalogCount() {
-    try {
-      var c = window.EZSignalEngine && EZSignalEngine.catalog && EZSignalEngine.catalog();
-      if (!c) return 0;
-      if (typeof c.count === "number") return c.count;
-      return (c.signals || []).length;
-    } catch (e) { return 0; }
-  }
-  function openCatalog() {
-    var arr = [];
-    try { arr = (window.EZSignalEngine && EZSignalEngine.forRole && EZSignalEngine.forRole(roleKey())) || []; }
-    catch (e) { arr = []; }
-    var html = '<div class="ezx-cat">';
-    if (!arr.length) {
-      html += '<div class="ezx-cat-empty">카탈로그를 아직 읽을 수 없습니다.</div>';
+  /* 신호를 대화로 연다 — EZSignalChat.ask가 topic을 걸고 Elizax.send로 자연어 질문을 보낸다.
+     모듈 부재 시에도 사용자는 답을 받아야 하므로 문장 그대로 대화에 태운다(R6 폴백). */
+  function askSignal(id, fallbackText) {
+    setTab("chat");
+    if (id && window.EZSignalChat && EZSignalChat.ask) {
+      try { EZSignalChat.ask(id); return; } catch (e) { /* fall through */ }
     }
-    arr.forEach(function (s) {
-      html += '<div class="ezx-cat-row"><span class="ezx-cat-t">' + esc(s.typeLabel || s.type || "") + "</span>"
-        + '<span class="ezx-cat-s">' + esc(s.stage || "") + "</span>"
-        + '<span class="ezx-cat-n">' + esc(s.notice || "") + "</span>"
-        + (s.now ? "" : '<span class="ezx-cat-b">데이터 준비 필요</span>') + "</div>";
-    });
-    html += "</div>";
-    if (window.TX && TX.modal) {
-      TX.modal({
-        title: "알림 카탈로그 — 내 역할 " + arr.length + "건 / 전체 " + catalogCount() + "건",
-        body: html, wide: true,
-        actions: [{ label: "닫기", kind: "ghost" }]
-      });
-    }
+    if (fallbackText) sendMessage(String(fallbackText));
   }
 
   /* ---------------- 새 채팅 시작 (푸터 단일 버튼) ---------------- */
@@ -1319,6 +1289,14 @@
     }
     var ledger = buildLedgerContext();
     if (ledger) line += "\n" + ledger;
+    /* 18-2차 R4 — 신호의 실측 근거를 payload에만 보이지 않게 실어 준다.
+       화면에 렌더되는 메시지(m.text)에는 절대 들어가지 않는다: 이 함수의 반환값은
+       전송용 문자열 전용이고, 렌더는 원문 userText를 쓴다. */
+    var sigCtx = "";
+    if (window.EZSignalChat && EZSignalChat.contextFor) {
+      try { sigCtx = String(EZSignalChat.contextFor(userText) || ""); } catch (e) { sigCtx = ""; }
+    }
+    if (sigCtx) line += "\n" + sigCtx;
     return line + "\n" + userText;
   }
 
@@ -2598,12 +2576,10 @@
     updateScreenChip();
     updateStatus();
     updateFabCount();
-    /* 기본 진입 = 알림 탭 — build에서는 markAllRead를 미루므로 열 때 채운다 */
-    if (curTab === "ntf") {
-      toggleTabDot("ntf", false);
-      renderNtf(null);
-      EZNotif.markAllRead();
-    }
+    /* 18-2차 R1 — 열면 대화 탭(빈 채팅창). 알림을 여기서 렌더·markAllRead 하지 않는다:
+       패널을 여는 것만으로 배지가 지워지면 「9+가 뭘 뜻하는지 모르겠다」가 되돌아온다.
+       배지는 알림 탭을 실제로 눌렀을 때만(setTab) 지워진다. */
+    if (curTab === "ntf") renderNtf(null);
     setTimeout(function () { try { el.textarea.focus(); } catch (e) {} }, 220);
   }
   function closePanel() {

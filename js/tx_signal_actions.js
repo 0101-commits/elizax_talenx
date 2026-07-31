@@ -1,65 +1,75 @@
 /* ============================================================================
- * tx_signal_actions.js — 신호 알림 처리 배선 (window.EZSignalAct) · 18차 §5 (W4)
+ * tx_signal_actions.js — 알림 처리 배선 (window.EZSignalAct) · 18-2차 R5 (B3)
  * ----------------------------------------------------------------------------
  * 목적
- *   신호 카드(EZSignalCard)의 「처리 방법」 버튼 A1~A6을 눌렀을 때, **이미 있는
- *   기능**을 실제로 켠다. 이 파일은 새 화면·새 폼·새 저장소를 만들지 않는다.
- *   가짜 성공(토스트만 띄우고 아무 일도 안 하는 것)을 만들지 않는다 — 진입점이
- *   없으면 정직하게 폴백하고, 사용자는 반드시 실재하는 화면에 착지한다.
+ *   18-2차부터 **기본은 대화 안에서 끝낸다.** 알림을 눌렀다고 화면이 튀지 않는다.
+ *   run()은 초안·계산·비교를 대화 한 턴으로 돌려주고, 화면 이동은 사용자가
+ *   「자세히」·「화면에서 고칠게」처럼 실제로 요청했을 때만 openScreen()이 한다.
+ *   이미 있는 기능만 켠다 — 새 화면·새 폼·새 저장소를 만들지 않는다.
+ *   가짜 성공(토스트만 띄우고 아무 일도 안 하는 것)을 만들지 않는다.
  *
  * 공개 API
- *   EZSignalAct.run(inst, actionIdx) → true(처리 시작) | false(불가)
- *   EZSignalAct.ask(inst)            → 카드 「자세히」. Elizax.sendRaw(엔진 프롬프트)
- *   EZSignalAct.actionAt(inst, i)    → 정규화된 actions[i] (없으면 null)
- *   EZSignalAct.signalOf(inst)       → 카탈로그 신호 원본 (없으면 null)
- *   EZSignalAct.resolveScreen(inst)  → {s, p} 신호 stage → 화면 좌표 (라이브 점검용)
- *   EZSignalAct.targetOf(inst, i)    → {type, s, p, how} 실행 전 진입점 해석 결과
+ *   EZSignalAct.run(inst, i, text)        대화 안에서 해결 (기본 경로)
+ *   EZSignalAct.openScreen(inst, i, text) 화면으로 데려가는 명시 경로
+ *   EZSignalAct.fromText(inst, text)      사용자 말 한 줄 → 위 둘 중 하나로 라우팅
+ *   EZSignalAct.wantsScreen(text)         화면으로 가겠다는 말인지 (EZNav.resolve 재사용)
+ *   EZSignalAct.ask(inst)                 근거를 그대로 대화로 보낸다
+ *   EZSignalAct.actionAt(inst, i)         정규화된 actions[i] (없으면 null)
+ *   EZSignalAct.signalOf(inst)            카탈로그 신호 원본 (없으면 null)
+ *   EZSignalAct.resolveScreen(inst)       {s, p} 화면 좌표 (라이브 점검용)
+ *   EZSignalAct.targetOf(inst, i)         {s, p, how} 진입점 사전 해석 (디버그)
  *
- * A타입 → 실제 진입점 (감사로 확인한 file:line)
+ * 처리 종류 6가지(카탈로그 내부 코드는 화면에 내지 않는다) → 실제 진입점
  * ┌────┬────────────┬────────────────────────────────────────────────────────┐
- * │A1  │새로 쓰기   │목표: #s-perf `[data-txf="anchor-airec"]`               │
+ * │ 1  │초안 작성   │목표: #s-perf `[data-txf="anchor-airec"]`               │
  * │    │            │      = openNew()+초안 생성 (tx_fix_perf.js:2489)        │
  * │    │            │      오버레이 자체 = openNew (tx_fix_perf.js:1876)      │
  * │    │            │      프리필 `[data-txf="new-name"]`/`new-desc` (:1843·1846)│
  * │    │            │체크인: `[data-txf="anchor-aick"]`                      │
  * │    │            │      → openCheckinModal(o,true) (tx_fix_perf.js:2501)   │
- * │    │            │자기평가: #s-appr `[data-pane="0"] .txfw-form`           │
- * │    │            │      = writeFormBody(emp) 인라인 (tx_fix_appr.js:361)   │
+ * │    │            │본인 평가: #s-appr `[data-pane="0"] .txfw-form`          │
+ * │    │            │      = writeFormBody(emp,'self') (tx_fix_appr.js:361)   │
  * │    │            │      AI 근거초안 `[data-txdr="gen"]` (tx_fix_appr.js:620)│
  * ├────┼────────────┼────────────────────────────────────────────────────────┤
- * │A2  │내가 고치기 │가중치: `[data-txf="weight"]`                            │
+ * │ 2  │직접 수정   │가중치: `[data-txf="weight"]`                            │
  * │    │            │      → openWeightEditor() (tx_fix_perf.js:2519·1915)    │
- * │    │            │실적값·진척: 위 A1 체크인 모달(KR 현재값 입력칸이 그 자리)│
- * │    │            │자기평가: 위 A1 자기평가 인라인 폼(같은 폼이 수정 자리)  │
+ * │    │            │실적값·진척: 위 체크인 모달(현재값 입력칸이 그 자리)     │
+ * │    │            │본인 평가: 위 인라인 폼(같은 폼이 수정 자리)             │
  * │    │            │목표·연결: `.grow[data-oid]`·`.mg.txf-exp[data-oid]`     │
  * │    │            │      → openGoalDetail() = `.txf-ov` (tx_fix_perf.js:    │
  * │    │            │      2671·2665·2290)                                    │
  * ├────┼────────────┼────────────────────────────────────────────────────────┤
- * │A3  │알려주기    │TX.modal 발송 폼 (js/ui_kit.js:26) →                     │
- * │    │            │  수신자 원장 적재 = EZLedger.add({emp_id:…})            │
+ * │ 3  │전달        │TX.modal 발송 폼 (js/ui_kit.js:26) →                     │
+ * │    │            │  받는 사람 성과 기록 = EZLedger.add({emp_id:…})         │
  * │    │            │  (tx_ctx_ledger.js:498·456 — 개인별 전달 계약)          │
  * │    │            │  + EZNotif.push (tx_elizax.js:131) 알림 기록            │
  * ├────┼────────────┼────────────────────────────────────────────────────────┤
- * │A4  │1on1 잡기   │localStorage `elizax_1on1_v1:<emp>`.nextAgenda 이월      │
+ * │ 4  │1:1 안건    │localStorage `elizax_1on1_v1:<emp>`.nextAgenda 이월      │
  * │    │            │  (tx_1on1.js:62·201·1142) → EZOneOnOne.start()          │
  * │    │            │  (tx_1on1.js:1195·636) → `[data-ez1o-agin]` 프리필(:632)│
  * ├────┼────────────┼────────────────────────────────────────────────────────┤
- * │A5  │상세 보기   │EZNav.go(s,p) (tx_nav.js:84·118). 기록·해제 없음         │
+ * │ 5  │화면 열기   │EZNav.go(s,p) (tx_nav.js:84·118). 기록·해제 없음         │
  * ├────┼────────────┼────────────────────────────────────────────────────────┤
- * │A6  │승인 요청   │체크인: 위 A1 체크인 모달의 「체크인 · 승인 요청」        │
+ * │ 6  │결재 올리기 │체크인: 위 체크인 모달의 결재 버튼                       │
  * │    │            │  → ckSave → sessionStorage `txf_ckreq_<oid>`            │
  * │    │            │  (tx_fix_perf.js:2126 / 규약 tx_inbox.js:82·145)        │
  * │    │            │그 외: sessionStorage `txf_ibreq_<id>` 직접 생성         │
- * │    │            │  (규약 tx_inbox.js:83·108·175) → 조직장 승인 대기함     │
+ * │    │            │  (규약 tx_inbox.js:83·108·175) → 조직장 결재 대기함     │
  * └────┴────────────┴────────────────────────────────────────────────────────┘
- * 공통 마무리(A5 제외): EZSignalEngine.resolve(id,"acted") → TX.toast(done.title)
- *   → `ez:ctx` 1건(source:"signal.<id>.<A타입>") → EZLedger 수신(:1496).
+ * 기록이 실제로 남는 처리(3·4·6)만 확인을 받고, 끝나면
+ *   EZSignalEngine.resolve(id,"acted") + TX.toast(done.title) + `ez:ctx` 1건.
+ * 초안만 보여 주거나 화면만 여는 것은 **신호를 해제하지 않는다.**
+ *
+ * 화면에 내지 않는 것 (18-2차 R2)
+ *   분류 이름표·코드, 근거 축 이름, 필드 경로, 레코드 식별자. 식별자가 꼭 필요하면
+ *   사람이 읽는 이름(사원명·조직명·목표 제목)으로 바꿔 쓴다. 금지어 목록은 이 파일에
+ *   적지 않고 카탈로그에서 읽거나 B1의 EZSignalChat.scrub()에 맡긴다.
  *
  * 규칙
  *   - ES5 IIFE. let/const/화살표/템플릿리터럴 없음.
- *   - 외부 전역(EZNav·EZSignalEngine·EZAI·EZDraft·EZOneOnOne·EZLedger·EZNotif·
- *     TX·TXRoles)은 전부 없을 수 있다 — 모두 guard, 절대 throw하지 않는다.
- *   - `now !== 1`(데이터 준비 필요) 신호는 A5만 허용. 나머지는 정직하게 거절.
+ *   - 외부 전역(EZNav·EZSignalEngine·EZSignalChat·EZAI·EZOneOnOne·EZLedger·
+ *     EZNotif·TX·TXRoles)은 전부 없을 수 있다 — 모두 guard, 절대 throw하지 않는다.
+ *   - 데이터 준비가 안 된 신호는 화면 열기만 허용. 나머지는 정직하게 거절.
  * ========================================================================== */
 (function () {
   "use strict";
@@ -101,9 +111,94 @@
     return window.EZSignalCatalog || {};
   }
 
-  function actionLabel(t) {
-    var m = catalog().actionLabel || {};
-    return m[t] || t || "";
+  /* 카탈로그 처리 코드 → 1~6 숫자. 코드 문자열을 화면·분기 어디에도 남기지 않는다. */
+  function actNo(act) {
+    var n = parseInt(String((act && act.type) || "").replace(/[^0-9]/g, ""), 10);
+    return isNaN(n) ? 0 : n;
+  }
+
+  /* ======================================================================
+     0-2) 사람 말로 고치기 — 분류 이름·코드·필드 경로·식별자를 화면에서 지운다
+     ====================================================================== */
+
+  var ID_RE = /(EMP|ORG|OBJ|KR|JOB|TH)-[A-Za-z0-9가-힣_-]+/g;
+  var FIELD_RE = /(objectives|keyResults|employees|orgs|jobProfiles|checkins|feedbacks|competency_profile)\.[A-Za-z_]+/g;
+  var EDIT_TAIL = /\s*\(\s*수정할 수 있어요\s*\)\s*$/;
+
+  function findBy(list, key, val, out) {
+    var i;
+    for (i = 0; i < (list || []).length; i++) {
+      if (list[i] && list[i][key] === val) return list[i][out] || "";
+    }
+    return "";
+  }
+
+  /* 레코드 식별자 → 사람이 읽는 이름. 못 찾으면 지운다(코드를 그대로 내지 않는다). */
+  function humanName(id) {
+    var d = data();
+    if (/^EMP-/.test(id)) return findBy(d.employees, "emp_id", id, "name");
+    if (/^ORG-/.test(id)) return findBy(d.orgs, "org_id", id, "name");
+    if (/^OBJ-/.test(id)) return findBy(d.objectives, "objective_id", id, "title");
+    if (/^KR-/.test(id)) return findBy(d.keyResults, "kr_id", id, "name");
+    if (/^JOB-/.test(id)) {
+      var jp = d.jobProfiles || {};
+      return (jp[id] && jp[id].title) || "";
+    }
+    return "";
+  }
+
+  /* 목표 제목 — 화면·기록에 목표를 가리켜야 할 때 코드 대신 이것을 쓴다 */
+  function titleOf(oid) {
+    if (!oid) return "";
+    return humanName(oid) || "";
+  }
+
+  /* 금지어는 카탈로그의 분류 이름표에서 읽는다 — 이 파일에 적어 두지 않는다. */
+  function banList() {
+    var c = catalog(), out = [], maps = [c.typeLabel, c.actionLabel], i, k, m;
+    for (i = 0; i < maps.length; i++) {
+      m = maps[i] || {};
+      for (k in m) {
+        if (!Object.prototype.hasOwnProperty.call(m, k)) continue;
+        if (m[k]) out.push(String(m[k]));
+        out.push(String(k));
+      }
+    }
+    return out;
+  }
+
+  function tidy(t) {
+    return String(t)
+      .replace(/\(\s*\)/g, "")
+      .replace(/\s*·\s*·\s*/g, " · ")
+      .replace(/^\s*·\s*|\s*·\s*$/g, "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+([,.])/g, "$1")
+      .trim();
+  }
+
+  function localScrub(s) {
+    var t = String(s == null ? "" : s);
+    t = t.replace(ID_RE, function (m) { return humanName(m); });
+    t = t.replace(FIELD_RE, "");
+    var ban = banList(), i;
+    for (i = 0; i < ban.length; i++) if (ban[i]) t = t.split(ban[i]).join("");
+    return tidy(t);
+  }
+
+  /* B1의 EZSignalChat.scrub()이 단일 원천. 없으면 위 폴백. */
+  function scrub(s) {
+    try {
+      if (window.EZSignalChat && typeof EZSignalChat.scrub === "function") return EZSignalChat.scrub(s);
+    } catch (e) { /* 폴백으로 내려간다 */ }
+    return localScrub(s);
+  }
+
+  /* 처리 한 건을 사람 말로 부르는 이름. 분류 이름표(kind)는 버린다. */
+  function actName(sig, act) {
+    var s = scrub(String((act && act.label) || "").replace(EDIT_TAIL, ""));
+    if (s) return s;
+    return scrub(String((sig && sig.notice) || "")) || "알림";
   }
 
   /* 요소가 늦게 생기는 화면(오버레이·서브페이지 재렌더)을 위한 짧은 폴링 */
@@ -198,8 +293,8 @@
 
   /* ---- 처리 대상 분류 ----------------------------------------------------
      1차 기준은 `store`(그 처리가 실제로 저장하는 것)·`label`·`kind`뿐이다.
-     `notice`를 같이 섞으면 오배선이 난다 — 실측 확인: 중간점검-구성원-08의
-     notice에 "가중치 합은 65%"가 들어 있어, 핵심결과 수정(A2)이 가중치 편집기로
+     `notice`를 같이 섞으면 오배선이 난다 — 실측 확인: 한 체크인 신호의
+     notice에 "가중치 합은 65%"가 들어 있어, 핵심결과 직접 수정이 가중치 편집기로
      끌려갔다. notice·stage는 store가 아무것도 말해주지 않을 때만 2차로 본다. */
   var CLS_RE = {
     self:     /자기\s*평가|본인\s*평가|평가\s*의견/,
@@ -226,13 +321,12 @@
      2) 화면 좌표 — stage → GNB/서브탭
      ====================================================================== */
 
+  /* 카탈로그 stageNo(1~4)로 잡는다 — 단계 이름 문자열을 코드에 심지 않는다. */
   var STAGE_SCREEN = {
-    "목표수립": { s: "perf", p: 0 },
-    "중간점검": { s: "perf", p: 0 },
-    "평가": { s: "appr", p: 0 },
-    "피드백": { s: "perf", p: 1 },
-    "보상": { s: "pay", p: 0 },
-    "육성": { s: "hrm", p: 0 }
+    1: { s: "perf", p: 0 },
+    2: { s: "perf", p: 0 },
+    3: { s: "appr", p: 0 },
+    4: { s: "perf", p: 1 }
   };
 
   function resolveScreen(inst, act) {
@@ -241,7 +335,7 @@
     if (cls === "self") return { s: "appr", p: 0 };
     if (cls === "meeting") return { s: "perf", p: 2 };
     if (cls === "feedback") return { s: "perf", p: 1 };
-    return STAGE_SCREEN[sig.stage] || { s: "perf", p: 0 };
+    return STAGE_SCREEN[sig.stageNo] || { s: "perf", p: 0 };
   }
 
   /* EZNav.go 우선. 없으면 GNB 버튼을 직접 눌러 같은 결과를 만든다. */
@@ -317,22 +411,22 @@
      4) 마무리 — 해제 + 토스트 + 원장 1건
      ====================================================================== */
 
-  var LEDGER_TYPE = {
-    "목표수립": "goal", "중간점검": "checkin", "평가": "eval", "피드백": "feedback"
-  };
+  var LEDGER_TYPE = { 1: "goal", 2: "checkin", 3: "eval", 4: "feedback" };
 
   function ledgerType(sig, act) {
-    if (act && act.type === "A4") return "oneonone";
-    return LEDGER_TYPE[sig && sig.stage] || "goal";
+    if (actNo(act) === 4) return "oneonone";
+    return LEDGER_TYPE[sig && sig.stageNo] || "goal";
   }
 
-  /* ez:ctx 1건 — 페이로드 형태는 tx_inbox.js:347 발행부를 그대로 따른다 */
+  /* ez:ctx 1건 — 페이로드 형태는 tx_inbox.js:347 발행부를 그대로 따른다.
+     source는 표시 문구가 아니라 조인 키다(tx_ctx_ledger.js:492). 신호 번호만 쓴다
+     — 신호 id에는 단계·주체 이름이 박혀 있어 화면에 새면 안 된다. */
   function record(inst, sig, act, summary) {
     var detail = {
       type: ledgerType(sig, act),
-      source: "signal." + sig.id + "." + act.type,
-      title: actionLabel(act.type) + " — " + (act.label || sig.notice || sig.id),
-      summary: String(summary || sig.notice || ""),
+      source: "signal." + (sig.no || 0) + ".a" + actNo(act),
+      title: "알림 처리 — " + actName(sig, act),
+      summary: scrub(String(summary || sig.notice || "")),
       weight: 2
     };
     try {
@@ -346,11 +440,18 @@
     } catch (e) { /* 엔진 미로드 — 무해화 */ }
   }
 
-  /* A5를 제외한 모든 처리의 공통 착지 */
+  /* 실제로 기록이 남은 처리의 착지 — 여기서만 신호를 해제한다 */
   function finish(inst, sig, act, summary) {
     resolveSignal(sig);
     var done = (inst && inst.done) || sig.done || {};
-    toast(done.title || "처리했습니다.", "ok");
+    toast(scrub(done.title || "처리했어요."), "ok");
+    record(inst, sig, act, summary);
+  }
+
+  /* 화면만 열었거나 초안만 보여 준 경우 — 기록은 남기고 신호는 그대로 둔다.
+     (실제 저장이 아직 없는데 해제하면 처리한 척이 된다) */
+  function noted(inst, sig, act, summary, say) {
+    if (say) toast(scrub(say), "");
     record(inst, sig, act, summary);
   }
 
@@ -452,7 +553,7 @@
     var sig = signalOf(inst) || {};
     var evs = evidenceOf(inst), lines = [], i;
     for (i = 0; i < evs.length; i++) {
-      if (evs[i] && evs[i].text) lines.push("- " + evs[i].text + (evs[i].assumed ? " (추정)" : ""));
+      if (evs[i] && evs[i].text) lines.push("- " + evs[i].text + (evs[i].assumed ? " — 아직 확인되지 않은 값이에요" : ""));
     }
     return "[알림] " + (sig.notice || "") + "\n[근거]\n" + lines.join("\n");
   }
@@ -511,7 +612,7 @@
   }
 
   /* ======================================================================
-     7) A1 새로 쓰기
+     7) 초안 작성
      ====================================================================== */
 
   function runA1(inst, sig, act) {
@@ -549,7 +650,8 @@
             var gen = document.querySelector('#s-appr [data-txdr-panel] [data-txdr="gen"]');
             if (gen) { try { gen.click(); } catch (e) { /* 무시 */ } }
           }
-          finish(inst, sig, act, "자기평가 작성 폼으로 이동 · 근거초안 " + (aiLive() ? "생성 요청" : "미연결"));
+          noted(inst, sig, act, "본인 평가 작성 폼으로 이동 · 근거초안 " + (aiLive() ? "생성 요청" : "미연결"),
+            "본인 평가를 쓰는 자리로 왔어요. 여기서 직접 고치실 수 있어요.");
         });
       });
     });
@@ -571,8 +673,9 @@
           if (!ov) { fallbackDraft(inst, sig, act, "목표 생성 화면이 열리지 않았습니다."); return; }
           prefillNewGoal(ov, inst, act);
           highlight(ov.querySelector('[data-txf="new-name"]') || ov);
-          finish(inst, sig, act,
-            "목표 생성 화면 진입 · " + (aiLive() ? "AI 초안 생성 실행" : "카탈로그 초안 미리 채움"));
+          noted(inst, sig, act,
+            "목표를 새로 쓰는 화면 진입 · " + (aiLive() ? "AI 초안 생성 실행" : "미리 채운 문안"),
+            "목표를 새로 쓰는 자리로 왔어요. 문안은 그대로 고치실 수 있어요.");
         });
       });
     });
@@ -604,8 +707,9 @@
           var b = ov.querySelector('[data-txf="gd-aick"]') || ov.querySelector('[data-txf="gd-checkin"]');
           if (!b) { anchorCheckin(inst, sig, act, what); return; }
           try { b.click(); } catch (e) { /* 무시 */ }
-          finish(inst, sig, act, what + " 열기 · 대상 목표 " + got +
-            (oid && got !== oid ? " (근거 대상 " + oid + "은 이 화면에 없음)" : ""));
+          noted(inst, sig, act, what + " 열기 · 대상 " + (titleOf(got) || "목표") +
+            (oid && got !== oid ? " (원래 가리킨 " + (titleOf(oid) || "목표") + "은 이 화면에 없음)" : ""),
+            what + "을 열었어요.");
         });
         return;
       }
@@ -618,7 +722,7 @@
     waitFor('#s-perf [data-txf="anchor-aick"]', 12, function (a) {
       if (!a) { fallbackDraft(inst, sig, act, "체크인 화면을 열지 못했습니다."); return; }
       try { a.click(); } catch (e) { /* 무시 */ }
-      finish(inst, sig, act, what + " 열기 (내 첫 목표 기준)");
+      noted(inst, sig, act, what + " 열기 (내 첫 목표 기준)", what + "을 열었어요.");
     });
   }
 
@@ -634,7 +738,7 @@
     return true;
   }
 
-  /* 근거가 가리키는 목표가 이 화면에 행으로 없을 수 있다(예: 전사 목표 OBJ-0001을
+  /* 근거가 가리키는 목표가 이 화면에 행으로 없을 수 있다(예: 전사 목표를
      조직장 목표 현황에서 클릭할 수 없다). 내 목표 → 화면에 있는 첫 목표 순으로
      내려가며 실제로 열 수 있는 것을 연다. 열린 목표 id를 돌려주고, 근거가 가리킨
      것과 다르면 호출부가 그 사실을 토스트·기록에 그대로 적는다. */
@@ -653,7 +757,7 @@
   }
 
   /* ======================================================================
-     8) A2 내가 고치기
+     8) 직접 수정
      ====================================================================== */
 
   function runA2(inst, sig, act) {
@@ -675,7 +779,8 @@
       clickWhenReady('#s-perf [data-txf="weight"]', 14, function (btn) {
         if (!btn) { fallbackDraft(inst, sig, act, "가중치 설정 버튼을 찾지 못했습니다."); return; }
         /* 저장은 사용자가 모달에서 확정한다. 여기서는 수정 전 값만 남긴다. */
-        finish(inst, sig, act, "가중치 편집 진입 · 수정 전 " + (before || "값 없음"));
+        noted(inst, sig, act, "가중치 편집 진입 · 수정 전 " + (before || "값 없음"),
+          "가중치를 직접 고치는 자리로 왔어요.");
       });
     });
     return true;
@@ -689,22 +794,23 @@
       if (got) {
         var swapped = (oid && got !== oid);
         if (swapped) {
-          toast("근거가 가리킨 " + oid + "은 이 화면에서 열 수 없어 " + got + "을 열었습니다.", "warn");
+          toast((titleOf(oid) || "가리킨 목표") + "은 이 화면에서 열 수 없어 "
+            + (titleOf(got) || "다른 목표") + "을 열었어요.", "warn");
         }
         waitFor('#s-perf [data-txf-ov="goal"].open', 16, function (ov) {
           if (ov) highlight(ov);
-          finish(inst, sig, act, "목표 상세 진입 · 대상 " + got +
-            (swapped ? " (근거 대상 " + oid + "은 이 화면에 없음)" : "") +
-            (ov ? "" : " (상세 오버레이 미표시 — 목표 현황에서 확인)"));
+          noted(inst, sig, act, "목표 상세 진입 · 대상 " + (titleOf(got) || "목표") +
+            (swapped ? " (원래 가리킨 " + (titleOf(oid) || "목표") + "은 이 화면에 없음)" : "") +
+            (ov ? "" : " (상세가 열리지 않아 목표 현황에서 확인)"),
+            swapped ? "" : "목표를 직접 고치는 자리로 왔어요.");
         });
         return;
       }
       /* 대상 목표가 없다 — 화면까지는 데려간다(가짜 성공 금지) */
       waitFor("#s-perf .txf-goal-body, #s-perf .subpage", 14, function (host) {
         if (host) { scrollTo(host); highlight(host); }
-        toast("고칠 목표를 찾지 못했습니다 — 목표 현황에서 대상을 직접 골라 주세요.", "warn");
+        toast("고칠 목표를 찾지 못했어요 — 목표 현황에서 직접 골라 주세요.", "warn");
         record(inst, sig, act, "목표 현황으로 이동 · 대상 목표 미확정");
-        resolveSignal(sig);
       });
     });
     return true;
@@ -714,13 +820,13 @@
     if (!oid) return "";
     var d = data(), out = [];
     (d.keyResults || []).forEach(function (k) {
-      if (k && k.objective_id === oid) out.push(String(k.name || k.kr_id) + " " + String(k.weight || "-"));
+      if (k && k.objective_id === oid) out.push(String(k.name || "핵심결과") + " " + String(k.weight || "-"));
     });
     return out.join(" · ");
   }
 
   /* ======================================================================
-     9) A3 알려주기
+     9) 전달
      ====================================================================== */
 
   /* 수신자 후보 — 실데이터의 manager_id / head_id / 직속 팀원에서만 만든다 */
@@ -759,11 +865,11 @@
       }
       sel += "</select></label>";
     }
-    var text = String((act && act.draft) || sig.notice || "");
+    var text = scrub(String((act && act.draft) || sig.notice || ""));
     var mo = openDraftModal({
       inst: inst,
-      title: "알려주기 — " + (act.label || sig.stage),
-      note: "받는 사람의 성과 기록에 그대로 남습니다. 문안은 고칠 수 있어요.",
+      title: "이대로 보낼까요 — " + actName(sig, act),
+      note: "받는 사람의 성과 기록에 그대로 남아요. 문안은 고칠 수 있어요.",
       text: text,
       chips: act.chips || [],
       evidence: sel,
@@ -804,8 +910,8 @@
         if (window.EZLedger && EZLedger.add) {
           EZLedger.add({
             type: ledgerType(sig, act),
-            source: "signal." + sig.id + ".A3.to." + toId,
-            title: "알림 전달 — " + (sig.notice || sig.id),
+            source: "signal." + (sig.no || 0) + ".a3.to." + toId,
+            title: "알림 전달 — " + (scrub(sig.notice) || actName(sig, act)),
             summary: (CU.name || "보낸 사람") + " → " + (toName || toId) + " · " + text,
             weight: 2, emp_id: toId
           });
@@ -831,7 +937,7 @@
   }
 
   /* ======================================================================
-     10) A4 1on1 잡기
+     10) 1:1 안건
      ====================================================================== */
 
   var ONE_KEY = "elizax_1on1_v1:";
@@ -888,7 +994,7 @@
   }
 
   /* ======================================================================
-     11) A5 상세 보기 — 기록도 해제도 하지 않는다 (카탈로그 규칙)
+     11) 화면 열기 — 기록도 해제도 하지 않는다 (카탈로그 규칙)
      ====================================================================== */
 
   function runA5(inst, sig, act) {
@@ -910,18 +1016,18 @@
     if (!ok) {
       /* 화면 전환 자체가 안 된다 — 근거를 그대로 보여주는 것이 최선의 정직 */
       openDraftModal({
-        inst: inst, title: "알림 상세 — " + sig.id,
-        note: "화면으로 이동하지 못해 근거를 그대로 보여드립니다.",
-        text: enginePrompt(inst)
+        inst: inst, title: "알림 자세히 보기",
+        note: "화면으로 넘어가지 못해 내용을 그대로 보여드려요.",
+        text: scrub(enginePrompt(inst))
       });
       return false;
     }
-    toast((label || "해당 화면") + "으로 이동했습니다.", "");
+    toast((label || "해당 화면") + "으로 넘어왔어요.", "");
     return true;   /* 기록·해제 없음 */
   }
 
   /* ======================================================================
-     12) A6 승인 요청
+     12) 결재 올리기
      ====================================================================== */
 
   var IB_PREFIX = "txf_ibreq_";   /* tx_inbox.js:83 규약 */
@@ -929,12 +1035,12 @@
   function runA6(inst, sig, act) {
     var cls = classify(inst, act);
 
-    /* ① 체크인 승인 — 체크인 모달의 「체크인 · 승인 요청」이 txf_ckreq_를 만든다.
+    /* ① 체크인 결재 — 체크인 모달의 결재 버튼이 txf_ckreq_를 만든다.
           우리가 sessionStorage를 흉내내는 것보다 실제 폼을 태우는 것이 진짜다.
-          (A6 store는 전부 "요청 기록 + 승인 흐름"이라 1차 기준이 침묵한다 —
-           이때만 stage·notice 2차 기준이 체크인/목표를 가른다.) */
+          (store가 전부 "요청 기록 + 승인 흐름"이라 1차 기준이 침묵한다 —
+           이때만 단계·문구 2차 기준이 체크인/목표를 가른다.) */
     if (cls === "checkin") {
-      return openCheckinFlow(inst, sig, act, "체크인 승인 요청 창");
+      return openCheckinFlow(inst, sig, act, "체크인 올리는 창");
     }
 
     /* ② 그 외(목표 수정·가중치 변경) — 조직장 승인 대기함 요청 카드 생성 */
@@ -947,32 +1053,32 @@
     var curVal = isWeight ? (weightSnapshot(oid) || "현재 가중치") : "현재 내용";
     var mo = openDraftModal({
       inst: inst,
-      title: "승인 요청 — " + (act.label || sig.stage),
-      note: "조직장 승인 대기함(신청/승인 › 받은 문서)으로 올라갑니다. 승인 전에는 아무것도 반영되지 않아요.",
-      text: String((act && act.draft) || sig.notice || ""),
+      title: "조직장에게 올릴까요 — " + actName(sig, act),
+      note: "조직장 결재 대기함(신청/승인 › 받은 문서)으로 올라가요. 승인 전에는 아무것도 반영되지 않아요.",
+      text: scrub(String((act && act.draft) || sig.notice || "")),
       chips: act.chips || [],
-      evidence: '<b>대상</b> ' + esc(title || oid || "대상 미확정") +
+      evidence: '<b>대상</b> ' + esc(title || "대상 미확정") +
         " · <b>항목</b> " + esc(isWeight ? "핵심 성과 가중치" : "목표 내용") +
         " · <b>현재</b> " + esc(curVal),
-      submitLabel: "승인 요청 보내기",
+      submitLabel: "올리기",
       onSubmit: function (v) {
-        var ok = writeInboxRequest(sig, isWeight, oid, title, curVal, v);
+        var ok = writeInboxRequest(sig, isWeight, title, curVal, v);
         if (!ok) {
-          toast("요청을 저장하지 못했습니다 — 문안을 복사해 조직장에게 직접 전달해 주세요.", "warn");
+          toast("올리지 못했어요 — 문안을 복사해 조직장에게 직접 전달해 주세요.", "warn");
           return false;
         }
         finish(inst, sig, act,
-          (isWeight ? "가중치 변경" : "목표 수정") + " 승인 요청 생성 · 대상 " +
-          (title || oid || "미확정") + " · 현재 " + curVal);
-        /* 승인 대기함이 보이는 관점이면 바로 그 화면으로 데려간다 */
+          (isWeight ? "가중치 변경" : "목표 수정") + " 결재 올림 · 대상 " +
+          (title || "미확정") + " · 현재 " + curVal);
+        /* 결재 대기함이 보이는 관점이면 바로 그 화면으로 데려간다 */
         var rk = roleKey();
         if (rk === "leader" || rk === "hr") nav("wf", 0, null);
         return true;
       }
     });
     if (!mo) {
-      sendToElizax(String((act && act.draft) || sig.notice || ""));
-      toast("요청 폼을 띄우지 못해 문안을 elizax 대화로 보냈습니다.", "warn");
+      sendToElizax(scrub(String((act && act.draft) || sig.notice || "")));
+      toast("올리는 창을 띄우지 못해 문안을 대화로 보냈어요.", "warn");
       return false;
     }
     if (aiLive()) {
@@ -983,20 +1089,19 @@
   }
 
   /* tx_inbox.js:108·175 규약대로 txf_ibreq_<id> 생성 (kind:'goal'|'weight') */
-  function writeInboxRequest(sig, isWeight, oid, title, curVal, comment) {
+  function writeInboxRequest(sig, isWeight, title, curVal, comment) {
     var CU = cu();
-    var key = IB_PREFIX + "sig" + String(sig.id).replace(/[^A-Za-z0-9]/g, "") + "_" +
-      Date.now().toString(36);
+    var key = IB_PREFIX + "sig" + String(sig.no || 0) + "_" + Date.now().toString(36);
     var payload = {
       kind: isWeight ? "weight" : "goal",
       owner_emp_id: CU.emp_id || "",
-      title: title || oid || (sig.notice || sig.id),
+      title: title || scrub(sig.notice || ""),
       field: isWeight ? "핵심 성과 가중치" : "목표 내용",
       cur: curVal,
       req: comment.slice(0, 120),
       comment: comment,
       at: asOf(),
-      src: "elizax 알림 " + sig.id + " · 근거 " + evidenceOf({ sig: sig }).length + "건"
+      src: "elizax 알림 · 근거 " + evidenceOf({ sig: sig }).length + "건"
     };
     try { sessionStorage.setItem(key, JSON.stringify(payload)); }
     catch (e) { return false; }
@@ -1020,12 +1125,12 @@
     toast(why + " 문안을 보여드릴게요.", "warn");
     var mo = openDraftModal({
       inst: inst,
-      title: (actionLabel(act.type) || "처리") + " — " + (act.label || sig.stage),
+      title: actName(sig, act),
       note: why + " 아래 문안을 복사해 해당 화면에서 직접 붙여 주세요.",
-      text: String((act && act.draft) || sig.notice || ""),
+      text: scrub(String((act && act.draft) || sig.notice || "")),
       chips: act.chips || []
     });
-    if (!mo) { sendToElizax(String((act && act.draft) || sig.notice || "")); }
+    if (!mo) { sendToElizax(scrub(String((act && act.draft) || sig.notice || ""))); }
     /* 실제 저장이 일어나지 않았으므로 신호를 해제하지 않는다. 기록만 남긴다. */
     record(inst, sig, act, "진입점을 찾지 못해 문안만 안내 — " + why);
     return false;
@@ -1051,8 +1156,8 @@
     var cls = classify(inst, act);
     var e = CLS_ENTRY[cls] || CLS_ENTRY.goal;
     var scr = { s: e.s, p: e.p }, how = e.how;
-    switch (act.type) {
-      case "A1":
+    switch (actNo(act)) {
+      case 1:
         if (cls === "goal" || cls === "weight") {
           scr = { s: "perf", p: 0 };
           how = aiLive() ? '[data-txf="anchor-airec"]' : '[data-txf="new"]';
@@ -1060,68 +1165,178 @@
           how = "피드백 탭 + 문안 창 (쓰기 진입점 없음)";
         }
         break;
-      case "A2": break;                      /* 분류 표 그대로 */
-      case "A3": how = "TX.modal 발송 폼 → EZLedger.add({emp_id})"; break;
-      case "A4": scr = { s: "perf", p: 2 }; how = CLS_ENTRY.meeting.how; break;
-      case "A5": scr = resolveScreen(inst, act); how = "EZNav.go"; break;
-      case "A6":
+      case 2: break;                         /* 분류 표 그대로 */
+      case 3: how = "TX.modal 발송 폼 → EZLedger.add({emp_id})"; break;
+      case 4: scr = { s: "perf", p: 2 }; how = CLS_ENTRY.meeting.how; break;
+      case 5: scr = resolveScreen(inst, act); how = "EZNav.go"; break;
+      case 6:
         how = (cls === "checkin")
           ? '[data-txf="gd-aick"] → sessionStorage txf_ckreq_'
           : "TX.modal 요청 폼 → sessionStorage txf_ibreq_";
         break;
       default: how = "미지원";
     }
-    return { type: act.type, cls: cls, s: scr.s, p: scr.p, how: how, live: sig.now === 1 };
+    return { no: actNo(act), cls: cls, s: scr.s, p: scr.p, how: how, live: sig.now === 1 };
   }
 
   /* ======================================================================
-     15) run — 단일 진입점
+     15) 의도 판정 — 화면으로 갈지, 대화 안에서 끝낼지
      ====================================================================== */
 
-  function run(inst, actionIdx) {
+  /* 「자세히」·「화면에서 고칠게」·「거기서 수정」 같은 말이 있을 때만 화면으로 간다.
+     내비게이션 의도 파서는 이미 tx_nav.js에 있다(EZNav.resolve = 이동 동사 + 목적지가
+     둘 다 있을 때만 non-null). 두 번째 파서를 만들지 않고 그것을 재사용하고,
+     목적지 단어가 없는 「직접 고칠게」류만 여기서 보탠다. */
+  var SCREEN_INTENT = /(자세히|화면\s*에서|화면\s*으로|직접\s*(고치|수정|입력|쓰|쓸|작성)|거기서\s*(고치|수정|쓰|작성)|가서\s*(고치|수정)|열어\s*줘|열어\s*볼)/;
+
+  function wantsScreen(text) {
+    var t = String(text == null ? "" : text);
+    if (!t) return false;
+    if (SCREEN_INTENT.test(t)) return true;
+    try { if (window.EZNav && EZNav.resolve && EZNav.resolve(t)) return true; }
+    catch (e) { /* 파서 부재 — 위 판정만 쓴다 */ }
+    return false;
+  }
+
+  /* 「이대로 보내줘」처럼 기록을 남기라고 확정한 말 */
+  var WRITE_INTENT = /(이대로\s*(보내|저장|올려|요청|담아)|보내\s*줘|보내자|전달\s*해|저장\s*해|올려\s*줘|요청\s*해|담아\s*줘|잡아\s*줘)/;
+
+  function wantsWrite(text) {
+    var t = String(text == null ? "" : text);
+    return !!t && WRITE_INTENT.test(t);
+  }
+
+  /* 기록이 실제로 남는 처리 = 전달·1:1 안건·결재 (3·4·6) */
+  function writesRecord(act) {
+    var n = actNo(act);
+    return n === 3 || n === 4 || n === 6;
+  }
+
+  /* 화면으로 넘어갈 때는 왜 넘어가는지 한 줄로 알린다 (R5) */
+  function sayWhy(line) {
+    var t = scrub(line);
+    if (!t) return;
+    try {
+      if (window.EZChat && EZChat.push) { EZChat.push({ role: "ai", text: t }); return; }
+    } catch (e) { /* 대화 저장소 부재 — 토스트로 */ }
+    toast(t, "");
+  }
+
+  /* ======================================================================
+     16) run — 기본 경로. 대화 안에서 끝낸다
+     ====================================================================== */
+
+  /* 처리 한 건을 사용자 말투 요청 한 줄로 바꾼다. 이 문장이 대화에 그대로 올라가고,
+     실측 근거는 B1의 EZSignalChat.contextFor()가 보이지 않게 실어 준다. */
+  function chatRequest(sig, act) {
+    var head = scrub(sig.notice || "");
+    var what = actName(sig, act);
+    var tail = writesRecord(act)
+      ? " 보낼 문안을 먼저 채팅에서 보여줘. 확인하고 보낼게."
+      : " 지금 데이터로 채팅에서 바로 정리해줘. 화면은 아직 안 옮겨도 돼.";
+    return tidy(head + (head && what ? " — " : "") + what + tail);
+  }
+
+  function chatResolve(inst, sig, act) {
+    var req = chatRequest(sig, act);
+    try { if (window.Elizax && Elizax.open) Elizax.open(); } catch (e) { /* 무시 */ }
+    if (sendToElizax(req)) return true;
+    /* 대화를 못 열었다 — 문안 창으로 정직하게 폴백(신호는 해제하지 않는다) */
+    return fallbackDraft(inst, sig, act, "대화를 열지 못했어요.");
+  }
+
+  function guard(inst, actionIdx) {
     var sig = signalOf(inst);
     var act = actionAt(inst, actionIdx);
-    if (!sig || !act || !act.type) {
-      toast("처리할 알림 정보를 찾지 못했습니다.", "warn");
-      return false;
+    if (!sig || !act || !actNo(act)) {
+      toast("처리할 알림 정보를 찾지 못했어요.", "warn");
+      return null;
     }
-    /* 라이브 15건이 아니면 A5만 — 거짓 작동을 만들지 않는다(§4) */
-    if (sig.now !== 1 && act.type !== "A5") {
-      toast("이 알림은 데이터 준비가 필요해 아직 처리할 수 없어요. 상세 보기만 됩니다.", "warn");
-      return false;
+    /* 라이브 신호가 아니면 화면 열기만 — 거짓 작동을 만들지 않는다 */
+    if (sig.now !== 1 && actNo(act) !== 5) {
+      toast("이 알림은 데이터가 더 모여야 처리할 수 있어요. 지금은 내용만 볼 수 있어요.", "warn");
+      return null;
     }
+    return { sig: sig, act: act };
+  }
+
+  /* run(inst, i, text) — 기본은 채팅 안에서 해결한다.
+     text에 화면으로 가겠다는 말이 있으면 openScreen으로 넘기고,
+     기록을 남기라고 확정한 말이 있으면 실제 쓰기 흐름을 태운다. */
+  function run(inst, actionIdx, text) {
+    var g = guard(inst, actionIdx);
+    if (!g) return false;
+    if (wantsScreen(text)) return openScreen(inst, actionIdx, text);
     try {
-      switch (act.type) {
-        case "A1": return runA1(inst, sig, act);
-        case "A2": return runA2(inst, sig, act);
-        case "A3": return runA3(inst, sig, act);
-        case "A4": return runA4(inst, sig, act);
-        case "A5": return runA5(inst, sig, act);
-        case "A6": return runA6(inst, sig, act);
-        default:
-          toast("아직 지원하지 않는 처리 방법입니다 — " + act.type, "warn");
-          return false;
+      if (writesRecord(g.act) && wantsWrite(text)) {
+        switch (actNo(g.act)) {
+          case 3: return runA3(inst, g.sig, g.act);
+          case 4: return runA4(inst, g.sig, g.act);
+          case 6: return runA6(inst, g.sig, g.act);
+        }
       }
+      return chatResolve(inst, g.sig, g.act);
     } catch (e) {
-      /* 어떤 경우에도 카드가 죽지 않게 한다 */
       try { console.error("[EZSignalAct]", e); } catch (e2) { /* 무시 */ }
-      toast("처리 중 문제가 생겨 문안만 보여드립니다.", "warn");
-      return fallbackDraft(inst, sig, act, "처리 중 오류가 났습니다.");
+      return fallbackDraft(inst, g.sig, g.act, "처리 중 문제가 생겼어요.");
     }
   }
 
-  /* 카드 `.ezs-agent` 우측 「자세히」 — 엔진 프롬프트를 elizax에 그대로 보낸다 */
+  /* openScreen(inst, i, text) — 사용자가 화면에서 직접 하겠다고 한 경우에만 */
+  function openScreen(inst, actionIdx, text) {
+    var g = guard(inst, actionIdx);
+    if (!g) return false;
+    var dst = resolveScreen(inst, g.act);
+    var label = "";
+    try { if (window.EZNav && EZNav.labelOf) label = EZNav.labelOf(dst.s, dst.p); } catch (e) { label = ""; }
+    sayWhy("직접 고치시겠다고 하셔서 " + (label || "해당 화면") + "으로 넘어갈게요.");
+    try {
+      switch (actNo(g.act)) {
+        case 1: return runA1(inst, g.sig, g.act);
+        case 2: return runA2(inst, g.sig, g.act);
+        case 3: return runA3(inst, g.sig, g.act);
+        case 4: return runA4(inst, g.sig, g.act);
+        case 5: return runA5(inst, g.sig, g.act);
+        case 6: return runA6(inst, g.sig, g.act);
+        default:
+          toast("아직 지원하지 않는 처리예요.", "warn");
+          return false;
+      }
+    } catch (e2) {
+      try { console.error("[EZSignalAct]", e2); } catch (e3) { /* 무시 */ }
+      toast("처리 중 문제가 생겨 문안만 보여드려요.", "warn");
+      return fallbackDraft(inst, g.sig, g.act, "처리 중 문제가 생겼어요.");
+    }
+  }
+
+  /* fromText — 사용자 말 한 줄로 라우팅한다(칩·자유 입력 공통 진입) */
+  function fromText(inst, text, actionIdx) {
+    return wantsScreen(text) ? openScreen(inst, actionIdx, text) : run(inst, actionIdx, text);
+  }
+
+  /* 근거를 그대로 대화로 — 대화가 단일 원천이므로 EZSignalChat이 있으면 그쪽 */
   function ask(inst) {
-    var p = enginePrompt(inst);
-    if (!p) { toast("보낼 근거가 없습니다.", "warn"); return false; }
-    try { if (window.Elizax && Elizax.open) Elizax.open(); } catch (e) { /* 무시 */ }
+    var sig = signalOf(inst) || {};
+    try {
+      if (sig.id && window.EZSignalChat && typeof EZSignalChat.ask === "function") {
+        if (window.Elizax && Elizax.open) Elizax.open();
+        EZSignalChat.ask(sig.id);
+        return true;
+      }
+    } catch (e) { /* 아래 폴백 */ }
+    var p = scrub(enginePrompt(inst));
+    if (!p) { toast("보낼 내용이 없어요.", "warn"); return false; }
+    try { if (window.Elizax && Elizax.open) Elizax.open(); } catch (e2) { /* 무시 */ }
     if (sendToElizax(p)) return true;
-    openDraftModal({ inst: inst, title: "알림 근거", note: "elizax 대화를 열 수 없어 근거를 그대로 보여드립니다.", text: p });
+    openDraftModal({ inst: inst, title: "알림 내용", note: "대화를 열 수 없어 내용을 그대로 보여드려요.", text: p });
     return false;
   }
 
   window.EZSignalAct = {
     run: run,
+    openScreen: openScreen,
+    fromText: fromText,
+    wantsScreen: wantsScreen,
     ask: ask,
     actionAt: actionAt,
     signalOf: signalOf,

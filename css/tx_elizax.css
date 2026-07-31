@@ -84,7 +84,7 @@
 .ezx-x:hover{ background:var(--color-background-muted); color:var(--color-text-primary); }
 .ezx-x:active{ transform:scale(.95); }
 
-/* ---------- 2탭 IA — 알림(기본) / 대화 (18차 결정 ③) ---------- */
+/* ---------- 2탭 IA — 대화(기본) / 알림 (18-2차 R6: 대화가 먼저) ---------- */
 .ezx-tabs{
   flex:none; display:flex; gap:4px; padding:6px 10px;
   border-bottom:1px solid var(--ezx-hairline);
@@ -110,9 +110,18 @@
 .ezx-mode-ntf .ezx-ntf-pane{ display:block; }
 .ezx-pane-empty{ padding:36px 10px; text-align:center; color:var(--color-text-secondary); font-size:12px; line-height:1.6; }
 
-/* [알림] 탭 — 라이브 신호 카드 구역 + 「지난 알림」 접이식 */
-.ezx-sig-live{ display:flex; flex-direction:column; gap:10px; }
+/* [알림] 탭 — 한 줄 목록(18-2차 R6) + 「지난 알림」 접이식.
+   한 줄 = 알림 문구 한 문장. 칩·근거·처리 버튼 없음. 누르면 대화가 열린다.
+   문법은 아래 .ezx-ntf-row와 같은 계열(1px hairline 구분선 · hover muted). */
+.ezx-sig-live{ display:flex; flex-direction:column; }
 .ezx-sig-live:empty{ display:none; }
+.ezx-sig-row{
+  display:block; width:100%; text-align:left; cursor:pointer;
+  padding:11px 6px; border-bottom:1px solid var(--ezx-hairline);
+  font-size:12.5px; font-weight:600; line-height:1.5; color:var(--color-text-primary);
+  transition:background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.ezx-sig-row:hover{ background:var(--color-background-muted); color:var(--color-accent); }
 .ezx-sig-none{ padding:22px 10px; }
 .ezx-past{ margin-top:12px; border-top:1px solid var(--ezx-hairline); }
 .ezx-past-h{
@@ -267,33 +276,9 @@
 .ezx-starter:hover{ border-color:var(--color-accent); color:var(--color-accent); background:var(--color-accent-muted); }
 .ezx-starter:active{ transform:scale(.95); }
 
-/* 웰컴 라이브 알림 카드 3장 + 카탈로그 열람 링크 (18차 요청 2·5) */
-.ezx-sig-welcome{ display:flex; flex-direction:column; gap:9px; text-align:left; margin-top:2px; }
-.ezx-catlink{
-  display:block; margin:10px auto 0; font-size:11.5px; font-weight:600;
-  color:var(--color-text-secondary); text-decoration:underline;
-  text-decoration-color:var(--color-border-emphasized); text-underline-offset:3px;
-}
-.ezx-catlink:hover{ color:var(--color-accent); text-decoration-color:var(--color-accent); }
-
-/* 카탈로그 열람 모달 (TX.modal 안쪽 — .ezx-root 외부이므로 비중첩 선택자) */
-.ezx-cat{ max-height:60vh; overflow-y:auto; }
-.ezx-cat-empty{ padding:26px 8px; text-align:center; font-size:12px; color:var(--color-text-secondary); }
-.ezx-cat-row{
-  display:flex; align-items:baseline; gap:8px; padding:7px 4px;
-  border-bottom:1px solid var(--color-border); font-size:12px; color:var(--color-text-primary);
-}
-.ezx-cat-t{
-  flex:none; min-width:62px; font-size:10px; font-weight:700; text-align:center;
-  padding:2px 7px; border-radius:var(--radius-full);
-  background:var(--color-accent-muted); color:var(--color-text-accent, var(--color-accent));
-}
-.ezx-cat-s{ flex:none; min-width:56px; font-size:10.5px; color:var(--color-text-secondary); }
-.ezx-cat-n{ flex:1 1 auto; line-height:1.5; }
-.ezx-cat-b{
-  flex:none; font-size:10px; font-weight:600; padding:2px 7px; border-radius:var(--radius-full);
-  background:var(--color-background-muted); color:var(--color-text-secondary);
-}
+/* 18-2차: 웰컴 신호 카드 3장(.ezx-sig-welcome)·카탈로그 링크(.ezx-catlink)·
+   카탈로그 모달(.ezx-cat*) 전부 폐기. 웰컴은 빈 채팅 + .ezx-starter 버튼뿐이므로
+   추가 스타일이 필요 없다 — 두 묶음이 같은 시각 계열을 쓰는 것이 R3의 요구다. */
 
 /* ---------- Composer — frosted, pill input ---------- */
 .ezx-foot{

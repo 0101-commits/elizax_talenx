@@ -1292,42 +1292,115 @@
     } catch (e2) {}
   }
 
-  /* ================= AI 프롬프트 ================= */
-  /* 알림 문구 + 실측 근거(출처·기준시점) + 기준값 + 알림 조건 + 초안 지침 + 출력 형식 */
+  /* ================= AI 프롬프트 (18-2차 R4 — 대화체 계약) =================
+     카드가 폐기됐으므로 프롬프트도 「표 채우기」가 아니라 「말 걸기」다.
+     · 분류 이름(유형·단계·처리)·코드·필드 이름·기록 번호는 한 글자도 싣지 않는다
+     · 실측 근거는 사람 말로만 싣고, 출처는 물어볼 때만 밝히도록 지시한다
+     문구 정제는 `EZSignalChat.scrub`이 단일 원천이고, 그 모듈이 없을 때만
+     아래 최소 정제기가 대신 돈다(노드 검증·부분 로딩 대비). */
+  var MIN_TABLE = {
+    objectives: '목표', keyResults: '핵심결과', checkins: '체크인', employees: '구성원',
+    orgs: '조직', jobs: '직무', jobProfiles: '직무 프로파일', competencies: '역량',
+    strategyThemes: '전략 테마', feedbackHistory: '피드백 이력', evalHistory: '평가 이력',
+    evaluations: '평가 기록', peerReviews: '동료 리뷰', attendance: '근태 기록',
+    payroll: '급여 기록', leaves: '휴가 기록', period: '기간'
+  };
+  var MIN_ABBR = { OBJ: '목표', KR: '핵심결과', EMP: '구성원', ORG: '조직', CHK: '체크인', TH: '기준', FB: '피드백' };
+  function minScrub(text) {
+    var s = String(text == null ? '' : text), k;
+    if (!s) return '';
+    s = s.replace(/FY(\d{4})[-\s]?([1-4])Q/g, '$1년 $2분기');
+    s = s.replace(/ORG-\d+\s*\(([^)]{1,40})\)/g, '$1');
+    s = s.replace(/([A-Za-z][A-Za-z0-9]*(?:-[0-9A-Za-z가-힣]+)*)\.([A-Za-z_][A-Za-z0-9_]*)/g,
+      function (all, pfx) { return (MIN_TABLE[pfx] || '') + ' 기록'; });
+    s = s.replace(/(?:EMP|ORG|OBJ|KR)-[0-9A-Za-z_]+(?:-[0-9A-Za-z_]+)*/g, '');
+    s = s.replace(/JOB-[^\s\/,)\]·]+/g, '').replace(/TH-[^\s\/,)\]·]+/g, '');
+    s = s.replace(/(?:FB|CHK|EV|PR)-[0-9A-Za-z_-]+/g, '');
+    s = s.replace(/\b(OBJ|KR|EMP|ORG|CHK|TH|FB)\b/g, function (t) { return MIN_ABBR[t] || ''; });
+    for (k in MIN_TABLE) if (has(MIN_TABLE, k)) s = s.replace(new RegExp('\\b' + k + '\\b', 'g'), MIN_TABLE[k]);
+    s = s.replace(/기한 도래|작성 공백|기준 이탈|연결 불일치|상황 변동/g, '살펴볼 점');
+    s = s.replace(/새로 쓰기|내가 고치기|알려주기|1on1 잡기|상세 보기|승인 요청/g, '이어서 할 일');
+    s = s.replace(/\bT[1-5]\b/g, '').replace(/\bA[1-6]\b/g, '');
+    s = s.replace(/[\[(【]\s*(?:사실|비교|추이|연결|이력|범위)\s*[\])】]/g, '');
+    s = s.replace(/\(\s*\)/g, '').replace(/「\s*」/g, '');
+    if (/[·\/]/.test(s)) {
+      var parts = s.split(/\s*[·\/]\s*/), keep = [], i, p;
+      for (i = 0; i < parts.length; i++) {
+        p = parts[i].replace(/^\s+|\s+$/g, '');
+        if (p && p !== '-') keep.push(p);
+      }
+      s = keep.join(' · ');
+    }
+    return s.replace(/\s{2,}/g, ' ').replace(/^\s+|\s+$/g, '');
+  }
+  function sane(text) {
+    try {
+      if (window.EZSignalChat && typeof EZSignalChat.scrub === 'function') return EZSignalChat.scrub(text);
+    } catch (e) {}
+    return minScrub(text);
+  }
+
   function prompt(inst) {
     if (!inst) return '';
     if (typeof inst === 'string') inst = instance(inst);
     if (!inst) return '';
-    var L = [];
-    L.push('[알림] ' + inst.notice);
-    L.push('[대상] ' + inst.stage + ' · ' + (inst.typeLabel || inst.type) + ' · ' + inst.actor
-      + (inst.scopeLabel ? ' (' + inst.scopeLabel + ')' : '') + ' · 기준 시점 ' + inst.asof);
+    /* 대화 모듈이 있으면 그쪽이 단일 원천 — 질문 + 보이지 않는 참고 자료 */
+    try {
+      if (window.EZSignalChat && typeof EZSignalChat.promptFor === 'function') {
+        var viaChat = EZSignalChat.promptFor(inst);
+        if (viaChat) return viaChat.length > 1600 ? viaChat.slice(0, 1597) + '…' : viaChat;
+      }
+    } catch (e0) {}
+
+    var L = [], i;
+    L.push('[사용자에게 건넬 이야기] ' + sane(inst.notice));
+    L.push('[기준 시점] ' + inst.asof);
     var ev = (inst.evidence || []).filter(function (e) { return e.show === '기본' || e.show === '접힘'; });
     if (!ev.length) ev = (inst.evidence || []).slice(0, 4);
-    L.push('[근거]');
+    var sure = [], soft = [];
     ev.slice(0, 5).forEach(function (e) {
-      L.push('- ' + cut(e.text, 110) + ' (출처 ' + cut(e.src || '-', 46) + ' · 기준 ' + (e.asof || inst.asof)
-        + (e.assumed === 1 ? ' · 추정값' : '') + ')');
+      var t = sane(cut(e.text, 120));
+      if (!t) return;
+      if (e.assumed === 1) soft.push(t); else sure.push(t);
     });
-    if (inst.thresholds && inst.thresholds.length) {
-      L.push('[기준값] ' + inst.thresholds.map(function (t) {
-        return t.name + ' ' + t.value + '(예시' + (t.range ? ' · 조정 ' + t.range : '') + ')'
-          + (t.actual ? ' · 실측 ' + t.actual : '');
-      }).join(' / '));
+    if (sure.length) {
+      L.push('[실제로 세어 본 것]');
+      for (i = 0; i < sure.length; i++) L.push('- ' + sure[i]);
     }
-    if (inst.principle) L.push('[알림 조건] ' + cut(inst.principle, 120));
+    if (soft.length) {
+      L.push('[아직 확인되지 않아 잠정으로 둔 것]');
+      for (i = 0; i < soft.length; i++) L.push('- ' + soft[i]);
+    }
+    if (inst.thresholds && inst.thresholds.length) {
+      var th = [];
+      inst.thresholds.slice(0, 2).forEach(function (t) {
+        var nm = sane(t.name);
+        if (!nm) return;
+        th.push(nm + ' — 회사가 보는 잠정 기준 ' + sane(t.value) + (t.actual ? ', 지금 측정값 ' + sane(t.actual) : ''));
+      });
+      if (th.length) L.push('[견줘 본 기준] ' + th.join(' / '));
+    }
+    var srcs = [], seen = {};
+    (inst.evidence || []).forEach(function (e) {
+      var s = sane(cut(e.src, 40));
+      if (!s || s.length < 2 || seen[s] || srcs.length >= 3) return;
+      seen[s] = 1; srcs.push(s);
+    });
+    if (srcs.length) L.push('[살펴본 자료 — 사용자가 물을 때만 사람 말로 밝히세요] ' + srcs.join(' · '));
     var acts = (inst.actions || []).slice().sort(function (a, b) { return (a.rank || 9) - (b.rank || 9); });
-    var act = null, i;
+    var act = null;
     for (i = 0; i < acts.length; i++) if (acts[i].type !== 'A5') { act = acts[i]; break; }
     if (!act) act = acts[0] || null;
-    if (act) {
-      L.push('[작성 지침 · ' + (act.kind || act.type) + '] ' + cut(act.draft, 300));
-      if (act.confirm) L.push('[확정 버튼 문구] ' + act.confirm);
-    }
-    L.push('[출력 형식] 위 근거에 있는 숫자와 이름만 써서 해요체로 3~5문장 초안을 쓰고, 근거에 없는 수치는 만들지 마세요. '
-      + '추정값이라고 적힌 줄은 「(추정)」을 붙여 인용하세요. 마지막 줄에 「확인 요청: …」 한 문장을 붙여 주세요.');
+    if (act && act.draft) L.push('[이어서 도울 수 있는 일] ' + sane(cut(String(act.draft).split('\n')[0], 160)));
+    if (!inst.ready) L.push('[주의] 이 주제는 실제 값을 다 세지 못했습니다. 단정하지 말고 무엇을 더 채워야 하는지만 말하세요.');
+    L.push('[답변 방식 — 반드시 지켜 주세요]');
+    L.push('1. 옆자리 동료에게 말하듯 해요체로 3~6문장만 씁니다. 표, 글머리기호, 굵은 글씨 나열은 쓰지 않습니다.');
+    L.push('2. 숫자는 문장 안에 녹여 씁니다. 근거를 줄 단위로 늘어놓지 않습니다.');
+    L.push('3. 내부 분류 이름, 영문 표 이름, 점 찍힌 데이터 경로, 코드처럼 보이는 기록 번호는 한 글자도 쓰지 않습니다.');
+    L.push('4. 위에 적힌 값만 씁니다. 없는 숫자는 만들지 않고, 잠정이라고 적힌 값은 확정해 말하지 않습니다.');
+    L.push('5. 마지막 문장은 사용자가 바로 이어받을 수 있는 짧은 제안이나 물음으로 맺습니다.');
     var out = L.join('\n');
-    return out.length > 1200 ? out.slice(0, 1197) + '…' : out;
+    return out.length > 1600 ? out.slice(0, 1597) + '…' : out;
   }
 
   /* ================= 노출 ================= */

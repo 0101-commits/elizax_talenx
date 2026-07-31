@@ -105,6 +105,35 @@
       .replace(/"/g, "&quot;");
   }
   function norm(s) { return String(s || "").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, ""); }
+  /* 근거 칩의 출처를 사람이 읽는 말로 바꾼다. 기록 번호·영문 표 이름은 화면에 쓰지 않는다.
+     정제 원천은 EZSignalChat.scrub — 없으면 아래 최소 정제로 대신한다. */
+  var SRC_WORDS = [
+    [/\bkeyResults?\b/g, "핵심결과 기록"], [/\bobjectives?\b/g, "목표 기록"],
+    [/\bcheckins?\b/g, "체크인 기록"], [/\bemployees?\b/g, "인사 기록"],
+    [/\bjobProfiles?\b/g, "직무 프로파일"], [/\borgs?\b/g, "조직 기록"],
+    [/\bevaluations?\b/g, "평가 기록"], [/\bfeedback\w*\b/g, "피드백 기록"],
+    [/\bcompetenc\w*\b/g, "역량 기준"], [/\bstrategyThemes?\b/g, "전략 방향"],
+    [/\brule\b/g, "회사 규정"], [/\bskill\w*\b/g, "스킬 사전"]
+  ];
+  function humanSrc(s) {
+    var t = String(s || ""), i;
+    if (!t) return "";
+    if (window.EZSignalChat && typeof window.EZSignalChat.scrub === "function") {
+      try { t = String(window.EZSignalChat.scrub(t) || t); } catch (e) { /* 아래 마무리만 적용 */ }
+    }
+    t = t.replace(/[A-Z]{2,4}-[A-Za-z0-9가-힣_-]+/g, " ");         /* 남은 기록 번호 */
+    for (i = 0; i < SRC_WORDS.length; i++) t = t.replace(SRC_WORDS[i][0], SRC_WORDS[i][1]);
+    t = t.replace(/([가-힣\)])\.[A-Za-z_][\w.]*/g, "$1")           /* 「…기록.sum」 같은 꼬리 경로 */
+      .replace(/\.(?=\s|$|[「·\/])/g, "")
+      .replace(/\.(?=「)/g, " ")
+      .replace(/[A-Za-z_][\w]*\.[\w.]*/g, "")                       /* 남은 점 찍힌 경로 통째로 */
+      .replace(/([가-힣」\)])\.(?=[가-힣「])/g, "$1 · ")             /* 우리말 사이에 남은 점 */
+      .replace(/([가-힣])(?=「)/g, "$1 ")
+      .replace(/\s*[\/·]\s*/g, " · ")
+      .replace(/(?:\s*·\s*)+/g, " · ")
+      .replace(/^\s*·\s*|\s*·\s*$/g, "");
+    return norm(t);
+  }
   function z2(n) { return (n < 10 ? "0" : "") + n; }
   function nowStamp() {
     var t = new Date();
@@ -1211,7 +1240,8 @@
       html += '<span class="ezl-ev-chip' + guessCls + (clickable ? " click" : "") + '" style="--ezl-c:' + meta.color + '"'
         + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 원문·출처·인용 이력 보기"' : ' title="' + esc(it2.title) + ' — 타인 기록이라 요약까지만 제공됩니다"') + ">"
         + '<span class="tb">' + esc(meta.label) + "</span>" + esc(shorten(it2.title, 14))
-        + (clickable && lv2 === "full" ? '<span class="sr">' + esc(it2.source || "") + "</span>" : "")
+        /* 출처는 사람이 읽는 말로만 — 기록 번호·표 이름은 화면에 쓰지 않는다 */
+        + (clickable && lv2 === "full" ? '<span class="sr">' + esc(humanSrc(it2.source)) + "</span>" : "")
         + "</span>";
     }
     picked = gated.map(function (g) { return g.it; });
