@@ -207,6 +207,7 @@
   function openModal() {
     /* 비어 있으면 모달 없이 토스트만 */
     if (!grabSession()) { toast("내보낼 대화가 없습니다", "warn"); return; }
+    injectStyle();   /* 휴면 모듈이므로 스타일도 열 때만 주입 */
     if (!window.TX || !TX.modal) { doExport("md"); return; } /* 모달 불가 → MD 즉시 */
 
     var title = "새 대화";
@@ -282,46 +283,12 @@
     document.head.appendChild(st);
   }
 
-  /* ---------------- 버튼 주입 (푸터행 폴링) ---------------- */
-
-  function injectButton() {
-    var row = document.querySelector(".ezx-root .ezx-foot-row");
-    if (!row) return false;
-    if (row.querySelector(".ezcx-export-btn")) return true; /* 중복 방지 */
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "ezcx-export-btn";
-    btn.textContent = "내보내기";
-    btn.setAttribute("aria-label", "대화 내보내기");
-    btn.addEventListener("click", openModal);
-    /* "대화 초기화"(.ezx-reset) 바로 옆에 배치 */
-    var reset = row.querySelector(".ezx-reset");
-    if (reset && reset.nextSibling) row.insertBefore(btn, reset.nextSibling);
-    else row.appendChild(btn);
-    return true;
-  }
-
-  function boot() {
-    if (!window.EZChat) {
-      console.warn("[tx_chat_export] EZChat 스토어 없음 — 모듈 비활성");
-      return;
-    }
-    injectStyle();
-    /* FAB(.ezx-root)는 DOMContentLoaded 이후 생성 → 폴링 (300ms × 최대 20회) */
-    var tries = 0;
-    (function poll() {
-      if (injectButton()) return;
-      if (++tries >= 20) {
-        console.warn("[tx_chat_export] .ezx-foot-row 미발견 — 버튼 주입 포기");
-        return;
-      }
-      setTimeout(poll, 300);
-    })();
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
-  } else {
-    boot();
-  }
+  /* ---------------- 휴면(dormant) — 버튼 주입 중단 ---------------- */
+  /* 18차 §7: 푸터행은 「＋ 새 채팅 시작」 한 칸으로 단순화한다.
+     "내보내기" 버튼 주입(구 injectButton/폴링)을 제거해 이 모듈은 DOM을
+     건드리지 않는다. 변환·다운로드·모달 로직(sessionToMd·doExport·openModal)은
+     그대로 남겨 두어, 필요해지면 openModal() 호출 한 줄로 되살릴 수 있다.
+     전역은 만들지 않는다(§9). */
+  void doExport;   /* 미사용 경고 방지용 참조 — 로직 보존이 목적 */
+  void openModal;
 })();

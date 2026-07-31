@@ -7,7 +7,8 @@
    노출 형태 3종:
      ① 도킹 대화창  — elizax 패널이 TXAgent.runScenario(key, host)로
                       시나리오를 대화 안에 임베드 (host=.ezx-scnhost)
-     ② 선제 팝업    — 메인 앱 위 감지 카드 (scheduleProactive)
+     ② 알림 카드    — 메인 앱 위 단일 알림 표면 (scheduleProactive → EZSignalCard.slot,
+                      카드·엔진 미로드 시에만 .agh-popup 폴백)
      ③ 전체화면 딥워크 — Agent Hub 오버레이 (openHub/openFull)
 
    Exposes window.TXAgent = {
@@ -756,16 +757,17 @@
     host.innerHTML =
       '<div class="agh-shead"><div><h2>오늘은 어떤 도움을 드릴까요?</h2>' +
       '<span class="agh-exp">역할 주체 <b>' + esc(r.label) + "</b> 기준으로 화면과 권한이 자동 구성됩니다</span></div></div>" +
-      /* 선제 감지 건수·내용은 alertsNow() 실계산 결과 — 상수 폐기 */
+      /* 알림 건수·내용은 신호 엔진(있으면) 또는 alertsNow() 실계산 결과 — 상수 폐기 */
       (function () {
-        var al = alertsNow();
-        if (!al.length) {
-          return '<div class="agh-brief"><span class="ic">⚡</span><div><b>선제 감지 0건</b> — 지금 조회되는 임계 초과 신호가 없습니다. ' +
-            "없는 경고를 만들지 않습니다.</div></div>";
+        var sig = sigPending();
+        var titles = sig ? sig.map(sigNotice) : alertsNow().map(function (a) { return a.title; });
+        if (!titles.length) {
+          return '<div class="agh-brief"><span class="ic">⚡</span><div><b>알림 0건</b> — 지금 처리할 알림이 없습니다. ' +
+            "없는 알림을 만들지 않습니다.</div></div>";
         }
-        return '<div class="agh-brief"><span class="ic">⚡</span><div><b>선제 감지 ' + al.length + "건</b> — " +
-          al.map(function (a) { return esc(a.title); }).join(" · ") + ". " +
-          "호출 없이 에이전트가 먼저 포착했습니다. 🔔 알림 또는 아래 과제 카드에서 확인하세요.</div></div>";
+        return '<div class="agh-brief"><span class="ic">⚡</span><div><b>알림 ' + titles.length + "건</b> — " +
+          titles.map(function (t) { return esc(t); }).join(" · ") + ". " +
+          "호출 없이 먼저 포착했습니다. 🔔 알림 또는 아래 과제 카드에서 확인하세요.</div></div>";
       })() +
       '<div class="agh-qwgrid">' + cards + "</div>";
     ctxPanelIf(host, [
@@ -920,8 +922,8 @@
       '<div class="agh-verdict" data-agh-verdict style="display:none"></div>' +
       gateHTML("qw2");
     ctxPanelIf(host, [
-      { tag: "선제 감지", title: "가중치 합계 105%", kind: "warn", body: "전체 목표 가중치 합이 100%보다 <b>5%p</b> 높습니다. 목표3 가중치 15%→10% 조정안을 준비했습니다. " + srcChip("rule", "가중치 합계 규칙") },
-      { tag: "선제 감지", title: "전사목표 미연결", kind: "warn", body: "목표 3이 전사 목표 '매출 3조 8,000억'과 연결되지 않았습니다. KR4 연결을 제안합니다. " + srcChip("talenx", "전사 목표체계 FY2026") }
+      { tag: "알림", title: "가중치 합계 105%", kind: "warn", body: "전체 목표 가중치 합이 100%보다 <b>5%p</b> 높습니다. 목표3 가중치 15%→10% 조정안을 준비했습니다. " + srcChip("rule", "가중치 합계 규칙") },
+      { tag: "알림", title: "전사목표 미연결", kind: "warn", body: "목표 3이 전사 목표 '매출 3조 8,000억'과 연결되지 않았습니다. KR4 연결을 제안합니다. " + srcChip("talenx", "전사 목표체계 FY2026") }
     ], "");
     simQw2(names, host, carry);
   };
@@ -2734,30 +2736,73 @@
     } catch (e3) { /* 무시 */ }
     return out;
   }
+  /* ---------- 신호 엔진(EZSignalEngine)이 있으면 그것이 유일한 알림 원천 ----------
+     엔진 미로드 환경(카탈로그 배선 전)에서는 아래 alertsNow() 폴백을 그대로 쓴다. */
+  function sigPending() {
+    var E = window.EZSignalEngine;
+    if (!E || typeof E.pending !== "function") return null;      // null = 엔진 없음
+    try {
+      var a = E.pending(role().key);
+      return a && a.length ? a : [];                             // [] = 처리할 알림 없음
+    } catch (e) { return null; }
+  }
+  function sigNotice(inst) {
+    var s = (inst && inst.signal) || inst || {};
+    return s.notice || s.agent || s.id || "알림";
+  }
+  function alertCount() {
+    var sig = sigPending();
+    if (sig) return sig.length;
+    try { return alertsNow().length; } catch (e) { return 0; }
+  }
+  /* 신호 1건을 여는 유일한 경로 — 카드(우하단 슬롯) 또는 도킹 패널 [알림] 탭 */
+  function openSignal(inst) {
+    var C = window.EZSignalCard;
+    if (C && typeof C.slot === "function") { try { C.slot([inst]); return; } catch (e) { /* 아래로 폴백 */ } }
+    if (window.Elizax && Elizax.showTab) { try { Elizax.showTab("ntf"); } catch (e2) { /* 무해화 */ } }
+  }
   function showAlerts() {
     if (!(window.TX && TX.menu)) return;
     var btn = el.root.querySelector("[data-agh-alerts]");
+    var sig = sigPending();
+    if (sig) {
+      if (!sig.length) { toast("처리하지 않은 알림이 없습니다 — 없는 알림을 만들지 않습니다."); return; }
+      TX.menu(btn, sig.map(function (s) {
+        return { label: "🔔 " + sigNotice(s), onClick: function () { openSignal(s); } };
+      }));
+      return;
+    }
     var al = alertsNow();
     if (!al.length) { toast("지금 조회되는 임계 초과 신호가 없습니다 — 없는 알림을 만들지 않습니다."); return; }
     TX.menu(btn, al.map(function (a) {
       return { label: "▲ " + a.title + " — " + a.body, onClick: function () { showScreen(a.screen); } };
     }));
   }
-  /* 메인 앱 위 선제 팝업 카드 */
+  /* 메인 앱 위 알림 표면 — 하나만 뜬다(신호 카드). 카드/엔진 미로드 시에만 폴백 팝업. */
   var popupShown = false;
   function scheduleProactive() {
     if (popupShown) return;
     setTimeout(function () {
       if (popupShown || state.open) return;
-      /* 역할별 관심 화면과 맞는 실알림을 고른다 — 인덱스 고정(0/1/2)은 알림 개수가
-         실계산으로 바뀌면 엉뚱한 항목을 집으므로 폐기. 알림이 없으면 팝업도 없다. */
+      /* elizax 패널이 열려 있으면 띄우지 않는다 — 알림 탭에 같은 카드가 이미 있어 한 신호가 두 번 보인다 */
+      if (document.querySelector(".ezx-root.ezx-open")) return;
+      var C = window.EZSignalCard, sig = sigPending();
+      if (sig && C && typeof C.slot === "function") {
+        if (!sig.length) return;                       /* 엔진이 "처리할 알림 없음"이라 답했다 */
+        try {
+          C.slot(sig.slice(0, 2));                     /* 2건이면 카드가 "관련 2건"으로 묶는다 */
+          popupShown = true;
+          return;
+        } catch (e) { /* 카드 렌더 실패 — 아래 폴백으로 내려간다 */ }
+      }
+      /* 폴백(신호 카드·엔진 미로드) — 알림을 잃지 않기 위해 기존 경로 유지 */
       var al = alertsNow();
       if (!al.length) return;
       popupShown = true;
       var want = { leader: ["qw1", "qw7"], hr: ["qw5", "calib"], exec: ["qw7", "qw5"], member: ["qw2", "qw7"] }[role().key] || [];
       var a = al.filter(function (x) { return want.indexOf(x.screen) >= 0; })[0] || al[0];
       var card = h("div", "agh-popup");
-      card.innerHTML = '<div class="hd"><span class="dot"></span>에이전트 알림 · 선제 감지</div>' +
+      card.innerHTML = '<div class="hd"><span class="dot"></span>알림</div>' +
         "<b>" + esc(a.title) + "</b><p>" + esc(a.body) + "</p>" +
         '<div class="acts"><button class="agh-btn primary" data-pgo>열어서 확인</button><button class="agh-btn" data-pdis>나중에</button></div><small>1일 뒤 다시 알림 · 승인하면 반영</small>';
       document.body.appendChild(card);
@@ -2787,7 +2832,11 @@
     if (rc) rc.textContent = role().label + " 관점 · " + CU().name;
     /* AI 연결 상태 칩 — 실제 EZAI 모드 반영 */
     var ac = el.root.querySelector("[data-agh-alertcnt]");
-    if (ac) ac.textContent = alertsNow().length;
+    if (ac) {
+      var an = alertCount();
+      ac.textContent = an > 9 ? "9+" : String(an);   /* 도킹 배지와 같은 클램프 */
+      ac.setAttribute("title", "처리하지 않은 알림 " + an + "건");
+    }
     var ai = el.root.querySelector("[data-agh-ai]");
     if (ai && window.EZAI) {
       var rdy = EZAI.ready && EZAI.ready();

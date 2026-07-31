@@ -97,7 +97,7 @@
   }
 
   /* ---- data-astryx-theme 자동 부여 — AI 레이어 루트만, talenx 화면(#s-… / .tx-…) 금지 ---- */
-  var AI_ROOTS = '.ezx-root,.ezx-panel,.ezx-fab,.agh-root,.ezl-panel,.ezpm-root,.ez1o-root,.txr-receipt,.ezpo-modal';
+  var AI_ROOTS = '.ezx-root,.ezx-panel,.ezx-fab,.agh-root,.ezl-panel,.ezpm-root,.ez1o-root,.txr-receipt,.ezpo-modal,.ezs-slot,.ezs-stack,.ezs-card';
   function stamp(scope) {
     var nodes = (scope || document).querySelectorAll(AI_ROOTS);
     for (var i = 0; i < nodes.length; i++) {

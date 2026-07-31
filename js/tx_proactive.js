@@ -1,27 +1,28 @@
 /* ============================================================================
- * tx_proactive.js — 선제(proactive) 알림 단일 코디네이터 (§6 2슬롯 프레임)
+ * tx_proactive.js — 알림 단일 코디네이터 (§6 2슬롯 프레임)
  * ----------------------------------------------------------------------------
- * 슬롯 1(pill/토스트)을 세 표면이 시간 공유한다:
- *   - tx_agent.js   .agh-popup      선제 감지 카드        prio 3 (최상)
- *   - tx_entry.js   .eze-pill       화면 문맥 제안 pill    prio 2
- *   - tx_upgrade.js .ezup-ctxchip   컨텍스트 칩/온보딩     prio 1
- * 규칙: 새 claim의 prio ≥ active prio → 교체(밀린 쪽 [알림] 적재).
- *       새 claim의 prio <  active prio → 새 쪽을 즉시 닫고 [알림]으로만 적재.
+ * 슬롯 1(우하단)을 네 표면이 시간 공유한다 — 화면에 쓰는 말은 「알림」 하나:
+ *   - ez_signal_card.js .ezs-slot      신호 알림 카드        prio 4 (최상)
+ *   - tx_agent.js       .agh-popup     폴백 알림 카드        prio 3
+ *   - tx_entry.js       .eze-pill      화면 문맥 폴백 pill   prio 2
+ *   - tx_upgrade.js     .ezup-ctxchip  컨텍스트 칩           prio 1
+ * 규칙: 새 claim의 prio ≥ active prio → 교체. prio < active prio → 새 쪽 즉시 닫기.
  * 슬롯 2는 FAB 자체(카운트) — 여기서 관리하지 않는다.
  *
- * 증발 금지: 교체·소멸된 항목은 EZNotif(도킹 패널 [알림] 탭 스토어)에 적재.
- *   release(id, acted) — acted=true면 사용자가 실행한 것이므로 적재 생략.
- *   ponytail: tx_agent/tx_entry는 acted 플래그를 아직 안 넘김 — 실행된 항목도
- *   적재되는 소음 있음. 해당 파일 소유 작업에서 release(id, true) 전달이 업그레이드 경로.
+ * [알림] 적재는 신호 카드만: FAB 배지는 EZNotif 건수를 세므로, 만료된 문맥 칩·
+ * 화면 폴백까지 적재하면 화면만 옮겨도 숫자가 자동으로 오른다(배지 폭주 근본원인).
+ * 처리할 일이 있는 신호 카드만 남기고 나머지는 흔적 없이 사라진다.
  *
  * 계약(하위호환): window.EZProactive.claim(id, dismissFn) / release(id[, acted]).
  * ========================================================================== */
 (function () {
   "use strict";
   if (window.EZProactive && window.EZProactive.__v2) return;
-  var PRIO = { "agh-popup": 3, "eze-pill": 2, "ezup-ctxchip": 1, "ezup-onboard": 1 };
-  var SEL = { "agh-popup": ".agh-popup", "eze-pill": ".eze-pill", "ezup-ctxchip": ".ezup-ctxchip", "ezup-onboard": ".ezup-ctxchip" };
-  var LABEL = { "agh-popup": "선제 감지", "eze-pill": "화면 제안", "ezup-ctxchip": "문맥 제안", "ezup-onboard": "안내" };
+  /* 신호 카드 id는 ez_signal_card.js(W2)가 claim 시 쓰는 키 — 두 표기 모두 허용 */
+  var PRIO = { "ezs-slot": 4, "ezs-card": 4, "agh-popup": 3, "eze-pill": 2, "ezup-ctxchip": 1 };
+  var SEL = { "ezs-slot": ".ezs-slot", "ezs-card": ".ezs-card", "agh-popup": ".agh-popup", "eze-pill": ".eze-pill", "ezup-ctxchip": ".ezup-ctxchip" };
+  var LABEL = { "ezs-slot": "알림", "ezs-card": "알림", "agh-popup": "알림", "eze-pill": "알림", "ezup-ctxchip": "알림" };
+  var SIGNAL = { "ezs-slot": 1, "ezs-card": 1 };   // [알림] 적재 대상 = 신호 카드만
   var active = null; // { id, dismiss }
 
   function snapshot(id) {
@@ -39,6 +40,7 @@
     } catch (e) { return null; }
   }
   function archive(id, body) {
+    if (!SIGNAL[id]) return;   // 신호 카드가 아니면 아무 흔적도 남기지 않는다 (배지 폭주 차단)
     if (!(window.EZNotif && typeof window.EZNotif.push === "function")) return;
     try { window.EZNotif.push({ kind: "proactive", src: id, title: LABEL[id] || id, body: body, action: askOf(id) }); } catch (e) { /* 스토어 미로드 등 — 무해화 */ }
   }
@@ -48,14 +50,14 @@
       var p = PRIO[id] != null ? PRIO[id] : 2;
       if (active && active.id !== id) {
         var ap = PRIO[active.id] != null ? PRIO[active.id] : 2;
-        if (p < ap) { // 상위가 점유 중 — 새 항목은 표시 없이 알림 적재 후 닫기
+        if (p < ap) { // 상위가 점유 중 — 새 항목은 표시하지 않고 닫는다(신호 카드면 [알림] 적재)
           archive(id, snapshot(id));
           if (typeof dismiss === "function") { try { dismiss(); } catch (e) {} }
           return false;
         }
         var old = active;
         active = null; // dismiss 안의 release() 재진입 시 이중 적재 방지
-        archive(old.id, snapshot(old.id)); // 밀린 쪽 적재 (DOM 제거 전 스냅샷)
+        archive(old.id, snapshot(old.id)); // 밀린 쪽이 신호 카드면 적재 (DOM 제거 전 스냅샷)
         if (typeof old.dismiss === "function") { try { old.dismiss(); } catch (e) {} }
       }
       active = { id: id, dismiss: (typeof dismiss === "function" ? dismiss : null) };
@@ -63,7 +65,7 @@
     },
     release: function (id, acted) {
       if (!active || active.id !== id) return;
-      if (!acted) archive(id, snapshot(id)); // 자연 소멸·"나중에" — 잔존
+      if (!acted) archive(id, snapshot(id)); // 자연 소멸·"나중에" — 신호 카드만 잔존
       active = null;
     }
   };

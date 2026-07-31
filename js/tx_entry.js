@@ -41,7 +41,8 @@
  *    - [규칙] 세션당 화면별 1회(sessionStorage), × 닫기, 8s 후 fade-out
  *      (hover 시 타이머 일시정지), FAB(.ezx-fab) 없으면 미표시.
  *      pill 하단에 근거 표기 "근거: 화면 문맥 · 맥락 원장" 고정 노출.
- *      자율성 어휘 재사용: pill 헤더에 "제안" 배지(승인 전 side-effect 0).
+ *      화면에 쓰는 말은 「알림」 하나 — 헤더 배지 어휘("제안") 폐지(18차).
+ *      EZSignalEngine에 미처리 신호가 있으면 이 pill은 뜨지 않는다(폴백 전용).
  *    - [맥락 축적] 제안 수락(문구 클릭) 시 CustomEvent "ez:ctx" 발행 —
  *      tx_ctx_ledger.js가 수신해 원장에 기록(제안→수락도 감사 가능하게).
  *    - [노출 API] window.EZEntry = { suggest(screenKey), openMenu() }.
@@ -334,13 +335,24 @@
     hideTimer = setTimeout(function () { dismissPill(false); }, ms);
   }
 
+  /* 처리하지 않은 신호 알림이 있으면 화면 문맥 pill은 뜨지 않는다 — 표면은 하나뿐 */
+  function signalsPending() {
+    var E = window.EZSignalEngine;
+    if (!E || typeof E.pending !== "function") return false;
+    try {
+      var a = E.pending(roleKey());
+      return !!(a && a.length);
+    } catch (e) { return false; }
+  }
+
   function showPill(key, force) {
     var sg = SUGGESTIONS[key];
     if (!sg) return false;
     if (!force && wasShown(key)) return false;
     if (!findFab()) return false;              /* FAB 없으면 기준점이 없다 — 미표시 */
     if (chatSurfaceOpen()) return false;       /* 이미 대화 중 — 방해 금지 */
-    if (!sg.need()) return false;              /* 실행 수단 부재 — 빈 제안 금지 */
+    if (!sg.need()) return false;              /* 실행 수단 부재 — 빈 안내 금지 */
+    if (signalsPending()) return false;        /* 신호 알림 카드가 우선 — 이 pill은 폴백 */
 
     dismissPill(true);
     closeMenu();
@@ -351,13 +363,12 @@
     pill.className = "eze-pill";
     pill.setAttribute("data-astryx-theme", "talenx"); /* body 직속 — 토큰 스코프 루트 */
     pill.setAttribute("role", "dialog");
-    pill.setAttribute("aria-label", "elizax 선제 제안");
+    pill.setAttribute("aria-label", "elizax 알림");
     pill.setAttribute("data-eze-key", key);
     pill.innerHTML =
       '<div class="eze-hd">' +
         '<span class="eze-dot"></span>' +
         '<span class="eze-who">elizax</span>' +
-        '<span class="eze-badge" title="자율성 수준: 제안 — 승인 전에는 아무것도 반영되지 않음">제안</span>' +
         '<span class="sp"></span>' +
         '<button class="eze-ib" data-eze-menu title="AI 진입점 메뉴" aria-label="진입점 메뉴">⋯</button>' +
         '<button class="eze-ib" data-eze-close title="닫기" aria-label="닫기">×</button>' +
@@ -373,11 +384,10 @@
 
     requestAnimationFrame(function () { pill.classList.add("eze-show"); });
     pillEl = pill;
-    /* 선제 알림 단일화: 이미 떠 있는 다른 선제 팝업(agh-popup/ctxchip)을 닫고 이 pill로 교체.
-       meta는 알림 보관함(EZNotif) 축적용 — 밀려나도 [알림] 탭에서 다시 실행 가능 */
+    /* 알림 표면 단일화: 이미 떠 있는 다른 표면(신호 카드/agh-popup/ctxchip)을 닫고 이 pill로 교체.
+       claim(id, dismissFn) 2인자 계약뿐이다 — 3번째 meta 인자는 코디네이터가 받지 않는다. */
     if (window.EZProactive) {
-      EZProactive.claim("eze-pill", function () { dismissPill(true); },
-        { text: sg.text(rk), kind: "제안", action: (sg.act ? sg.act(rk) : null) });
+      EZProactive.claim("eze-pill", function () { dismissPill(true); });
     }
     armAutoHide(AUTOHIDE_MS);
     return true;
@@ -393,7 +403,7 @@
         detail: {
           type: sg.ctxType,
           source: "entry.pill." + key,
-          title: "선제 제안 수락",
+          title: "알림 처리",
           summary: sg.text(roleKey()),
           weight: 1
         }

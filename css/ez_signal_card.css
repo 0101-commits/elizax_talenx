@@ -1,0 +1,500 @@
+/* ============================================================================
+   ez_signal_card.css — 신호 알림 카드 단일 스타일 (18차 §2, W2 소유)
+   ----------------------------------------------------------------------------
+   짝: js/ez_signal_card.js (window.EZSignalCard)
+   토큰만 쓴다 — hex 직접 사용 금지. 색은 astryx `light-dark()` 토큰이므로
+   다크 모드는 자동으로 따라온다.
+   빨강 0 — --color-error* / --color-*-red / --color-trust-warm 은 쓰지 않는다.
+   유형칩 5단(§2 표): T1 accent / T2 trust / T3 accent 14% / T4 trust 12% / T5 무채색.
+   z-index는 css/ez_kit.css 사다리 토큰만(--z-badge / --z-panel / …).
+   모션은 --duration-* + --ease-standard, keyframes는 ez_kit.css의 ezk* 재사용.
+   --spacing-* 토큰은 이 저장소에 정의가 없어 6자리/정수 폴백을 함께 적는다.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- 카드 본체 */
+.ezs-card {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  background: var(--color-background-card);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-container, 12px);
+  padding: var(--spacing-3, 12px) var(--spacing-3, 12px) var(--spacing-2, 10px);
+  font-family: var(--font-family-body);
+  color: var(--color-text-primary);
+  font-size: var(--text-body-size, 13px);
+  line-height: var(--text-body-leading, 1.5);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.ezs-card[data-t="T2"], .ezs-card[data-t="T4"] { border-left-color: var(--color-trust); }
+.ezs-card[data-t="T5"] { border-left-color: var(--color-border-emphasized); }
+.ezs-card[data-now="0"] { border-left-color: var(--color-border-emphasized); background: var(--color-background-muted); }
+
+.ezs-card button { font: inherit; font-family: inherit; cursor: pointer; }
+.ezs-card button[disabled] { cursor: not-allowed; }
+
+/* ------------------------------------------------------------------- 머리행 */
+.ezs-hd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-1, 5px);
+  margin-bottom: var(--spacing-2, 8px);
+}
+.ezs-sp { flex: 1 1 auto; min-width: 0; }
+
+.ezs-type, .ezs-stage, .ezs-scope, .ezs-need, .ezs-rel {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 9999px);
+  border: 1px solid transparent;
+  font-size: var(--text-supporting-size, 10.5px);
+  line-height: 1.6;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 유형 5단 — 파랑/네이비/무채색만. 심각도를 색으로 말하지 않는다 */
+.ezs-card[data-t="T1"] .ezs-type { background: var(--color-accent); color: var(--color-on-accent); }
+.ezs-card[data-t="T2"] .ezs-type { background: var(--color-trust); color: var(--color-on-accent); }
+.ezs-card[data-t="T3"] .ezs-type {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-text-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+.ezs-card[data-t="T4"] .ezs-type {
+  background: color-mix(in srgb, var(--color-trust) 12%, transparent);
+  color: var(--color-trust);
+  border-color: color-mix(in srgb, var(--color-trust) 30%, transparent);
+}
+.ezs-card[data-t="T5"] .ezs-type { background: var(--color-background-muted); color: var(--color-text-secondary); }
+
+.ezs-stage {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  font-weight: 500;
+}
+.ezs-scope {
+  background: color-mix(in srgb, var(--color-trust) 10%, transparent);
+  color: var(--color-trust);
+  border-color: color-mix(in srgb, var(--color-trust) 28%, transparent);
+}
+.ezs-need {
+  background: var(--color-background-muted);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-emphasized);
+  font-weight: 500;
+}
+.ezs-rel {
+  background: var(--color-accent-muted);
+  color: var(--color-text-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+.ezs-rel[hidden] { display: none; }
+
+.ezs-x {
+  flex: none;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border: 0; background: none;
+  border-radius: var(--radius-full, 9999px);
+  color: var(--color-icon-secondary);
+  font-size: 11px; line-height: 1;
+  transition: background var(--duration-fast, 175ms) var(--ease-standard), color var(--duration-fast, 175ms) ease;
+}
+.ezs-x:hover { background: var(--color-overlay-hover); color: var(--color-icon-primary); }
+.ezs-x:active { background: var(--color-overlay-pressed); }
+
+/* --------------------------------------------------------------- 신호 한 줄 */
+.ezs-notice {
+  margin: 0 0 var(--spacing-2, 8px);
+  font-size: var(--text-heading-5-size, 13.5px);
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+}
+.ezs-todo {
+  margin: 0 0 var(--spacing-2, 8px);
+  padding: var(--spacing-2, 7px) var(--spacing-2, 9px);
+  background: var(--color-background-muted);
+  border: 1px dashed var(--color-border-emphasized);
+  border-radius: var(--radius-element, 8px);
+  font-size: var(--text-supporting-size, 11px);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------- 근거 줄 */
+.ezs-ev { list-style: none; margin: 0 0 var(--spacing-2, 8px); padding: 0; }
+.ezs-ev > li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 6px;
+  row-gap: 2px;
+  padding: var(--spacing-1, 5px) 0;
+  border-top: 1px solid var(--color-border);
+  min-width: 0;
+}
+.ezs-ev > li:first-child { border-top: 0; }
+.ezs-ax {
+  grid-column: 1; grid-row: 1;
+  align-self: start;
+  margin-top: 1px;
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-inner, 4px);
+  background: var(--color-background-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--text-supporting-size, 10px);
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.ezs-tx {
+  grid-column: 2; grid-row: 1;
+  min-width: 0;
+  font-size: var(--text-supporting-size, 12px);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+.ezs-tx b { font-weight: 700; color: var(--color-text-accent); }
+.ezs-asm { font-style: normal; color: var(--color-text-disabled); font-size: 0.92em; }
+.ezs-why {
+  grid-column: 2; grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--text-supporting-size, 10px);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.ezs-why .ezk-chip { white-space: normal; font-size: inherit; padding: 1px 6px; }
+.ezs-dt { color: var(--color-text-disabled); }
+
+/* --------------------------------------------------------------- 더보기·접힘 */
+.ezs-ev-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 var(--spacing-2, 8px);
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full, 9999px);
+  background: transparent;
+  color: var(--color-text-accent);
+  font-size: var(--text-supporting-size, 11px);
+  font-weight: 600;
+  transition: background var(--duration-fast, 175ms) var(--ease-standard), border-color var(--duration-fast, 175ms) ease;
+}
+.ezs-ev-more::before { content: "▾"; font-size: 0.85em; }
+.ezs-ev-more[aria-expanded="true"]::before { content: "▴"; }
+.ezs-ev-more:hover { background: var(--color-accent-muted); border-color: color-mix(in srgb, var(--color-accent) 35%, transparent); }
+
+.ezs-fold {
+  margin: 0 0 var(--spacing-2, 8px);
+  padding: var(--spacing-2, 8px) var(--spacing-2, 10px);
+  background: var(--color-background-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-element, 8px);
+  animation: ezkInsert var(--duration-fast, 175ms) var(--ease-standard) both;
+}
+.ezs-fold[hidden] { display: none; }
+.ezs-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: var(--spacing-2, 8px); }
+.ezs-meta .ezk-chip { font-size: var(--text-supporting-size, 10px); }
+.ezs-fold .ezs-ev { margin-bottom: var(--spacing-2, 8px); }
+
+.ezs-th {
+  margin: 0 0 var(--spacing-2, 8px);
+  padding: var(--spacing-2, 8px) 0 0;
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-supporting-size, 11px);
+  line-height: 1.5;
+}
+.ezs-th dt { color: var(--color-text-secondary); font-weight: 600; }
+.ezs-th dd {
+  margin: 0 0 6px;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.ezs-th dd:last-child { margin-bottom: 0; }
+.ezs-th dd em { font-style: normal; color: var(--color-text-disabled); font-weight: 500; }
+
+.ezs-rule {
+  margin: 0;
+  padding-top: var(--spacing-2, 8px);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-supporting-size, 10.5px);
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------------- 처리행 */
+.ezs-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 var(--spacing-2, 8px);
+}
+.ezs-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border-emphasized);
+  border-radius: var(--radius-element, 8px);
+  background: var(--color-background-card);
+  color: var(--color-text-primary);
+  text-align: left;
+  transition: background var(--duration-fast, 175ms) var(--ease-standard),
+              border-color var(--duration-fast, 175ms) ease,
+              transform var(--duration-fast-min, 130ms) var(--ease-standard);
+}
+.ezs-btn:hover { background: var(--color-overlay-hover); border-color: var(--color-accent); }
+.ezs-btn:active { transform: scale(0.98); }
+.ezs-btn .ezs-k {
+  font-style: normal;
+  font-size: var(--font-size-2xs, 9.5px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+}
+.ezs-btn .ezs-l {
+  font-size: var(--text-supporting-size, 12px);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.ezs-btn .ezs-edit { display: none; }
+.ezs-btn-1 {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+}
+.ezs-btn-1 .ezs-k { color: var(--color-on-accent); opacity: 0.75; }
+.ezs-btn-1:hover {
+  background: color-mix(in srgb, var(--color-accent) 88%, var(--color-tint-hover));
+  border-color: color-mix(in srgb, var(--color-accent) 88%, var(--color-tint-hover));
+}
+.ezs-btn[disabled] {
+  background: var(--color-background-muted);
+  border-color: var(--color-border);
+  color: var(--color-text-disabled);
+  transform: none;
+}
+.ezs-btn[disabled] .ezs-k { color: var(--color-text-disabled); opacity: 1; }
+.ezs-btn[disabled]:hover { background: var(--color-background-muted); border-color: var(--color-border); }
+/* 데이터 준비 필요 상태에서 유일하게 살아 있는 A5 상세 보기를 눈에 보이게 세운다 */
+.ezs-card[data-now="0"] .ezs-btn:not([disabled]) {
+  border-color: var(--color-accent);
+  color: var(--color-text-accent);
+  background: var(--color-accent-muted);
+}
+.ezs-card[data-now="0"] .ezs-btn:not([disabled]) .ezs-k { color: var(--color-text-accent); opacity: 0.8; }
+
+/* ------------------------------------------------------------ 에이전트 한 줄 */
+.ezs-agent {
+  display: block;                     /* ✦ + 한 줄 + 「자세히」가 한 문단으로 흐른다 */
+  margin: 0 0 var(--spacing-2, 8px);
+  padding: var(--spacing-2, 7px) var(--spacing-2, 9px);
+  background: color-mix(in srgb, var(--color-trust) 6%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--color-trust) 45%, transparent);
+  border-radius: 0 var(--radius-element, 8px) var(--radius-element, 8px) 0;
+  font-size: var(--text-supporting-size, 11.5px);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+.ezs-agent-tx { overflow-wrap: anywhere; }
+.ezs-ask {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 5px;
+  white-space: nowrap;
+  color: var(--color-text-accent);
+  font-size: var(--text-supporting-size, 11px);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ezs-ask:hover { color: var(--color-accent); }
+
+/* -------------------------------------------------------------------- 꼬리말 */
+.ezs-ft {
+  margin: 0;
+  padding-top: var(--spacing-2, 7px);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--text-supporting-size, 10px);
+  line-height: 1.5;
+  color: var(--color-text-disabled);
+  overflow-wrap: anywhere;
+}
+
+/* 처리 완료 잔상 — W4(EZSignalAct)가 .ezs-done + .ezs-doneline 을 붙인다 */
+.ezs-card.ezs-done { animation: ezkFlash var(--duration-slow, 975ms) var(--ease-standard) both; }
+.ezs-card.ezs-done .ezs-acts { display: none; }
+.ezs-doneline {
+  margin: 0 0 var(--spacing-2, 8px);
+  padding: var(--spacing-2, 7px) var(--spacing-2, 9px);
+  border-radius: var(--radius-element, 8px);
+  background: var(--color-accent-muted);
+  color: var(--color-text-accent);
+  font-size: var(--text-supporting-size, 11px);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* ============================================================ 스택 (2건 이상)
+   astryx 원칙: Card는 위젯 컨테이너, 목록 항목 껍데기가 아니다.
+   → 초점 1건만 카드로 펼치고 나머지는 .ezx-ntf-row 문법의 행으로 접는다. */
+.ezs-stack {
+  display: block;
+  min-width: 0;
+  outline: none;
+}
+.ezs-stack:focus-visible { box-shadow: 0 0 0 3px var(--color-accent-muted); border-radius: var(--radius-container, 12px); }
+.ezs-stack-body { min-width: 0; }
+
+.ezs-rows { list-style: none; margin: var(--spacing-2, 8px) 0 0; padding: 0; }
+.ezs-rows[hidden] { display: none; }
+.ezs-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 6px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-text-primary);
+  text-align: left;
+  transition: background var(--duration-fast, 175ms) var(--ease-standard);
+}
+.ezs-row:hover { background: var(--color-background-muted); }
+.ezs-row:focus-visible { background: var(--color-accent-muted); outline: none; }
+.ezs-row-dot {
+  flex: none;
+  width: 7px; height: 7px;
+  margin-top: 5px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-accent);
+}
+.ezs-row[data-t="T2"] .ezs-row-dot, .ezs-row[data-t="T4"] .ezs-row-dot { background: var(--color-trust); }
+.ezs-row[data-t="T5"] .ezs-row-dot, .ezs-row[data-now="0"] .ezs-row-dot { background: var(--color-border-emphasized); }
+.ezs-row-bd { flex: 1 1 auto; min-width: 0; }
+.ezs-row-tt {
+  display: block;
+  font-size: var(--text-supporting-size, 12.5px);
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+.ezs-row-bs {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-supporting-size, 10.5px);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.ezs-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: var(--spacing-2, 8px);
+}
+.ezs-pager[hidden] { display: none; }
+.ezs-pg-b {
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-background-card);
+  color: var(--color-text-secondary);
+  font-size: 13px; line-height: 1;
+  transition: background var(--duration-fast, 175ms) var(--ease-standard), color var(--duration-fast, 175ms) ease;
+}
+.ezs-pg-b:hover { background: var(--color-accent-muted); color: var(--color-text-accent); }
+.ezs-pg {
+  font-size: var(--text-supporting-size, 11px);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  min-width: 34px;
+  text-align: center;
+}
+
+/* =================================================== 표면별 변주 (mode 4종) */
+
+/* stack — 420px 패널 탭 안. 기본값이 곧 stack. */
+
+/* inline — 채팅 말풍선 줄 안. 테두리를 낮추고 폭을 흐름에 맡긴다 */
+.ezs-card[data-mode="inline"] {
+  border-left-width: 3px;
+  box-shadow: none;
+  background: var(--color-background-card);
+}
+
+/* welcome — 패널 빈 상태. 접힘·꼬리말 없음 + 아주 촘촘히 */
+.ezs-card[data-mode="welcome"] {
+  padding: var(--spacing-2, 10px) var(--spacing-2, 10px) var(--spacing-2, 8px);
+  border-radius: var(--radius-element, 8px);
+}
+.ezs-card[data-mode="welcome"] .ezs-notice { font-size: var(--text-supporting-size, 12.5px); margin-bottom: 6px; }
+.ezs-card[data-mode="welcome"] .ezs-ev { margin-bottom: 6px; }
+.ezs-card[data-mode="welcome"] .ezs-acts { margin-bottom: 0; }
+.ezs-card[data-mode="welcome"] .ezs-btn { padding: 5px 10px; }
+.ezs-card[data-mode="welcome"] .ezs-x { display: none; }
+
+/* slot — 우하단 선제 슬롯. FAB(24px/24px, 56px) 위로 비켜 앉는다 */
+.ezs-slot {
+  position: fixed;
+  right: 24px;
+  bottom: 96px;
+  z-index: var(--z-panel, 4000);
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: var(--spacing-2, 8px);
+  background: var(--color-background-popover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-container, 12px);
+  box-shadow: var(--shadow-high, 0 12px 32px var(--color-shadow));
+  font-family: var(--font-family-body);
+}
+.ezs-slot.ezs-in { animation: ezkInsert var(--duration-medium, 410ms) var(--ease-standard) both; }
+.ezs-slot .ezs-card {
+  border: 0;
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-element, 8px);
+  background: transparent;
+  padding: var(--spacing-2, 8px) var(--spacing-2, 10px);
+}
+.ezs-slot .ezs-card[data-t="T2"], .ezs-slot .ezs-card[data-t="T4"] { border-left-color: var(--color-trust); }
+.ezs-slot .ezs-card[data-t="T5"], .ezs-slot .ezs-card[data-now="0"] { border-left-color: var(--color-border-emphasized); }
+.ezs-slot .ezs-rows { max-height: 132px; overflow-y: auto; }
+
+@media (max-width: 460px) {
+  .ezs-slot { right: 8px; left: 8px; width: auto; bottom: 88px; }
+}

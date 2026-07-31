@@ -108,7 +108,10 @@
 
   /* ---------------- DOM refs ---------------- */
   var el = {};
-  var curTab = "chat";
+  var DEFAULT_TAB = "ntf";   /* 18차 결정 ③ — 기본 진입 = 알림 탭 */
+  var curTab = DEFAULT_TAB;
+  var pastOpen = false;      /* [알림] 탭 「지난 알림」 접힘 상태 */
+  var pastTouched = false;   /* 사용자가 직접 접었다 → 자동 펼침(카드 0장 폴백)보다 우선 */
 
   /* ---------------- EZNotif — 알림 단일 스토어 (§6 잔존형 알림: 토스트→FAB 카운트→[알림] 탭) ---------------- */
   var EZNotif = (function () {
@@ -248,20 +251,18 @@
       /* 전체화면 전환 시 같은 대화가 이어지도록 대화 스크린으로 진입 */
       if (window.TXAgent && window.TXAgent.openHub) { closePanel(); window.TXAgent.openHub("chat"); }
     });
-    var gear = h("button", "ezx-x", { "aria-label": "AI 연결 설정", title: "AI 연결 설정", text: "⚙" });
-    gear.addEventListener("click", function () {
-      if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateStatus(); renderMessages(); });
-    });
+    /* ⚙(AI 연결 설정) 버튼 삭제 — 18차 요청 4. EZAI.openSettings 함수는 그대로 남는다
+       (tx_fix_msf.js 등 외부 호출자용). 🔍(tx_chat_search) 주입 앵커는 .ezx-expand 왼쪽. */
     var xbtn = h("button", "ezx-x", { "aria-label": "닫기", text: "✕" });
     xbtn.addEventListener("click", closePanel);
-    top.appendChild(mark); top.appendChild(titles); top.appendChild(gear); top.appendChild(exbtn); top.appendChild(xbtn);
+    top.appendChild(mark); top.appendChild(titles); top.appendChild(exbtn); top.appendChild(xbtn);
     head.appendChild(top);
 
-    /* 3탭 IA — 대화 / 기록 / 알림 (§5) */
+    /* 2탭 IA — 알림(기본 진입) / 대화 (18차 결정 ③. 기록 탭은 알림 탭 「지난 알림」으로 접음) */
     var tabs = h("div", "ezx-tabs");
     el.tabBtns = {};
-    [["chat", "대화"], ["rec", "기록"], ["ntf", "알림"]].forEach(function (d) {
-      var b = h("button", "ezx-tab" + (d[0] === "chat" ? " on" : ""), { type: "button", "data-tab": d[0] });
+    [["ntf", "알림"], ["chat", "대화"]].forEach(function (d) {
+      var b = h("button", "ezx-tab" + (d[0] === DEFAULT_TAB ? " on" : ""), { type: "button", "data-tab": d[0] });
       b.innerHTML = "<span>" + d[1] + "</span><span class=\"ezx-tab-dot\" hidden></span>"
         + (d[0] === "ntf" ? "<span class=\"ezx-tab-n\" hidden></span>" : "");
       b.addEventListener("click", function () { setTab(d[0]); });
@@ -293,34 +294,29 @@
       el.pickerInput = pin; el.pickerList = plist;
     }
 
-    /* context chip row */
-    var ctx = h("div", "ezx-ctx");
-    var userChip = h("span", "ezx-chip");
-    userChip.innerHTML = "<b>" + esc(CURRENT.name) + "</b>·" + esc(CURRENT.jobTitle || "");
-    var screenChip = h("span", "ezx-chip ezx-chip-screen");
-    var ctxToggle = h("button", "ezx-ctx-toggle on", { "aria-pressed": "true", title: "현재 화면 맥락을 메시지에 첨부" });
-    ctxToggle.innerHTML = '<span class="ezx-switch"></span><span>현재 화면 맥락</span>';
-    ctxToggle.addEventListener("click", function () {
-      state.attachContext = !state.attachContext;
-      ctxToggle.classList.toggle("on", state.attachContext);
-      ctxToggle.setAttribute("aria-pressed", state.attachContext ? "true" : "false");
-    });
-    ctx.appendChild(userChip); ctx.appendChild(screenChip); ctx.appendChild(ctxToggle);
-    el.screenChip = screenChip;
+    /* 맥락 칩 행 삭제 — 신원칩·현재 화면칩·「현재 화면 맥락」 토글 3종 제거 (18차 요청 2).
+       state.attachContext는 true 고정(buildPayloadMessage 계약 불변).
+       단 tx_journey(사이클 칩)·tx_jobcontext(내 직무 칩)가 폴링으로 이 노드에
+       appendChild 하므로 — 두 파일은 이번 차 소유가 아니라 고칠 수 없다 —
+       빈 숨김 노드를 남겨 두 모듈의 appendChild가 계속 성공하게 한다. */
+    var ctx = h("div", "ezx-ctx", { hidden: "hidden", "aria-hidden": "true" });
+    el.screenChip = null;
 
     /* message list */
     var list = h("div", "ezx-list", { role: "log", "aria-live": "polite" });
     el.list = list;
 
-    /* [기록]·[알림] 패인 — 기존 앵커(.ezx-ctx/.ezx-list/.ezx-foot)는 유지, 탭 모드 클래스로만 전환 */
-    var recPane = h("div", "ezx-pane ezx-rec-pane");
+    /* [알림] 패인 — 라이브 신호 카드 + 「지난 알림」 접이식.
+       성과 기록(recPane)은 탭이 아니라 「지난 알림」 안쪽 컨테이너로 강등된다
+       (renderNtf가 매 렌더마다 이 노드를 다시 붙인다 — ezl:changed 갱신 대상 유지). */
+    var recPane = h("div", "ezx-rec-pane");
     var ntfPane = h("div", "ezx-pane ezx-ntf-pane");
     el.recPane = recPane; el.ntfPane = ntfPane;
 
     /* footer / composer */
     var foot = h("div", "ezx-foot");
-    /* 연결 상태 배너 (죽은 updateAiBadge 대체 — proxy/direct/offline 3모드) */
-    var status = h("div", "ezx-status");
+    /* AI 미연결 단일 폴백 줄 — 「● 연결됨 · AI 연결됨」 상태 배너 삭제 (18차 요청 2) */
+    var status = h("div", "ezx-note warn ezx-warnline", { hidden: "hidden" });
     el.status = status;
     foot.appendChild(status);
     var comp = h("div", "ezx-composer");
@@ -334,10 +330,11 @@
     send.addEventListener("click", submit);
     comp.appendChild(ta); comp.appendChild(send);
     var footRow = h("div", "ezx-foot-row");
-    var reset = h("button", "ezx-reset", { text: "대화 초기화" });
-    reset.addEventListener("click", resetConversation);
+    /* 「대화 초기화」+주입되던 「내보내기」 → 「＋ 새 채팅 시작」 한 칸 (18차 요청 2) */
+    var nchat = h("button", "ezx-newchat", { type: "button", text: "＋ 새 채팅 시작" });
+    nchat.addEventListener("click", newChat);
     var hint = h("span", "ezx-hint", { text: "Enter 전송 · Shift+Enter 줄바꿈" });
-    footRow.appendChild(reset); footRow.appendChild(hint);
+    footRow.appendChild(nchat); footRow.appendChild(hint);
     foot.appendChild(comp); foot.appendChild(footRow);
     el.textarea = ta; el.send = send;
 
@@ -349,7 +346,7 @@
     panel.appendChild(tabs);
     panel.appendChild(ctx);
     panel.appendChild(list);
-    panel.appendChild(recPane);
+    /* recPane은 패널 직속이 아니라 renderNtf가 「지난 알림」 안쪽에 붙인다 */
     panel.appendChild(ntfPane);
     panel.appendChild(foot);
 
@@ -394,54 +391,113 @@
       updateFabCount();
       if (curTab === "ntf") renderNtf();
     });
+    /* 신호 엔진(W1)은 뒤늦게 로드될 수 있다 — 늦은 폴링으로 한 번만 구독 */
+    subscribeSignals();
+    /* 기본 진입 탭 = 알림. setTab을 여기서 부르지 않는다(markAllRead가 배지를 미리 지움) */
+    curTab = DEFAULT_TAB;
+    el.root.classList.toggle("ezx-mode-ntf", DEFAULT_TAB === "ntf");
     updateFabCount();
     updateStatus();
-    /* 성과 기록 변경 → [기록] 탭 도트 또는 즉시 재렌더 */
+    /* 성과 기록 변경 → 「지난 알림」이 펼쳐져 있으면 즉시 재렌더, 아니면 알림 탭 도트 */
     document.addEventListener("ezl:changed", function () {
-      if (curTab === "rec" && window.EZLedger && EZLedger.renderRows) EZLedger.renderRows(el.recPane);
-      else toggleTabDot("rec", true);
+      if (curTab === "ntf" && pastOpen) renderLedgerInto(null);
+      else toggleTabDot("ntf", true);
     });
   }
 
-  /* ---------------- 3탭 전환 ---------------- */
-  /* hl = 성과 기록 하이라이트 대상 entry id (외부 Elizax.showTab("rec", id) 진입용) */
+  /* 신호 엔진 변경 구독 — 엔진 부재 시 최대 20회(≈8초) 재시도 후 포기 */
+  var _sigSubbed = false;
+  function subscribeSignals() {
+    if (_sigSubbed) return;
+    var tries = 0;
+    (function poll() {
+      if (_sigSubbed) return;
+      if (window.EZSignalEngine && window.EZSignalEngine.onChange) {
+        _sigSubbed = true;
+        try {
+          window.EZSignalEngine.onChange(function () {
+            updateFabCount();
+            if (curTab === "ntf") renderNtf();
+            if (!msgs().length) renderMessages();   /* 웰컴 카드 3장 갱신 */
+          });
+        } catch (e) { /* ignore */ }
+        updateFabCount();
+        if (curTab === "ntf") renderNtf();
+        if (!msgs().length) renderMessages();
+        return;
+      }
+      if (++tries < 20) setTimeout(poll, 400);
+    })();
+  }
+
+  /* ---------------- 2탭 전환 (알림 · 대화) ----------------
+     hl = 성과 기록 하이라이트 대상 entry id.
+     외부 계약 유지: showTab("rec", id) → 알림 탭 + 「지난 알림」 펼침 + 해당 행 하이라이트. */
   function setTab(k, hl) {
-    if (k !== "chat" && k !== "rec" && k !== "ntf") k = "chat";
+    if (k === "rec") { k = "ntf"; pastOpen = true; }        /* 기록 탭 폐지 → 리다이렉트 */
+    if (k !== "chat" && k !== "ntf") k = DEFAULT_TAB;
     curTab = k;
-    el.root.classList.toggle("ezx-mode-rec", k === "rec");
     el.root.classList.toggle("ezx-mode-ntf", k === "ntf");
     for (var t in el.tabBtns) el.tabBtns[t].classList.toggle("on", t === k);
-    if (k === "rec") {
-      toggleTabDot("rec", false);
-      /* 하이라이트가 필요하면 renderInto(=성과 기록 임베드 렌더), 아니면 renderRows */
-      if (window.EZLedger && hl && EZLedger.renderInto) EZLedger.renderInto(el.recPane, hl);
-      else if (window.EZLedger && EZLedger.renderRows) EZLedger.renderRows(el.recPane);
-      else el.recPane.innerHTML = '<div class="ezx-pane-empty">성과 기록 모듈이 아직 로드되지 않았습니다.</div>';
-    }
     if (k === "ntf") {
-      renderNtf();
+      toggleTabDot("ntf", false);
+      renderNtf(hl || null);
       EZNotif.markAllRead();
+      if (hl) scrollPastIntoView();
     }
   }
   function toggleTabDot(k, on) {
     var d = el.tabBtns && el.tabBtns[k] && el.tabBtns[k].querySelector(".ezx-tab-dot");
     if (d) d.hidden = !on;
   }
-  function updateFabCount() {
-    var n = EZNotif.unreadCount();
-    if (el.cnt) { el.cnt.hidden = n === 0; el.cnt.textContent = n > 9 ? "9+" : String(n); }
-    var tn = el.tabBtns && el.tabBtns.ntf && el.tabBtns.ntf.querySelector(".ezx-tab-n");
-    if (tn) { tn.hidden = n === 0; tn.textContent = String(n); }
+
+  /* ---- 미처리 알림 수 — 신호 엔진이 있으면 그 수, 없으면 EZNotif 미확인 수 ----
+     (배지 폭주 근본원인 = 만료 문맥칩까지 EZNotif로 아카이브되던 것. 기준을 신호로 옮긴다) */
+  function signalPending() {
+    if (!window.EZSignalEngine || !window.EZSignalEngine.pending) return null;
+    try {
+      var arr = window.EZSignalEngine.pending(roleKey());
+      return (arr && typeof arr.length === "number") ? arr : null;
+    } catch (e) { return null; }
   }
-  function renderNtf() {
-    var p = el.ntfPane;
-    if (!p) return;
-    var arr = EZNotif.list();
-    if (!arr.length) {
-      p.innerHTML = '<div class="ezx-pane-empty">알림이 아직 없습니다.<br>제안·감지·응답 도착이 여기에 남아 다시 실행할 수 있습니다.</div>';
-      return;
+  function pendingCount() {
+    var arr = signalPending();
+    if (arr) return arr.length;
+    try { return EZNotif.unreadCount(); } catch (e) { return 0; }
+  }
+  function updateFabCount() {
+    var n = pendingCount();
+    var label = "처리하지 않은 알림 " + n + "건";
+    var txt = n > 9 ? "9+" : String(n);
+    if (el.cnt) {
+      el.cnt.hidden = n === 0;
+      el.cnt.textContent = txt;
+      el.cnt.title = label;
     }
-    p.innerHTML = "";
+    var tn = el.tabBtns && el.tabBtns.ntf && el.tabBtns.ntf.querySelector(".ezx-tab-n");
+    if (tn) { tn.hidden = n === 0; tn.textContent = txt; tn.title = label; }
+    if (el.fab) el.fab.title = n ? ("elizax · " + label) : "elizax";
+  }
+
+  /* ---- 「지난 알림」 안쪽 성과 기록(EZLedger) 진입 ---- */
+  function renderLedgerInto(hl) {
+    var c = el.recPane;
+    if (!c) return;
+    if (window.EZLedger && hl && EZLedger.renderInto) {
+      try { EZLedger.renderInto(c, hl); return; } catch (e) { /* fall through */ }
+    }
+    if (window.EZLedger && EZLedger.renderRows) {
+      try { EZLedger.renderRows(c); return; } catch (e2) { /* fall through */ }
+    }
+    c.innerHTML = '<div class="ezx-pane-empty">성과 기록 모듈이 아직 로드되지 않았습니다.</div>';
+  }
+  function scrollPastIntoView() {
+    var b = el.ntfPane && el.ntfPane.querySelector(".ezx-past");
+    if (b && b.scrollIntoView) { try { b.scrollIntoView({ block: "nearest" }); } catch (e) { /* ignore */ } }
+  }
+
+  /* ---- 기존 EZNotif 행 마크업·markRead 동작 그대로 ---- */
+  function fillNtfRows(host, arr) {
     arr.forEach(function (n) {
       var row = h("div", "ezx-ntf-row" + (n.read ? "" : " unread"));
       row.innerHTML = '<span class="dot"></span><div class="bd"><div class="tt">' + esc(n.title) + "</div>"
@@ -458,8 +514,61 @@
         row.appendChild(act);
       }
       row.addEventListener("click", function () { EZNotif.markRead(n.id); });
-      p.appendChild(row);
+      host.appendChild(row);
     });
+  }
+
+  /* [알림] 탭 = 라이브 신호 카드 스택 + 접힌 「지난 알림」(EZNotif 행 + 성과 기록).
+     EZSignalEngine·EZSignalCard가 없으면 카드 구역을 비우고 「지난 알림」을 펼쳐
+     기존 EZNotif 목록이 그대로 보이게 폴백한다 — 어떤 경우에도 throw하지 않는다. */
+  function renderNtf(hl) {
+    var p = el.ntfPane;
+    if (!p) return;
+    p.innerHTML = "";
+
+    /* (1) 라이브 신호 카드 */
+    var nLive = 0;
+    var insts = signalPending();
+    if (insts && insts.length && window.EZSignalCard && EZSignalCard.stack) {
+      var live = h("div", "ezx-sig-live");
+      try {
+        var node = EZSignalCard.stack(insts, "stack");
+        if (node) { live.appendChild(node); nLive = insts.length; }
+      } catch (e) { nLive = 0; }
+      if (nLive) p.appendChild(live);
+    }
+
+    var arr = EZNotif.list();
+    if (!nLive) {
+      p.appendChild(h("div", "ezx-pane-empty ezx-sig-none", {
+        text: arr.length ? "지금 처리할 알림이 없습니다. 지난 알림을 아래에 모았습니다."
+          : "지금 처리할 알림이 없습니다."
+      }));
+    }
+
+    /* (2) 지난 알림 — 접이식. 라이브 카드가 없으면 자동 펼침(구 EZNotif 목록 동작 보존),
+       단 사용자가 한 번 접었으면 그 선택을 존중한다 */
+    var open = pastOpen || (!nLive && !pastTouched);
+    var past = h("div", "ezx-past");
+    var hd = h("button", "ezx-past-h", { type: "button", "aria-expanded": open ? "true" : "false" });
+    hd.innerHTML = '<span class="ezx-past-ar">' + (open ? "▾" : "▸") + "</span><span>지난 알림</span>"
+      + (arr.length ? '<span class="ezx-past-n">' + arr.length + "</span>" : "");
+    var bd = h("div", "ezx-past-bd");
+    if (!open) bd.hidden = true;
+    hd.addEventListener("click", function () {
+      pastTouched = true;
+      pastOpen = !open;
+      renderNtf(null);
+    });
+    if (arr.length) fillNtfRows(bd, arr);
+    else bd.appendChild(h("div", "ezx-pane-empty", { text: "지난 알림이 아직 없습니다." }));
+    /* 성과 기록(EZLedger) 진입 — 원장은 저장소가 하나이므로 여기서 그대로 읽는다 */
+    bd.appendChild(h("div", "ezx-past-sec", { text: "성과 기록" }));
+    bd.appendChild(el.recPane);
+    past.appendChild(hd); past.appendChild(bd);
+    p.appendChild(past);
+    if (open) renderLedgerInto(hl || null);
+    updateFabCount();   /* 렌더 시점의 미처리 수와 배지를 항상 일치시킨다 */
   }
 
   function autoGrow() {
@@ -520,7 +629,10 @@
     list.classList.add("on");
   }
 
+  /* 화면칩은 18차에 삭제됨 — 호출자 4곳(syncSubjectUI·openPanel·GNB 클릭·build)을
+     그대로 두기 위해 함수는 남기고 대상 노드가 없으면 조용히 빠진다. */
   function updateScreenChip() {
+    if (!el.screenChip) return;
     var label = activeScreenLabel();
     var txt = "현재 화면 " + label;
     if (needsSubject(state.perspective) && state.subject) {
@@ -560,42 +672,45 @@
     sub.textContent = "목표·평가부터 근무·급여까지, 화면 이동·조회·초안 작성을 도와드립니다.";
     wrap.appendChild(sub);
 
-    var m = aiMode();
-    if (m === "offline") {
-      var off = h("div", "ezx-agent-off");
-      off.innerHTML = "AI 미연결 — 연결 없이 예시 응답을 보여줍니다. ";
-      var connect = h("button", "ezx-starter", { type: "button", text: "⚙ AI 연결" });
-      connect.style.marginLeft = "6px";
-      connect.addEventListener("click", function () {
-        if (window.EZAI && window.EZAI.openSettings) window.EZAI.openSettings(function () { updateStatus(); renderMessages(); });
-      });
-      off.appendChild(connect);
-      wrap.appendChild(off);
-    } else {
-      var ready = !window.EZAI || !window.EZAI.ready || window.EZAI.ready();
-      var onNote = h("div", "ezx-persp-note");
-      onNote.style.marginTop = "10px";
-      onNote.innerHTML = (ready ? "● <b>연결됨</b> · " : "◐ ") + esc(window.EZAI ? window.EZAI.modeLabel() : "확인 중");
-      onNote.style.color = ready ? "var(--color-success)" : "var(--color-warning)";
-      wrap.appendChild(onNote);
-    }
+    /* 연결 상태 문구(● 연결됨 / AI 미연결 배너)는 컴포저 위 단일 폴백 줄(updateStatus)로 일원화 */
 
-    /* 역할 기반 에이전트 제안 칩 — 클릭하면 대화 안에서 바로 실행 */
-    var scns = (window.TXAgent && window.TXAgent.SCENARIOS) || [];
-    var rk = "member";
-    try { rk = (window.TXRoles && TXRoles.current && TXRoles.current().key) || "member"; } catch (e) { /* ignore */ }
-    var mine = scns.filter(function (s) { return (s.roles || []).indexOf(rk) >= 0; }).slice(0, 5);
-    if (mine.length) {
-      var slab = h("div", "ezx-scn-lab", { text: "지금 도와드릴 수 있는 일" });
-      wrap.appendChild(slab);
-      var srow = h("div", "ezx-starters");
-      mine.forEach(function (s) {
-        var b = h("button", "ezx-starter scn", { type: "button" });
-        b.innerHTML = "✦ " + esc(s.chip);
-        b.addEventListener("click", function () { runScenarioInChat(s.key, s.chip); });
-        srow.appendChild(b);
+    /* 역할별 라이브 알림 카드 3장 — 엔진·카드 렌더러가 없으면 기존 시나리오 칩으로 폴백 */
+    var welcomeCards = 0;
+    var winsts = signalPending();
+    if (winsts && winsts.length && window.EZSignalCard && EZSignalCard.render) {
+      var wbox = h("div", "ezx-sig-welcome");
+      winsts.slice(0, 3).forEach(function (inst) {
+        try {
+          var node = EZSignalCard.render(inst, "welcome");
+          if (node) { wbox.appendChild(node); welcomeCards++; }
+        } catch (e) { /* 카드 1장 실패는 전체를 막지 않는다 */ }
       });
-      wrap.appendChild(srow);
+      if (welcomeCards) {
+        wrap.appendChild(h("div", "ezx-scn-lab", { text: "지금 처리할 알림" }));
+        wrap.appendChild(wbox);
+        var link = h("button", "ezx-catlink", { type: "button", text: "카탈로그 전체 보기 (" + catalogCount() + "건)" });
+        link.addEventListener("click", openCatalog);
+        wrap.appendChild(link);
+      }
+    }
+    if (!welcomeCards) {
+      /* 폴백 — 기존 역할 기반 시나리오 칩 그대로 */
+      var scns = (window.TXAgent && window.TXAgent.SCENARIOS) || [];
+      var rk = "member";
+      try { rk = (window.TXRoles && TXRoles.current && TXRoles.current().key) || "member"; } catch (e) { /* ignore */ }
+      var mine = scns.filter(function (s) { return (s.roles || []).indexOf(rk) >= 0; }).slice(0, 5);
+      if (mine.length) {
+        var slab = h("div", "ezx-scn-lab", { text: "지금 도와드릴 수 있는 일" });
+        wrap.appendChild(slab);
+        var srow = h("div", "ezx-starters");
+        mine.forEach(function (s) {
+          var b = h("button", "ezx-starter scn", { type: "button" });
+          b.innerHTML = "✦ " + esc(s.chip);
+          b.addEventListener("click", function () { runScenarioInChat(s.key, s.chip); });
+          srow.appendChild(b);
+        });
+        wrap.appendChild(srow);
+      }
     }
 
     var starters = h("div", "ezx-starters");
@@ -607,6 +722,49 @@
     wrap.appendChild(starters);
     return wrap;
   }
+
+  /* ---------------- 신호 카탈로그 열람 (웰컴 카드 아래 텍스트 링크) ---------------- */
+  function catalogCount() {
+    try {
+      var c = window.EZSignalEngine && EZSignalEngine.catalog && EZSignalEngine.catalog();
+      if (!c) return 0;
+      if (typeof c.count === "number") return c.count;
+      return (c.signals || []).length;
+    } catch (e) { return 0; }
+  }
+  function openCatalog() {
+    var arr = [];
+    try { arr = (window.EZSignalEngine && EZSignalEngine.forRole && EZSignalEngine.forRole(roleKey())) || []; }
+    catch (e) { arr = []; }
+    var html = '<div class="ezx-cat">';
+    if (!arr.length) {
+      html += '<div class="ezx-cat-empty">카탈로그를 아직 읽을 수 없습니다.</div>';
+    }
+    arr.forEach(function (s) {
+      html += '<div class="ezx-cat-row"><span class="ezx-cat-t">' + esc(s.typeLabel || s.type || "") + "</span>"
+        + '<span class="ezx-cat-s">' + esc(s.stage || "") + "</span>"
+        + '<span class="ezx-cat-n">' + esc(s.notice || "") + "</span>"
+        + (s.now ? "" : '<span class="ezx-cat-b">데이터 준비 필요</span>') + "</div>";
+    });
+    html += "</div>";
+    if (window.TX && TX.modal) {
+      TX.modal({
+        title: "알림 카탈로그 — 내 역할 " + arr.length + "건 / 전체 " + catalogCount() + "건",
+        body: html, wide: true,
+        actions: [{ label: "닫기", kind: "ghost" }]
+      });
+    }
+  }
+
+  /* ---------------- 새 채팅 시작 (푸터 단일 버튼) ---------------- */
+  function newChat() {
+    if (state.streaming) stopStreaming();
+    if (window.EZChat && EZChat.newSession) {
+      try { EZChat.newSession(); renderMessages(); return; } catch (e) { /* fall through */ }
+    }
+    resetConversation();   /* EZChat 부재 폴백 — 기존 초기화 경로 */
+  }
+
   /* ---------------- 작업중 카드 (계획 STEP + 원천 확인 내역 — W3 p6) ---------------- */
   var WORK_STEPS = {
     subject: [["talenx", "내 목표·KR 현황 조회"], ["ERP", "실적·체크인 기록 대조"], ["규정", "평가규정 해당 조항 확인"], ["맥락", "지난 대화·1:1 노트 로드"]],
@@ -1434,7 +1592,7 @@
       aiMsg.role = "err";
       aiMsg.streaming = false;
       aiMsg.text = "연결에 실패했습니다 (" + (err && err.message ? err.message : "network") +
-        "). 잠시 후 다시 시도해 주세요. 문제가 계속되면 AI 연결 설정(⚙)을 확인하세요.";
+        "). 잠시 후 다시 시도해 주세요.";
       finishStreaming();
       renderMessages();
     });
@@ -2038,7 +2196,7 @@
 
   function offUnknown() {
     return {
-      text: "AI 미연결 상태입니다 — 이 질문은 연결 후 답할 수 있습니다 (헤더 ⚙에서 연결).\n\n" +
+      text: "AI 미연결 상태입니다 — 이 질문은 연결 후 답할 수 있습니다.\n\n" +
         "지금 확인 가능한 것\n" +
         "- 내 목표·KR 진척 — \"내 목표 진척 알려줘\"\n" +
         "- 최근 체크인·블로커 — \"최근 체크인 보여줘\"\n" +
@@ -2420,19 +2578,17 @@
   }
 
   /* ---------------- Open / close ---------------- */
-  /* 컴포저 상단 연결 상태 배너 — proxy/direct/offline 3모드 */
+  /* 「● 연결됨 · AI 연결됨」 상태 배너 삭제 (18차 요청 2).
+     남은 것은 단 하나 — EZAI.ready()가 false일 때만 뜨는 무채색 경고 한 줄.
+     함수 자체는 호출자 4곳(build·probe 콜백·openPanel·EZAI 설정 저장) 때문에 유지한다. */
   function updateStatus() {
-    if (!el.status) return;
-    var m = aiMode();
-    var rdy = !!(window.EZAI && EZAI.ready && EZAI.ready());
-    if (m === "offline") {
-      el.status.innerHTML = '<span class="off">○ 오프라인 — 예시 응답 · ⚙에서 AI 연결</span>';
-    } else if (rdy) {
-      el.status.innerHTML = '<span class="ok">● 연결됨</span> · '
-        + esc(window.EZAI && EZAI.modeLabel ? EZAI.modeLabel() : m);
-    } else {
-      el.status.innerHTML = '<span class="wait">◐ 연결 확인 중</span>';
-    }
+    var s = el.status;
+    if (!s) return;
+    var rdy = true;
+    try { if (window.EZAI && EZAI.ready) rdy = !!EZAI.ready(); } catch (e) { rdy = true; }
+    if (rdy) { s.hidden = true; s.textContent = ""; return; }
+    s.hidden = false;
+    s.textContent = "AI 미연결 — 연결 없이 예시 응답으로 보여드립니다.";
   }
 
   function openPanel() {
@@ -2440,9 +2596,14 @@
     el.root.classList.add("ezx-open");
     syncPerspectiveFromRole();
     updateScreenChip();
-    /* updateAiBadge는 폐기됨 — 연결 상태는 ezx-status 배너(updateStatus)로 일원화 */
     updateStatus();
     updateFabCount();
+    /* 기본 진입 = 알림 탭 — build에서는 markAllRead를 미루므로 열 때 채운다 */
+    if (curTab === "ntf") {
+      toggleTabDot("ntf", false);
+      renderNtf(null);
+      EZNotif.markAllRead();
+    }
     setTimeout(function () { try { el.textarea.focus(); } catch (e) {} }, 220);
   }
   function closePanel() {

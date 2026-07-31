@@ -167,7 +167,8 @@
   /* 스트리밍 감지: 도킹 리스트 안 .ezx-caret 존재 → work */
   var glowObs = new MutationObserver(function () {
     var caret = document.querySelector(".ezx-list .ezx-caret");
-    var popup = document.querySelector(".agh-popup.show");
+    /* 알림 표면(신호 카드 슬롯 또는 폴백 팝업)이 떠 있으면 halo */
+    var popup = document.querySelector(".ezs-slot, .agh-popup.show");
     var gate = document.querySelector(".ezx-list .agh-gate .agh-btn[data-chosen]") ? null : document.querySelector(".ezx-list .agh-gate");
     if (caret) setGlow("work");
     else if (popup) setGlow("suggest");
@@ -198,7 +199,7 @@
       chipEl.setAttribute("data-astryx-theme", "talenx"); /* astryx 토큰 스코프 — body 직속이라 직접 스탬프 */
       chipEl.addEventListener("click", function () {
         var ask = chipEl._ask;
-        hideCtxChip(true); /* acted — [알림] 적재 생략 */
+        hideCtxChip(true); /* acted */
         if (ask === "__brief__") openMeetingBrief();
         else elizaxSend(ask);
       });
@@ -207,18 +208,22 @@
     chipEl.innerHTML = '<span class="spark">✦</span>' + esc(cfg.chip);
     chipEl._ask = cfg.ask;
     clearTimeout(chipTimer);
-    /* 단일 슬롯 선점 — 상위 우선순위(감지 카드·pill)가 점유 중이면 표시하지 않고 [알림]에만 적재됨 */
+    /* 단일 슬롯 선점 — 상위 우선순위(신호 알림 카드·pill)가 점유 중이면 이 칩은 뜨지 않는다 */
     if (window.EZProactive && !EZProactive.claim("ezup-ctxchip", hideCtxChip)) return;
     requestAnimationFrame(function () { chipEl.classList.add("show"); });
-    chipTimer = setTimeout(hideCtxChip, 6000); /* 자연 소멸 → 코디네이터가 [알림] 탭 적재 */
+    /* 자연 소멸 — [알림]에 적재하지 않는다. 배지는 처리할 신호만 세야 하므로
+       만료된 문맥 칩이 숫자를 올리던 폭주 경로를 여기서 끊는다(코디네이터 archive()도 신호만 허용). */
+    chipTimer = setTimeout(function () { hideCtxChip(true); }, 6000);
   }
   function showCtxChip(key) {
     var cfg = CTX_SUGGEST[key];
     if (!cfg) { hideCtxChip(); return; }
     showChip(cfg);
   }
-  function hideCtxChip(acted) {
-    if (window.EZProactive) EZProactive.release("ezup-ctxchip", acted === true);
+  /* noKeep=true → 코디네이터에 "잔존시키지 말라"고 알린다(release 2번째 인자).
+     클릭(실행)·자연 만료 모두 이 칩은 잔존시키지 않는다 — 문맥 칩은 처리할 일이 아니다. */
+  function hideCtxChip(noKeep) {
+    if (window.EZProactive) EZProactive.release("ezup-ctxchip", noKeep === true);
     clearTimeout(chipTimer);
     if (chipEl) chipEl.classList.remove("show");
   }

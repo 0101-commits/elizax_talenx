@@ -2,14 +2,15 @@
  * tx_chat_unread.js — 미확인 응답 감지 → EZNotif 통합 (elizax 채팅 확장 모듈)
  * ----------------------------------------------------------------------------
  * v2 재편(§5.2·§6): 자체 빨강 배지(#E5484D)·자체 카운트 폐지.
- * 감지(닫힘 중 응답 완료·선제 브리핑)만 담당하고, 잔존은 EZNotif 단일 스토어로:
+ * 감지(닫힘 중 응답 완료)만 담당하고, 잔존은 EZNotif 단일 스토어로:
  *   토스트/pill → FAB 카운트(EZNotif.unreadCount) → [알림] 탭 아카이브.
  * - 닫힘 판정: .ezx-root에 ezx-open 없음 AND .agh-root에 on 없음.
  * - 닫힘 중 (a) 스트리밍 완료 (b) 비스트리밍 ai push → EZNotif.push(kind:"chat")
  *   + FAB pulse. 이 모듈이 push한 id는 패널/허브 열림 시 일괄 읽음 처리.
- * - 문서 타이틀 "(N) " 프리픽스는 EZNotif.unreadCount() 구독으로 동기화.
- * - 선제 브리핑(로드 25초·세션당 1회·미조작 시)은 기존 유지 — EZChat.push가
- *   ai push 경로로 자연히 EZNotif에 적재된다.
+ * - 문서 타이틀 "(N) " 프리픽스는 EZNotif.unreadCount() 구독으로 동기화(>9는 "9+"
+ *   로 클램프 — FAB 배지와 같은 표기).
+ * - 18차: 로드 25초 후 채팅에 밀어 넣던 브리핑 메시지 제거. 알림은 신호 알림
+ *   카드(EZSignalCard) 하나로만 뜬다 — 대화창을 읽지 않은 말로 채우지 않는다.
  * ========================================================================== */
 (function () {
   "use strict";
@@ -17,19 +18,11 @@
   /* ---------- 상태 ---------- */
   var streamingOn = false;  // 스트리밍 생성 중 (ai push 중복 집계 방지)
   var interacted = false;   // 패널/허브 열람 또는 사용자 발화 여부
-  var briefedMem = false;   // localStorage 불가 환경용 메모리 플래그
   var baseTitle = null;     // 프리픽스 제거된 원래 문서 타이틀
   var fabEl = null;
   var rootObserved = false;
   var hubObserved = false;
   var myIds = [];           // 이 모듈이 push한 알림 id — 열람 시 읽음 처리
-
-  function lsGet(k) {
-    try { return window.localStorage.getItem(k); } catch (e) { return null; }
-  }
-  function lsSet(k, v) {
-    try { window.localStorage.setItem(k, v); return true; } catch (e) { return false; }
-  }
 
   /* ---------- 스타일 (FAB pulse만 — 배지는 tx_elizax.js .ezx-cnt가 담당) ---------- */
   function injectStyle() {
@@ -59,9 +52,10 @@
 
   /* ---------- 문서 타이틀 프리픽스 (미확인 알림 수 연동) ---------- */
   function syncTitle() {
-    if (baseTitle === null) baseTitle = document.title.replace(/^\(\d+\)\s/, "");
+    if (baseTitle === null) baseTitle = document.title.replace(/^\((?:\d+|9\+)\)\s/, "");
     var n = window.EZNotif ? EZNotif.unreadCount() : 0;
-    document.title = (n > 0 ? "(" + n + ") " : "") + baseTitle;
+    /* 배지와 같은 클램프 — 두 자리 숫자가 타이틀에서만 불어나 보이던 불일치 해소 */
+    document.title = (n > 0 ? "(" + (n > 9 ? "9+" : n) + ") " : "") + baseTitle;
   }
 
   /* ---------- FAB pulse ---------- */
@@ -162,57 +156,8 @@
     }, 300);
   }
 
-  /* ---------- 선제 브리핑 (로드 25초 후 1회) ---------- */
-  var BRIEF_TEXTS = {
-    leader: "팀 체크인 지연 3명을 감지했습니다. '주간 체크인 브리핑 만들어줘'라고 요청하면 초안까지 준비합니다.",
-    member: "이번 주 체크인 마감이 다가옵니다. '이번 주 체크인 초안 잡아줘'라고 요청하면 초안까지 준비합니다.",
-    hr: "등급 조정 사전 점검 이슈 2건을 감지했습니다. '등급 조정 점검 브리핑 만들어줘'라고 요청하면 초안까지 준비합니다.",
-    exec: "조직 성과 신호에 변화가 감지되었습니다. '경영 브리핑 요약 만들어줘'라고 요청하면 초안까지 준비합니다."
-  };
-
-  function briefFlagKey() {
-    var sid = "default";
-    try {
-      if (window.EZChat && typeof window.EZChat.currentId === "function") {
-        sid = String(window.EZChat.currentId() || "default");
-      }
-    } catch (e) { /* 무해화 */ }
-    return "ezcx.unread.briefed." + sid;
-  }
-  function alreadyBriefed() {
-    if (briefedMem) return true;
-    return lsGet(briefFlagKey()) === "1";
-  }
-  function markBriefed() {
-    briefedMem = true;
-    lsSet(briefFlagKey(), "1");
-  }
-
-  function scheduleProactiveBrief() {
-    setTimeout(function () {
-      if (!window.EZChat || typeof window.EZChat.push !== "function") return;
-      if (!isClosed()) return;
-      if (interacted) return;
-      if (alreadyBriefed()) return;
-
-      var roleKey = "member";
-      try {
-        if (window.TXRoles && typeof window.TXRoles.current === "function") {
-          var r = window.TXRoles.current();
-          if (r && r.key) roleKey = r.key;
-        }
-      } catch (e) { /* 역할 조회 실패 시 기본 톤 */ }
-
-      var text = BRIEF_TEXTS[roleKey] || BRIEF_TEXTS.member;
-      markBriefed();
-      window.EZChat.push({
-        role: "ai",
-        text: "✦ (선제 브리핑) " + text,
-        meta: { ezcxProactive: true }
-      });
-      // EZNotif 적재는 "messages" push 핸들러(bump)가 자동 처리
-    }, 25000);
-  }
+  /* 18차: 로드 25초 후 채팅에 브리핑 메시지를 밀어 넣던 타이머 제거.
+     알림 표면은 신호 알림 카드 하나 — 여기서는 감지·배지 배선만 담당한다. */
 
   /* ---------- 부트스트랩 ---------- */
   function boot() {
@@ -220,7 +165,6 @@
     bindChat();
     bindOpenWatchers();
     pollRoots();
-    scheduleProactiveBrief();
     if (window.EZNotif && EZNotif.onChange) EZNotif.onChange(syncTitle);
     syncTitle();
   }
