@@ -17,7 +17,25 @@
  *   EZSignalAct.actionAt(inst, i)         정규화된 actions[i] (없으면 null)
  *   EZSignalAct.signalOf(inst)            카탈로그 신호 원본 (없으면 null)
  *   EZSignalAct.resolveScreen(inst)       {s, p} 화면 좌표 (라이브 점검용)
- *   EZSignalAct.targetOf(inst, i)         {s, p, how} 진입점 사전 해석 (디버그)
+ *   EZSignalAct.targetOf(inst, i)         {s, p, how, reachable, why} 진입점 사전 해석
+ *   EZSignalAct.reach(inst, i)            {ok, chat, why} 갈 곳이 정말 있는가
+ *
+ * 18-3차 개정 — 화면 인계(handoff)를 제대로 만든다
+ *   사용자 지시: "인라인으로 한 후에 자세히 확인하고 싶으면 관련 화면으로 넘어가야
+ *   하는데 그 기능은 어떻게 된거야? 그 기능 고도화해줘."
+ *   ① 정확한 자리에 내린다 — 화면·오버레이가 아니라 그 줄·그 칸까지 스크롤 + 강조
+ *      (land · landInModal). 목표 상세는 핵심 성과 표, 체크인은 값 입력칸,
+ *      가중치는 첫 가중치 칸, 본인 평가는 첫 입력칸이 착지점이다.
+ *   ② 맥락을 들고 간다 — 채팅에서 나온 제안을 착지 지점 맨 위 쪽지로 옮긴다
+ *      (carryNote · proposalOf). 칸에 프리필이 되는 경우는 쪽지에 문안을 겹쳐
+ *      쓰지 않고 돌아갈 길만 둔다.
+ *   ③ 돌아갈 길을 남긴다 — 쪽지의 「대화로 돌아가기」가 같은 대화를 다시 연다
+ *      (Elizax.open + showTab("chat")). 새 오버레이를 만들지 않는다.
+ *   ④ 갈 곳이 없으면 가지 않는다 — reach()가 먼저 판단하고, 안 되면 이유를
+ *      대화에 한 문장으로 적고 그 자리에 머문다. 대상 목표를 바꿔 열었을 때도
+ *      saySwap()이 대화에 남긴다(토스트만으로 흘리지 않는다).
+ *   R5는 그대로다 — run()은 대화에 머물고, openScreen()만 이동하며, 이동만 한
+ *   경우에는 신호를 해제하지 않는다.
  *
  * 처리 종류 6가지(카탈로그 내부 코드는 화면에 내지 않는다) → 실제 진입점
  * ┌────┬────────────┬────────────────────────────────────────────────────────┐
@@ -242,7 +260,20 @@
       ".ezsa-chip{font-size:11.5px;font-weight:700;border-radius:999px;padding:4px 11px;cursor:pointer;" +
       "border:1px solid var(--color-border-emphasized,#c9d3e4);background:transparent;" +
       "color:var(--color-text-accent,#1F7AF0)}" +
-      ".ezsa-ev{font-size:11.5px;line-height:1.7;color:var(--color-text-secondary,#5C6474);margin-top:9px}";
+      ".ezsa-ev{font-size:11.5px;line-height:1.7;color:var(--color-text-secondary,#5C6474);margin-top:9px}" +
+      /* 착지 쪽지 — 화면 안에 흐름대로 끼워 넣는다(떠 있는 층을 새로 만들지 않으므로 z 값이 없다) */
+      ".ezsa-carry{margin:0 0 11px;padding:10px 13px;border:1px solid var(--color-border-blue);" +
+      "background:var(--color-background-blue);border-radius:var(--radius-container)}" +
+      ".ezsa-carry p{margin:0}" +
+      ".ezsa-carry-l{font-size:12.5px;line-height:1.6;color:var(--color-text-primary)}" +
+      ".ezsa-carry-q{margin-top:8px;padding:8px 10px;border:1px solid var(--color-border);" +
+      "background:var(--color-background-card);border-radius:var(--radius-element);font-size:12.5px;" +
+      "line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;max-height:132px;overflow:auto}" +
+      ".ezsa-carry-b{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}" +
+      ".ezsa-carry-b button{font:inherit;font-size:11.5px;line-height:1.4;padding:4px 11px;cursor:pointer;" +
+      "border-radius:var(--radius-full);border:1px solid var(--color-border);" +
+      "background:var(--color-background-card);color:var(--color-accent)}" +
+      ".ezsa-carry-b button:hover{background:var(--color-background-muted);border-color:var(--color-accent)}";
     document.head.appendChild(st);
   }
 
@@ -251,6 +282,154 @@
     styleOnce();
     el.classList.add("ezsa-hl");
     setTimeout(function () { try { el.classList.remove("ezsa-hl"); } catch (e) { /* 무시 */ } }, 2000);
+  }
+
+  /* ======================================================================
+     0-3) 착지 — 정확한 자리 + 옮겨 온 제안 + 대화로 돌아가는 길
+     ----------------------------------------------------------------------
+     화면으로 넘어간 다음이 원래 허술했다. 화면만 열고 끝내면 사용자는 (ㄱ) 어디를
+     고쳐야 하는지, (ㄴ) 대화에서 무슨 얘기가 나왔는지, (ㄷ) 어떻게 돌아가는지를
+     스스로 기억해야 한다. land()가 셋을 한 번에 처리한다.
+       target → 그 줄·그 칸까지 스크롤 + 1.8초 강조
+       host   → 그 안 맨 위에 착지 쪽지(왜 왔는지 · 대화에서 제안한 내용 ·
+                「대화로 돌아가기」). 쪽지는 흐름 안에 끼우므로 새 층이 아니다.
+     TXFIX(js/tx_fix_common.js)에 스크롤·강조 헬퍼가 있는지 먼저 확인했다 —
+     D · CU · emp · org · teamName · nameTeam · avatarColor · avatar · initial ·
+     won · pad2 · ready · onSection 뿐이고 강조·스크롤은 없다.
+     그래서 이 파일의 scrollTo · highlight를 계속 쓴다.
+     ====================================================================== */
+
+  var CARRY_ID = "ezsa-carry";
+  var carryWired = false;
+
+  /* 대화의 마지막 답변 — 「대화에서 제안한 내용」의 원천 */
+  function lastAnswer() {
+    try {
+      if (!window.EZChat || !EZChat.messages) return "";
+      var arr = EZChat.messages() || [], i, m;
+      for (i = arr.length - 1; i >= 0; i--) {
+        m = arr[i];
+        if (m && m.role === "ai" && m.text) return String(m.text);
+      }
+    } catch (e) { /* 무시 */ }
+    return "";
+  }
+
+  /* 화면으로 들고 갈 제안. 처리 문안이 있으면 그것이 가장 구체적이고,
+     없으면 방금 답변을 옮긴다. 지어내지 않는다 — 둘 다 없으면 빈 문자열. */
+  function proposalOf(inst, act) {
+    var t = scrub(String((act && act.draft) || ""));
+    if (!t) t = scrub(lastAnswer());
+    t = String(t || "").replace(/\s+$/, "");
+    if (t.length > 420) t = t.slice(0, 420) + "…";
+    return t;
+  }
+
+  /* 쪽지를 끼워도 안전한 그릇인지 — 표 내부(tr/tbody/table)에는 넣지 않는다 */
+  function safeHost(el) {
+    if (!el || el.nodeType !== 1) return null;
+    var tag = String(el.tagName || "").toUpperCase();
+    if (tag === "TABLE" || tag === "TBODY" || tag === "THEAD" || tag === "TR" || tag === "TD" || tag === "TH") return null;
+    return el;
+  }
+
+  function dropCarry() {
+    var old = document.getElementById(CARRY_ID);
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+  }
+
+  /* 「대화로 돌아가기」·「문안 복사」·「닫기」 — 위임 1회 */
+  function wireCarry() {
+    if (carryWired) return;
+    carryWired = true;
+    document.addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      if (t.closest("[data-ezsa-back]")) {
+        ev.preventDefault();
+        /* 같은 대화 그대로 다시 연다 — 새 창을 만들지 않는다 */
+        try { if (window.Elizax && Elizax.open) Elizax.open(); } catch (e) { /* 무시 */ }
+        try { if (window.Elizax && Elizax.showTab) Elizax.showTab("chat"); } catch (e2) { /* 무시 */ }
+        dropCarry();
+        return;
+      }
+      if (t.closest("[data-ezsa-carry-copy]")) {
+        ev.preventDefault();
+        var q = document.querySelector("#" + CARRY_ID + " .ezsa-carry-q");
+        copyText(q ? q.textContent : "");
+        return;
+      }
+      if (t.closest("[data-ezsa-carry-x]")) { ev.preventDefault(); dropCarry(); }
+    }, false);
+  }
+
+  /* host 맨 위에 착지 쪽지 하나. 화면당 항상 한 장만 둔다. */
+  function carryNote(host, line, proposal) {
+    var h = safeHost(host);
+    if (!h) return null;
+    styleOnce();
+    wireCarry();
+    dropCarry();
+    var box = document.createElement("div");
+    box.id = CARRY_ID;
+    box.className = "ezsa-carry";
+    /* TX.modal은 talenx 오버레이 루트에 붙는다 — 토큰 스코프를 직접 진다 */
+    box.setAttribute("data-astryx-theme", "talenx");
+    var p = scrub(String(proposal || ""));
+    box.innerHTML =
+      '<p class="ezsa-carry-l">' + esc(scrub(line || "여기가 고치는 자리예요.")) + "</p>" +
+      (p ? '<p class="ezsa-carry-q">' + esc(p) + "</p>" : "") +
+      '<p class="ezsa-carry-b">' +
+      '<button type="button" data-ezsa-back>대화로 돌아가기</button>' +
+      (p ? '<button type="button" data-ezsa-carry-copy>문안 복사</button>' : "") +
+      '<button type="button" data-ezsa-carry-x>닫기</button>' +
+      "</p>";
+    if (h.firstChild) h.insertBefore(box, h.firstChild);
+    else h.appendChild(box);
+    return box;
+  }
+
+  /* 쪽지를 둘 그릇 — 착지 지점을 품은 가장 가까운 카드. 화면 맨 위에 두면 정작
+     스크롤이 내려가면서 쪽지가 위로 사라진다(라이브 확인). 그래서 「그 표가 있는
+     카드」 안에 둬서 착지 지점과 쪽지가 늘 같이 보이게 한다. */
+  function hostFor(target, fallback) {
+    var h = null;
+    try { h = target && target.closest ? target.closest(".txf-fcard, .tx-mbody, .txfw-form") : null; }
+    catch (e) { h = null; }
+    return safeHost(h) || safeHost(fallback) || null;
+  }
+
+  /* 아직 화면 밖이면 즉시 끌어온다. 부드러운 스크롤은 뒤에 오는 재렌더·쪽지 삽입에
+     밀려 취소되는 일이 있었다(라이브 확인: 목표 상세에서 핵심 성과 표가 화면 밖에
+     남아 스크롤이 0으로 돌아갔다). 그래서 마지막 확인만은 즉시 스크롤로 못박는다. */
+  function scrollNow(el) {
+    if (!el) return;
+    try { el.scrollIntoView({ block: "center" }); }
+    catch (e) { try { el.scrollIntoView(); } catch (e2) { /* 무시 */ } }
+  }
+
+  function ensureInView(el) {
+    if (!el || !el.getBoundingClientRect) return;
+    var r;
+    try { r = el.getBoundingClientRect(); } catch (e) { return; }
+    var h = window.innerHeight || 800;
+    if (r.top >= 56 && r.top <= h * 0.7) return;      /* 이미 눈에 들어와 있다 */
+    scrollNow(el);
+  }
+
+  /* o: {host, target, line, proposal} — target을 못 찾으면 host를 강조한다.
+     여기서는 부드러운 스크롤을 쓰지 않는다 — 애니메이션이 진행되는 동안 쪽지가
+     끼어들면서 애니메이션이 나중에 착지해 보정 스크롤을 덮어썼다(라이브 확인). */
+  function land(o) {
+    o = o || {};
+    var t = o.target || o.host || null;
+    if (t) { scrollNow(t); highlight(t); }
+    if (o.host) carryNote(o.host, o.line, o.proposal);
+    /* 쪽지가 위쪽에 끼면서 target이 화면 밖으로 밀릴 수 있다 — 두 번 더 맞춘다 */
+    if (t && t !== o.host) {
+      setTimeout(function () { ensureInView(t); }, 90);
+      setTimeout(function () { ensureInView(t); }, 320);
+    }
   }
 
   /* ======================================================================
@@ -631,7 +810,13 @@
   function feedbackFlow(inst, sig, act) {
     nav("perf", 1, function () {
       waitFor('#s-perf .subpage[data-p="1"]', 14, function (pg) {
-        if (pg) { scrollTo(pg); highlight(pg); }
+        if (pg) {
+          land({
+            host: pg, target: pg.querySelector(".fb-card") || pg,
+            line: "피드백을 새로 쓰는 자리가 이 화면에는 아직 없어요. 받은 피드백만 여기서 볼 수 있어요.",
+            proposal: proposalOf(inst, act)
+          });
+        }
         fallbackDraft(inst, sig, act, "이 화면에는 피드백을 새로 쓰는 자리가 아직 없습니다.");
       });
     });
@@ -644,7 +829,13 @@
       clickWhenReady('#s-appr .ap-tabs button[data-tab="0"]', 12, function () {
         waitFor('#s-appr [data-pane="0"] .txfw-form', 16, function (form) {
           if (!form) { fallbackDraft(inst, sig, act, "평가 작성 화면을 열지 못했습니다."); return; }
-          scrollTo(form); highlight(form);
+          /* 폼 전체가 아니라 첫 입력칸까지 데려간다 — 어디에 쓰는지가 바로 보이게 */
+          land({
+            host: form,
+            target: form.querySelector("textarea, input, select") || form,
+            line: "본인 평가를 쓰는 자리예요. 강조된 칸에 바로 쓰실 수 있어요.",
+            proposal: proposalOf(inst, act)
+          });
           /* AI가 살아 있으면 근거초안 생성까지 눌러준다(tx_fix_appr.js:620) */
           if (aiLive()) {
             var gen = document.querySelector('#s-appr [data-txdr-panel] [data-txdr="gen"]');
@@ -672,7 +863,12 @@
         waitFor('#s-perf [data-txf-ov="new"].open', 16, function (ov) {
           if (!ov) { fallbackDraft(inst, sig, act, "목표 생성 화면이 열리지 않았습니다."); return; }
           prefillNewGoal(ov, inst, act);
-          highlight(ov.querySelector('[data-txf="new-name"]') || ov);
+          /* 문안은 이미 칸에 들어갔다 — 쪽지에 문안을 또 붙이지 않고 돌아갈 길만 둔다 */
+          land({
+            host: ov.querySelector(".txf-ovbody") || ov,
+            target: ov.querySelector('[data-txf="new-name"]') || ov,
+            line: "목표를 새로 쓰는 자리예요. 대화에서 나온 문안을 미리 채워 뒀어요 — 그대로 고치셔도 돼요."
+          });
           noted(inst, sig, act,
             "목표를 새로 쓰는 화면 진입 · " + (aiLive() ? "AI 초안 생성 실행" : "미리 채운 문안"),
             "목표를 새로 쓰는 자리로 왔어요. 문안은 그대로 고치실 수 있어요.");
@@ -702,11 +898,16 @@
     nav("perf", 0, function () {
       var got = openBestGoalDetail(oid);
       if (got) {
+        saySwap(oid, got);
         waitFor('#s-perf [data-txf-ov="goal"].open', 16, function (ov) {
           if (!ov) { anchorCheckin(inst, sig, act, what); return; }
           var b = ov.querySelector('[data-txf="gd-aick"]') || ov.querySelector('[data-txf="gd-checkin"]');
           if (!b) { anchorCheckin(inst, sig, act, what); return; }
           try { b.click(); } catch (e) { /* 무시 */ }
+          /* 창만 띄우고 끝내지 않는다 — 실제로 값을 넣는 칸까지 데려간다 */
+          landInModal("[data-ck-kr]",
+            "여기가 값을 넣는 자리예요 — " + (titleOf(got) || "목표") + "의 진척값이에요.",
+            proposalOf(inst, act));
           noted(inst, sig, act, what + " 열기 · 대상 " + (titleOf(got) || "목표") +
             (oid && got !== oid ? " (원래 가리킨 " + (titleOf(oid) || "목표") + "은 이 화면에 없음)" : ""),
             what + "을 열었어요.");
@@ -722,8 +923,31 @@
     waitFor('#s-perf [data-txf="anchor-aick"]', 12, function (a) {
       if (!a) { fallbackDraft(inst, sig, act, "체크인 화면을 열지 못했습니다."); return; }
       try { a.click(); } catch (e) { /* 무시 */ }
+      /* 어느 목표 기준인지 반드시 말한다 — 조용히 바꿔치기하지 않는다 */
+      var mine = myObjectives();
+      sayWhy("가리킨 목표를 이 화면에서 열 수 없어서 " +
+        (mine.length ? (titleOf(mine[0].objective_id) || "제 첫 목표") : "첫 목표") + " 기준으로 열었어요.");
+      landInModal("[data-ck-kr]", "여기가 값을 넣는 자리예요.", proposalOf(inst, act));
       noted(inst, sig, act, what + " 열기 (내 첫 목표 기준)", what + "을 열었어요.");
     });
+  }
+
+  /* 열린 TX.modal 안의 특정 칸에 착지 — 모달 본문(.tx-mbody)이 쪽지의 그릇이다 */
+  function landInModal(sel, line, proposal) {
+    waitFor(".tx-back.show .tx-mbody " + sel, 16, function (el) {
+      if (!el) return;                       /* 모달을 못 찾으면 아무것도 하지 않는다 */
+      var body = el.closest ? el.closest(".tx-mbody") : null;
+      land({ host: body, target: el, line: line, proposal: proposal });
+      try { if (el.focus) el.focus(); } catch (e) { /* 무시 */ }
+    });
+  }
+
+  /* 근거가 가리킨 대상과 실제로 열린 대상이 다르면 대화에 그대로 적는다.
+     토스트만 띄우면 사라져 버려서 「조용한 바꿔치기」와 다를 게 없다. */
+  function saySwap(want, got) {
+    if (!want || !got || want === got) return;
+    sayWhy((titleOf(want) || "가리킨 목표") + "은 이 화면에서 열 수 없어서 " +
+      (titleOf(got) || "다른 목표") + "을 열었어요. 필요하면 목표를 바꿔 주세요.");
   }
 
   /* 목표 상세 오버레이 열기 — 해당 목표 행을 실제로 클릭한다(tx_fix_perf.js:2671) */
@@ -778,6 +1002,9 @@
     nav("perf", 0, function () {
       clickWhenReady('#s-perf [data-txf="weight"]', 14, function (btn) {
         if (!btn) { fallbackDraft(inst, sig, act, "가중치 설정 버튼을 찾지 못했습니다."); return; }
+        /* 편집기 첫 칸까지 데려가고, 수정 전 값을 눈에 보이게 들고 간다 */
+        landInModal(".txf-we", "여기가 가중치를 고치는 자리예요. 합계가 100%가 되면 저장할 수 있어요.",
+          (before ? "지금 값 — " + before + "\n\n" : "") + proposalOf(inst, act));
         /* 저장은 사용자가 모달에서 확정한다. 여기서는 수정 전 값만 남긴다. */
         noted(inst, sig, act, "가중치 편집 진입 · 수정 전 " + (before || "값 없음"),
           "가중치를 직접 고치는 자리로 왔어요.");
@@ -793,12 +1020,20 @@
       var got = openBestGoalDetail(oid);
       if (got) {
         var swapped = (oid && got !== oid);
-        if (swapped) {
-          toast((titleOf(oid) || "가리킨 목표") + "은 이 화면에서 열 수 없어 "
-            + (titleOf(got) || "다른 목표") + "을 열었어요.", "warn");
-        }
+        /* 바꿔치기는 대화에 남긴다(토스트는 사라진다) */
+        if (swapped) saySwap(oid, got);
         waitFor('#s-perf [data-txf-ov="goal"].open', 16, function (ov) {
-          if (ov) highlight(ov);
+          if (ov) {
+            /* 오버레이 전체를 감싸 강조하면 「어디를 고치나」가 안 보인다 —
+               핵심 성과 표(값·가중치가 있는 자리)까지 데려간다 */
+            var tg = ov.querySelector(".txf-krt") || ov.querySelector(".txf-fcard") || ov;
+            land({
+              host: hostFor(tg, ov.querySelector(".txf-ovbody") || ov),
+              target: tg,
+              line: (titleOf(got) || "목표") + "을 열었어요. 값과 가중치는 이 표에서 고칠 수 있어요.",
+              proposal: proposalOf(inst, act)
+            });
+          }
           noted(inst, sig, act, "목표 상세 진입 · 대상 " + (titleOf(got) || "목표") +
             (swapped ? " (원래 가리킨 " + (titleOf(oid) || "목표") + "은 이 화면에 없음)" : "") +
             (ov ? "" : " (상세가 열리지 않아 목표 현황에서 확인)"),
@@ -806,10 +1041,17 @@
         });
         return;
       }
-      /* 대상 목표가 없다 — 화면까지는 데려간다(가짜 성공 금지) */
+      /* 대상 목표가 없다 — 화면까지는 데려간다(가짜 성공 금지).
+         못 골랐다는 사실은 토스트로만 흘리지 않고 대화에도 남긴다. */
       waitFor("#s-perf .txf-goal-body, #s-perf .subpage", 14, function (host) {
-        if (host) { scrollTo(host); highlight(host); }
-        toast("고칠 목표를 찾지 못했어요 — 목표 현황에서 직접 골라 주세요.", "warn");
+        if (host) {
+          land({
+            host: host, target: host,
+            line: "어느 목표를 고쳐야 하는지 제가 못 골랐어요. 목표 현황에서 직접 골라 주세요.",
+            proposal: proposalOf(inst, act)
+          });
+        }
+        sayWhy("어느 목표를 고칠지 제가 못 골라서 목표 현황까지만 열었어요. 목표를 골라 주시면 이어서 도울게요.");
         record(inst, sig, act, "목표 현황으로 이동 · 대상 목표 미확정");
       });
     });
@@ -984,7 +1226,11 @@
           if (!String(inp.value || "").trim()) {
             inp.value = agenda.replace(/\s+/g, " ").trim().slice(0, 60);
           }
-          scrollTo(inp); highlight(inp);
+          land({
+            host: safeHost(inp.parentNode) || inp.parentNode,
+            target: inp,
+            line: "다음 면담 안건에 미리 담아 뒀어요. 문구는 그대로 고치셔도 돼요."
+          });
         }
         finish(inst, sig, act, "1:1 아젠다 미리 채움 · 이월 " + (carried ? "완료" : "미적용") +
           " · " + agenda.slice(0, 40));
@@ -1002,15 +1248,33 @@
     var oid = pickObjectiveId(inst);
     var label = "";
     try { if (window.EZNav && EZNav.labelOf) label = EZNav.labelOf(dst.s, dst.p); } catch (e) { label = ""; }
+    var prop = proposalOf(inst, act);
     var ok = nav(dst.s, dst.p, function () {
-      if (dst.s === "perf" && dst.p === 0 && oid) {
-        if (openGoalDetail(oid)) return;
+      /* ① 가리킨 목표가 이 화면에 있으면 그 목표 상세까지 열고 표를 강조 */
+      if (dst.s === "perf" && dst.p === 0 && oid && openGoalDetail(oid)) {
+        waitFor('#s-perf [data-txf-ov="goal"].open', 16, function (ov) {
+          if (!ov) return;
+          var tg = ov.querySelector(".txf-krt") || ov;
+          land({
+            host: hostFor(tg, ov.querySelector(".txf-ovbody") || ov),
+            target: tg,
+            line: (titleOf(oid) || "목표") + "의 상세예요. 이야기했던 내용은 여기에 옮겨 뒀어요.",
+            proposal: prop
+          });
+        });
+        return;
       }
       waitFor("#s-" + dst.s, 12, function (secEl) {
-        if (secEl) {
-          var pg = secEl.querySelector('.subpage[data-p="' + dst.p + '"]') || secEl;
-          scrollTo(pg); highlight(pg);
-        }
+        if (!secEl) return;
+        var pg = secEl.querySelector('.subpage[data-p="' + dst.p + '"]') || secEl;
+        /* ② 상세를 못 열어도 그 줄까지는 데려간다 — 화면만 열고 끝내지 않는다 */
+        var row = oid ? pg.querySelector('[data-oid="' + oid + '"]') : null;
+        land({
+          host: pg, target: row || pg,
+          line: row ? "이야기했던 줄이에요. 눌러서 상세를 볼 수 있어요."
+                    : (label || "해당 화면") + "이에요. 이야기했던 내용은 아래에 옮겨 뒀어요.",
+          proposal: prop
+        });
       });
     });
     if (!ok) {
@@ -1176,7 +1440,42 @@
         break;
       default: how = "미지원";
     }
-    return { no: actNo(act), cls: cls, s: scr.s, p: scr.p, how: how, live: sig.now === 1 };
+    var rc = reach(inst, idx);
+    return {
+      no: actNo(act), cls: cls, s: scr.s, p: scr.p, how: how,
+      live: sig.now === 1, reachable: rc.ok, why: rc.why
+    };
+  }
+
+  /* ---- 갈 곳이 정말 있는가 -----------------------------------------------
+     화면 이동 전에 이것부터 묻는다. 갈 곳이 없으면 「비슷한 화면」으로 데려가서
+     사용자가 헤매게 하는 대신, 대화에서 그대로 말한다. R2를 지키느라 이유를
+     흐리지 않는다 — 분류 이름을 쓰지 않고도 무엇이 없는지 말할 수 있다.
+       ok    : 화면으로 데려가도 되는가
+       why   : 안 되는 이유 (사람 말 한 문장, 그대로 대화에 올라간다)
+       chat  : 대화에서 이어서 도울 수 있는가 (문안 초안 등) */
+  function reach(inst, idx) {
+    var sig = signalOf(inst), act = actionAt(inst, idx);
+    if (!sig || !act || !actNo(act)) {
+      return { ok: false, chat: false, why: "이 이야기로는 어느 자리를 고쳐야 할지 아직 짚지 못했어요." };
+    }
+    var n = actNo(act), cls = classify(inst, act);
+    if (n < 1 || n > 6) {
+      return { ok: false, chat: false, why: "이건 아직 화면에서 처리할 방법이 없어요. 여기서 같이 정리해 볼게요." };
+    }
+    /* 라이브가 아닌 신호로 화면을 열어 주면 빈 화면에 데려다 놓는 셈이 된다 */
+    if (sig.now !== 1 && n !== 5) {
+      return { ok: false, chat: false, why: "이건 데이터가 더 모여야 화면에서 고칠 수 있어요. 지금은 여기서 내용만 볼 수 있어요." };
+    }
+    /* 피드백을 새로 쓰거나 고치는 자리가 이 화면에는 없다(카드·상세만 있다) */
+    if (cls === "feedback" && (n === 1 || n === 2)) {
+      return { ok: false, chat: true, why: "피드백을 새로 쓰는 자리가 이 화면에는 아직 없어요. 여기서 문안을 잡아 드릴게요." };
+    }
+    /* 고칠 목표를 한 건도 못 고르는 상태 — 화면에 데려가도 열 것이 없다 */
+    if ((cls === "goal" || cls === "weight" || cls === "checkin") && n !== 5 && !pickObjectiveId(inst) && !myObjectives().length) {
+      return { ok: false, chat: false, why: "고칠 목표가 아직 없어서 화면에서 열 게 없어요. 먼저 목표를 세우는 이야기부터 해요." };
+    }
+    return { ok: true, chat: true, why: "" };
   }
 
   /* ======================================================================
@@ -1282,14 +1581,28 @@
     }
   }
 
-  /* openScreen(inst, i, text) — 사용자가 화면에서 직접 하겠다고 한 경우에만 */
+  /* openScreen(inst, i, text) — 사용자가 화면에서 직접 하겠다고 한 경우에만.
+     text가 비어 있는 호출(답변 끝의 진입 장치)도 받는다 — 그때는 사유 문장을 바꾼다. */
   function openScreen(inst, actionIdx, text) {
+    var sig0 = signalOf(inst), act0 = actionAt(inst, actionIdx);
+    /* ① 갈 곳이 정말 있는지 먼저 묻는다. 없으면 근처로 데려가지 않고 그대로 말한다. */
+    var rc = reach(inst, actionIdx);
+    if (!rc.ok) {
+      sayWhy(rc.why);
+      if (rc.chat && sig0 && act0) return chatResolve(inst, sig0, act0);
+      return false;
+    }
     var g = guard(inst, actionIdx);
     if (!g) return false;
+    dropCarry();               /* 지난 인계의 쪽지가 남아 있으면 걷는다 */
     var dst = resolveScreen(inst, g.act);
     var label = "";
     try { if (window.EZNav && EZNav.labelOf) label = EZNav.labelOf(dst.s, dst.p); } catch (e) { label = ""; }
-    sayWhy("직접 고치시겠다고 하셔서 " + (label || "해당 화면") + "으로 넘어갈게요.");
+    /* 화면으로 넘어갈 때는 왜 넘어가는지 한 줄 (R5). 사용자가 말해서 가는 경우와
+       답변 끝의 진입 장치로 가는 경우의 사유가 다르므로 문장을 나눈다. */
+    sayWhy(wantsScreen(text)
+      ? "직접 고치시겠다고 하셔서 " + (label || "해당 화면") + "으로 넘어갈게요."
+      : (label || "해당 화면") + "에서 바로 고칠 수 있어요. 그 자리로 옮겨 드릴게요.");
     try {
       switch (actNo(g.act)) {
         case 1: return runA1(inst, g.sig, g.act);
@@ -1341,6 +1654,7 @@
     actionAt: actionAt,
     signalOf: signalOf,
     resolveScreen: resolveScreen,
-    targetOf: targetOf
+    targetOf: targetOf,
+    reach: reach            /* 화면으로 데려가도 되는가 {ok, chat, why} */
   };
 })();

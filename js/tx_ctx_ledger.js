@@ -33,9 +33,25 @@
  *      usedCount 증가·체인 승격은 실인용(ctxCited)만 — 추측은 카운트 금지,
  *      키워드 매칭 0건이면 "뒷받침 기록 없음" 상태를 정직하게 표시.
  *    - 노출 수위는 window.EZEvidencePolicy[역할] (없으면 전부 "core"):
- *      core=요약칩+미니칩 / trace=+source 표기·"원장에서 보기"(openPanel(id))
- *      / logic=+"산출 로직 보기" 팝오버(①입력 수집 ②규칙 적용 ③모델 판단
- *      ④검증 — 결정 게이트·승인 전 side-effect 0) + "감사 기록됨 · GA-26xxx".
+ *      core=요약칩+미니칩 / trace=+출처 표기·칩 클릭으로 성과 기록 점프
+ *      / logic=+"산출 로직"(①입력 수집 ②규칙 적용 ③모델 판단 ④검증).
+ *
+ * ⑥ 18-3차 개정 — 답변당 근거 표면은 하나, 그것도 접힌 한 줄 (2026-07-31)
+ *    사용자 지시: "이미 위에 근거가 나오는데 이거를 밑에 또 나오게 해야해?
+ *    전반적으로 중복이 있는지 검토 후 수정" / "산출로직보기를 누르면 위에 UI가
+ *    겹쳐서 떠서 읽을 수 없음" / "결정흐름이나 성과기록에서 보기는 필요 없음".
+ *    - 기본 = 알약 하나 `관련 기록 N건 ▾`. 누르면 그 아래로 펼쳐진다.
+ *      낱말은 GLOSSARY의 「성과 기록」과 맞춘다(누르면 도착하는 곳과 같은 이름).
+ *    - 「성과 기록에서 보기」·「◈ 결정 흐름」 버튼 삭제 — 둘 다 tx_entry.js의
+ *      ⋯ 메뉴(성과 기록·결정 흐름)에 그대로 있고, 칩 클릭도 성과 기록으로 간다.
+ *    - 산출 로직은 body 직속 position:fixed 팝오버였다. 트리거가 답변 바로
+ *      아래라서 팝오버가 언제나 자기가 설명하는 답변을 덮었다(트리거 "위쪽"에
+ *      놓는 배치 규칙 때문). 띄우는 층을 없애고 대화 흐름 안 인라인 확장으로
+ *      바꿨다 — 겹칠 자리 자체가 없어지고 z 값도 하나 줄었다.
+ *    - 같은 사실을 두 번 보이지 않는다: 건수는 접힌 줄에만, 기록 제목은 칩에만,
+ *      실인용 여부는 문장 하나로만(점선 칩 폐지), 제한 사유는 펼친 안에서 한 번만.
+ *    - 모양 문법의 단일 원천 = tx_chat_followups.js의 `.ezcx-row`/`.ezcx-row-chip`
+ *      /`.ezcx-row-token`. 줄의 위아래 순서도 그 파일 settleOrder()가 정한다.
  * ④ 엣지 케이스
  *    - "messages" 재렌더마다 기존 스트립 전부 제거 후 재주입. 스트리밍 중
  *      (streaming {on:true})에는 주입하지 않고 종료 후 렌더.
@@ -66,7 +82,7 @@
   "use strict";
 
   var LS_PREFIX = "elizax_ctx_v1:";
-  var STORE_V = 3;           /* 스토어 스키마 버전 (v3 = source 조인 키 규약) */
+  var STORE_V = 4;           /* 스토어 스키마 버전 (v3 = source 조인 키 규약 · v4 = 규칙 제목 사람 말로) */
   var MAX_ITEMS = 80;
   var RENDER_DELAY = 240;
   var Z_PANEL = 100020;     /* quickask(100010)·fix_home(100001)보다 위 */
@@ -81,6 +97,12 @@
   var renderTimer = null;
   var streamingOn = false;
   var seq = 0;
+  /* 근거 한 줄 접힘 상태 — 기본 접힘. messages 재렌더에는 살아남고,
+     새 질문(스트리밍 시작)·세션 전환에서 다시 접힌다 (18-3차) */
+  var evOpen = false;
+  var logicOpen = false;
+  /* 답변 아래 줄의 공용 행 클래스 — 단일 원천은 tx_chat_followups.js (18-3차 계약) */
+  var ROW_CLS = "ezcx-row";
 
   /* ---------------- type 메타 ---------------- */
   /* 타입색 = astryx 카테고리컬 토큰 (§8.3 — 원장 TYPES 8색 흡수) */
@@ -292,6 +314,44 @@
     return changed;
   }
 
+  /* v3 → v4 스토어 호환 — 옛 시드 제목에 규칙 경로가 그대로 찍혀 있었다
+     (`rule.weight.sum — KR 가중치 합 100%`). 화면에 나오는 글자라 R2 위반이다.
+     source(조인 키)는 그대로 두고 제목만 사람 말로 바꾼다.
+     제목은 chainSig에 들어가므로 바꾸면 기록 체인이 깨진다 → 체인을 다시 계산한다. */
+  var RULE_TITLE_V4 = [
+    [/^rule\.weight\.sum\b/, "핵심결과 가중치 합은 100%"],
+    [/^rule\.calibration\.gate\b/, "등급 조정은 심의 승인 뒤에 확정"]
+  ];
+  function migrateRuleTitles(list) {
+    var changed = false, i, r;
+    for (i = 0; i < list.length; i++) {
+      if (!list[i] || list[i].type !== "rule") continue;
+      for (r = 0; r < RULE_TITLE_V4.length; r++) {
+        if (RULE_TITLE_V4[r][0].test(String(list[i].title || ""))) {
+          list[i].title = RULE_TITLE_V4[r][1];
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (changed) rechainAll(list);
+    return changed;
+  }
+  /* 체인 전량 재계산 — 제목을 고친 정당한 마이그레이션 뒤에만 쓴다.
+     한 건만 다시 해시하면 뒤 항목의 prev_hash가 어긋나 "불일치"로 잡힌다. */
+  function rechainAll(list) {
+    var chained = [], i;
+    for (i = 0; i < list.length; i++) if (list[i] && list[i].hash) chained.push(list[i]);
+    chained.sort(function (a, b) { return (a.chainSeq || 0) - (b.chainSeq || 0); });
+    var prev = "GENESIS";
+    for (i = 0; i < chained.length; i++) {
+      chained[i].prev_hash = prev;
+      chained[i].chainSeq = i + 1;
+      chained[i].hash = hashStr(chainSig(chained[i]));
+      prev = chained[i].hash;
+    }
+  }
+
   function loadStore() {
     if (items) return items;
     items = [];
@@ -305,6 +365,7 @@
           var ver = obj.v || 1;
           if (ver < 2) backfillSeedFlags(items);
           if (ver < 3) migrateSourceKeys(items);
+          if (ver < 4) migrateRuleTitles(items);
           /* 버전만 올라간 경우에도 1회 저장 — 매 로드마다 마이그레이션 재실행 방지 */
           migrated = ver < STORE_V;
         }
@@ -444,8 +505,9 @@
       "FY2025 하반기 평가 이력", "종합 등급·리뷰 코멘트 · 강점: 실행력 / 보완: 위임", 3));
 
     /* 규칙 1 */
+    /* 제목은 사람 말로만 — source(조인 키)는 그대로 두고 화면 글자만 바꾼다 (R2) */
     out.push(mkSeed(5, 1, 9, 0, "rule", "rule.weight.sum",
-      "rule.weight.sum — KR 가중치 합 100%", "목표 가중치 검증 규칙 · 위반 시 저장 차단 · 기준 시점 데이터 기준", 3));
+      "핵심결과 가중치 합은 100%", "목표 가중치 검증 규칙 · 위반 시 저장 차단 · 기준 시점 데이터 기준", 3));
 
     /* leader/hr/exec — 팀/전사 관점 1~2건 */
     if (role === "leader") {
@@ -457,7 +519,7 @@
       out.push(mkSeed(7, 7, 9, 10, "org", "org.dist.FY2026H1",
         "전사 평가 분포 기준선", "등급 분포 가이드 · 관대화/중심화 편향 모니터링 지표", 3));
       out.push(mkSeed(7, 14, 10, 0, "rule", "rule.calibration.gate",
-        "rule.calibration.gate — 등급 조정 승인 단계", "조정은 심의 게이트 통과 후 확정 · 승인 전에는 반영되지 않음", 3));
+        "등급 조정은 심의 승인 뒤에 확정", "조정은 심의를 통과한 뒤 확정 · 승인 전에는 반영되지 않음", 3));
     }
 
     return out;
@@ -642,41 +704,42 @@
       "border:1px solid var(--color-border-orange);border-radius:var(--radius-inner);padding:1.5px 6px;}",
       ".ezl-lvchip{font-size:9.5px;font-weight:700;color:var(--color-text-blue);background:var(--color-background-blue);",
       "border:1px solid var(--color-border-blue);border-radius:var(--radius-inner);padding:1.5px 6px;}",
-      /* ---- 답변 근거 스트립 ---- */
-      ".ezl-ev-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:3px 4px 7px;}",
-      ".ezl-ev-cap{font-size:10.5px;font-weight:700;color:var(--color-text-secondary);background:var(--color-background-muted);",
-      "border:1px solid var(--color-border);border-radius:var(--radius-full);padding:3px 9px;white-space:nowrap;}",
-      ".ezl-ev-chip{display:inline-flex;align-items:center;gap:4px;max-width:100%;font-size:10.5px;line-height:1.4;",
-      "border-radius:var(--radius-full);padding:3px 9px;border:1px solid var(--color-border-blue);background:var(--color-background-blue);",
-      "color:var(--color-text-primary);user-select:none;}",
-      ".ezl-ev-chip .tb{font-size:9px;font-weight:800;color:var(--ezl-c,var(--color-accent));}",
-      ".ezl-ev-chip .sr{font-family:var(--font-family-code);font-size:9px;color:var(--color-text-secondary);}",
-      ".ezl-ev-chip.click{cursor:pointer;}",
-      ".ezl-ev-chip.click:hover{background:var(--color-accent-muted);border-color:var(--color-accent);}",
-      /* ---- 추측 인용(비실인용) 구분 — 점선 + 중립 톤 (F15) ---- */
-      ".ezl-ev-cap.guess{color:var(--color-text-secondary);border-style:dashed;}",
-      ".ezl-ev-chip.guess{border-style:dashed;border-color:var(--color-border-emphasized);",
-      "background:var(--color-background-surface);color:var(--color-text-secondary);}",
-      ".ezl-ev-none{font-size:10.5px;font-weight:700;color:var(--color-text-orange);background:var(--color-background-orange);",
-      "border:1px dashed var(--color-border-orange);border-radius:var(--radius-full);padding:3px 10px;}",
-      ".ezl-ev-link,.ezl-ev-logic{font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;border-radius:var(--radius-full);",
-      "padding:3px 10px;border:1px solid var(--color-border-emphasized);background:var(--color-background-surface);color:var(--color-accent);transition:background var(--duration-fast) var(--ease-standard);}",
-      ".ezl-ev-link:hover,.ezl-ev-logic:hover{background:var(--color-overlay-hover);border-color:var(--color-accent);}",
-      ".ezl-ev-logic{color:var(--color-text-purple);border-color:var(--color-border-purple);}",
-      /* ---- 산출 로직 팝오버 ---- */
-      ".ezl-pop{position:fixed;z-index:" + (Z_PANEL + 10) + ";width:330px;max-width:92vw;background:var(--color-background-popover);color:var(--color-text-primary);",
-      "border:1px solid var(--color-border);border-radius:var(--radius-container);box-shadow:var(--shadow-high,0 18px 50px var(--color-shadow));padding:13px 14px;",
-      "font-size:11.5px;line-height:1.55;}",
-      ".ezl-pop h4{margin:0 0 8px;font-size:12.5px;font-weight:700;letter-spacing:-.02em;}",
+      /* ---- 답변 근거 한 줄 (18-3차) ----------------------------------------
+         답변당 근거 표면은 이것 하나. 기본은 접힌 한 줄이고 눌러야 펼쳐진다.
+         모양 문법의 단일 원천은 tx_chat_followups.js의 공용 행 클래스다 —
+         `.ezcx-row`(줄 컨테이너) / `.ezcx-row-chip`(누를 수 있는 알약) /
+         `.ezcx-row-token`(누를 수 없는 알약). 우리 줄도 그 클래스를 같이 단다.
+         아래 규칙은 그 파일이 없을 때를 위한 **같은 값의 폴백**이다. 값이
+         똑같아야 어느 스타일이 뒤에 주입돼도 결과가 흔들리지 않는다 —
+         값을 바꿀 때는 tx_chat_followups.js의 공용 문법을 먼저 바꿀 것. */
+      ".ezl-ev-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:2px 4px 6px;}",
+      ".ezl-ev-more,.ezl-ev-logic{cursor:pointer;font:inherit;font-size:12px;line-height:1.4;padding:5px 11px;",
+      "border-radius:var(--radius-full);border:1px solid var(--color-border);background:var(--color-background-card);",
+      "color:var(--color-accent);user-select:none;max-width:100%;",
+      "transition:background var(--duration-fast) var(--ease-standard),border-color var(--duration-fast) var(--ease-standard);}",
+      ".ezl-ev-more:hover,.ezl-ev-logic:hover{background:var(--color-background-muted);border-color:var(--color-accent);}",
+      ".ezl-ev-more .cv{margin-left:5px;font-size:9px;opacity:.65;}",
+      /* 뒷받침 기록이 없을 때 — 경고색으로 놀래지 않고 중립 알약으로 조용히 알린다 */
+      ".ezl-ev-quiet{font-size:12px;line-height:1.4;padding:5px 11px;border-radius:var(--radius-full);",
+      "border:1px solid var(--color-border);background:var(--color-background-muted);color:var(--color-text-secondary);}",
+      /* 펼친 본문 — 한 줄 아래로 전체 폭을 차지해 흐른다. 무엇도 덮지 않는다 */
+      ".ezl-ev-open{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:1px;}",
+      /* 근거 알약 — 기하는 공용 문법(.ezcx-row-chip/-token)이 내고, 여기선 속 글자만 */
+      ".ezl-ev-chip{display:inline-flex;align-items:center;gap:5px;}",
+      ".ezl-ev-chip .tb{font-size:9.5px;font-weight:800;color:var(--ezl-c,var(--color-accent));}",
+      ".ezl-ev-note{flex:1 1 100%;font-size:11px;line-height:1.5;color:var(--color-text-secondary);padding:1px 3px 0;}",
+      /* ---- 산출 로직 — 팝오버 폐기, 제자리에서 아래로 펼친다 (겹침 원인 제거) ---- */
+      ".ezl-logic{flex:1 1 100%;margin-top:1px;background:var(--color-background-muted);border:1px solid var(--color-border);",
+      "border-radius:var(--radius-container);padding:10px 12px;font-size:11.5px;line-height:1.55;}",
+      ".ezl-logic-h{display:block;font-size:11.5px;font-weight:700;margin-bottom:8px;letter-spacing:-.02em;}",
       ".ezl-step{display:flex;gap:8px;margin-bottom:7px;}",
+      ".ezl-step:last-child{margin-bottom:0;}",
       ".ezl-step .n{flex:none;width:17px;height:17px;border-radius:var(--radius-full);background:var(--color-trust);color:var(--color-on-accent);",
       "font-size:9.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-top:1px;}",
       ".ezl-step .t b{display:block;font-size:11px;}",
       ".ezl-step .t span{color:var(--color-text-secondary);font-size:10.5px;}",
-      ".ezl-step .t code{font-family:var(--font-family-code);font-size:9.5px;color:var(--color-text-green);",
-      "background:var(--color-background-green);border:1px solid var(--color-border-green);border-radius:var(--radius-inner);padding:0 4px;}",
-      ".ezl-pop-ga{margin-top:9px;padding-top:8px;border-top:1px dashed var(--color-border);font-size:10px;color:var(--color-text-secondary);}",
-      ".ezl-pop-ga b{color:var(--color-trust);font-family:var(--font-family-code);}",
+      ".ezl-logic-ga{margin-top:9px;padding-top:8px;border-top:1px dashed var(--color-border);font-size:10.5px;",
+      "line-height:1.5;color:var(--color-text-secondary);}",
       "@media (prefers-reduced-motion:reduce){.ezl-panel,.ezl-scrim,.ezx-fab.ezl-bump{transition:none !important;animation:none !important;}}"
     ].join("");
     var st = document.createElement("style");
@@ -1019,7 +1082,6 @@
     var scrim = document.getElementById("ezl-scrim");
     if (p) p.classList.remove("on");
     if (scrim) scrim.classList.remove("on");
-    closeLogicPop();
   }
 
   /* ================= 답변 근거칩 ================= */
@@ -1191,12 +1253,12 @@
       try { if (window.EZChat && EZChat.persist) EZChat.persist(); } catch (eP) { /* 무시 */ }
     }
     if (!picked.length) {
-      /* 뒷받침 기록 0건 — 추측으로 채우지 않고 상태를 정직하게 표시 (F15) */
+      /* 뒷받침 기록 0건 — 추측으로 채우지 않고 상태를 정직하게 표시 (F15).
+         다만 경고색으로 놀래지 않고 같은 한 줄 자리에 조용히 알린다 */
       var none = document.createElement("div");
-      none.className = "ezl-ev-wrap";
-      none.innerHTML = '<span class="ezl-ev-none">⚠ 이 답변을 뒷받침하는 기록 없음</span>';
-      if (anchor.nextSibling) anchor.parentNode.insertBefore(none, anchor.nextSibling);
-      else anchor.parentNode.appendChild(none);
+      none.className = ROW_CLS + " ezl-ev-wrap";
+      none.innerHTML = '<span class="ezcx-row-token ezl-ev-quiet">관련 기록 없음</span>';
+      insertBelowAnswer(anchor, none);
       return;
     }
 
@@ -1218,53 +1280,70 @@
     }
     if (!gated.length && !blocked) return;
 
-    /* 실인용(ctxCited)=기존 스타일, 추측=점선 칩 + 별도 캡션 — 인용 정직화 (F15) */
-    var guessCls = cited ? "" : " guess";
-    var html = '<span class="ezl-ev-cap' + guessCls + '">'
-      + (cited ? "근거 · AI가 인용한 기록 " : "관련일 수 있는 기록 ") + gated.length + "건</span>";
-    var anyClick = false, summCnt = 0;
-    for (i = 0; i < gated.length; i++) {
-      var it2 = gated[i].it;
-      var lv2 = gated[i].lv;
-      /* [F15] 칩 수위는 항목별 — 내 기록이면 member도 원장까지 추적 가능 */
-      var chLv = chipLevel(it2);
-      var meta = TYPES[it2.type] || TYPES.org;
-      if (lv2 === "anon") {
-        html += '<span class="ezl-ev-chip' + guessCls + '" style="--ezl-c:var(--color-text-secondary)" title="응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)">'
-          + '<span class="tb">' + esc(meta.label) + "</span>익명 집계</span>";
-        continue;
+    /* [18-3차] 접힌 한 줄이 기본. 낱말은 GLOSSARY의 「성과 기록」과 맞춘다 —
+       눌러서 도착하는 곳이 성과 기록이니 부르는 이름도 「기록」으로 통일한다. */
+    var html = '<button type="button" class="ezcx-row-chip ezl-ev-more" data-ezl-ev-toggle="1" title="'
+      + (evOpen ? "접기" : "이 답과 겹치는 성과 기록을 봅니다") + '">'
+      + "관련 기록 " + gated.length + '건<span class="cv">' + (evOpen ? "▴" : "▾") + "</span></button>";
+
+    if (evOpen) {
+      var open = "", summCnt = 0;
+      for (i = 0; i < gated.length; i++) {
+        var it2 = gated[i].it;
+        var lv2 = gated[i].lv;
+        /* [F15] 칩 수위는 항목별 — 내 기록이면 member도 원장까지 추적 가능 */
+        var chLv = chipLevel(it2);
+        var meta = TYPES[it2.type] || TYPES.org;
+        if (lv2 === "anon") {
+          open += '<span class="ezcx-row-token ezl-ev-chip" style="--ezl-c:var(--color-text-secondary)" title="응답자 보호 정책에 따라 익명 집계로 제공합니다 (정책 v3.1)">'
+            + '<span class="tb">' + esc(meta.label) + "</span>익명 집계</span>";
+          continue;
+        }
+        if (lv2 === "summ") summCnt++;
+        var clickable = chLv !== "core";
+        /* 누를 수 있으면 강조 알약, 아니면 중립 알약 — 기하는 같고 색만 다르다 (공용 문법) */
+        open += '<span class="' + (clickable ? "ezcx-row-chip" : "ezcx-row-token") + ' ezl-ev-chip" style="--ezl-c:' + meta.color + '"'
+          + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 원문·인용 이력 보기"' : ' title="' + esc(it2.title) + ' — 타인 기록이라 요약까지만 제공됩니다"') + ">"
+          /* 종류 배지 + 제목이면 사람이 알아볼 정보는 다 있다. 출처(조인 키)는 덧붙이지
+             않는다 — 사람 말로 옮겨도 제목을 되풀이하거나(「…향상」) 조인 키가 뭉개져
+             나오기만 했다(1on1.rec.0630 → "1기록.0630"). 출처는 물었을 때(칩 클릭 →
+             성과 기록 상세)만 밝힌다 (R2 · 한 스트립 안 중복 금지) */
+          + '<span class="tb">' + esc(meta.label) + "</span>" + esc(shorten(it2.title, 16))
+          + "</span>";
       }
-      if (lv2 === "summ") summCnt++;
-      var clickable = chLv !== "core";
-      if (clickable) anyClick = true;
-      html += '<span class="ezl-ev-chip' + guessCls + (clickable ? " click" : "") + '" style="--ezl-c:' + meta.color + '"'
-        + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 원문·출처·인용 이력 보기"' : ' title="' + esc(it2.title) + ' — 타인 기록이라 요약까지만 제공됩니다"') + ">"
-        + '<span class="tb">' + esc(meta.label) + "</span>" + esc(shorten(it2.title, 14))
-        /* 출처는 사람이 읽는 말로만 — 기록 번호·표 이름은 화면에 쓰지 않는다 */
-        + (clickable && lv2 === "full" ? '<span class="sr">' + esc(humanSrc(it2.source)) + "</span>" : "")
-        + "</span>";
-    }
-    picked = gated.map(function (g) { return g.it; });
-    if (anyClick && picked.length) {
-      html += '<button type="button" class="ezl-ev-link" data-ezl-open="' + esc(picked[0].id) + '">성과 기록에서 보기</button>';
-      html += '<button type="button" class="ezl-ev-link" data-ezl-journey="1" title="이 근거들이 성과 사이클 어느 단계의 결정으로 이어지는지 봅니다">&#9672; 결정 흐름</button>';
-    }
-    /* [F15] 산출 로직은 "이 답이 어떻게 만들어졌는가" = 본인 검증 동선 — 역할로 통째 차단하지 않는다 */
-    html += '<button type="button" class="ezl-ev-logic" data-ezl-logic="1" data-ezl-refs="'
-      + esc(refs.join(",")) + '" data-ezl-ga="' + esc(answerAuditRef(msg) || "") + '">산출 로직 보기</button>';
-    /* 제한이 걸린 경우에만 이유를 한 줄로 */
-    if (blocked || summCnt) {
-      var why = [];
-      if (blocked) why.push("타인·집계 기록 " + blocked + "건은 열람 규칙상 제외");
-      if (summCnt) why.push("타인 기록 " + summCnt + "건은 요약까지만");
-      html += '<span class="ezl-ev-cap guess" title="보관·열람 규칙 v3.1">' + esc(why.join(" · ")) + "</span>";
+      /* 실인용이 아니라는 사실은 한 번만, 사람 말로. 점선 칩으로 같은 말을 또 하지 않는다 */
+      if (!cited) {
+        open += '<span class="ezl-ev-note">AI가 직접 인용한 건 아니고, 답변 내용과 겹치는 기록이에요.</span>';
+      }
+      /* 제한이 걸린 경우에만 이유를 한 줄로 (펼친 안에서 한 번만) */
+      if (blocked || summCnt) {
+        var why = [];
+        if (blocked) why.push("타인·집계 기록 " + blocked + "건은 열람 규칙상 제외했어요");
+        if (summCnt) why.push("타인 기록 " + summCnt + "건은 요약까지만 보여요");
+        open += '<span class="ezl-ev-note" title="보관·열람 규칙 v3.1">' + esc(why.join(" · ")) + "</span>";
+      }
+      /* [F15] 산출 로직은 "이 답이 어떻게 만들어졌는가" = 본인 검증 동선 — 역할로 통째 차단하지 않는다 */
+      open += '<button type="button" class="ezcx-row-chip ezl-ev-logic" data-ezl-logic="1">'
+        + (logicOpen ? "산출 로직 접기" : "산출 로직 보기") + "</button>";
+      if (logicOpen) open += logicHtml(refs, msg);
+      html += '<div class="ezl-ev-open">' + open + "</div>";
     }
 
     var wrap = document.createElement("div");
-    wrap.className = "ezl-ev-wrap";
+    /* 공용 행 문법(.ezcx-row) + 우리 이름 — 두 줄이 한 덩어리로 읽히게 하는 계약 */
+    wrap.className = ROW_CLS + " ezl-ev-wrap";
     wrap.innerHTML = html;
-    if (anchor.nextSibling) anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
-    else anchor.parentNode.appendChild(wrap);
+    insertBelowAnswer(anchor, wrap);
+    /* 펼쳤을 때는 펼친 내용이 보이도록 대화를 바닥까지 내린다 (팝오버 대신 확보하는 가독성) */
+    if (evOpen) { try { list.scrollTop = list.scrollHeight; } catch (eS) { /* 무시 */ } }
+  }
+
+  /* 답변 바로 아래에 붙인다. 두 줄(근거·이어서 물어보기)의 위아래 순서는
+     tx_chat_followups.js의 settleOrder()가 단독으로 정한다 — 여기서 되받아
+     재정렬하면 두 모듈이 서로를 밀어내며 순서가 흔들린다. 우리는 넣기만 한다. */
+  function insertBelowAnswer(anchor, node) {
+    if (anchor.nextSibling) anchor.parentNode.insertBefore(node, anchor.nextSibling);
+    else anchor.parentNode.appendChild(node);
   }
 
   function scheduleStrip() {
@@ -1275,62 +1354,42 @@
     }, RENDER_DELAY);
   }
 
-  /* ---------------- 산출 로직 팝오버 ---------------- */
-  function closeLogicPop() {
-    var pop = document.getElementById("ezl-pop");
-    if (pop && pop.parentNode) pop.parentNode.removeChild(pop);
+  /* ---------------- 산출 로직 — 대화 안에서 펼치는 인라인 블록 ----------------
+     옛 구현은 body 직속 position:fixed 팝오버였고 트리거 "위쪽"에 놓였다.
+     트리거가 답변 바로 아래에 있으니 팝오버는 언제나 자기가 설명하는 답변을 덮었다.
+     띄우는 층을 없애고 대화 흐름 안으로 넣으면 겹칠 자리 자체가 사라진다. */
+  function logicStep(n, t, s) {
+    return '<div class="ezl-step"><span class="n">' + n + '</span><div class="t"><b>' + t + "</b>"
+      + "<span>" + s + "</span></div></div>";
   }
-  function openLogicPop(btn) {
-    closeLogicPop();
-    var ids = (btn.getAttribute("data-ezl-refs") || "").split(",");
-    var ga = norm(btn.getAttribute("data-ezl-ga") || "");
-    var cited = [], ruleSrcs = [], citedIds = [], restricted = 0, i, it;
+  function logicHtml(ids, msg) {
+    var rules = [], i, it;
     for (i = 0; i < ids.length; i++) {
       it = byId(ids[i]);
       if (!it) continue;
-      /* 열람 규칙 — 타인·집계 기록의 원문·출처는 로직 팝오버에도 노출하지 않는다 */
+      /* 열람 규칙 — 타인·집계 기록의 출처는 여기에도 노출하지 않는다 */
       var lv = polCheck(it);
-      if (lv === "no" || lv === "anon") { restricted++; continue; }
-      cited.push(it.title);
-      citedIds.push(it.id);
-      if (it.type === "rule" && lv === "full") ruleSrcs.push(it.source);
+      if (lv === "no" || lv === "anon") continue;
+      /* 회사 규정 이름은 사람이 읽는 말로만 (표 이름·경로 금지) */
+      if (it.type === "rule" && lv === "full") {
+        var hs = humanSrc(it.source);
+        if (hs && rules.indexOf(hs) < 0) rules.push(hs);
+      }
     }
-    if (!ruleSrcs.length) ruleSrcs = ["rule.asof.snapshot"];
-    var citedTxt = cited.length
-      ? cited.map(function (t) { return shorten(t, 18); }).join(" · ")
-      : "인용한 기록 없음";
-
-    var pop = document.createElement("div");
-    pop.id = "ezl-pop";
-    pop.className = "ezl-pop";
-    pop.innerHTML =
-      "<h4>산출 로직 — 이 답은 이렇게 만들어졌습니다</h4>"
-      + '<div class="ezl-step"><span class="n">1</span><div class="t"><b>입력 수집</b>'
-      + "<span>인용 기록 " + cited.length + "건: " + esc(citedTxt) + "</span></div></div>"
-      + '<div class="ezl-step"><span class="n">2</span><div class="t"><b>규칙 적용</b>'
-      + "<span>" + ruleSrcs.map(function (s) { return "<code>" + esc(s) + "</code>"; }).join(" ") + " 검증 통과</span></div></div>"
-      + '<div class="ezl-step"><span class="n">3</span><div class="t"><b>모델 판단</b>'
-      + "<span>인용 기록 범위 안에서 요약·초안 생성 (범위 밖 추정 없음)</span></div></div>"
-      + '<div class="ezl-step"><span class="n">4</span><div class="t"><b>검증</b>'
-      + "<span>기준 시점 데이터 확인 · 승인 대기 — 승인 전 변경 없음</span></div></div>"
-      /* 감사 참조는 원장 실 id만 — 대응 기록이 없으면 정직하게 "기록 전" */
-      + '<div class="ezl-pop-ga">'
-      + (ga
-        ? "⛨ 감사 기록됨 · <b>" + esc(ga) + "</b>"
-        : "⛨ 기록 전 — 이 답변은 아직 원장에 결정으로 기록되지 않았습니다 (결정 게이트 확정 시 기록)")
-      + (citedIds.length ? "<br>인용 기록 id · <b>" + esc(citedIds.join(", ")) + "</b>" : "")
-      + (restricted ? "<br>타인·집계 기록 " + restricted + "건은 열람 규칙에 따라 제외됨" : "")
-      + "</div>";
-    document.body.appendChild(pop);
-
-    /* 버튼 근처 배치 (뷰포트 밖으로 나가지 않게 보정) */
-    var r = btn.getBoundingClientRect();
-    var w = 330, h = pop.offsetHeight || 230;
-    var left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
-    var top = r.top - h - 8;
-    if (top < 8) top = Math.min(r.bottom + 8, window.innerHeight - h - 8);
-    pop.style.left = left + "px";
-    pop.style.top = Math.max(8, top) + "px";
+    if (!rules.length) rules = ["기준 시점의 회사 규정"];
+    /* 위 칩이 이미 보여 준 건수·제목은 되풀이하지 않는다 (한 스트립 안 중복 금지) */
+    return '<div class="ezl-logic">'
+      + '<b class="ezl-logic-h">이 답은 이렇게 만들어졌습니다</b>'
+      + logicStep(1, "입력 수집", "위에 보인 기록만 읽었습니다 — 다른 자료는 쓰지 않았어요")
+      + logicStep(2, "규칙 적용", esc(rules.join(" · ")) + "을 함께 확인했습니다")
+      + logicStep(3, "모델 판단", "읽은 범위 안에서만 요약·초안을 만들었습니다")
+      + logicStep(4, "검증", "기준 시점 데이터로 확인했고, 승인하기 전에는 아무것도 바뀌지 않습니다")
+      /* 감사 참조는 실제 대응 기록이 있을 때만 — 없으면 정직하게 "아직 안 남았다" */
+      + '<div class="ezl-logic-ga">'
+      + (answerAuditRef(msg)
+        ? "이 답변은 성과 기록에 남았습니다."
+        : "아직 성과 기록으로 남지는 않았습니다 — 확정할 때 함께 기록됩니다.")
+      + "</div></div>";
   }
 
   /* ================= 내보내기 / 가져오기 (F4) ================= */
@@ -1389,9 +1448,14 @@
   function onDocClick(ev) {
     var t = ev.target;
 
-    /* 팝오버 밖 클릭 → 팝오버 닫기 (로직 버튼 자체는 아래에서 처리) */
-    var pop = document.getElementById("ezl-pop");
-    if (pop && !pop.contains(t) && !closestAttr(t, "data-ezl-logic")) closeLogicPop();
+    /* 근거 한 줄 접기·펼치기 — 접으면 산출 로직도 함께 접는다 */
+    if (closestAttr(t, "data-ezl-ev-toggle")) {
+      ev.preventDefault();
+      evOpen = !evOpen;
+      if (!evOpen) logicOpen = false;
+      renderStrip();
+      return;
+    }
 
     /* 닫기 (X·스크림) */
     if (closestAttr(t, "data-ezl-close")) { ev.preventDefault(); closePanel(); return; }
@@ -1468,21 +1532,21 @@
       return;
     }
 
-    /* 산출 로직 팝오버 토글 */
-    var lg = closestAttr(t, "data-ezl-logic");
-    if (lg) {
+    /* 산출 로직 인라인 펼치기·접기 (제자리 확장 — 덮는 층이 없다) */
+    if (closestAttr(t, "data-ezl-logic")) {
       ev.preventDefault();
-      if (document.getElementById("ezl-pop")) closeLogicPop();
-      else openLogicPop(lg);
+      logicOpen = !logicOpen;
+      renderStrip();
       return;
     }
   }
 
   function onKeydown(ev) {
     if (ev.key !== "Escape" && ev.keyCode !== 27) return;
-    if (document.getElementById("ezl-pop")) { closeLogicPop(); return; }
     if (detailId) { detailId = null; refreshMounts(null); return; }   /* 상세 → 목록 */
-    if (isPanelOpen()) closePanel();
+    if (isPanelOpen()) { closePanel(); return; }
+    if (logicOpen) { logicOpen = false; renderStrip(); return; }
+    if (evOpen) { evOpen = false; renderStrip(); return; }
   }
 
   function onCtxEvent(ev) {
@@ -1505,11 +1569,16 @@
       if (d && d.on === false) { streamingOn = false; scheduleStrip(); }
       else {
         streamingOn = true;
+        /* 새 질문 = 새 답변 — 근거는 다시 접힌 한 줄에서 시작한다 */
+        evOpen = false;
+        logicOpen = false;
         removeStrips();
         if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
       }
     });
     EZChat.on("switch", function () {
+      evOpen = false;
+      logicOpen = false;
       removeStrips();
       if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
       scheduleStrip();

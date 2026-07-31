@@ -112,6 +112,7 @@
   var curTab = DEFAULT_TAB;
   var pastOpen = false;      /* [알림] 탭 「지난 알림」 접힘 상태 */
   var pastTouched = false;   /* 사용자가 직접 접었다 → 자동 펼침(카드 0장 폴백)보다 우선 */
+  var sigOpenId = null;      /* [알림] 탭에서 지금 펼쳐 둔 줄 — 한 번에 하나만 */
 
   /* ---------------- EZNotif — 알림 단일 스토어 (§6 잔존형 알림: 토스트→FAB 카운트→[알림] 탭) ---------------- */
   var EZNotif = (function () {
@@ -484,8 +485,10 @@
   function renderLedgerInto(hl) {
     var c = el.recPane;
     if (!c) return;
-    if (window.EZLedger && hl && EZLedger.renderInto) {
-      try { EZLedger.renderInto(c, hl); return; } catch (e) { /* fall through */ }
+    /* hl 없이도 renderInto 를 쓴다 — renderRows 는 푸터가 없어 결정 흐름·규칙·내보내기가 닫힌다.
+       highlightId 는 선택 인자다(tx_ctx_ledger.js renderInto). */
+    if (window.EZLedger && EZLedger.renderInto) {
+      try { EZLedger.renderInto(c, hl || null); return; } catch (e) { /* fall through */ }
     }
     if (window.EZLedger && EZLedger.renderRows) {
       try { EZLedger.renderRows(c); return; } catch (e2) { /* fall through */ }
@@ -519,9 +522,36 @@
     });
   }
 
+  /* 알림 미리보기 두 문장 — 자연문 답변(EZSignalChat.answerText)의 앞머리만 자른다.
+     새 문구를 지어내지 않는다: 대화에서 받을 답의 첫 두 문장이 그대로 미리보기다. */
+  function previewOf(id) {
+    var full = "";
+    if (window.EZSignalChat && EZSignalChat.answerText) {
+      try { full = String(EZSignalChat.answerText(id) || ""); } catch (e) { full = ""; }
+    }
+    full = full.replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+    if (!full) return "";
+    var out = "", n = 0, i, ch;
+    for (i = 0; i < full.length; i++) {
+      ch = full.charAt(i);
+      out += ch;
+      if (ch === "." || ch === "!" || ch === "?") { n++; if (n >= 2) break; }
+    }
+    out = out.replace(/^\s+|\s+$/g, "");
+    if (out.length > 140) out = out.slice(0, 139) + "…";
+    return out;
+  }
+  /* 화면으로 갈 수 있는 알림인지 — 갈 곳이 없으면 그 출구를 아예 만들지 않는다 */
+  function screenTargetOf(inst) {
+    if (!inst || !(window.EZSignalAct && EZSignalAct.targetOf && EZSignalAct.openScreen)) return null;
+    try { return EZSignalAct.targetOf(inst, 0) || null; } catch (e) { return null; }
+  }
+
   /* [알림] 탭 = 한 줄 목록(18-2차 R6) + 접힌 「지난 알림」(EZNotif 행 + 성과 기록).
      한 줄 = 알림 문구 한 문장뿐. 유형칩·단계칩·범위칩·근거·처리 버튼 전부 없다.
-     줄을 누르면 카드가 펼쳐지지 않고 대화가 열려 그 주제로 답이 온다.
+     줄을 누르면 제자리에서 펼쳐져 무슨 얘기인지 두 문장 보여 주고, 거기서 두 갈래로
+     나간다 — 「대화에서 이어보기」(전체 답변) · 「관련 화면 열기」(갈 곳이 있을 때만).
+     한 번에 한 줄만 펼쳐진다. 「지난 알림」의 EZNotif 행은 손대지 않는다.
      엔진이 없으면 목록을 비우고 「지난 알림」을 펼쳐 폴백한다 — 어떤 경우에도 throw하지 않는다. */
   function renderNtf(hl) {
     var p = el.ntfPane;
@@ -537,9 +567,41 @@
         var line = inst && (inst.notice || (inst.sig && inst.sig.notice));
         if (!line) return;
         var id = inst.id || "";
-        var row = h("button", "ezx-sig-row", { type: "button", text: String(line) });
-        row.addEventListener("click", function () { askSignal(id, String(line)); });
-        live.appendChild(row);
+        var open = !!id && sigOpenId === id;
+        var item = h("div", "ezx-sig-item" + (open ? " open" : ""));
+        var row = h("button", "ezx-sig-row", {
+          type: "button", text: String(line), "aria-expanded": open ? "true" : "false"
+        });
+        row.addEventListener("click", function () {
+          sigOpenId = (sigOpenId === id) ? null : id;   /* 한 번에 하나만 */
+          renderNtf(null);
+        });
+        item.appendChild(row);
+        if (open) {
+          var ex = h("div", "ezx-sig-ex");
+          var pv = previewOf(id);
+          ex.appendChild(h("div", "ezx-sig-pv", {
+            text: pv || "무슨 얘기인지는 대화에서 바로 확인할 수 있어요."
+          }));
+          var exits = h("div", "ezx-sig-exits");
+          var goChat = h("button", "ezx-sig-exit", { type: "button", text: "대화에서 이어보기" });
+          goChat.addEventListener("click", function () {
+            sigOpenId = null;
+            askSignal(id, String(line));
+          });
+          exits.appendChild(goChat);
+          if (screenTargetOf(inst)) {
+            var goScr = h("button", "ezx-sig-exit go", { type: "button", text: "관련 화면 열기" });
+            goScr.addEventListener("click", function () {
+              try { EZSignalAct.openScreen(inst, 0); }
+              catch (e) { /* 모듈 부재 — 조용하게 무시 */ }
+            });
+            exits.appendChild(goScr);
+          }
+          ex.appendChild(exits);
+          item.appendChild(ex);
+        }
+        live.appendChild(item);
         nLive++;
       });
       if (nLive) p.appendChild(live);
@@ -684,7 +746,9 @@
     /* ── 18-2차 R3: 카드 폐기. 빈 채팅창 + 추천 대화 버튼 두 묶음뿐 ──
        (1) 「지금 볼 만한 것」 = EZSignalChat.starters(role)가 미처리 신호를
            사용자 말투 질문으로 바꾼 것 최대 3개. 분류명·유형·단계는 노출하지 않는다.
-       (2) 기존 일반 스타터 3개. 두 묶음의 버튼 모양은 동일(.ezx-starter). */
+       (2) 기존 일반 스타터 3개 — 회색 그대로.
+       (1)은 AI가 실제 데이터를 보고 직접 권하는 질문이므로 회색으로 두면 눌러볼
+       이유가 보이지 않는다. .scn 강조(accent 계열)를 입혀 (2)와 구분한다. */
     var sigQs = [];
     if (window.EZSignalChat && EZSignalChat.starters) {
       try {
@@ -699,7 +763,7 @@
       wrap.appendChild(h("div", "ezx-scn-lab", { text: "지금 볼 만한 것" }));
       var srow = h("div", "ezx-starters");
       sigQs.forEach(function (it) {
-        var b = h("button", "ezx-starter", { type: "button", text: it.q });
+        var b = h("button", "ezx-starter scn", { type: "button", text: it.q });
         b.addEventListener("click", function () { askSignal(it.id, it.q); });
         srow.appendChild(b);
       });
@@ -809,99 +873,19 @@
     m.steps.forEach(function (s) { s.st = 2; });
     refreshWork(m);
   }
-  /* ---------------- 영수증 전용 카드 (F15) ----------------
-     검증 가능한 답변은 회색 말풍선이 아니라 화면 영수증(tx_roles)과 같은
-     시각 언어로 낸다: as-of 칩(EZKit.clock 실값) · 메트릭 행 · 근거 칩 · 감사 칩.
-     골격은 EZKit.receipt/asof/src 렌더러를 그대로 쓰고, 카드 내부 레이아웃만
-     여기서 정의한다(소유 파일 외 CSS 수정 없이 런타임 주입). */
-  function ensureRcptStyles() {
-    if (document.getElementById("ezx-rcpt-css")) return;
-    var css = [
-      ".ezx-msg.ezx-rcptmsg{align-self:stretch;max-width:100%;}",
-      ".ezx-rcptmsg .ezk-receipt{margin:0;}",
-      /* EZKit 미로드 폴백 골격 */
-      ".ezx-rc-fallback{border:1px solid var(--color-border,#e3e5e8);border-left:3px solid var(--color-accent,#1F7AF0);",
-      "border-radius:var(--radius-container,12px);background:var(--color-background-card,#fff);padding:12px 14px;}",
-      ".ezx-rc-fallback .ezk-receipt-head{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px;}",
-      /* 도구 호출 투명화 줄 — "확인한 데이터: 목표 3건 · 체크인 5건" (허브 라이브 확인내역과 같은 문법) */
-      ".ezx-rc-tools{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;margin:0 0 9px;padding:6px 10px;",
-      "border:1px solid var(--ezx-hairline,var(--color-border,#e3e5e8));border-radius:var(--radius-element,8px);",
-      "background:var(--color-background-muted,#f5f6f8);}",
-      ".ezx-rc-tools .lb{font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--color-text-secondary,#6b7280);}",
-      ".ezx-rc-tools .tv{flex:1 1 auto;font-size:11.5px;line-height:1.5;color:var(--color-text-primary,#111827);}",
-      ".ezx-rc-tools .tn{font-size:10px;color:var(--color-text-secondary,#6b7280);white-space:nowrap;}",
-      /* 메트릭 행 */
-      ".ezx-rc-metrics{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 9px;}",
-      ".ezx-rc-metric{display:flex;flex-direction:column;gap:1px;min-width:78px;padding:5px 10px;",
-      "border:1px solid var(--ezx-hairline,var(--color-border,#e3e5e8));border-radius:var(--radius-element,8px);",
-      "background:var(--color-background-muted,#f5f6f8);}",
-      ".ezx-rc-metric .k{font-size:10px;letter-spacing:.02em;color:var(--color-text-secondary,#6b7280);}",
-      ".ezx-rc-metric .v{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--color-text-primary,#111827);}",
-      ".ezx-rc-metric .s{font-size:10px;color:var(--color-text-secondary,#6b7280);}",
-      /* 본문 — 말풍선과 동일한 마크다운 그래머 */
-      ".ezx-rc-body{font-size:12.5px;line-height:1.58;color:var(--color-text-primary,#111827);}",
-      ".ezx-rc-body p{margin:0 0 8px;} .ezx-rc-body p:last-child{margin-bottom:0;}",
-      ".ezx-rc-body h3{font-size:13px;font-weight:700;margin:10px 0 6px;} .ezx-rc-body h3:first-child{margin-top:0;}",
-      ".ezx-rc-body ul{margin:6px 0;padding-left:17px;} .ezx-rc-body li{margin:2px 0;}",
-      ".ezx-rc-body table{border-collapse:collapse;margin:6px 0;font-size:11.5px;width:100%;}",
-      ".ezx-rc-body th,.ezx-rc-body td{border:1px solid var(--ezx-hairline,var(--color-border,#e3e5e8));padding:3px 7px;text-align:left;}",
-      ".ezx-rc-body th{background:var(--color-background-muted,#f5f6f8);font-weight:600;}",
-      ".ezx-rc-body code{background:var(--color-background-muted,#f5f6f8);border-radius:4px;padding:1px 5px;font-size:11.5px;",
-      "font-family:var(--font-family-code,monospace);}",
-      /* 근거 칩 줄 */
-      ".ezx-rc-srcs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:9px;",
-      "padding-top:8px;border-top:1px dashed var(--ezx-hairline,var(--color-border,#e3e5e8));}",
-      ".ezx-rc-srcs .lb{font-size:10px;font-weight:700;color:var(--color-text-secondary,#6b7280);margin-right:2px;}",
-      /* 감사 칩 — 원장 실 id 없으면 '기록 전' 중립 표기 */
-      ".ezx-rc-pre{border-style:dashed !important;color:var(--color-text-secondary,#6b7280) !important;}",
-      /* 인용 3등급 — tx_ctx_ledger 스트립과 같은 시각 문법 (실인용/추측 점선/0건) */
-      ".ezx-rc-cite.cited{color:var(--color-text-green,#15803d);background:var(--color-background-green,rgba(21,128,61,.08));",
-      "border-color:var(--color-border-green,var(--color-border,#e3e5e8));font-weight:700;}",
-      ".ezx-rc-cite.guess{border-style:dashed;border-color:var(--color-border-emphasized,#c9ced6);",
-      "background:var(--color-background-surface,transparent);color:var(--color-text-secondary,#6b7280);}",
-      ".ezx-rc-cite.none{border-style:dashed;border-color:var(--color-border-orange,#f0b27a);",
-      "background:var(--color-background-orange,rgba(240,178,122,.12));color:var(--color-text-orange,#c2410c);font-weight:700;}",
-      /* What-if 재계산 (읽기 전용) */
-      ".ezx-rc-wi{margin-top:9px;padding-top:8px;border-top:1px dashed var(--ezx-hairline,var(--color-border,#e3e5e8));",
-      "display:flex;flex-wrap:wrap;align-items:center;gap:7px;}",
-      ".ezx-rc-wibtn{font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;padding:4px 11px;",
-      "border-radius:var(--radius-full,999px);border:1px solid var(--color-accent,#1F7AF0);",
-      "background:var(--color-background-card,#fff);color:var(--color-accent,#1F7AF0);}",
-      ".ezx-rc-wibtn:hover{background:var(--color-accent-muted,rgba(31,122,240,.1));}",
-      ".ezx-rc-wibtn[disabled]{opacity:.55;cursor:default;}",
-      ".ezx-rc-wihint{font-size:10px;color:var(--color-text-secondary,#6b7280);}",
-      ".ezx-rc-wiout{flex:1 1 100%;}",
-      ".ezx-rc-wiout:empty{display:none;}",
-      ".ezx-rc-wiout{margin-top:6px;border:1px solid var(--ezx-hairline,var(--color-border,#e3e5e8));",
-      "border-radius:var(--radius-element,8px);background:var(--color-background-muted,#f5f6f8);padding:8px 10px;}",
-      ".ezx-rc-wirow{display:flex;gap:8px;align-items:baseline;font-size:11.5px;padding:2px 0;",
-      "color:var(--color-text-primary,#111827);}",
-      ".ezx-rc-wirow .lb{width:52px;flex:none;font-size:10px;font-weight:700;color:var(--color-text-secondary,#6b7280);}",
-      ".ezx-rc-wirow.warn{color:var(--color-warning,#b45309);}",
-      ".ezx-rc-wirow .chg{font-style:normal;font-size:10px;font-weight:700;color:var(--color-warning,#b45309);}",
-      ".ezx-rc-wirow .keep{font-style:normal;font-size:10px;color:var(--color-text-secondary,#6b7280);}",
-      ".ezx-rc-winote{margin-top:5px;font-size:10px;line-height:1.45;color:var(--color-text-secondary,#6b7280);}"
-    ].join("");
-    var st = document.createElement("style");
-    st.id = "ezx-rcpt-css";
-    st.textContent = css;
-    (document.head || document.documentElement).appendChild(st);
-  }
+  /* ---------------- 답변은 말풍선이다 ----------------
+     이전에는 도구를 부른 답변을 전부 카드(EZKit.receipt)로 감쌌다. 제목줄과 기준시각
+     칩·상황 칩·근거 칩이 먼저 오고, 정작 하려던 말은 카드 맨 아래에 묻혔다.
+     사용자 지시대로 뒤집는다 — 본문이 곧 메시지다.
 
-  /* EZKit.status 렌더러 재사용 — 라벨만 상황 문구로 교체(점 색은 data-mode가 결정) */
-  function statusChip(mode, label) {
-    var base = (window.EZKit && EZKit.status)
-      ? EZKit.status(mode)
-      : '<span class="ezk-chip ezk-status" data-mode="' + esc(mode) + '">-</span>';
-    return base.replace(/>[^<]*<\/span>\s*$/, ">" + esc(label) + "</span>");
-  }
-  /* 감사 칩 — 원장(EZLedger) 실 id만 "기록됨"으로 단언한다.
-     해시 위조 ID(EZKit.gaId) 금지 — 기록이 없으면 정직하게 "기록 전". */
-  function auditChip(m) {
-    var id = m && m.meta && m.meta.ledgerId;
-    if (id) return '<span class="ezk-chip ezk-audit" data-ezx-audit>&#9960; 감사 기록됨 · ' + esc(id) + "</span>";
-    return '<span class="ezk-chip ezk-audit ezx-rc-pre" data-ezx-audit>&#9960; 기록 전 — 실행 시 원장 기록</span>';
-  }
+       · 본문 = .ezx-bubble. 다른 AI 답변과 똑같은 말풍선, 눈이 가장 먼저 닿는 곳.
+       · 수치는 말풍선 아래 작은 타일 띠로만(최대 4개) — 사용자가 남기라고 한
+         「직전 등급」·「과업 영역」 같은 데이터만 남긴다.
+       · 제목줄·기준시각 칩·「실AI 응답 · 승인 필요」·「추정 근거 N건」·「기록 전」·
+         「확인한 데이터 · 도구 N회」는 전부 삭제. 대화가 아니다.
+         연결 상황은 이미 컴포저 위 한 줄(updateStatus)과 m.note가 말해 주고,
+         근거 표시는 tx_ctx_ledger 스트립 하나로 모은다.
+       · 시각 정의는 css/tx_elizax.css(.ezx-rc-*) — 런타임 주입 블록은 없앴다. */
 
   /* 영수증 서술자 접근 — meta에도 사본을 두어 세션 복원 후에도 카드로 남는다
      (EZChat.serializeMsg는 role/text/note/fb/meta만 보존) */
@@ -1036,8 +1020,8 @@
     r.wiParams = p;
     r.wiResult = res;
     if (out) out.innerHTML = whatifHTML(res, p);
-    if (btn) btn.textContent = "↺ 다시 계산";
-    /* 실행 사실을 원장에 남겨 감사 칩이 실 id를 얻게 한다 (위조 ID 금지) */
+    if (btn) btn.textContent = "다시 계산해 볼게";
+    /* 실행 사실은 여전히 원장에 남긴다 — 화면에 감사 칩을 달지 않을 뿐이다(위조 ID 금지) */
     if (!res.error && !res.blocked && window.EZLedger && EZLedger.add) {
       try {
         var pv = wiPersonal(res);
@@ -1057,9 +1041,7 @@
         });
         if (ent && ent.id) {
           if (!m.meta) m.meta = {};
-          m.meta.ledgerId = ent.id;
-          var ac = node.querySelector("[data-ezx-audit]");
-          if (ac) ac.outerHTML = auditChip(m);
+          m.meta.ledgerId = ent.id;   /* 기록 흔적은 성과 기록(원장)에서 확인한다 */
         }
       } catch (e) { /* 원장 오류 무시 */ }
     }
@@ -1068,11 +1050,8 @@
     scrollToBottom();
   }
 
-  /* ---- 인용 3등급을 카드 안에서도 유지 (F15) ----
-     판정 주체는 tx_ctx_ledger(실인용 ctxCited / 추측 .guess / 0건 "기록 없음").
-     카드는 msg.meta의 그 판정을 그대로 읽어 같은 등급을 표시한다 — 자체 승격 금지. */
-  /* 원장에 실제로 존재하는 id만 인정 — 스트립(tx_ctx_ledger)과 같은 기준으로 세지 않으면
-     카드는 "추정 근거 4건", 스트립은 "기록 없음"으로 어긋난다. */
+  /* 원장에 실제로 존재하는 id만 인정 — 근거 스트립(tx_ctx_ledger)과 같은 기준으로 센다.
+     칩은 사라졌지만 이 함수는 남긴다 — rcHasCitations(수치 띠를 붙일지 판단)이 쓴다. */
   function resolveRefs(refs) {
     if (Object.prototype.toString.call(refs) !== "[object Array]" || !refs.length) return [];
     if (!window.EZLedger || !EZLedger.list) return refs.slice();
@@ -1083,103 +1062,111 @@
     for (i = 0; i < refs.length; i++) if (idx[refs[i]]) ok.push(refs[i]);
     return ok;
   }
-  function citeChip(m) {
-    var meta = (m && m.meta) || {};
-    var refs = resolveRefs(meta.ctxRefs);
-    if (meta.ctxCited === true && refs && refs.length) {
-      return '<span class="ezk-chip ezx-rc-cite cited" data-ezx-cite title="AI가 실제로 인용한 성과 기록">' +
-        "&#10003; 인용 근거 " + refs.length + "건</span>";
+
+  /* 말풍선 아래 작은 데이터 띠 — 사용자가 남기라고 한 부분.
+     도구 결과에 실제로 있는 수치만 쓰고(rcMetricsOf), 네 개를 넘기지 않는다. */
+  function metricsNode(r) {
+    var list = (r && r.metrics) || [];
+    if (Object.prototype.toString.call(list) !== "[object Array]" || !list.length) return null;
+    var strip = h("div", "ezx-rc-metrics"), n = 0, i, x, tile;
+    for (i = 0; i < list.length && n < 4; i++) {
+      x = list[i];
+      if (!x || x.k == null || x.v == null) continue;
+      tile = h("div", "ezx-rc-metric");
+      tile.appendChild(h("span", "k", { text: String(x.k) }));
+      tile.appendChild(h("span", "v", { text: String(x.v) }));
+      if (x.sub) tile.appendChild(h("span", "s", { text: String(x.sub) }));
+      strip.appendChild(tile);
+      n++;
     }
-    if (refs && refs.length) {
-      return '<span class="ezk-chip ezx-rc-cite guess" data-ezx-cite title="관련일 수 있는 기록 — 실인용 아님">' +
-        "&#9702; 추정 근거 " + refs.length + "건</span>";
-    }
-    return '<span class="ezk-chip ezx-rc-cite none" data-ezx-cite title="이 답변을 뒷받침하는 성과 기록이 없습니다">' +
-      "&#9888; 뒷받침 기록 없음</span>";
-  }
-  function syncCiteChip(m) {
-    var node = m && m._node;
-    if (!node || !node.parentNode) return;
-    var cur = node.querySelector("[data-ezx-cite]");
-    if (!cur) return;
-    var next = citeChip(m);
-    if (cur.outerHTML !== next) cur.outerHTML = next;
-  }
-  function scheduleCiteSync(m) {
-    /* tx_ctx_ledger는 messages 이벤트 240ms 뒤에 근거를 판정해 meta에 기록한다 */
-    [360, 780, 1500].forEach(function (d) { setTimeout(function () { syncCiteChip(m); }, d); });
+    return n ? strip : null;
   }
 
-  /* "확인한 데이터: 목표 3건 · 체크인 5건" — 실제로 호출된 도구만 나열한다(연출 금지) */
-  function toolsLineHTML(r) {
-    var t = r && r.tools;
-    if (Object.prototype.toString.call(t) !== "[object Array]" || !t.length) return "";
-    var parts = t.map(function (x) {
-      return String(x.summary || x.label || x.name || "").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
-    }).filter(function (s) { return !!s; });
-    if (!parts.length) return "";
-    return '<div class="ezx-rc-tools"><span class="lb">확인한 데이터</span>' +
-      '<span class="tv">' + esc(parts.join(" · ")) + "</span>" +
-      '<span class="tn">도구 ' + t.length + "회</span></div>";
+  /* ---- 이 답변이 어떤 알림에서 출발했는지 — 화면 진입을 단 하나만 내주기 위해 ----
+     사용자: "인라인으로 한 후에 자세히 확인하고 싶으면 관련 화면으로 넘어가야 하는데
+     그 기능은 어떻게 된거야?" — 진입이 없어 못 찾았다. 한 줄만 열어 둔다.
+     주제 식별자는 화면에 절대 나오지 않는다(R2) — 내부에만 두는 기억이다. */
+  function stampSigTopic(m) {
+    if (!m) return;
+    var t = null;
+    try { t = (window.EZSignalChat && EZSignalChat.topic) ? EZSignalChat.topic() : null; }
+    catch (e) { t = null; }
+    if (!t) return;
+    m._sigInst = t;
+    if (!m.meta) m.meta = {};
+    if (t.id) m.meta.sigId = String(t.id);
+  }
+  function sigInstOf(m) {
+    if (!m) return null;
+    if (m._sigInst) return m._sigInst;
+    var id = m.meta && m.meta.sigId;
+    if (!id) return null;
+    if (window.EZSignalEngine && EZSignalEngine.instance) {
+      try { m._sigInst = EZSignalEngine.instance(String(id)) || null; }
+      catch (e) { m._sigInst = null; }
+    }
+    return m._sigInst || null;
+  }
+  /* 단 하나의 조용한 진입. 처리 버튼 여러 개를 되살리는 것이 아니다.
+     실제 이동은 EZSignalAct.openScreen이 한다(이유 한 줄·하이라이트·돌아오는 길 포함). */
+  function screenGoBtn(m) {
+    var inst = sigInstOf(m);
+    if (!inst) return null;
+    if (!(window.EZSignalAct && EZSignalAct.openScreen && EZSignalAct.targetOf)) return null;
+    var t = null;
+    try { t = EZSignalAct.targetOf(inst, 0); } catch (e) { return null; }
+    if (!t) return null;
+    var b = h("button", "ezx-rc-golink", { type: "button", text: "화면에서 직접 고칠게" });
+    b.addEventListener("click", function () {
+      try { EZSignalAct.openScreen(inst, 0); } catch (e2) { /* 모듈 부재 — 조용하게 무시 */ }
+    });
+    return b;
   }
 
-  function receiptBodyHTML(m) {
-    var r = rcptOf(m) || {};
-    var html = toolsLineHTML(r);
-    if (r.metrics && r.metrics.length) {
-      html += '<div class="ezx-rc-metrics">';
-      r.metrics.forEach(function (x) {
-        html += '<div class="ezx-rc-metric"><span class="k">' + esc(x.k) + '</span><span class="v">' + esc(x.v) + "</span>" +
-          (x.sub ? '<span class="s">' + esc(x.sub) + "</span>" : "") + "</div>";
+  /* 답변 꼬리의 조용한 한 줄 — 화면 진입과 What-if 재계산.
+     둘 다 없으면 띠를 만들지 않는다. */
+  function footNode(m, r) {
+    var go = screenGoBtn(m);
+    var hasWi = !!(r && r.whatif);
+    if (!go && !hasWi) return null;
+    var foot = h("div", "ezx-rc-foot");
+    if (go) foot.appendChild(go);
+    if (hasWi) {
+      var wb = h("button", "ezx-rc-golink", {
+        type: "button", "data-ezx-whatif": "1",
+        text: r.wiResult ? "다시 계산해 볼게" : "수치를 바꾸면 어떻게 되는지 보여줘"
       });
-      html += "</div>";
+      foot.appendChild(wb);
+      foot.appendChild(h("span", "ezx-rc-wihint", { text: "읽기 전용 · 실제 데이터는 변하지 않아요" }));
+      var out = h("div", "ezx-rc-wiout", { "data-ezx-wiout": "1" });
+      if (r.wiResult) out.innerHTML = whatifHTML(r.wiResult, r.wiParams || whatifParams(r));
+      foot.appendChild(out);
     }
-    html += '<div class="ezx-rc-body">' + mdToHtml(stripCtxMarker(m.text || "")) + "</div>";
-    if (r.srcs && r.srcs.length) {
-      html += '<div class="ezx-rc-srcs"><span class="lb">근거</span>';
-      r.srcs.forEach(function (s) {
-        html += (window.EZKit && EZKit.src) ? EZKit.src(s.kind, s.label)
-          : '<span class="ezk-chip">' + esc(s.label) + "</span>";
-      });
-      html += "</div>";
-    }
-    if (r.whatif) {
-      html += '<div class="ezx-rc-wi">' +
-        '<button type="button" class="ezx-rc-wibtn" data-ezx-whatif>' +
-        (r.wiResult ? "↺ 다시 계산" : "↺ What-if 재계산") + "</button>" +
-        '<span class="ezx-rc-wihint">읽기 전용 · 실제 평가 데이터는 변경되지 않습니다</span>' +
-        '<div class="ezx-rc-wiout" data-ezx-wiout>' +
-        (r.wiResult ? whatifHTML(r.wiResult, r.wiParams || whatifParams(r)) : "") +
-        "</div></div>";
-    }
-    return html;
+    return foot;
   }
 
+  /* 도구를 부른 답변 — 평범한 말풍선 + 수치 타일 띠 + 꼬리 한 줄.
+     노드 계통은 다른 AI 답변과 동일(.ezx-msg.ai > .ezx-bubble) — tx_ctx_ledger 근거
+     스트립·tx_chat_followups 칩·tx_chat_feedback·tx_chat_actions(복사·재생성)이
+     모두 그 선택자를 쓴다. 카드일 때는 복사·재생성 버튼이 아예 붙지 못했다. */
   function buildReceiptNode(m) {
-    ensureRcptStyles();
     var r = rcptOf(m) || {};
     var node = h("div", "ezx-msg ai ezx-rcptmsg");
-    var chips = (r.offline
-      ? statusChip("suggest", "AI 미연결 · 로컬 데이터 조회")
-      : statusChip("approve", "실AI 응답 · 승인 필요"))
-      + citeChip(m) + auditChip(m);
-    var body = receiptBodyHTML(m);
-    if (window.EZKit && EZKit.receipt) {
-      node.innerHTML = EZKit.receipt({ title: r.title, chips: chips, body: body });
-    } else {
-      node.innerHTML = '<div class="ezk-receipt ezx-rc-fallback"><div class="ezk-receipt-head">' +
-        '<span class="ezk-receipt-title">' + esc(r.title || "확인 결과") + "</span>" +
-        '<span class="ezk-chip ezk-asof">&#128204; 기준 ' +
-        esc(r.asOf || (window.EZKit && EZKit.clock ? EZKit.clock.asOf() : "2026-07-16 06:00")) + "</span>" +
-        chips + '</div><div class="ezk-receipt-body">' + body + "</div></div>";
+    var bubble = h("div", "ezx-bubble");
+    bubble.innerHTML = mdToHtml(stripCtxMarker(m.text || ""));
+    node.appendChild(bubble);
+    var strip = metricsNode(r);
+    if (strip) node.appendChild(strip);
+    var foot = footNode(m, r);
+    if (foot) {
+      node.appendChild(foot);
+      var wbtn = foot.querySelector("[data-ezx-whatif]");
+      if (wbtn) wbtn.addEventListener("click", function () { runWhatIf(m, node); });
     }
-    var wbtn = node.querySelector("[data-ezx-whatif]");
-    if (wbtn) wbtn.addEventListener("click", function () { runWhatIf(m, node); });
     if (m.note) node.appendChild(h("div", "ezx-note" + (m.noteWarn ? " warn" : ""), { text: m.note }));
     if (m.recos && m.recos.length) node.appendChild(buildRecos(m.recos));
     m._node = node;
-    m._bubble = node.querySelector(".ezx-rc-body");
-    scheduleCiteSync(m);
+    m._bubble = bubble;
     return node;
   }
 
@@ -1212,7 +1199,7 @@
       }
       return snode;
     }
-    /* 영수증형 답변 → 전용 카드 (스트리밍 중에는 기존 말풍선 유지) */
+    /* 수치 띠가 붙는 답변 (스트리밍 중에는 띠 없이 말풍선만) */
     if (m.role === "ai" && !m.streaming && rcptOf(m)) return buildReceiptNode(m);
     var node = h("div", "ezx-msg " + (m.role === "user" ? "user" : m.role === "err" ? "err" : "ai"));
     var bubble = h("div", "ezx-bubble");
@@ -1220,6 +1207,11 @@
     else bubble.innerHTML = mdToHtml(stripCtxMarker(m.text || ""));
     if (m.streaming) bubble.appendChild(h("span", "ezx-caret"));
     node.appendChild(bubble);
+    /* 수치 띠가 없는 답변에도 화면 진입 한 줄은 필요하다 — 알림에서 출발한 대화면 붙인다 */
+    if (m.role === "ai" && !m.streaming) {
+      var pfoot = footNode(m, null);
+      if (pfoot) node.appendChild(pfoot);
+    }
     if (m.note) node.appendChild(h("div", "ezx-note" + (m.noteWarn ? " warn" : ""), { text: m.note }));
     if (m.recos && m.recos.length) node.appendChild(buildRecos(m.recos));
     m._node = node; m._bubble = bubble;
@@ -1397,6 +1389,9 @@
       perspective: state.perspective
     };
     if (ids.actor_emp_id) body.actor_emp_id = ids.actor_emp_id;
+    /* buildPayloadMessage가 EZSignalChat.contextFor로 주제를 이미 걸어 두었다.
+       그 주제를 이 답변에 새겨 두면 답변 꼬리에 「화면에서 직접 고칠게」 한 줄을 낼 수 있다. */
+    stampSigTopic(aiMsg);
 
     if (agentReady) agentRespond(body, aiMsg, userText);
     else streamChat(body, aiMsg, userText);   /* 오프라인 의도 분기는 원문 질문이 필요 (G4) */
@@ -2261,21 +2256,21 @@
     setTimeout(tick, 120);
   }
 
-  /* ---------------- 실AI 응답 영수증 서술자 (F16) ----------------
-     "검증 가능한 답변"이 오프라인에서만 성립하지 않도록, 라이브 응답에도 같은 카드를 붙인다.
-     서술자에는 **실제로 일어난 일만** 담는다 — 호출된 도구와 그 요약, 모델 실인용 근거,
-     as-of 시각. 연출 스텝이나 추정 수치는 넣지 않는다.
-     도구를 하나도 안 부른 순수 대화 응답에는 카드를 붙이지 않는다(신호 희석 방지).
+  /* ---------------- 실AI 응답의 수치 서술자 (F16) ----------------
+     서술자에는 **실제로 일어난 일만** 담는다 — 호출된 도구와 그 요약, 도구 결과에서
+     뽑은 수치. 연출 스텝이나 추정 수치는 넣지 않는다.
+     도구를 하나도 안 부른 순수 대화 응답에는 수치 띠를 붙이지 않는다(신호 희석 방지).
 
      descriptor(msg.meta.receipt) 스키마:
-       { title, asOf, offline:false, mode,
+       { title, asOf, offline:false, mode,   // title·asOf는 화면에 렌더하지 않는다(내부 기록용)
          tools:  [{ name, src, label, summary }],   // 실제 호출된 도구 (navigate·화면확인 제외)
-         metrics:[{ k, v, sub? }],                  // 도구 결과에서만 추출 (최대 4)
-         srcs:   [{ kind, label }],                 // 근거 칩 (도구 원천)
+         metrics:[{ k, v, sub? }],                  // 말풍선 아래 타일 띠 — 도구 결과에서만 (최대 4)
+         srcs:   [{ kind, label }],                 // 렌더하지 않는다 — 근거 표시는
+                                                    //   tx_ctx_ledger 스트립 하나로 모았다(중복 폐지)
          whatif: { emp_id?, achievement_delta?, cap_pct? } | null,
          wiParams?, wiResult? }                     // What-if 실행 후 runWhatIf가 채움 */
   var RC_SKIP_TOOLS = { navigate: 1, get_screen_context: 1 };
-  /* EZKit.src가 아는 kind는 talenx/erp/rule/web — 도구 원천을 그 어휘로 옮긴다 */
+  /* 도구 원천 어휘 talenx/erp/rule/web — 지금은 서술자에만 남고 화면에는 쓰이지 않는다 */
   var RC_SRC_KIND = {
     get_checkins: "erp", simulate_whatif: "rule", get_strategy_themes: "rule",
     get_context_ledger: "talenx", get_org_overview: "talenx"

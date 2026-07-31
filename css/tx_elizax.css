@@ -123,6 +123,22 @@
 }
 .ezx-sig-row:hover{ background:var(--color-background-muted); color:var(--color-accent); }
 .ezx-sig-none{ padding:22px 10px; }
+
+/* 줄을 누르면 제자리에서 펼쳐진다 — 미리보기 두 문장 + 두 갈래 출구.
+   한 번에 한 줄만 펼쳐진다. 카드가 아니라 목록 행의 확장이다. */
+.ezx-sig-item{ border-bottom:1px solid var(--ezx-hairline); }
+.ezx-sig-item .ezx-sig-row{ border-bottom:0; }
+.ezx-sig-item.open .ezx-sig-row{ color:var(--color-accent); }
+.ezx-sig-ex{ padding:0 6px 12px; }
+.ezx-sig-pv{ font-size:12px; line-height:1.6; color:var(--color-text-secondary); }
+.ezx-sig-exits{ display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; }
+.ezx-sig-exit{
+  font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:var(--radius-full);
+  border:1px solid var(--ezx-hairline); background:var(--color-background-card); color:var(--color-text-secondary);
+  transition:border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast) var(--ease-standard);
+}
+.ezx-sig-exit:hover{ border-color:var(--color-accent); color:var(--color-accent); background:var(--color-accent-muted); }
+.ezx-sig-exit.go{ color:var(--color-accent); border-color:color-mix(in srgb, var(--color-accent) 35%, transparent); }
 .ezx-past{ margin-top:12px; border-top:1px solid var(--ezx-hairline); }
 .ezx-past-h{
   display:flex; align-items:center; gap:6px; width:100%; text-align:left;
@@ -253,6 +269,47 @@
 .ezx-note{ font-size:11px; color:var(--color-text-secondary); margin-top:6px; font-weight:400; }
 .ezx-note.warn{ color:var(--color-warning); }
 
+/* ---------- 답변은 말풍선이다. 데이터 타일은 그 아래 작은 띠 ----------
+   이전에는 모든 AI 답변이 영수증 카드(.ezk-receipt)로 감싸여 제목줄·기준시각 칩·
+   상태 칩·근거 칩이 먼저 오고 정작 하려던 말이 카드 맨 아래 묻혔다. 뒤집는다:
+   본문이 곧 메시지(.ezx-bubble = 다른 답변과 같은 말풍선)이고, 「직전 등급」·
+   「과업 영역」처럼 수치로 읽는 게 나은 것만 말풍선 아래 작은 타일 띠로 붙인다(최대 4).
+   카드 테두리·제목줄·칩줄은 만들지 않는다. 근거 칩 줄(.ezx-rc-srcs)은 폐기 —
+   근거 표시는 tx_ctx_ledger의 스트립 하나로 모은다(중복 금지). */
+.ezx-msg.ezx-rcptmsg{ max-width:88%; align-self:flex-start; }
+.ezx-rc-metrics{ display:flex; flex-wrap:wrap; gap:6px; margin:7px 0 0; }
+.ezx-rc-metric{
+  display:flex; flex-direction:column; gap:1px; min-width:72px; padding:5px 10px;
+  border:1px solid var(--ezx-hairline); border-radius:var(--radius-element);
+  background:var(--color-background-muted);
+}
+.ezx-rc-metric .k{ font-size:10px; letter-spacing:.02em; color:var(--color-text-secondary); }
+.ezx-rc-metric .v{ font-size:14px; font-weight:700; letter-spacing:-.02em; color:var(--color-text-primary); }
+.ezx-rc-metric .s{ font-size:10px; color:var(--color-text-secondary); }
+
+/* 답변 꼬리의 조용한 한 줄 — 「화면에서 직접 고칠게」와 What-if 재계산.
+   버튼 줄이 아니라 밑줄 텍스트다(처리 버튼 6종을 되살리는 것이 아니다). */
+.ezx-rc-foot{ display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; margin-top:7px; }
+.ezx-rc-golink{
+  font-size:11.5px; font-weight:600; color:var(--color-accent); cursor:pointer;
+  background:none; border:0; padding:0; text-decoration:underline; text-underline-offset:2px;
+  transition:color var(--duration-fast) var(--ease-standard);
+}
+.ezx-rc-golink:hover{ color:var(--color-text-primary); }
+.ezx-rc-wihint{ font-size:10px; color:var(--color-text-secondary); }
+.ezx-rc-wiout{
+  flex:1 1 100%; margin-top:2px; padding:8px 10px;
+  border:1px solid var(--ezx-hairline); border-radius:var(--radius-element);
+  background:var(--color-background-muted);
+}
+.ezx-rc-wiout:empty{ display:none; }
+.ezx-rc-wirow{ display:flex; gap:8px; align-items:baseline; font-size:11.5px; padding:2px 0; color:var(--color-text-primary); }
+.ezx-rc-wirow .lb{ width:52px; flex:none; font-size:10px; font-weight:700; color:var(--color-text-secondary); }
+.ezx-rc-wirow.warn{ color:var(--color-warning); }
+.ezx-rc-wirow .chg{ font-style:normal; font-size:10px; font-weight:700; color:var(--color-warning); }
+.ezx-rc-wirow .keep{ font-style:normal; font-size:10px; color:var(--color-text-secondary); }
+.ezx-rc-winote{ margin-top:5px; font-size:10px; line-height:1.45; color:var(--color-text-secondary); }
+
 /* recommendations (OKR suggestions) */
 .ezx-recos{ margin-top:10px; display:flex; flex-direction:column; gap:8px; }
 .ezx-reco{ border:1px solid var(--ezx-hairline); border-radius:var(--radius-container); padding:10px 11px; background:var(--color-background-card); }
@@ -277,8 +334,10 @@
 .ezx-starter:active{ transform:scale(.95); }
 
 /* 18-2차: 웰컴 신호 카드 3장(.ezx-sig-welcome)·카탈로그 링크(.ezx-catlink)·
-   카탈로그 모달(.ezx-cat*) 전부 폐기. 웰컴은 빈 채팅 + .ezx-starter 버튼뿐이므로
-   추가 스타일이 필요 없다 — 두 묶음이 같은 시각 계열을 쓰는 것이 R3의 요구다. */
+   카탈로그 모달(.ezx-cat*) 전부 폐기. 웰컴은 빈 채팅 + .ezx-starter 버튼뿐이다.
+   단, 「지금 볼 만한 것」 묶음(AI가 실제 데이터를 보고 직접 권하는 질문)은
+   일반 3개와 같은 회색으로 두면 눌러볼 이유가 안 보인다 — .scn 강조 계열을
+   그대로 입혀 accent로 구분한다(색 계열은 accent 하나, 경고색 금지). */
 
 /* ---------- Composer — frosted, pill input ---------- */
 .ezx-foot{
@@ -335,8 +394,12 @@
 .ezx-msg.scn { align-self: stretch; max-width: 100%; }
 .ezx-scnhost { min-width: 0; }
 .ezx-scn-lab { font-size: 11px; font-weight: 700; color: var(--color-text-secondary); margin: 14px 0 6px; letter-spacing: .03em; }
-.ezx-starter.scn { border-color: color-mix(in srgb, var(--color-accent) 35%, transparent); color: var(--color-accent); font-weight: 600; }
-.ezx-starter.scn:hover { background: var(--color-accent-muted); }
+.ezx-starter.scn {
+  border-color: color-mix(in srgb, var(--color-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--color-accent-muted) 55%, transparent);
+  color: var(--color-accent); font-weight: 600;
+}
+.ezx-starter.scn:hover { border-color: var(--color-accent); background: var(--color-accent-muted); }
 
 /* ---------- 내비게이션 확인 카드 (intent router) ---------- */
 .ezx-navcard{

@@ -1,5 +1,6 @@
 /* ez_kit.css — 신뢰 컴포넌트 6종 + 모션/z 토큰 단일 정의 (v2 기획안 §7·§8.4)
-   규칙: astryx 토큰 var()만 사용, hex 금지. talenx 화면(.tx-*/#s-*) 무영향 — 스코프 한정. */
+   규칙: astryx 토큰 var()만 사용, hex 금지. talenx 화면(.tx-* 또는 #s-*) 무영향 — 스코프 한정.
+   주의: 이 주석 안에 별표+슬래시를 쓰면 주석이 여기서 닫혀 아래 토큰 블록이 통째로 버려진다. */
 
 [data-astryx-theme="talenx"] {
   --ease-standard: cubic-bezier(0.24, 1, 0.4, 1);

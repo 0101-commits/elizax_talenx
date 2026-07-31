@@ -50,6 +50,15 @@
       - 모달에서 사유 미선택 제출: 경고 토스트 후 모달 유지.
       - AI 오프라인(목업 응답) 모드에서도 동일하게 동작(저장은 로컬 원장).
       - 스트리밍 중 취소된 빈 ai 메시지(text 없음)에는 버튼을 붙이지 않음.
+
+   ⑤ 18-3차 개정 — 휴면(dormant)
+      사용자 지시(2026-07-31): "대화 결과 밑에 나오는 손가락 화살표들 삭제."
+      답변 아래 👍/👎 행은 폐기한다. 이 모듈은 DOM을 전혀 건드리지 않는다
+      (버튼 주입·스타일 주입·클릭 위임·이벤트 구독·MutationObserver 전부 중단).
+      영속화 계약(m.fb = {v,at,reason?} · tx_chatstore.js serializeMsg)과
+      기록 헬퍼(saveFb·clearFb·openReasonModal·scan)는 그대로 남겨 두어,
+      필요해지면 wire() 호출 한 줄로 되살릴 수 있다. 전역은 만들지 않는다.
+      → tx_chat_export.js가 18차에 먼저 쓴 휴면 방식과 같다.
    ===================================================================== */
 (function () {
   "use strict";
@@ -311,20 +320,20 @@
     scan(); /* 초기 1회 — 복원된 세션의 기존 fb 상태 반영 */
   }
 
-  /* EZChat/DOM은 늦게 생긴다 — 300ms 간격 최대 20회 폴링 */
-  function boot() {
-    var tries = 0;
-    (function poll() {
-      if (window.EZChat && window.EZChat.on && document.body) { wire(); return; }
-      tries++;
-      if (tries >= 20) return; /* 환경 미성립 — 조용히 포기 */
-      setTimeout(poll, 300);
-    })();
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
-  } else {
-    boot();
-  }
+  /* ---------------- 휴면(dormant) — 주입·구독 전면 중단 ---------------- */
+  /* 18-3차 ⑤: 답변 아래 👍/👎 행 폐기. 부트스트랩(폴링→wire)을 제거해 이 모듈은
+     스타일 한 줄도 넣지 않고, 클릭 위임·EZChat 구독·MutationObserver도 걸지 않는다.
+     아래 void 참조는 로직 보존이 목적이다(미사용 경고 방지). 되살리려면 wire() 1회. */
+  void wire;
+  void scan;
+  void applyToNode;
+  void saveFb;
+  void clearFb;
+  void openReasonModal;
+  void onDocClick;
+  void injectStyle;
+  void resolveMessage;
+  void timeLabel;
+  void esc;
+  void toast;
 })();
