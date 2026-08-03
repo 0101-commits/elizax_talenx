@@ -483,10 +483,13 @@
       if (window.EZSignalEngine && window.EZSignalEngine.onChange) {
         _sigSubbed = true;
         try {
-          window.EZSignalEngine.onChange(function () {
+          window.EZSignalEngine.onChange(function (ev) {
             updateFabCount();
             if (curTab === "ntf") renderNtf();
             if (!msgs().length) renderMessages();   /* 추천 대화 버튼 갱신 */
+            /* 20-4차 — 처리가 실제로 끝나면 그 결과와 이어 물을 말을 대화에 남긴다.
+               낙관적으로 미리 쓰지 않는다. 엔진이 「했다」고 알려 줄 때만 쓴다. */
+            if (ev && ev.id && ev.rec && ev.rec.st === "acted") pushSigDone(String(ev.id));
           });
         } catch (e) { /* ignore */ }
         updateFabCount();
@@ -1774,6 +1777,71 @@
     m._node = node;
     return node;
   }
+  /* ---------------- 처리 결과 + 이어 물을 말 (20-4차) ----------------
+     카탈로그에 이미 「처리 후 안내」(done.title · done.desc)가 적혀 있다. 그 문장을
+     그대로 쓰고, 그 아래에 이어 물을 말 세 개를 붙인다. 대화가 여기서 끊기지 않게. */
+  function pushSigDone(id) {
+    var arr = msgs(), i;
+    for (i = arr.length - 1; i >= 0 && i > arr.length - 4; i--) {
+      if (arr[i] && arr[i].role === "sigdone" && !arr[i].going
+          && String(arr[i].id) === id) return;  /* 같은 결과를 두 번 쓰지 않는다 */
+    }
+    pushMessage({ role: "sigdone", id: id, at: Date.now() });
+    renderMessages();
+    scrollToBottom();
+  }
+  /* 처리 단추를 누른 직후 — 아직 끝나지 않았다. 무엇을 하려는지만 말하고
+     이어 물을 말을 붙인다. 「했다」고 말하는 것은 resolve 가 온 뒤(sigdone)다. */
+  function pushSigGo(id, idx) {
+    pushMessage({ role: "sigdone", id: id, idx: idx, going: 1, at: Date.now() });
+    renderMessages();
+    scrollToBottom();
+  }
+  function buildSigDoneNode(m) {
+    var node = h("div", "ezx-msg ai");
+    var bubble = h("div", "ezx-bubble");
+    var sig = null, inst = null;
+    try { if (window.EZSignalEngine) inst = EZSignalEngine.instance(m.id, roleKey()); } catch (e) { inst = null; }
+    sig = (inst && (inst.sig || inst)) || null;
+    var wrap = h("div", "ezx-sig-done");
+    if (m.going) {
+      /* 아직 안 끝난 단계 — 카탈로그의 확인 단추 이름과 남는 기록으로 말한다 */
+      var acts = (sig && sig.actions) || [];
+      var a = acts[m.idx] || acts[0] || {};
+      var head = a.confirm ? ("[" + a.confirm + "]을 누르면 반영돼요.") : "화면을 열었어요.";
+      wrap.appendChild(h("div", "sd-title", { text: head }));
+      if (a.store) wrap.appendChild(h("div", "sd-desc", { text: "→ 남는 기록 : " + a.store }));
+    } else {
+      var done = (sig && sig.done) || {};
+      wrap.appendChild(h("div", "sd-title", { text: done.title || "처리했어요." }));
+      if (done.desc) wrap.appendChild(h("div", "sd-desc", { text: "→ " + done.desc }));
+    }
+
+    /* 이어 물을 말 — 카탈로그 처리에서 뽑은 후속 칩(EZSignalChat.chips) 그대로 */
+    var qs = [];
+    if (window.EZSignalChat && EZSignalChat.chips) {
+      try { qs = EZSignalChat.chips(inst || m.id) || []; } catch (e2) { qs = []; }
+    }
+    if (qs.length) {
+      wrap.appendChild(h("div", "sd-lab", { text: "이어서 물어보기" }));
+      var row = h("div", "sd-chips");
+      qs.forEach(function (q) {
+        var b = h("button", "sd-chip", { type: "button", text: String(q) });
+        b.addEventListener("click", function () {
+          /* 주제를 물려준다 — 칩 문장만 보내면 낱말이 겹치는 다른 신호로 튄다 (20-4차) */
+          state.followSig = String(m.id);
+          sendMessage(String(q));
+        });
+        row.appendChild(b);
+      });
+      wrap.appendChild(row);
+    }
+    bubble.appendChild(wrap);
+    node.appendChild(bubble);
+    m._node = node;
+    return node;
+  }
+
   /* 처리 실행 — 신호 인스턴스를 만들어 EZSignalAct.run 에 넘긴다.
      모듈이 없으면 조용히 아무 것도 하지 않는다(가짜 성공을 만들지 않는다). */
   function runSigAction(id, idx) {
@@ -1784,7 +1852,12 @@
       renderMessages();
       return;
     }
-    try { EZSignalAct.run(inst, idx, ""); } catch (e2) { /* 배선 실패 — 화면은 그대로 */ }
+    var ok = false;
+    try { ok = EZSignalAct.run(inst, idx, "") !== false; } catch (e2) { ok = false; }
+    /* 처리가 곧바로 끝나지 않는 것이 많다(화면으로 데려가 사용자가 저장한다).
+       그래서 누른 직후에는 「무엇을 하면 반영되는지」만 말하고 이어 물을 말을 붙인다.
+       실제로 끝나면 엔진이 알려 주고 그때 결과 문장이 따라온다(pushSigDone). */
+    if (ok) pushSigGo(id, idx);
   }
 
   function buildMsgNode(m) {
@@ -1809,6 +1882,7 @@
       return lnode;
     }
     if (m.role === "sig") return buildSigNode(m);
+    if (m.role === "sigdone") return buildSigDoneNode(m);
     if (m.role === "nav") return buildNavNode(m);
     if (m.role === "navask") return buildNavAskNode(m);
     if (m.role === "scn") {
@@ -2151,7 +2225,8 @@
        화면에 남고, 모델은 그 뒤에 덧붙이는 말만 한다. */
     var sigM = signalHit(userText);
     var sigId = (sigM && sigM.id) ? String(sigM.id) : "";
-    if (sigId) pushMessage({ role: "sig", id: sigId, at: Date.now() });
+    if (state.followSig) { sigId = state.followSig; state.followSig = null; }
+    if (sigId && !sigShown(sigId)) pushMessage({ role: "sig", id: sigId, at: Date.now() });
     /* 실 에이전트 가능(연결+키+도구) → 라이브 카드(실 도구 호출 표시),
        그 외 라이브 → 기존 연출 카드, 오프라인 → 카드 없음 */
     var agentReady = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
@@ -2161,7 +2236,7 @@
     var workMsg = agentReady ? pushMessage(makeLiveWorkMsg())
       : (aiMode() !== "offline" && !sigId) ? pushMessage(makeWorkMsg(state.perspective)) : null;
     /* _q = 원문 질문. 영수증 제목·What-if 가정 파싱이 완료 시점에 필요하다(SSE 경로 포함) */
-    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText };
+    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText, _sigId: sigId };
     pushMessage(aiMsg);
     renderMessages();
     if (workMsg && !workMsg.live) animateWork(workMsg);
@@ -3004,7 +3079,9 @@
 
   /* 이 턴에 그 신호의 답 말풍선을 이미 그렸는가 (20-3차) */
   function sigShown(sid) {
-    var arr = msgs(), i, stop = Math.max(0, arr.length - 6);
+    /* 처리를 실행하면 그 사이에 안내 말풍선이 몇 개 끼어든다 — 창을 넉넉히 본다.
+       같은 주제를 한 대화 안에서 두 번 펼치지 않는 것이 목적이다. */
+    var arr = msgs(), i, stop = Math.max(0, arr.length - 12);
     for (i = arr.length - 1; i >= stop; i--) {
       if (arr[i] && arr[i].role === "sig" && String(arr[i].id) === String(sid)) return true;
     }
@@ -3017,11 +3094,20 @@
     var rk = roleKey();
 
     /* ① 이 질문이 부른 신호의 답 */
-    var hit = signalHit(q);
-    var sid = hit && (hit.id || (hit.sig && hit.sig.id));
+    var sid = aiMsg._sigId || "";      /* 이 턴이 이미 정한 주제 (20-4차) */
+    if (!sid) {
+      var hit = signalHit(q);
+      sid = hit && (hit.id || (hit.sig && hit.sig.id));
+    }
     /* 20-3차 — 그 신호의 답(알림 문구·근거·기준값)이 이미 말풍선으로 떠 있으면
        같은 말을 문장으로 다시 쓰지 않는다. 이어받을 한 줄만 남긴다. */
     if (sid && sigShown(sid)) {
+      /* 후속 칩을 눌렀다 — 같은 말을 되풀이하지 않고 카탈로그의 다른 칸으로 답한다 */
+      var fu = "";
+      if (window.EZSignalChat && EZSignalChat.followAnswer) {
+        try { fu = String(EZSignalChat.followAnswer(sid, q, rk) || ""); } catch (e3) { fu = ""; }
+      }
+      if (fu) return { text: fu, note: "" };
       return { text: "위에 정리해 둔 내용부터 보시고, 고치고 싶은 곳이 있으면 말씀해 주세요.", note: "" };
     }
     if (sid && window.EZSignalChat && EZSignalChat.answerText) {

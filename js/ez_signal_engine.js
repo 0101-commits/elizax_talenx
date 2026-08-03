@@ -1147,7 +1147,10 @@
     var ck = id + '|' + rk + '|' + A;
     if (cacheEval[ck]) return cacheEval[ck];
     var out;
-    if (sig.now !== 1 || !EVAL[id]) {
+    /* 20-4차 — 점화 판정을 카탈로그 `now` 에서 **EVAL 구현 유무**로 옮겼다.
+       원천 데이터를 채우고 EVAL 을 붙이면 그 신호가 곧바로 실계산으로 넘어간다.
+       카탈로그 `now` 는 문서(설계 시점의 판단)로 남고 판정에는 쓰지 않는다. */
+    if (!EVAL[id]) {
       /* 열람 전용 — 카탈로그 예시값 전량을 (추정)으로 표시하고 처리 버튼은 카드가 잠근다 */
       out = { hit: false, ready: false, facts: {}, evidence: buildEvidence(sig, null),
               thresholds: buildThresholds(sig, null), asof: A, notice: sig.notice };
@@ -1482,7 +1485,24 @@
     liveIds: function () {
       var c = CAT();
       if (!c || !c.signals) return [];
-      return c.signals.filter(function (s) { return s.now === 1; }).map(function (s) { return s.id; });
+      return c.signals.filter(function (s) { return !!EVAL[s.id]; }).map(function (s) { return s.id; });
+    },
+    /* 이 신호를 지금 실계산할 수 있는가 — 화면·대화가 「예시」 표시를 가를 때 쓴다 */
+    hasEval: function (id) { return !!EVAL[String(id)]; },
+    /* 판정 함수를 밖에서 등록한다 (js/ez_signal_eval2.js 가 쓴다).
+       같은 신호를 두 번 등록하면 나중 것이 이긴다 — 덮어쓰기를 막지 않는다. */
+    registerEval: function (id, fn) {
+      if (!id || typeof fn !== 'function') return false;
+      EVAL[String(id)] = fn;
+      cacheEval = {};
+      return true;
+    },
+    /* EVAL 이 쓰는 계산 맥락 — 밖에서 등록한 판정 함수도 같은 맥락을 받는다 */
+    ctx: function (role) { return ctxFor(roleKey(role)); },
+    /* 밖에서 등록한 판정 함수가 쓰는 계산 도구 — 같은 값·같은 반올림 규칙을 쓰게 한다 */
+    helpers: {
+      num: num, r0: r0, r1: r1, pn: pn, avg: avg, cut: cut,
+      arr: arr, data: D, thv: thv, asof: asof, dayShift: dayShift, asofMs: asofMs, co: co
     }
   };
 

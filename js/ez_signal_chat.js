@@ -998,8 +998,13 @@
   /* 이 인스턴스가 실제로 세어진 것인가 */
   function isLive(inst) {
     if (!inst) return false;
-    var sig = inst.sig || inst;
-    return !!(sig && sig.now === 1 && inst.ready);
+    var sig = inst.sig || inst, e = ENG();
+    /* 20-4차 — 카탈로그 `now` 가 아니라 엔진이 실제로 셀 수 있는지로 가른다.
+       원천 데이터와 판정 함수가 붙는 대로 예시 답변이 실측 답변으로 바뀐다. */
+    var can = false;
+    try { can = !!(e && e.hasEval && e.hasEval(sig.id)); } catch (e0) { can = false; }
+    if (!can) can = !!(sig && sig.now === 1);      /* 구버전 엔진 폴백 */
+    return !!(can && inst.ready);
   }
 
   /* ============ 6-4. 화면에 그대로 나가는 신호 답변 (20-3차) ============
@@ -1063,6 +1068,40 @@
       out.actions.push({ idx: pick[j].i, label: cut(nm, 28) });
     }
     return out;
+  }
+
+  /* ---- 이어 물은 말에 답하기 (20-4차) --------------------------------------
+     알림 문구·근거를 이미 화면에 보여 준 뒤 사용자가 후속 칩을 누르면, 같은 말을
+     또 하면 대화가 헛돈다. 무엇을 물었는지에 따라 카탈로그의 다른 칸을 답으로 낸다.
+       「어떻게 고치지」 → 처리 초안(draft)          「무슨 기록 보고 한 말이야」 → 살펴본 자료
+       「되돌려」        → 되돌리는 방법             그 밖 → 빈 문자열(부르는 쪽이 알아서)          */
+  function followAnswer(x, text, role) {
+    var inst = instOf(x);
+    if (!inst) return '';
+    var sig = inst.sig || inst, t = S(text), i;
+    if (/되돌|취소|없애|지워/.test(t)) {
+      return tidy('되돌리는 것은 화면에서 직접 하셔야 해요. 바꾼 내용은 수정 이력에 남아 있어 어디를 되돌릴지 그 화면에서 고를 수 있어요.');
+    }
+    if (/고치|고칠|수정|어떻게|어디를|방법|무엇부터|해야/.test(t)) {
+      var acts = (sig.actions || []).slice().sort(function (a, b) { return (a.rank || 9) - (b.rank || 9); });
+      var act = null;
+      for (i = 0; i < acts.length; i++) if (acts[i].type !== 'A5') { act = acts[i]; break; }
+      if (!act) act = acts[0] || null;
+      if (act && act.draft) {
+        var sents = S(act.draft).split(/(?<=다\.)\s*/);
+        var body = scrub(sents.slice(0, 2).join(' ')).replace(/\s+/g, ' ');
+        var tail = act.confirm ? (' 확인한 뒤 [' + act.confirm + ']을 누르면 반영돼요.') : '';
+        return tidy(body + tail);
+      }
+      return '';
+    }
+    if (/기록|근거|어디서|출처|자료|무엇을 보고/.test(t)) {
+      var src = sourceWords(inst);
+      if (!src.length) return '';
+      return tidy((isLive(inst) ? '' : '아직 실제로 세지 못해 예시로 보여 드린 것이고, ')
+        + src.join(' · ') + '을 보고 말씀드렸어요.');
+    }
+    return '';
   }
 
   /* ===================== 7. 근거 블록 (보이지 않게 실린다) ===================== */
@@ -1339,6 +1378,7 @@
     ask: ask,
     contextFor: contextFor,
     answerBlocks: answerBlocks,   /* 화면이 그대로 그리는 신호 답변 (20-3차) */
+    followAnswer: followAnswer,   /* 이어 물은 말에 카탈로그의 다른 칸으로 답한다 (20-4차) */
     answerText: answerText,
     chips: chips,
     topic: topic,

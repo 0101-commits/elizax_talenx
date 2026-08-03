@@ -554,6 +554,25 @@
 }
 .ezx-sig-ans .sg-act.ghost:hover{ color:var(--color-accent); border-color:var(--color-accent); opacity:1; }
 
+/* ---------- 처리 결과 + 이어 물을 말 (20-4차) ---------- */
+.ezx-sig-done{ display:flex; flex-direction:column; gap:3px; }
+.ezx-sig-done .sd-title{
+  font-size:13.5px; font-weight:700; line-height:1.5; color:var(--color-text-primary);
+}
+.ezx-sig-done .sd-desc{ font-size:12.5px; line-height:1.6; color:var(--color-text-secondary); }
+.ezx-sig-done .sd-lab{
+  margin-top:9px; font-size:12px; font-weight:600; color:var(--color-text-secondary);
+}
+.ezx-sig-done .sd-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; }
+.ezx-sig-done .sd-chip{
+  flex:none; padding:6px 11px; font-size:12.5px; font-weight:600; line-height:1.4;
+  color:var(--color-accent); background:var(--color-accent-muted);
+  border:1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  border-radius:var(--radius-full);
+  transition:background var(--duration-fast) var(--ease-standard);
+}
+.ezx-sig-done .sd-chip:hover{ background:color-mix(in srgb, var(--color-accent) 18%, transparent); }
+
 /* ---------- 신호 카탈로그 열람 (20차 §1) ----------
    같은 서랍을 쓰되 ① 고르는 줄 ② 한 줄에 두 층(질문 + 화면 문장)
    ③ 펼치면 설계 원본(근거·기준값·처리) 을 더한다. */
