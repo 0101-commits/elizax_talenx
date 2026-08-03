@@ -142,7 +142,9 @@ periods = [
     ('eval', H0, '2025-12-01', '2025-12-08', '2025-12-19', '2025-12-31'),
     # 평가·피드백은 기준 시점에 **열려 있어야** 그 단계 신호를 볼 수 있다.
     # 예전에는 개시일이 기준 시점보다 뒤여서 평가·피드백 신호 전부가 「아직 아님」이었다.
-    ('eval', H1, '2026-07-06', '2026-07-15', '2026-07-19', '2026-07-31'),
+    # 평가 마감 셋(자기평가 due · 1차 제출 due+1 · 2차 확정 close)이 모두 기준 시점
+    # 코앞에 와야 상위 조직장의 「1차 제출 D-2」·「2차 확정 D-4」가 성립한다.
+    ('eval', H1, '2026-07-06', '2026-07-15', '2026-07-17', '2026-07-20'),
     ('feedback', H1, '2026-07-01', '2026-07-14', '2026-07-16', '2026-07-18'),
     ('msf', H1, '2026-06-15', '2026-07-03', '2026-07-10', '2026-07-14'),
     ('upward', H1, '2026-06-15', '2026-06-29', '2026-07-05', '2026-07-12'),
@@ -623,6 +625,60 @@ all_ld = sorted({m['leader_emp_id'] for m in meetings})
 keep_leaders = set(all_ld[3:]) if len(all_ld) > 4 else set(all_ld)
 meetings = [m for m in meetings if m['leader_emp_id'] in keep_leaders]
 j['meetingStore'] = meetings
+
+# ⑧ 상위 조직장 관점의 평가 단계 (평가-상위조직장-01 · 05 · 08)
+#    엔진 upperScope 는 대표 조직장(EMP-0030)의 조직에 하위가 없어 한 단계 위
+#    ORG-026(Consulting BU)을 기준 조직으로 잡는다. 그 범위 안에만 심는다.
+def _subtree(root):
+    out, q = set(), [root]
+    while q:
+        oid = q.pop()
+        if not oid or oid in out:
+            continue
+        out.add(oid)
+        q += [o['org_id'] for o in j['orgs'] if o.get('parent_id') == oid]
+    return out
+
+UP_ORG = (orgIdx.get(empIdx[leader]['org_id']) or {}).get('parent_id')
+UP_SCOPE = _subtree(UP_ORG) if UP_ORG else set()
+
+#    2차 확정 대기가 기준(10건)을 넘어야 한다. 그런데 「제출률 0%인 하위 팀」이
+#    남아 있어야 01 도 함께 성립하므로, 골고루 뿌리지 않고 앞쪽 한두 팀에만 몰아
+#    심는다. 대표의 팀(ORG-030)과 그 직속 팀원은 손대지 않는다 — 팀장 관점의
+#    「팀원 평가 미작성」 신호가 그 사람들 위에 서 있다.
+UP_PEND_MIN = 10                      # TH-2차확정-대기건수
+up_pend = [x for x in ev_status
+           if empIdx[x['emp_id']]['org_id'] in UP_SCOPE
+           and x['first_submitted_at'] and not x['second_confirmed_at']]
+seeded_orgs = []
+for oid in sorted(o for o in UP_SCOPE if o not in (UP_ORG, empIdx[leader]['org_id'])):
+    if len(up_pend) >= UP_PEND_MIN:
+        break
+    for x in ev_status:
+        if len(up_pend) >= UP_PEND_MIN:
+            break
+        e = empIdx[x['emp_id']]
+        if e['org_id'] != oid or e.get('manager_id') == leader or x['first_submitted_at']:
+            continue
+        if not x['self_submitted_at']:
+            x['self_submitted_at'] = at(dshift(EV_H1['start'], 2), 10)
+        x['first_submitted_at'] = at(dshift(x['self_submitted_at'][:10], 2), 14)
+        x['second_confirmed_at'] = None
+        x['status'] = 'first_submitted'
+        up_pend.append(x)
+        if oid not in seeded_orgs:
+            seeded_orgs.append(oid)
+
+#    등급 변경 사유가 비어 있는 건 한 건 (평가-상위조직장-05 — 기준은 1건)
+up_noreason = 0
+for g in grade_hist:
+    if empIdx[g['emp_id']]['org_id'] in UP_SCOPE and g['reason']:
+        g['reason'] = None
+        up_noreason += 1
+        break
+
+print('데모 표본 — 상위 조직장 범위 %s: 2차 확정 대기 %d건(%s) · 등급 변경 사유 공백 %d건'
+      % (UP_ORG, len(up_pend), ' · '.join(seeded_orgs) or '추가 없음', up_noreason))
 
 print('데모 표본 — 육성 계획 미등록 %d명 · 면담 기록 있는 조직장 %d명으로 좁힘'
       % (len(low_ids), len(keep_leaders)))
