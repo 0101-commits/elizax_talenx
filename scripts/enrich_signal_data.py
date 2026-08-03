@@ -143,7 +143,7 @@ periods = [
     # 평가·피드백은 기준 시점에 **열려 있어야** 그 단계 신호를 볼 수 있다.
     # 예전에는 개시일이 기준 시점보다 뒤여서 평가·피드백 신호 전부가 「아직 아님」이었다.
     ('eval', H1, '2026-07-06', '2026-07-15', '2026-07-19', '2026-07-31'),
-    ('feedback', H1, '2026-07-01', '2026-07-18', '2026-07-24', '2026-08-08'),
+    ('feedback', H1, '2026-07-01', '2026-07-14', '2026-07-16', '2026-07-18'),
     ('msf', H1, '2026-06-15', '2026-07-03', '2026-07-10', '2026-07-14'),
     ('upward', H1, '2026-06-15', '2026-06-29', '2026-07-05', '2026-07-12'),
 ]
@@ -280,7 +280,11 @@ for e in emps:
         'status_id': 'EVS-%s' % eid, 'emp_id': eid, 'period': H1,
         'self_submitted_at': self_at, 'first_submitted_at': first_at,
         'second_confirmed_at': second_at, 'status': st,
-        'due_self': EV_H1['due'], 'due_first': '2026-08-03', 'due_second': EV_H1['close'],
+        # 1차 평가 마감은 자기평가 마감 다음이다. 이 값이 「평가 미작성 + 마감 임박」
+        # 판정의 원천이라 기간 일정에서 파생시킨다(예전에는 08-03 을 박아 두었다).
+        'due_self': EV_H1['due'],
+        'due_first': dshift(EV_H1['due'], 1),
+        'due_second': EV_H1['close'],
     })
 j['evalStatus'] = ev_status
 
@@ -453,9 +457,13 @@ for eid in sorted(SUBJ):
             'status': 'read' if read else 'sent',
             'char_len': rng(40, 320, 'fbc', eid, i),
         })
+DEMO_FIRST = ['EMP-0078', 'EMP-0030', 'EMP-0005', 'EMP-0001']   # 역할 대표 인물
 MSF = [p for p in j['periods'] if p['kind'] == 'msf'][0]
 for tgt in sorted(SUBJ)[:30]:
-    raters = [x for x in sorted(SUBJ) if x != tgt][:4]
+    # 대표 인물을 앞에 세운다 — 데모에서 보는 사람이 평가자로 배정돼 있어야 한다
+    pool = [x for x in DEMO_FIRST if x != tgt and x in SUBJ]
+    pool += [x for x in sorted(SUBJ) if x != tgt and x not in pool]
+    raters = pool[:4]
     for rt in raters:
         done = (H('msf', tgt, rt) % 5) != 0          # 다섯 중 하나는 미제출
         msf_assign.append({
@@ -574,6 +582,51 @@ mine.sort(key=lambda c: c.get('checkin_date') or '')
 for c in mine[-2:]:
     c['confidence'] = '낮음'
 print('데모 표본 — 구성원 대표 체크인 %d건을 지난달로, 마지막 2회 확신도 낮음' % moved)
+
+# ③ 아직 안 읽은 피드백 한 건 (피드백-구성원-04 — 사이클 종료 임박과 함께 걸린다)
+got = [x for x in fb_log if x.get('to_emp') == me and x.get('sent_at')]
+if got:
+    got[0]['read_at'] = None
+    got[0]['status'] = 'sent'
+
+# ④ 상향 피드백에 아직 응답하지 않았다 (피드백-구성원-06)
+for r in up_resp:
+    if r.get('rater_emp_id') == me:
+        r['submitted_at'] = None
+        r['status'] = 'pending'
+        break
+
+# ⑤ 팀 등급이 위쪽에 몰렸다 (평가-팀장-06) — 조직장 대표의 팀원 한 명을 한 칸 위로
+leader = DEMO_ROLE['leader']
+team = [e['emp_id'] for e in emps if e.get('manager_id') == leader]
+UP1 = {'A': 'S', 'B': 'A', 'C': 'B', 'D': 'C'}
+for eid in team:
+    v = evals.get(eid)
+    if v and v.get('grade') in UP1:
+        v['grade'] = UP1[v['grade']]
+        break
+
+# ⑥ 낮은 등급인데 육성 계획이 등록되지 않은 사람 (피드백-HR경영진-09)
+#    우연히 전원 등록돼 있어 「미등록 0명」이었다. 낮은 등급 두 명을 미등록으로 둔다.
+low_ids = [x for x in sorted(low_grade) if x in {d['emp_id'] for d in dev}][:2]
+for d in dev:
+    if d['emp_id'] in low_ids:
+        d['registered'] = False
+        d['items'] = []
+        d['created_at'] = None
+        d['memo'] = None
+
+# ⑦ 면담 기록이 아예 없는 조직 (피드백-HR경영진-01 — 완료율과 0건 조직 수를 함께 본다)
+#    면담을 만든 조직장 절반만 남긴다. 나머지 조직은 「한 건도 없음」이 된다.
+all_ld = sorted({m['leader_emp_id'] for m in meetings})
+#    절반을 지우면 상위 조직장의 「하위 팀 면담」 신호가 함께 죽는다 — 세 곳만 비운다
+keep_leaders = set(all_ld[3:]) if len(all_ld) > 4 else set(all_ld)
+meetings = [m for m in meetings if m['leader_emp_id'] in keep_leaders]
+j['meetingStore'] = meetings
+
+print('데모 표본 — 육성 계획 미등록 %d명 · 면담 기록 있는 조직장 %d명으로 좁힘'
+      % (len(low_ids), len(keep_leaders)))
+print('데모 표본 — 안 읽은 피드백 1건 · 상향 미응답 1건 · 팀 등급 한 칸 위로 1명')
 
 # ---------------------------------------------------------------- meta 표기
 COLLS = ['periods', 'objectiveHistory', 'krProgress', 'evaluatorMap', 'evalStatus',
