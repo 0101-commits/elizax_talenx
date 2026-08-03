@@ -127,8 +127,11 @@
 
     /* ================= 현황 LIST rebuild ================= */
     function cardHTML(c, i) {
-      var rAva = c.raters.length ? ava(c.raters[0].name, 24) : '';
-      var rNames = c.raters.map(nt).join(', ');
+      /* 익명 요청(anon!=='공개')인데 평가자 실명을 목록에 그대로 내면 결과를 열기도 전에
+         「누가 나를 평가했나」가 드러난다 — 결과 화면(namedRaters)과 같은 기준을 목록에도 적용. */
+      var named = (c.anon === '공개');
+      var rAva = named ? (c.raters.length ? ava(c.raters[0].name, 24) : '') : anonAva(24);
+      var rNames = named ? c.raters.map(nt).join(', ') : ('평가자 ' + c.raters.length + '명');
       return '<div class="mcard txf-mcard" data-ci="' + i + '" data-name="' + esc(c.subj.name) + '" data-type="' + esc(c.type) + '" data-order="' + c.order + '">' +
         ringSVG(c.pct) +
         '<div class="mbody">' +
@@ -590,7 +593,12 @@
         return;
       }
       var pg = pageOpen('txf-request-page');
-      var empList = (D.employees || []).slice(0, 80);
+      /* 대상자 후보 = 내가 360을 열 수 있는 범위. 조직장에게 전사 80명을 열어 주면
+         남의 팀원 진단을 임의로 만들 수 있다 — 조직장은 직속 팀원까지(HR·경영진은 전사).
+         조직원은 위 canManage 가드에서 이 화면 자체에 들어오지 못한다. */
+      var empList = ROLE === 'leader'
+        ? (D.employees || []).filter(function (e) { return e.manager_id === CU.emp_id; })
+        : (D.employees || []).slice(0, 80);
       var opt = '<option value="">대상자를 선택합니다.</option>' +
         empList.map(function (e) { return '<option value="' + e.emp_id + '">' + esc(nt(e)) + '</option>'; }).join('');
       var typeList = ['협업 리뷰', '동료 협업 피드백', '감정분석', '직책자 진단', '역량 진단'];

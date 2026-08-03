@@ -3,7 +3,7 @@
 
 원천:
   C:\\Users\\cgpar\\elizax_docs\\성과관리Agent_신호카탈로그_v0.6.json   (신호 150건, 기계 단일 원천)
-  ...05 HR AX\\00 제출본\\...W5_signal catalogue_260730.xlsx            (제출본. 알림 문구 4건이 더 다듬어짐)
+  ...05 HR AX\\00 제출본\\...W5_signal catalogue_260803.xlsx            (제출본. 알림 문구 4건이 더 다듬어짐)
 산출:
   C:\\Users\\cgpar\\elizax_talenx\\js\\ez_signals.js
 멱등. 다시 돌려도 같은 결과.
@@ -20,7 +20,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 SRC_JSON = r"C:\Users\cgpar\elizax_docs\성과관리Agent_신호카탈로그_v0.6.json"
 SRC_XLSX = (
     r"C:\Users\cgpar\OneDrive - 휴먼컨설팅그룹\03 Chapter\05 HR AX\00 제출본"
-    r"\성과평가 AI Agent_AX Consulting_W5_signal catalogue_260730.xlsx"
+    r"\성과평가 AI Agent_AX Consulting_W5_signal catalogue_260803.xlsx"
 )
 OUT_JS = r"C:\Users\cgpar\elizax_talenx\js\ez_signals.js"
 
@@ -55,17 +55,26 @@ def load():
     sigs = json.load(open(SRC_JSON, encoding="utf-8"))
     wb = openpyxl.load_workbook(SRC_XLSX, data_only=True)
     ws = wb["신호 카탈로그"]
+    # 열은 이름으로 찾는다 — 20차에 「이 알림을 부르는 질문」 열이 끼면서 뒤 열이 한 칸씩 밀렸다
+    head = [(c or "").replace("\n", "") if isinstance(c, str) else "" for c in
+            next(ws.iter_rows(min_row=2, max_row=2, values_only=True))]
+    def col(name):
+        for i, h in enumerate(head):
+            if h.startswith(name):
+                return i
+        raise SystemExit("열을 못 찾음: " + name)
+    C_ID, C_AI, C_NOTICE, C_NEED = col("신호 ID"), col("AI 판단 가능"), col("알림(Signal) 문구"), col("필요 데이터")
     rows = list(ws.iter_rows(min_row=3, values_only=True))
     assert len(rows) == len(sigs) == 150, (len(rows), len(sigs))
     fixed = 0
     for r, s in zip(rows, sigs):
-        assert r[1] == s["id"], (r[1], s["id"])
-        notice = (r[7] or "").strip()
+        assert r[C_ID] == s["id"], (r[C_ID], s["id"])
+        notice = (r[C_NOTICE] or "").strip()
         if notice and notice != s["notice"]:
             s["notice"] = notice          # 제출본 문구가 최신
             fixed += 1
-        s["_ai"] = (r[6] or "").replace("\n", " ").strip()   # AI 판단 가능
-        s["_need"] = (r[22] or "").strip()                   # 필요 데이터
+        s["_ai"] = str(r[C_AI] or "").replace("\n", " ").strip()   # AI 판단 가능
+        s["_need"] = str(r[C_NEED] or "").strip()                  # 필요 데이터
     print("notice synced from xlsx:", fixed)
     return sigs
 
@@ -163,8 +172,8 @@ def main():
     sigs = load()
     cards = [slim(s) for s in sigs]
     payload = {
-        "version": "v0.6 / W5 260730",
-        "source": "성과평가 AI Agent_AX Consulting_W5_signal catalogue_260730.xlsx",
+        "version": "v0.6 / W5 260803",
+        "source": "성과평가 AI Agent_AX Consulting_W5_signal catalogue_260803.xlsx",
         "count": len(cards),
         "typeLabel": TYPE_LABEL,
         "actionLabel": ACTION_LABEL,
@@ -174,7 +183,7 @@ def main():
     js = (
         "/* ez_signals.js — 성과관리 Agent 신호 카탈로그 (자동 생성물, 직접 고치지 않는다)\n"
         "   생성기 : scripts/build_signals.py\n"
-        "   원천   : 성과평가 AI Agent_AX Consulting_W5_signal catalogue_260730.xlsx (+ v0.6 JSON)\n"
+        "   원천   : 성과평가 AI Agent_AX Consulting_W5_signal catalogue_260803.xlsx (+ v0.6 JSON)\n"
         "   내용   : 신호 150건 · 근거/기준값/처리 방법/알림 문구. window.EZSignalCatalog 로 노출한다. */\n"
         "window.EZSignalCatalog = " + body + ";\n"
     )

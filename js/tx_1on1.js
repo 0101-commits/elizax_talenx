@@ -261,7 +261,8 @@
       "color:var(--color-on-accent,#fff);background:var(--color-accent,#1F7AF0);transition:filter var(--duration-fast,.12s);}",
       ".ez1o-btn:hover{filter:brightness(1.07);}",
       ".ez1o-btn:disabled{opacity:.5;cursor:default;}",
-      ".ez1o-badge{font-size:10px;font-weight:600;border-radius:var(--radius-full,999px);padding:2px 9px;white-space:nowrap;",
+      /* 글꼴 하한 — css/ez_kit.css §171: 본문 12.5px · 제목 13.5px · 11px 이하 금지 */
+      ".ez1o-badge{font-size:11.5px;font-weight:600;border-radius:var(--radius-full,999px);padding:2px 9px;white-space:nowrap;",
       "color:var(--color-trust,#23408E);background:color-mix(in srgb, var(--color-accent,#17F) 7%, transparent);border:1px solid color-mix(in srgb, var(--color-accent,#17F) 30%, transparent);}",
       ".ez1o-note{font-size:12.5px;color:var(--color-text-secondary,#6B7280);}",
       ".ez1o-linkbtn{cursor:pointer;margin-left:auto;border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-full,999px);",
@@ -343,7 +344,7 @@
       ".ez1o-card.new{border:1.5px solid var(--color-trust-warm,#C2410C);box-shadow:0 0 0 3px color-mix(in srgb, var(--color-trust-warm,#C40) 8%, transparent);}",
       ".ez1o-card.cand{border-style:dashed;opacity:.85;}",
       ".ez1o-card .nm{font-size:12px;font-weight:700;line-height:1.4;}",
-      ".ez1o-st{font-size:9.5px;font-weight:700;border-radius:var(--radius-full,999px);padding:1px 8px;white-space:nowrap;display:inline-block;margin-bottom:5px;}",
+      ".ez1o-st{font-size:11.5px;font-weight:700;border-radius:var(--radius-full,999px);padding:1px 8px;white-space:nowrap;display:inline-block;margin-bottom:5px;}",
       ".ez1o-st.live{color:var(--color-success,#15803D);background:color-mix(in srgb, var(--color-success,#180) 8%, transparent);border:1px solid color-mix(in srgb, var(--color-success,#180) 30%, transparent);}",
       ".ez1o-st.new{color:var(--color-trust-warm,#C2410C);background:color-mix(in srgb, var(--color-trust-warm,#C40) 8%, transparent);border:1px solid color-mix(in srgb, var(--color-trust-warm,#C40) 35%, transparent);}",
       ".ez1o-st.cand{color:var(--color-text-secondary,#6B7280);background:var(--color-background-muted,#F8FAFC);border:1px solid var(--color-border-emphasized,#CBD5E1);}",
@@ -359,11 +360,11 @@
       "font-weight:600;color:var(--color-text-primary,#1D2433);background:var(--color-background-card,#fff);text-align:left;}",
       ".ez1o-chip.on{color:var(--color-on-accent,#fff);background:var(--color-accent,#1F7AF0);border-color:var(--color-accent,#1F7AF0);}",
       ".ez1o-evs{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;}",
-      ".ez1o-ev{font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;border-radius:var(--radius-inner,5px);padding:2px 7px;",
+      ".ez1o-ev{font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;border-radius:var(--radius-inner,5px);padding:2px 7px;",
       "color:var(--color-text-secondary,#6B7280);background:var(--color-background-muted,#F8FAFC);border:1px solid var(--color-border,#E4E7EC);}",
       ".ez1o-ev.lk{cursor:pointer;color:var(--color-accent,#1F7AF0);border-color:color-mix(in srgb, var(--color-accent,#17F) 35%, transparent);}",
       ".ez1o-ev.lk:hover{background:color-mix(in srgb, var(--color-accent,#17F) 8%, transparent);}",
-      ".ez1o-why{flex-basis:100%;font-size:11px;color:var(--color-text-secondary,#6B7280);padding-left:2px;}",
+      ".ez1o-why{flex-basis:100%;font-size:12.5px;color:var(--color-text-secondary,#6B7280);padding-left:2px;}",
       ".ez1o-empty{font-size:12.5px;line-height:1.6;color:var(--color-text-secondary,#6B7280);padding:10px 12px;border-radius:var(--radius-element,8px);",
       "background:var(--color-background-muted,#F8FAFC);border:1px dashed var(--color-border-emphasized,#CBD5E1);}",
       ".ez1o-xag{cursor:pointer;border:none;background:none;font-size:11px;color:var(--color-text-secondary,#9CA3AF);padding:0 4px;}",
@@ -504,7 +505,7 @@
   };
   var SIG_TEXT = {
     leader: {
-      promise: "지난 1:1 약속 확인 — ", blocker: "블로커 해소 지원 — ", stall: "진척 정체 점검 — ",
+      promise: "지난 1:1 약속 확인 — ", blocker: "장애요인 해소 지원 — ", stall: "진척 정체 점검 — ",
       due: "기간 마감 리스크 — ", low: "달성률 점검 — ", feedback: "피드백 후속 코칭 — "
     },
     member: {
@@ -534,14 +535,14 @@
         [{ label: "기록 " + String(prom.at || "").split(" ")[0], id: prom.id, ledgerId: prom.id }]);
     }
 
-    /* (2) 핵심성과 — 블로커 / 진척 정체 / 낮은 달성률 */
+    /* (2) 핵심성과 — 장애요인 / 진척 정체 / 낮은 달성률 */
     krsInvolved(empId).forEach(function (k) {
       var cks = checkinsFor(empId, k.kr_id), last = cks.length ? cks[cks.length - 1] : null;
       var krRef = { label: k.kr_id, id: k.kr_id };
       if (last && String(last.blocker || "").trim()) {
-        /* 블로커 원문은 근거(why)로 — 제목에 붙이면 핵심성과 이름이 잘려 나간다 */
+        /* 장애요인 원문은 근거(why)로 — 제목에 붙이면 핵심성과 이름이 잘려 나간다 */
         push("blocker", k.name,
-          "최근 체크인(" + last.checkin_date + ")에 기록된 블로커: " + last.blocker,
+          "최근 체크인(" + last.checkin_date + ")에 기록된 장애요인: " + last.blocker,
           [krRef, { label: last.checkin_id, id: last.checkin_id }]);
       }
       if (!last) {
@@ -761,7 +762,7 @@
         + " · 달성률 " + k.progress + "%" + (k.target_value ? " / 목표값 " + k.target_value : "")
         + (last ? " · 최근 체크인 " + last.checkin_id + " " + last.checkin_date
                   + " (Δ" + last.progress_delta + "%p, " + (dayDiff(last.checkin_date, today)) + "일 경과"
-                  + (String(last.blocker || "").trim() ? ", 블로커: " + last.blocker : "") + ")"
+                  + (String(last.blocker || "").trim() ? ", 장애요인: " + last.blocker : "") + ")"
                 : " · 체크인 기록 없음"));
     });
     (D().feedbackHistory || []).forEach(function (f) {

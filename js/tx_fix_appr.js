@@ -268,8 +268,14 @@
       // '작성' 버튼 오배치를 제거(열람만). HR 액션은 2차 조정·결과 확정 열.
       selfC = cell(t.name, tn, { status: done ? 'done' : 'delay' });
       firstC = cell(mgr.name, mgrTeam, { status: done ? 'done' : 'info' });
-      secondC = cell(CU.name, F.teamName(CU));
-      resultC = cell(CU.name, F.teamName(CU), { status: done ? 'done' : null, btn: resultBtn });
+      // 2차 등급 조정·결과 확정의 실제 담당은 HR이다. CU.name을 그대로 쓰면 경영진 관점에서
+      // 담당자가 경영진 본인으로 찍혀 「경영진이 등급을 손보는 화면」이 된다 — hrRep()으로 고정.
+      // 경영진은 확정 주체가 아니므로 결과 칸도 열람 버튼만 둔다(조정 등급 입력은 canAdjust로 이미 HR 한정).
+      var hr = hrRep(), hrTeam = F.teamName(hr);
+      secondC = cell(hr.name, hrTeam, { status: 'info' });
+      resultC = cell(hr.name, hrTeam, roleKey() === 'hr'
+        ? { status: done ? 'done' : null, btn: resultBtn }
+        : { status: done ? 'done' : null, btn: done ? { cls: 'ap-btn-o', label: '결과 열람', attr: 'data-txf="result" data-emp="' + t.emp_id + '"' } : null });
     }
     return '<tr data-emp="' + t.emp_id + '">' +
       '<td>' + cell(t.name, tn) + '</td>' +
@@ -849,7 +855,8 @@
     });
     var body = '<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:12px">2차 등급 조정 — 대상자별 최종 조정 등급을 입력합니다.</div>' +
       '<table class="txf-adj"><thead><tr><th>대상자</th><th>소속</th><th>현재</th><th>조정 등급</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
-    TX.modal({ title: '조정 등급 입력', body: body, actions: [
+    /* 4열 표 — 기본 460px 모달이면 셀이 뭉개진다 */
+    TX.modal({ title: '조정 등급 입력', body: body, wide: true, actions: [
       { label: '취소', kind: 'ghost' },
       { label: '저장', kind: 'primary', onClick: function (box) {
         /* F4: 조정 등급 실저장 + 결과 확인 탭 재렌더 반영 */

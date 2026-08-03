@@ -640,6 +640,12 @@
     var insts = signalPending();
     if (insts && insts.length) {
       var live = h("div", "ezx-sig-live");
+      /* 보는 자리를 한 줄로 밝힌다 — 같은 38건을 받는 HR과 경영진이 왜 다른 순서로
+         보는지 사용자가 알 수 있게. 순위 점수·유형 코드는 쓰지 않는다. */
+      if (window.EZPersona && EZPersona.lens) {
+        var lens = EZPersona.lens(roleKey());
+        live.appendChild(h("div", "ezx-sig-lens", { text: lens.title + " · " + lens.hint }));
+      }
       insts.forEach(function (inst) {
         var line = inst && (inst.notice || (inst.sig && inst.sig.notice));
         if (!line) return;
@@ -1798,7 +1804,10 @@
      ③ 견줘 본 기준값 ④ 그 자리에서 할 수 있는 일.
      카드 크롬은 쓰지 않는다(18-2차 「전부 대화로」) — 말풍선 안의 글 계층뿐이다. */
   function buildSigNode(m) {
-    var node = h("div", "ezx-msg ai");
+    /* sig-rule — 이 말풍선은 모델이 아니라 규칙이 만든 것이다. 계통은 `.ezx-msg.ai`
+       그대로 두어야 하위 모듈(근거칩·후속칩·피드백)이 계속 붙는다(1770~1773 주석).
+       클래스 하나만 더해 CSS 로 좌측 레일만 다르게 그린다. */
+    var node = h("div", "ezx-msg ai sig-rule");
     var bubble = h("div", "ezx-bubble");
     var b = null;
     if (window.EZSignalChat && EZSignalChat.answerBlocks) {
@@ -1811,6 +1820,12 @@
       return node;
     }
     var wrap = h("div", "ezx-sig-ans");
+    /* 어디서 온 답인지 한 줄로 밝힌다 — 이 아래는 규칙이 센 것이고, 더 물으면
+       elizax(모델)가 이어서 답한다. 두 층을 사용자가 구분할 수 있어야 한다. */
+    wrap.appendChild(h("div", "sg-src", {
+      text: b.live ? "규칙으로 확인한 결과 · 지금 기록으로 직접 셌어요"
+                   : "규칙으로 확인한 결과 · 아직 기록이 모이는 중이에요"
+    }));
     if (b.off) wrap.appendChild(h("div", "sg-off", { text: b.off }));
     if (b.lead) wrap.appendChild(h("div", "sg-lead", { text: b.lead }));
     if (b.notice) wrap.appendChild(h("div", "sg-notice", { text: b.notice }));
@@ -1834,6 +1849,15 @@
       btn.addEventListener("click", function () { runSigAction(b.id, a.idx); });
       row.appendChild(btn);
     });
+    /* 규칙 → 모델로 넘어가는 자리. 위 근거는 규칙이 센 것이고, 이 단추를 누르면
+       그 근거를 그대로 물려 elizax 가 이어서 답한다(EZSignalChat.arm 으로 주제 고정). */
+    var deep = h("button", "sg-act deep", { type: "button", text: "✦ elizax에게 더 묻기" });
+    deep.addEventListener("click", function () {
+      try { if (window.EZSignalChat && EZSignalChat.arm) EZSignalChat.arm(b.id); } catch (e) { /* 주제 고정 실패는 무해 */ }
+      state.followSig = b.id;
+      sendMessage("이 알림이 왜 지금 떴는지, 무엇부터 하면 좋을지 자세히 알려줘");
+    });
+    row.appendChild(deep);
     var more = h("button", "sg-act ghost", { type: "button", text: "이 알림 자세히" });
     more.addEventListener("click", function () { openCatalog(b.id); });
     row.appendChild(more);
@@ -1967,7 +1991,9 @@
     }
     /* 수치 띠가 붙는 답변 (스트리밍 중에는 띠 없이 말풍선만) */
     if (m.role === "ai" && !m.streaming && rcptOf(m)) return buildReceiptNode(m);
-    var node = h("div", "ezx-msg " + (m.role === "user" ? "user" : m.role === "err" ? "err" : "ai"));
+    var node = h("div", "ezx-msg " + (m.role === "user" ? "user" : m.role === "err" ? "err" : "ai")
+      /* 알림에서 이어진 모델 답 — 규칙이 센 결과 위에 elizax 가 덧붙인 층임을 표시 */
+      + (m.role === "ai" && m._sigId ? " from-sig" : ""));
     var bubble = h("div", "ezx-bubble");
     if (m.role === "user") bubble.textContent = m.text;
     else bubble.innerHTML = mdToHtml(stripCtxMarker(m.text || ""));
@@ -2570,7 +2596,7 @@
     ["org", /(전사|회사\s*전체|등급\s*분포|인원\s*현황|조직\s*현황|본부\s*별)/],
     ["team", /(팀원|우리\s*팀|팀\s*현황|팀\s*상황|부서원|구성원\s*현황)/],
     ["grade", /(등급|고과|평가\s*결과|평가\s*점수|종합\s*점수|내\s*평가|평가는|평가\s*근거)/],
-    ["checkin", /(체크인|주간\s*보고|진행\s*보고|블로커|막힌)/],
+    ["checkin", /(체크인|주간\s*보고|진행\s*보고|장애요인|블로커|막힌)/],
     ["goal", /(목표|okr|\bkr\b|진척|진행\s*상황|달성률|달성도|진도)/i],
     ["feedback", /(피드백|360|다면|상향\s*평가|상향\s*피드백)/],
     ["oneonone", /(1\s*on\s*1|1\s*:\s*1|원온원|면담|일대일)/i],
@@ -2658,7 +2684,7 @@
       md += "- **" + (c.date || "-") + "** · 진척 " + pctOf(c.progress) +
         (c.delta != null ? " (" + (c.delta > 0 ? "+" : "") + c.delta + "%p)" : "") +
         (c.confidence ? " · 확신 " + c.confidence : "") +
-        (c.blocker ? " · 블로커 " + c.blocker : "") +
+        (c.blocker ? " · 장애요인 " + c.blocker : "") +
         (c.comment ? " — " + c.comment : "") + "\n";
     });
     return {
@@ -2668,7 +2694,7 @@
         metrics: [
           { k: "최근 체크인", v: cs.length + "건" },
           { k: "마지막", v: cs[0].date || "-" },
-          { k: "블로커", v: blockers.length + "건" }
+          { k: "장애요인", v: blockers.length + "건" }
         ],
         srcs: [offSrc("erp", "체크인 원장"), offSrc("talenx", "talenx KR 연결")]
       })
@@ -2728,7 +2754,7 @@
         (m.last_checkin || "-") + " | " + (m.grade_draft || "비노출") + " |\n";
     });
     if (blk.length) {
-      md += "\n블로커가 보고된 팀원 " + blk.length + "명: " + blk.map(function (m) { return m.name + "(" + m.blocker + ")"; }).join(", ") + "\n";
+      md += "\n장애요인가 보고된 팀원 " + blk.length + "명: " + blk.map(function (m) { return m.name + "(" + m.blocker + ")"; }).join(", ") + "\n";
     }
     return {
       text: md,
@@ -2737,7 +2763,7 @@
         metrics: [
           { k: "팀원", v: rows.length + "명" },
           { k: "평균 진척", v: (avg == null ? "-" : avg + "%") },
-          { k: "블로커", v: blk.length + "명" }
+          { k: "장애요인", v: blk.length + "명" }
         ],
         srcs: [offSrc("talenx", "talenx 팀 목표"), offSrc("erp", "체크인 대조"), offSrc("rule", "열람 규칙 v3.1")]
       })
@@ -3122,7 +3148,7 @@
       text: "AI 미연결 상태입니다. 이 질문은 연결 후 답할 수 있습니다.\n\n" +
         "지금 확인 가능한 것\n" +
         "- 내 목표·KR 진척 — \"내 목표 진척 알려줘\"\n" +
-        "- 최근 체크인·블로커 — \"최근 체크인 보여줘\"\n" +
+        "- 최근 체크인·장애요인 — \"최근 체크인 보여줘\"\n" +
         "- 평가 등급과 산출 근거 — \"내 등급 근거가 뭐야\"\n" +
         "- 팀 현황 / 전사 등급 분포 — 조직장·HR 권한\n" +
         "- 직무 기준·기대 역량 — \"내 직무 기준 알려줘\"\n" +

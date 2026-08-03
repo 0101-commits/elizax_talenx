@@ -297,7 +297,9 @@
       '#s-perf .txf-md .nt{font-size:13.5px;color:var(--ink-2);line-height:1.6;background:var(--soft);border-radius:8px;padding:14px 16px}',
       '#s-perf .txf-md .ai{display:flex;gap:9px;align-items:center;padding:8px 0;font-size:13.5px;color:var(--ink-2)}',
       '#s-perf .txf-md .ai .bx{width:16px;height:16px;border:1.5px solid var(--line);border-radius:4px;flex:none}',
-      '#s-perf .mt-main.txf-open{align-items:flex-start;justify-content:flex-start;color:var(--ink);padding:26px 30px}',
+      /* 세로로 쌓는다 — flex 행이면 elizax 바·아젠다 패널·미팅 상세가 셋으로 갈려 각각 좁아진다
+         (아젠다 선택 화면이 260px로 찌그러지던 원인). 블록이면 셋 다 본문 폭을 그대로 쓴다. */
+      '#s-perf .mt-main.txf-open{display:block;color:var(--ink);padding:26px 30px}',
       /* --- fix 13~16: clickable goal rows · 목표 상세 · 타임라인 · 카드 설정 --- */
       '#s-perf .grow[data-oid]{cursor:pointer}',
       '#s-perf .grow[data-oid]:hover{background:var(--soft)}',
@@ -539,7 +541,9 @@
     function buildGoalPage() {
       goalPage.innerHTML =
         '<div class="perf-head"><h2>목표 현황</h2><div class="btns">'
-        + '<button class="ghost-btn" data-txf="map">목표 맵</button>'
+        /* 목표 맵은 전 조직 목표를 펼쳐 보는 창구다 — renderGoalBody가 조직원을 본인 범위로
+           막아 둔 것을 이 버튼 하나가 우회한다. 조직원에게는 진입점을 내지 않는다. */
+        + (roleKey() === 'member' ? '' : '<button class="ghost-btn" data-txf="map">목표 맵</button>')
         + '<button class="ghost-btn" data-txf="weight">목표 가중치 설정</button>'
         + '<button class="btn-blue" data-txf="new">목표 생성</button></div></div>'
         + '<div class="pilltabs">'
@@ -558,40 +562,67 @@
     if (goalPage) buildGoalPage();
 
     /* ============================================================= *
-     *  피드백 (data-p=1) — patch in place (fix 9)                    *
+     *  피드백 (data-p=1) — 전면 재생성                               *
+     *  in-place 패치는 index.html의 정적 카드(권나정·안효·최인기 등   *
+     *  남이 받은 피드백 실명+원문)를 지우지 못했다. tx_hydrate는      *
+     *  demoSubjects에 EMP-0078만 있어 조직장·HR·경영진에서는 손대지   *
+     *  않고 빠지므로, 역할을 바꾸면 타인의 피드백 원문이 그대로 남는다.*
+     *  그래서 카드를 통째로 버리고 내가 받은 것만 다시 그린다.        *
      * ============================================================= */
     (function patchFeedback() {
       var page = sec.querySelector('.subpage[data-p="1"]');
       if (!page) return;
-      var goalTitles = objs.map(function (o) { return o.title; });
-      var senders = ['홍예준', '최우진', '성도현', '김중수', '김수민', '이해영'];
-      var cards = page.querySelectorAll('.fb-card');
-      cards.forEach(function (card, i) {
-        // avatar → deterministic initial circle
-        var av = card.querySelector('.fb-top .ava');
-        var nameEl = card.querySelector('.fb-ttl b');
-        var who = nameEl ? nameEl.textContent.trim() : ('U' + i);
-        if (av && F.avatar) {
-          var tmp = document.createElement('div'); tmp.innerHTML = F.avatar(who, 26);
-          var a2 = tmp.firstChild; a2.className = 'ava'; av.replaceWith(a2);
-        }
-        // vary related goal (every 3rd card gets a distinct real goal; others none)
-        var rel = card.querySelector('.rel-goal');
-        if (i % 3 === 2) {
-          var t = goalTitles[i % goalTitles.length];
-          if (!rel) {
-            rel = document.createElement('div'); rel.className = 'rel-goal';
-            var body = card.querySelector('.fb-body');
-            if (body) body.after(rel);
+      /* feedbackLog 필드는 log_id·to_emp·from_emp·kind·draft_at·sent_at·read_at·status·char_len뿐 —
+         본문 텍스트가 없다. 없는 본문을 지어내지 않고 종류·분량·읽음 상태만 싣는다. */
+      var mine = (D.feedbackLog || [])
+        .filter(function (f) { return f.to_emp === CU.emp_id; })
+        .sort(function (a, b) { return String(b.sent_at || '').localeCompare(String(a.sent_at || '')); });
+      function fbDate(iso) {
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return '날짜 미상';
+        var h = d.getHours() % 12 || 12;
+        return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 '
+          + (d.getHours() < 12 ? '오전 ' : '오후 ') + h + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+      }
+      /* 본문이 있는 자리에는 본문을 쓴다 — demoSubjects 13명에는 동료 리뷰의 실제 코멘트
+         (strength_comments·dev_comments)가 들어 있다. 보낸 사람이 겹치는 건에 그 문장을 싣고,
+         없으면 위 주석대로 종류·분량만 쓴다. 익명 리뷰면 보낸 사람 이름을 내지 않는다. */
+      var prByReviewer = {};
+      (function () {
+        var ds = (D.demoSubjects || []).filter(function (s) { return s.emp_id === CU.emp_id; })[0];
+        ((ds && ds.peerReviews) || []).forEach(function (pr) {
+          var parts = [];
+          [pr.strength_comments, pr.dev_comments].forEach(function (m) {
+            Object.keys(m || {}).forEach(function (k) { if (m[k]) parts.push(m[k]); });
+          });
+          if (pr.overall_comment) parts.unshift(pr.overall_comment);
+          if (parts.length && pr.reviewer_id) {
+            prByReviewer[pr.reviewer_id] = { text: parts.join(' '), anon: !!pr.anonymous };
           }
-          rel.innerHTML = '<span class="lb">관련 목표</span>' + esc(t);
-        } else if (rel) {
-          rel.remove();   // omit when none instead of repeating the same goal
-        }
-        // vary sender
-        var from = card.querySelector('.fb-from b');
-        if (from && i > 0) from.textContent = senders[i % senders.length];
-      });
+        });
+      })();
+      var html = mine.map(function (f) {
+        /* from_emp가 없는 건(174건 중 3건)은 발신자를 지어내지 않고 익명으로 둔다 */
+        var pr = f.from_emp ? prByReviewer[f.from_emp] : null;
+        var from = (pr && pr.anon) ? '익명' : (f.from_emp ? empName(f.from_emp) : '익명');
+        var body = pr ? esc(pr.text)
+          : (esc(f.kind || '피드백') + ' · 본문 ' + (f.char_len || 0) + '자'
+             + (f.status === 'read' ? ' · 읽음' : ' · 읽지 않음'));
+        return '<div class="fb-card"><div class="fb-top">'
+          + (F.avatar ? F.avatar(from, 26) : '<span class="ava"></span>')
+          + '<div class="fb-ttl"><b>' + esc(cuEmp.name || '나') + '</b> 님이 <b>' + esc(f.kind || '피드백') + '</b> 피드백을 받았습니다.</div>'
+          + '<span class="fb-dots">⋮</span></div>'
+          + '<div class="fb-body">' + body + '</div>'
+          + '<div class="fb-from"><b>' + esc(from) + '</b> 님이 보냄</div>'
+          + '<div class="fb-foot"><span>♡ 좋아요 0</span><span>💬 댓글 0</span>'
+          + '<span>🕑 ' + esc(fbDate(f.sent_at)) + '</span></div></div>';
+      }).join('');
+      /* 「더 보기」도 지운다 — 받은 건 전부 그렸으므로 더 볼 것이 없다 */
+      page.querySelectorAll('.fb-card, .fb-more').forEach(function (n) { n.remove(); });
+      page.insertAdjacentHTML('beforeend', html
+        || '<div class="fb-card"><div class="fb-body" style="color:var(--ink-3);margin:0">아직 받은 피드백이 없어요.</div></div>');
+      var subB = page.querySelector('.ph .sub b');
+      if (subB) subB.textContent = mine.length + '개';
     })();
 
     /* fix 14: 피드백 카드 클릭 → 상세 drawer */
@@ -628,7 +659,7 @@
         var b = e.target.closest('.txf-rx');
         if (b) { var n = b.querySelector('i'); if (n) n.textContent = parseInt(n.textContent, 10) + 1; }
       });
-      if (TX.drawer) TX.drawer({ title: '피드백 상세', subtitle: sender + ' 님이 보낸 피드백', body: el, width: 420 });
+      if (TX.drawer) TX.drawer({ title: '피드백 상세', subtitle: sender + ' 님이 보낸 피드백', body: el, width: '420px' });
       else if (TX.modal) TX.modal({ title: '피드백 상세', body: el, actions: [{ label: '닫기', kind: 'ghost' }] });
     }
 
@@ -668,10 +699,20 @@
 
     function meetingDetailHTML(m) {
       var e = m.emp;
-      return '<div class="txf-md">'
+      var head = '<div class="txf-md">'
         + '<div class="mdh">' + (F.avatar ? F.avatar(e.name, 44) : '')
         + '<div><div class="nm">' + esc(F.nameTeam ? F.nameTeam(e) : e.name) + '</div>'
-        + '<div class="dt">' + esc(m.date) + ' · 1:1 미팅</div></div></div>'
+        + '<div class="dt">' + esc(m.date) + ' · 1:1 미팅</div></div></div>';
+      /* tx_policy의 oneonone 행은 조직장·HR에게 「확정 요약만」을 허용한다 —
+         남의 1:1 안건·공유 노트·액션 아이템 원문은 당사자 몫이므로 여기서 내지 않는다. */
+      if (m.summaryOnly) {
+        return head
+          + '<h4>확정 요약</h4><div class="nt">' + esc(m.summary) + '</div>'
+          + '<div class="txf-krwhy" style="margin-top:10px">열람 범위 — 이 1:1은 <b>확정 요약</b>까지만 공개됩니다. '
+          + '안건·공유 노트·액션 아이템 원문은 당사자와 직접 조직장에게만 보입니다.</div>'
+          + '</div>';
+      }
+      return head
         + '<h4>안건</h4>'
         + m.agenda.map(function (a, i) { return '<div class="ag"><span class="no">' + (i + 1) + '</span><span>' + esc(a) + '</span></div>'; }).join('')
         + '<h4>공유 노트</h4><div class="nt">' + esc(m.notes) + '</div>'
@@ -694,9 +735,17 @@
     /* fix 15: 1:1 미팅 segtabs — tab별 대체 리스트 */
     var curMt = meetings;                 // list backing the visible tab
     var mtTabs = [meetings, null, null];
-    function makeAltMeeting(e, date, seed) {
+    function makeAltMeeting(e, date, seed, summaryOnly) {
       var eobj = (objByOwner[e.emp_id] || [])[0];
       var c = (chkByEmp[e.emp_id] || [])[0] || {};
+      /* 열람 권한으로 보는 1:1은 확정 요약 한 줄뿐 — 요약은 목표 제목·후속 액션 유무 같은
+         공개된 성과 정보로만 만들고, 체크인 코멘트(사적 노트)는 끌어오지 않는다. */
+      if (summaryOnly) {
+        return {
+          emp: e, date: date, flags: seed % 3, comments: (seed + 1) % 2, summaryOnly: true,
+          summary: (eobj ? eobj.title : '분기 핵심 과제') + ' 진행 점검 — 후속 액션 합의 완료'
+        };
+      }
       return {
         emp: e, date: date, flags: seed % 3, comments: (seed + 1) % 2,
         agenda: [
@@ -711,6 +760,8 @@
     function tabMeetings(idx) {
       // A: 조직원은 본인 1:1(idx 0)만 — 관리자(idx 1)·열람가능(idx 2) 탭은 동료의 사적 1:1 노트라 비노출
       if (roleKey() === 'member' && idx !== 0) return [];
+      // tx_policy의 oneonone 행에서 경영진은 「열람 불가」 — 열람 탭에 볼 대상이 없다
+      if (idx === 2 && roleKey() === 'exec') return [];
       if (mtTabs[idx]) return mtTabs[idx];
       /* 내가 관리자인 1:1은 직속 부하 전원 — 좌측 드롭다운은 전원을 보여주는데 여기서
          3명으로 잘라 두면 드롭다운에서 고른 사람의 카드가 없는 일이 생긴다 */
@@ -721,7 +772,7 @@
       var dates = idx === 1
         ? ['7월 2일 목요일 오전 11:00', '6월 24일 수요일 오후 3:30', '6월 11일 목요일 오전 9:30']
         : ['6월 30일 화요일 오후 4:00', '6월 18일 목요일 오전 10:30', '6월 3일 수요일 오후 2:00'];
-      mtTabs[idx] = pool.map(function (e, i) { return makeAltMeeting(e, dates[i] || dates[0], idx * 10 + i); });
+      mtTabs[idx] = pool.map(function (e, i) { return makeAltMeeting(e, dates[i] || dates[0], idx * 10 + i, idx === 2); });
       return mtTabs[idx];
     }
     /* .mt-main을 통째로 갈아엎으면 tx_1on1이 여기 맨 앞에 꽂아 둔 elizax 녹음·요약 바와
@@ -902,9 +953,12 @@
           + '<div class="ln"><span style="color:var(--ink-3)">핵심 성과</span><span class="vv">' + ks + '개</span></div></div>';
       }).join('');
     }
-    function treeHTML(orgId) {
+    function treeHTML(orgId, noKids) {
       var o = orgById[orgId]; if (!o) return '';
-      var kids = orgs.filter(function (x) { return x.parent_id === orgId; });
+      /* noKids: 조직원 관점 — 루트를 자기 소속으로 옮기는 것만으로는 부족하다.
+         EMP-0078의 소속(Package BG)은 하위 조직이 10개라 루트만 바꾸면 사실상 전사가 펼쳐진다.
+         그래서 하위 조직을 아예 접어 자기 조직 한 칸만 남긴다. */
+      var kids = noKids ? [] : orgs.filter(function (x) { return x.parent_id === orgId; });
       var expanded = ancestorOrgs(cuEmp.org_id).indexOf(orgId) >= 0;
       var g = kids.length ? (expanded ? '⊖' : '⊕') : '·';
       return '<div class="txf-tnode" data-node="' + orgId + '">'
@@ -918,7 +972,14 @@
       mapOv.className = 'txf-ov'; mapOv.setAttribute('data-txf-ov', 'map');
       var periods = {}; objs.forEach(function (o) { if (o.period) periods[o.period] = 1; });
       var periodOpts = '<option value="">주기 선택</option>' + Object.keys(periods).map(function (p) { return '<option value="' + esc(p) + '">' + esc(p) + '</option>'; }).join('');
-      var roots = orgs.filter(function (o) { return !o.parent_id; });
+      /* 버튼을 숨겨도 목표 생성 화면의 'new-map'으로 이 오버레이가 열린다 —
+         조직원은 트리 루트를 자기 소속 조직으로 좁혀 전사 목표가 펼쳐지지 않게 한다. */
+      var isMember = roleKey() === 'member';
+      var roots = isMember
+        ? [orgById[cuEmp.org_id]].filter(Boolean)
+        : orgs.filter(function (o) { return !o.parent_id; });
+      /* 구성원 필터도 같은 이유로 조직원은 자기 조직 인원까지만 (전사 40명 실명 노출 차단) */
+      var mapEmps = isMember ? (empByOrg[cuEmp.org_id] || []) : emps.slice(0, 40);
       mapOv.innerHTML =
         '<div class="txf-ovhead"><button class="bk" data-txf="map-close">←</button><h2>목표 맵</h2></div>'
         + '<div class="txf-ovbody"><div class="txf-map">'
@@ -926,10 +987,10 @@
         + '<button class="btn-blue" style="width:100%" data-txf="map-close">목표 현황으로 이동</button>'
         + '<div class="fl">주기</div><select data-txf="map-period">' + periodOpts + '</select>'
         + '<div class="fl">조직</div><div class="selbox" data-txf="map-orgname">' + esc((orgById[mapSel] || {}).name || '전체') + '</div>'
-        + '<div class="fl">구성원</div><select class="selbox"><option>구성원 선택</option>' + emps.slice(0, 40).map(function (e) { return '<option>' + esc(e.name) + '</option>'; }).join('') + '</select>'
+        + '<div class="fl">구성원</div><select class="selbox"><option>구성원 선택</option>' + mapEmps.map(function (e) { return '<option>' + esc(e.name) + '</option>'; }).join('') + '</select>'
         + '<label class="txf-ck" style="margin-top:14px"><input type="checkbox" data-txf="map-excl" checked> 마감한 목표 제외</label>'
         + '<div class="fl" style="margin-top:16px">조직도</div>'
-        + '<div class="txf-tree">' + roots.map(function (r) { return treeHTML(r.org_id); }).join('') + '</div></div>'
+        + '<div class="txf-tree">' + roots.map(function (r) { return treeHTML(r.org_id, isMember); }).join('') + '</div></div>'
         + '<div class="txf-cards" data-txf="map-cards">' + mapCardsHTML() + '</div>'
         + '</div></div>';
       sec.appendChild(mapOv);

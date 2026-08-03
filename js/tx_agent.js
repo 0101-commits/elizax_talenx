@@ -1267,7 +1267,7 @@
     }
     if (t.gap == null) parts.push("체크인 기록이 아직 한 건도 없습니다");
     else if (t.gap >= SIG.GAP_WARN) parts.push("마지막 체크인이 <b>" + t.gap + "일</b> 전(" + esc(t.last.checkin_date) + ")입니다");
-    if (bl) parts.push("직전 체크인에 「" + esc(bl.blocker) + "」가 블로커로 남아 있습니다");
+    if (bl) parts.push("직전 체크인에 「" + esc(bl.blocker) + "」가 장애요인으로 남아 있습니다");
     if (!parts.length) return null;
     return parts;
   }
@@ -1294,8 +1294,8 @@
         f.gapped.length ? "체크인 공백 " + f.gapped.length + "명" : "전원 " + SIG.GAP_WARN + "일 이내 기록"],
       ["talenx", "KR 진척 대비 기간 경과 대조",
         f.lag.length ? "진척 지연 " + f.lag.length + "명" : "드리프트 " + SIG.DRIFT_MIN + "%p 이상 없음"],
-      ["rule", "블로커·확신도·진척 하락 기록 확인",
-        "블로커 " + f.blockerCnt + "건 · 낮은 확신 " + f.lowCnt + "건 · 진척 하락 " + f.dropCnt + "건"]
+      ["rule", "장애요인·확신도·진척 하락 기록 확인",
+        "장애요인 " + f.blockerCnt + "건 · 낮은 확신 " + f.lowCnt + "건 · 진척 하락 " + f.dropCnt + "건"]
     ];
     function rowFor(s) {
       var bits = [], cls = "warn";
@@ -1309,9 +1309,9 @@
           (s.worst.drift != null ? " · 기간 경과 " + s.worst.elapsed + "% (−" + s.worst.drift + "%p)" : ""));
         if (s.worst.drift != null && s.worst.drift >= SIG.DRIFT_MIN) cls = "bad";
       } else bits.push("연결된 KR 기록 없음");
-      if (s.blockers.length) bits.push("블로커 " + s.blockers.length + "건");
+      if (s.blockers.length) bits.push("장애요인 " + s.blockers.length + "건");
       var ref = s.last
-        ? refChip("talenx", s.last.checkin_id, (s.last.comment || "") + (s.last.blocker ? " · 블로커: " + s.last.blocker : ""))
+        ? refChip("talenx", s.last.checkin_id, (s.last.comment || "") + (s.last.blocker ? " · 장애요인: " + s.last.blocker : ""))
         : srcChip("talenx", "체크인 기록 없음");
       var krRef = s.worst ? refChip("erp", s.worst.kr_id, s.worst.objective || s.worst.name) : "";
       return '<div class="agh-prow ' + cls + '"><span class="agh-tag">' +
@@ -1357,7 +1357,7 @@
         "대상 = <code>employees.manager_id</code> = " + esc(CU().name) + " 인 직속 <b>" + f.team.length + "명</b><br>" +
         "체크인 공백 = 기준 시점 − 마지막 <code>checkins.checkin_date</code><br>" +
         "드리프트 = 목표 <code>period</code> 경과율 − <code>keyResults.progress</code><br>" +
-        "블로커·확신도·진척 하락 = <code>checkins.blocker / confidence / progress_delta</code> 실카운트 " +
+        "장애요인·확신도·진척 하락 = <code>checkins.blocker / confidence / progress_delta</code> 실카운트 " +
         srcChip("talenx", "체크인·KR 기록") }
     ], "");
     Array.prototype.forEach.call(host.querySelectorAll("[data-sr]"), function (r, i) {
@@ -1397,16 +1397,16 @@
     var d = D(), id = emp && emp.emp_id, out = [];
     if (!id) return out;
     var ki = krIndex(), oi = objIndex();
-    /* 1) 체크인 — 진척 기록·블로커. 레코드 id를 근거 칩에 그대로 노출 */
+    /* 1) 체크인 — 진척 기록·장애요인. 레코드 id를 근거 칩에 그대로 노출 */
     (d.checkins || []).filter(function (c) { return c.emp_id === id; }).forEach(function (c) {
       var kr = ki[c.kr_id], obj = oi[c.objective_id];
       var body = (kr ? "「" + kr.name + "」 " : "") + "진척 " + Math.round(c.progress_snapshot || 0) + "%" +
         (c.progress_delta != null ? " (" + (c.progress_delta > 0 ? "+" : "") + (Math.round(c.progress_delta * 10) / 10) + "%p)" : "") +
         (c.comment ? " — " + c.comment : "");
       out.push({
-        date: c.checkin_date, tag: c.blocker ? "블로커" : "체크인", body: body,
+        date: c.checkin_date, tag: c.blocker ? "장애요인" : "체크인", body: body,
         kind: "erp", src: "체크인 " + (c.checkin_id || ""),
-        sub: c.blocker ? "블로커 · " + c.blocker : (obj ? obj.title : "")
+        sub: c.blocker ? "장애요인 · " + c.blocker : (obj ? obj.title : "")
       });
     });
     /* 2) KR 달성 — 진척 100% 또는 status가 완료인 것만 "달성"으로 부른다 */
@@ -1441,11 +1441,17 @@
         kind: "talenx", src: "피드백 " + (f.fb_id || ""), sub: ""
       });
     });
-    /* 5) 상향 피드백 — 조직장 본인 것만 (응답자 수 실값) */
-    (d.upwardFeedback || []).filter(function (u) { return u.leader_emp_id === id; }).forEach(function (u) {
+    /* 5) 상향 피드백 — 조직장 본인 것만 (응답자 수 실값).
+          응답자가 익명 임계(EZPolicy.ANON_MIN) 미만이면 근거 카드에도 싣지 않는다 —
+          소수 응답은 주제 목록만으로도 누가 썼는지 짐작되기 때문(tx_policy와 같은 규칙). */
+    var UF_MIN = (window.EZPolicy && EZPolicy.ANON_MIN) || 3;
+    (d.upwardFeedback || []).filter(function (u) {
+      return u.leader_emp_id === id && (u.respondents || 0) >= UF_MIN;
+    }).forEach(function (u) {
       out.push({
         date: u.period, tag: "상향", body: "상향 피드백 응답 " + (u.respondents || 0) + "명 · 주제 " +
-          ((u.themes || []).slice(0, 3).join(" / ") || "-"),
+          /* themes는 [{label,count}] 객체 배열 — 그대로 join하면 [object Object]가 찍힌다 */
+          ((u.themes || []).slice(0, 3).map(function (t) { return t.label || t; }).join(" / ") || "-"),
         kind: "talenx", src: "상향 " + (u.uf_id || ""), sub: ""
       });
     });
@@ -1551,7 +1557,7 @@
       (ck.checkins || []).forEach(function (c) {
         if (!out.blocker && c.blocker) out.blocker = { d: c.date, b: c.blocker };
       });
-      if (out.blocker) out.facts.push({ t: out.blocker.d + " 체크인 블로커 「" + out.blocker.b + "」", kind: "erp", lab: "체크인 기록" });
+      if (out.blocker) out.facts.push({ t: out.blocker.d + " 체크인 장애요인 「" + out.blocker.b + "」", kind: "erp", lab: "체크인 기록" });
       else if (ck.count) out.facts.push({ t: "최근 체크인 " + ck.count + "건 기록됨", kind: "erp", lab: "체크인 기록" });
 
       var lg = EZTools.run("get_context_ledger", { emp_id: id, limit: 3 }) || {};
@@ -1594,7 +1600,7 @@
     var s = "";
     /* 인정 — 조회된 최고 진척 목표가 있을 때만 */
     if (best) s += "「" + esc(best.t) + "」는 진척 " + best.p + "%로 계획대로 밀고 있습니다<b>(인정)</b>. ";
-    /* 상황·행동 — 조회된 사실(저진척 목표 / 체크인 블로커)만 조합 */
+    /* 상황·행동 — 조회된 사실(저진척 목표 / 체크인 장애요인)만 조합 */
     var sit = "";
     if (low && (!best || low.t !== best.t)) {
       sit = (best ? "다만 " : "") + "「" + esc(low.t) + "」는 진척 " + low.p + "%에 머물러 있고, " +
@@ -2491,7 +2497,7 @@
         (w.elapsed != null ? "(" + (w.period || "") + " 기간 경과 " + w.elapsed + "% 대비 " + (w.drift > 0 ? "−" + w.drift : "+" + Math.abs(w.drift)) + "%p)" : ""));
     }
     bits.push("점검 주기 동안 체크인 " + s.count + "건을 기록");
-    if (s.blockers.length) bits.push("블로커 " + s.blockers.length + "건을 조기에 공유(" + s.blockers[0].blocker + " 등)");
+    if (s.blockers.length) bits.push("장애요인 " + s.blockers.length + "건을 조기에 공유(" + s.blockers[0].blocker + " 등)");
     if (s.lows.length) bits.push("확신도 '낮음' " + s.lows.length + "건을 스스로 표시해 리스크를 선공유");
     return bits.join("하고, ") + "함";
   }

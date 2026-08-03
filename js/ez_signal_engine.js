@@ -1222,11 +1222,17 @@
       var inst = instance(s.id, rk);
       if (inst && inst.hit) out.push(inst);
     });
-    /* 수신 순서 = 구성원 → 팀장 → 상위 조직장 → HR·경영진 (§1) */
-    out.sort(function (a, b) {
-      if ((a.actorNo || 0) !== (b.actorNo || 0)) return (a.actorNo || 0) - (b.actorNo || 0);
-      return (a.stageNo || 0) - (b.stageNo || 0);
-    });
+    /* 보는 자리에 맞춰 먼저 짚을 것을 앞으로 — 경영진은 목표 정렬, HR은 평가 편차,
+       조직원은 체크인 시점, 조직장은 1:1 거리. EZPersona 가 없으면 예전 수신 순서
+       (구성원 → 팀장 → 상위 조직장 → HR·경영진, §1)를 그대로 쓴다. */
+    if (window.EZPersona && EZPersona.compare) {
+      out.sort(function (a, b) { return EZPersona.compare(a, b, rk); });
+    } else {
+      out.sort(function (a, b) {
+        if ((a.actorNo || 0) !== (b.actorNo || 0)) return (a.actorNo || 0) - (b.actorNo || 0);
+        return (a.stageNo || 0) - (b.stageNo || 0);
+      });
+    }
     return out;
   }
   function pending(role) {

@@ -295,6 +295,33 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 
 칩을 누를 때 주제를 물려준다(`state.followSig`) — 칩 문장만 보내면 낱말이 겹치는 다른 신호로 튀었다. 이어 물은 말에는 `EZSignalChat.followAnswer` 가 카탈로그의 **다른 칸**으로 답한다(어떻게 고치지 → 처리 초안 / 무슨 기록 → 살펴본 자료 / 되돌려 → 되돌리는 법). 같은 답을 두 번 쓰지 않는다.
 
+### 21차: 주체별 렌즈 · 규칙→AI 두 층 · HR 현장 용어 (`docs/PLAN-21-performance-persona-signal.md`)
+
+원천 = AI 컨퍼런스 시놉시스 v2 **§2.3 elizax Performance — 놓치던 신호까지 챙기는 AI**.
+
+**① 3 페르소나가 코드에 없었다.** 카탈로그 `roles` 는 세 갈래(`member` 40 · `leader` 72 · `hr`+`exec` 38)뿐이고 `hr` 만 또는 `exec` 만 가진 신호는 0건이다. 엔진의 유일한 하드 필터가 `roles.indexOf(rk)` 라서 **HR과 경영진이 같은 38건을 같은 순서로** 받았고, 정렬은 카탈로그 나열 순서(`actorNo → stageNo → no`)였다 — 유형(T1~T5)은 정렬에 쓰이지 않았다.
+
+`js/ez_signal_persona.js` 신설(`window.EZPersona`). 신호를 **감추지 않고 순서를 바꾼다** — 걸리는 자리는 `ez_signal_engine.js` `live()`·`pending()` 정렬 **한 곳**이라 알림 탭·FAB 배지·선제 팝업·추천 질문이 전부 따라온다. 모듈이 없으면 예전 순서로 그대로 돈다.
+
+| 관점 | 렌즈 | 먼저 올라오는 것 |
+|---|---|---|
+| 조직원 | 내 차례인 일 | 체크인 시점 · 상위 목표 변경 (T1·T5) |
+| 조직장 | 1:1 전에 볼 것 | 워크로드·진척·장애요인·확신도 (T2·중간점검) |
+| HR | 공정성 먼저 | 등급 분포·상한 초과·근거 부실·제출률 (T3·평가) |
+| 경영진 | 목표 정렬 먼저 | 조직 간 미연결·전략 연결·상하위 진척 괴리 (T4) |
+
+계기판 `node scripts/check_signal_persona.js` — HR·경영진 상위 5건 겹침 0건, 각 렌즈가 제 계열만 올리는지 검사(실패 시 exit 1). 알림 탭 머리에 렌즈 한 줄(`.ezx-sig-lens`)을 둬 왜 이 순서인지 밝힌다. 순위 점수·유형 코드는 화면에 쓰지 않는다.
+
+**② 규칙이 센 답과 elizax 가 이어서 한 답을 가른다.** 두 층이 한 대화에 쌓이는데 구분 표시가 없었다. 계통(`.ezx-msg.ai > .ezx-bubble`)은 하위 모듈 호환 때문에 통일해 둔 것이라 **클래스만** 더한다 — 규칙 답 `.sig-rule`(회색 레일 + 「규칙으로 확인한 결과 · 지금 기록으로 직접 셌어요」 한 줄), 알림에서 이어진 모델 답 `.from-sig`(액션 컬러 레일). 실계산이 안 되는 신호는 「아직 기록이 모이는 중이에요」로 바뀐다.
+
+넘어가는 자리는 단추다 — 신호 답변의 `✦ elizax에게 더 묻기`. `EZSignalChat.arm(id)` 로 주제를 못 박고 보내므로 그 알림의 근거가 payload 에 실린다(「더 묻기」 문장만으로는 낱말로 어느 알림인지 알 수 없다). 곁들여, `followAnswer` 가 `scrub()` 만 거쳐 `{{팀원명}}` 이 화면에 나가던 것을 고쳤다 — `phrase()` + **엔진이 알림 문구에 박아 둔 이름을 초안에도 물려 준다**.
+
+**③ HR 현장 용어로 되돌렸다.** "안 붙은" → "정렬되지 않은", "걸림돌" → "장애요인", "제자리" → "진척 증감이 연속 0", "목표 주인" → "목표 소유자", "눈금" → "등급 기준", "기록"(체크인) → "체크인" … 질문 **136건** 재작성 + 카탈로그 본문 **117건** 교정. 말투(반말 요청체)는 유지하고 용어만 바꿨다. 길이 18~36자·중복 0·라우팅 어긋남 0 유지, `HINT` **59건 보강**(옛 낱말도 남겨 둬 예전 말로 물어도 열린다). talenx 화면의 **「블로커」 25곳 → 「장애요인」**(데이터 필드 `checkins.blocker` 는 그대로). 제출본 xlsx 도 제품과 일치시키고 빌드 원천을 **260803** 으로 옮겼다 — 열은 번호가 아니라 **이름으로** 찾는다(20차에 「부르는 질문」 열이 끼면서 뒤 열이 한 칸 밀려 있었다).
+
+**④ 화면 결함.** 「1:1 준비 · 아젠다 선택」이 좌우로 찌그러진 근본 원인은 `#s-perf .mt-main.txf-open` 이 `display:flex`(행)이라 elizax 바·아젠다 패널·미팅 상세가 **셋으로 갈려 각 261px** 였던 것 — `display:block` 으로 셋 다 **742px**. 같은 화면 근거 칩·배지의 글꼴 하한 위반 4종(10px·9.5px) 상향, 좁은 창에서 1:1 사이드(320px 고정)를 아래로 접기, 「조정 등급 입력」 4열 표 `wide:true`, 드로어 `width: 420`(단위 없는 무효 CSS) → `'420px'`.
+
+**⑤ 역할 부적합 연결.** 조직원이 상사를 평가하는 화면은 없었다(적합). 대신 다른 어긋남 6건을 고쳤다 — 피드백 탭에 남던 **타인 피드백 원문**(정적 마크업 → `feedbackLog` 내 것만 재생성), 360 카드의 **평가자 실명 상시 노출**(비공개면 익명), 상향 피드백의 **익명 임계 우회**(응답 2명 노출) + `[object Object]` 출력, 경영진 화면의 평가 담당자가 **본인 이름**으로 뜨던 것, 조직원도 열 수 있던 **목표 맵 전사 노출**, 「내가 열람할 수 있는 1:1」 탭의 **동료 대화 원문**(정책은 확정 요약만).
+
 ## 파일·폴더 구조
 
 ```
@@ -311,11 +338,13 @@ elizax_talenx/
 │   ├── build_signals.py           신호 카탈로그(xlsx+JSON) → js/ez_signals.js 생성 (재실행 가능·멱등)
 │   ├── check_signal_questions.js  질문 150건 회귀 검사 — 빠짐·중복·라우팅·길이 (node)
 │   ├── check_signal_thresholds.js 판정 기준값이 카탈로그 값과 같은지 검사 (node)
+│   ├── check_signal_persona.js    주체별 렌즈가 서로 다른 것을 먼저 올리는지 검사 (node)
 │   └── enrich_assets/             job_profiles_new.json — 신규 직무 프로파일 병합 소스
 ├── docs/
 │   ├── PLAN-11-walkthrough-upgrade.md   11차(plan11) 워크스루 피드백 6건 기획서
 │   ├── PLAN-18-signal-alert-card.md     18차 신호 계층 계약서 (18-2차 「카드 폐기, 전부 대화로」 개정 포함)
 │   ├── PLAN-19-elizax-connective-tissue.md  19차 계약서 — 연결성 복구·사람 말·인라인 (피드백 12건)
+│   ├── PLAN-21-performance-persona-signal.md 21차 계약서 — 주체별 렌즈·규칙→AI 두 층·HR 용어·부적합 연결
 │   ├── 성과관리Agent_신호근거행동_기획_260728.md   휴넬 내장 Agent 신호·근거·행동 설계 문법 (기준 문서)
 │   ├── 성과관리Agent_신호카탈로그.xlsx           위 문법으로 채운 신호 목록 (v0.3 · 옛 산출물)
 │   └── 성과관리Agent_신호카탈로그_v0.7_질문열.xlsx  W5 제출본 + 「이 알림을 부르는 질문」 열 150건 (20차)
@@ -344,7 +373,8 @@ elizax_talenx/
 | `tx_ai_tools.js` | 에이전트 도구 8종 — TALENX_DATA 실조회 + 화면 전환 (`window.EZTools`) |
 | `tx_nav.js` | 자연어 내비게이션 intent 라우터 (`window.EZNav`) — 질문 가드 `askIntent` 포함. **질문에는 이동하지 않는다** |
 | `ez_signals.js` | 신호 카탈로그 150건 (`window.EZSignalCatalog`) — `scripts/build_signals.py` 자동 생성물, 직접 수정 금지 |
-| `ez_signal_engine.js` | 신호 실데이터 평가기 (`window.EZSignalEngine`) — 실계산 15건 / 열람 135건 |
+| `ez_signal_engine.js` | 신호 실데이터 평가기 (`window.EZSignalEngine`) — 판정 함수가 등록된 것만 실계산 |
+| `ez_signal_persona.js` | 주체별 렌즈 (`window.EZPersona`) — 같은 목록을 그 자리에서 먼저 볼 순서로 정렬. 엔진 `live()`·`pending()` 한 곳에 걸린다 |
 | `ez_signal_chat.js` | 신호 → 대화 (`window.EZSignalChat`) — 150건 질문 사전·자연문 답변·금지 표현 정제 |
 | `tx_signal_actions.js` | 신호 처리 배선 (`window.EZSignalAct`) — 초안·수정·알려주기·면담·화면·승인을 기존 화면에 연결 |
 | `ez_source_map.js` | 출처 → 화면 이름 사전 + 딥링크 (`window.EZSource`). 모르는 출처는 빈 문자열 = 화면에 안 그린다 |
