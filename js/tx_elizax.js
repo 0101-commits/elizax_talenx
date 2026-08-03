@@ -2280,14 +2280,22 @@
        사용자에게는 아무것도 알아보지 않고 뱉은 말로 보였다. 이제는
        확인 카드 → (스텝을 다 세운 뒤) 신호 답 → 이어가는 말 순서로 간다.
        카드가 세우는 줄은 그 신호가 실제로 읽은 기록이다(sigWorkPlan). */
-    var workMsg = agentReady ? pushMessage(makeLiveWorkMsg())
+    /* 인사·감사에는 확인 카드를 붙이지 않는다 (20-7차) — 「고마워」에 기록 네 건을
+       뒤졌다고 말하는 것은 안 한 일을 했다고 하는 것이다. */
+    var chatty = /^(thanks|greet)$/.test(String(offlineIntent(userText) || ""));
+    var workMsg = chatty ? null
+      : agentReady ? pushMessage(makeLiveWorkMsg())
       : sigId ? pushMessage(makeSigWorkMsg(sigId, state.perspective))
       : (aiMode() !== "offline") ? pushMessage(makeWorkMsg(state.perspective)) : null;
     /* 20-7차 — 사람은 먼저 답을 듣고 그 다음에 근거를 본다. 그래서 순서는
        확인 카드 → **말로 하는 답** → 알림 카드(문구·근거·기준값·처리 단추)다.
        예전에는 알림 카드를 먼저 앉히고 뒤에 한 줄을 붙여서, 물어본 사람이
        답을 듣기 전에 근거 표부터 읽어야 했다. */
-    var sigNew = !!(sigId && !sigShown(sigId));
+    /* 20-7차 — 알림 카드는 **그 알림이 실제로 뜰 때만** 붙인다. 예전에는 뜰 상태가
+       아닌데도 카드를 앉혀서 「지금은 이 알림이 뜰 상태가 아니에요」라는 시스템 말과
+       카탈로그 예시 문구(치환되지 않은 {{팀원명}} 까지)를 함께 내보냈다. 물어본
+       사람에게는 답도 아니고 근거도 아닌 표만 남았다. 뜰 상태가 아니면 말로만 답한다. */
+    var sigNew = !!(sigId && !sigShown(sigId) && sigHits(sigId));
     /* _q = 원문 질문. 영수증 제목·What-if 가정 파싱이 완료 시점에 필요하다(SSE 경로 포함) */
     var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText, _sigId: sigId, _sigNew: sigNew };
     pushMessage(aiMsg);
@@ -2551,11 +2559,15 @@
     /* 근로/근무 표기 혼용 실사용어를 모두 받는다 — "초과근로"가 의도 미매칭으로 새던 버그 */
     ["work", /(근무|근태|출퇴근|출근|퇴근|휴가|연차|반차|병가|초과\s*근[무로]|연장\s*근[무로]|야근|지각|조퇴|재택|근로\s*시간|소정)/]
   ];
-  var OFF_GREET = /^(안녕|하이|반가|고마|감사|수고|ㅎㅇ|헬로|hi|hello|hey|누구|뭐\s*해|뭐하|테스트|test)/i;
+  /* 인사와 「고마워」는 다르다 (20-7차) — 감사 인사에 자기소개와 기능 목록을 다시
+     펼치면 대화가 처음으로 되감긴다. 짧게 받고 하던 이야기를 이어 간다. */
+  var OFF_THANKS = /^(고마|감사|수고|땡큐|thx|thanks)/i;
+  var OFF_GREET = /^(안녕|하이|반가|ㅎㅇ|헬로|hi|hello|hey|누구|뭐\s*해|뭐하|테스트|test)/i;
 
   function offlineIntent(text) {
     var t = String(text || "").trim();
     if (!t) return "unknown";
+    if (t.length <= 24 && OFF_THANKS.test(t)) return "thanks";
     if (t.length <= 24 && OFF_GREET.test(t)) return "greet";
     for (var i = 0; i < OFF_INTENTS.length; i++) {
       if (OFF_INTENTS[i][1].test(t)) return OFF_INTENTS[i][0];
@@ -3107,7 +3119,8 @@
     var q = String(userText || "");
     var intent = offlineIntent(q);
     var out = null;
-    if (intent === "greet") out = offGreet();
+    if (intent === "thanks") out = { text: "네, 도움이 되었다니 다행이에요. 더 볼 게 있으면 말씀해 주세요." };
+    else if (intent === "greet") out = offGreet();
     else if (intent === "whatif") out = offWhatIf(sid, sname, q);
     else if (intent === "grade") out = offGrade(sid, sname);
     else if (intent === "checkin") out = offCheckin(sid, sname);
@@ -3165,18 +3178,13 @@
     }
     /* 20-3차 — 그 신호의 답(알림 문구·근거·기준값)이 이미 말풍선으로 떠 있으면
        같은 말을 문장으로 다시 쓰지 않는다. 이어받을 한 줄만 남긴다. */
-    if (sid && sigShown(sid)) {
-      /* 20-6차 — 이 턴이 그 답을 막 냈으면(_sigNew) 다음 한 걸음을 묻고,
-         이미 냈던 주제를 다시 물었으면 카탈로그의 다른 칸으로 답한다. 두 갈래 모두
-         오프라인 경로와 같은 함수(sigContinue)를 쓴다 — 연결 여부로 말이 달라지지 않게. */
+    /* 20-7차 — 아는 신호를 부른 말이면 **언제나** 말로 하는 답(sigContinue)으로 간다.
+       예전에는 알림 카드가 안 떴을 때만 `answerText` 로 빠졌는데, 그 함수는 알림
+       문구·근거·기준값·처리 초안을 통째로 한 문단에 쏟아 낸다. 뜰 상태가 아닌
+       알림에서는 치환되지 않은 자리표시자({{팀원명}})까지 그대로 실려 나왔다. */
+    if (sid) {
       var sc = sigContinue({ _sigId: sid, _sigNew: !!aiMsg._sigNew, _q: q });
-      return { text: sc.text, note: "" };
-    }
-    if (sid && window.EZSignalChat && EZSignalChat.answerText) {
-      var t = "";
-      try { t = String(EZSignalChat.answerText(sid, rk) || ""); } catch (e) { t = ""; }
-      t = t.replace(/^\s+|\s+$/g, "");
-      if (t) return { text: t, note: "지금 보이는 기록만으로 정리했어요." };
+      if (sc.text) return { text: sc.text, note: "" };
     }
 
     /* ② 로컬 기록으로 답할 수 있는 질문인가 — 못 알아들은 질문(unknown)이면 넘긴다 */
@@ -3193,7 +3201,7 @@
 
     /* ③ 이야기 중인 신호가 있으면 거기서 이어 간다 (20-6차) — 방금 신호 답을 받은
        사람이 자기 말로 되물었을 때 「연결되어 있지 않아요」로 끊기던 자리 */
-    var tid = liveTopicId();
+    var tid = liveTopicId(q);
     if (tid) {
       var scT = sigContinue({ _sigId: tid, _sigNew: false, _q: q });
       if (scT.text) return { text: scT.text, note: "" };
@@ -3201,6 +3209,23 @@
 
     /* ④ 사람 말 한 문장 */
     return { text: DEAD_END, note: "" };
+  }
+
+  /* 못 알아들은 질문이면 확인 카드를 지운다 (20-7차).
+     「오늘 점심 뭐 먹지」에 「확인 끝 · 근거 4건」을 남기고 답은 「확인해 드리지
+     못했어요」라고 하면, 카드가 하지도 않은 일을 했다고 말하는 셈이다. */
+  function dropWork(aiMsg) {
+    var m = aiMsg && aiMsg._work;
+    if (!m) return;
+    (m._timers || []).forEach(function (t) { clearTimeout(t); });
+    m._timers = [];
+    stopTick(m);
+    aiMsg._work = null;
+    try {
+      if (window.EZChat && EZChat.removeMessage) { EZChat.removeMessage(m); return; }
+    } catch (e) { /* 아래 폴백 */ }
+    var arr = msgs(), i = arr.indexOf(m);
+    if (i >= 0) arr.splice(i, 1);
   }
 
   function answerFallback(aiMsg, detail) {
@@ -3214,7 +3239,7 @@
        (19-3차) — 그래야 "지금 일하고 있다"가 눈에 보인다. */
     afterWorkFloor(aiMsg, function () {
       if (aiMsg._stopped) return;   /* 그 사이 사용자가 중지했다 */
-      completeWork(aiMsg);
+      if (ans.text === DEAD_END) dropWork(aiMsg); else completeWork(aiMsg);
       aiMsg.role = "ai";            /* err 버블로 두면 붉은 상자에 오류처럼 보인다 */
       aiMsg.streaming = false;
       aiMsg.text = ans.text;
@@ -3277,28 +3302,51 @@
     });
     return out.slice(0, 2);
   }
+  function sigHits(sid) {
+    var inst = sigInst(sid);
+    return !!(inst && inst.ready && inst.hit);
+  }
+  /* 알림 문구가 짚지 않은 근거를 한 줄 고른다 — 추정으로 표시된 줄은 말로 단정하지 않는다 */
+  function sigExtraLine(inst, notice) {
+    var rows = (inst && inst.evidence) || [], flat = String(notice || "").replace(/\s+/g, ""), i;
+    for (i = 0; i < rows.length; i++) {
+      var t = String(rows[i].text || "").replace(/[.\s]+$/, "");
+      if (!t || rows[i].assumed) continue;
+      if (/\{\{|\}\}/.test(t)) continue;              /* 치환 안 된 자리표시자는 내보내지 않는다 */
+      if (flat && flat.indexOf(t.replace(/\s+/g, "")) >= 0) continue;
+      return t;
+    }
+    return "";
+  }
   function sigSpeak(sid) {
     var inst = sigInst(sid);
-    var notice = inst && inst.hit ? String(inst.notice || "") : "";
+    var P = [];
+
+    /* 셀 수 없는 신호 — 없는 근거를 있는 척하지 않는다 */
+    if (!inst || !inst.ready) {
+      return "그건 아직 회사 기록으로 세지 못해서 지금 수치로 말씀드리기 어려워요. "
+        + "어떤 기록이 쌓이면 알려드릴 수 있는지 대신 짚어 드릴까요?";
+    }
+
+    /* 뜰 상태가 아니다 — 할 일이 없는데 처리를 제안하지 않는다 */
+    if (!inst.hit) {
+      P.push("확인해 보니 지금 챙기실 건 없어요.");
+      var ok = sigExtraLine(inst, "");
+      if (ok) P.push(ok + ".");
+      P.push("다른 것도 봐 드릴까요?");
+      return P.join(" ");
+    }
+
+    var notice = String(inst.notice || "");
     if (window.EZSignalChat && EZSignalChat.scrub) {
       try { notice = String(EZSignalChat.scrub(notice) || notice); } catch (e) { /* 원문 유지 */ }
     }
-    var P = [];
-    if (notice) P.push("네, 확인해 보니 " + notice.replace(/[.\s]+$/, "") + ".");
-    else P.push("확인해 봤는데 지금은 이 알림이 뜰 상태가 아니에요.");
-
-    /* ② 알림 문구가 짚지 않은 범위를 한 줄 덧붙인다. 같은 말 반복은 피한다. */
-    var rows = (inst && inst.evidence) || [], i, add = "";
-    var flat = notice.replace(/\s+/g, "");
-    for (i = 0; i < rows.length; i++) {
-      var t = String(rows[i].text || "").replace(/[.\s]+$/, "");
-      if (!t || rows[i].assumed) continue;            /* 추정 줄은 말로 단정하지 않는다 */
-      if (flat.indexOf(t.replace(/\s+/g, "")) >= 0) continue;
-      add = t; break;
-    }
+    /* ① 무엇이 보이는가 */
+    P.push("네, 확인해 보니 " + notice.replace(/[.\s]+$/, "") + ".");
+    /* ② 그래서 지금 어떤 상태인가 */
+    var add = sigExtraLine(inst, notice);
     if (add) P.push(add + ".");
-
-    /* ③ 두 갈래로 묻는다 — 카탈로그가 들고 있는 처리 그대로 */
+    /* ③ 그럼 무엇을 할까 — 카탈로그가 들고 있는 처리 그대로 */
     var L = actLabels(sid);
     if (L.length >= 2) {
       P.push("「" + L[0] + "」부터 잡아볼까요, 아니면 「" + L[1] + "」" + eulReul(L[1]) + " 볼까요?");
@@ -3309,16 +3357,28 @@
     }
     return P.join(" ");
   }
-  /* 지금 이야기 중인 신호 — EZSignalChat 이 걸어 둔 주제 */
-  function liveTopicId() {
+  /* 지금 이야기 중인 신호 — EZSignalChat 이 걸어 둔 주제.
+     20-7차 — 아무 말에나 이 주제를 붙이면 안 된다. 「오늘 점심 뭐 먹지」에
+     「위에 정리해 둔 내용부터 보시고」가 나오던 근본원인이 이 폴백이었다.
+     앞말을 받는 티가 나는 짧은 말일 때만 이어 간다. */
+  var FOLLOW_CUE = /(그럼|그거|그건|이거|이건|저거|거기|어디부터|어떻게|어떡|왜|더|자세히|다시|계속|그래서|아까|방금|누구부터|무엇부터|뭐부터)/;
+  function liveTopicId(text) {
     try {
       var t = window.EZSignalChat && EZSignalChat.topic && EZSignalChat.topic();
-      return (t && t.id) ? String(t.id) : "";
+      var id = (t && t.id) ? String(t.id) : "";
+      if (!id) return "";
+      if (text != null) {
+        var q = String(text).replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+        if (q.length > 30 || !FOLLOW_CUE.test(q)) return "";
+      }
+      return id;
     } catch (e) { return ""; }
   }
   function sigContinue(aiMsg) {
     var sid = aiMsg._sigId, text = "";
-    if (!aiMsg._sigNew) {
+    /* 뜰 상태가 아닌 알림에는 「위에 정리해 둔 내용」이 아예 없다 — 없는 것을
+       가리키지 않게, 이 경우는 다시 물어도 말로 답한다 (20-7차) */
+    if (!aiMsg._sigNew && sigHits(sid)) {
       /* 답을 이미 낸 주제를 다시 물었다 — 카탈로그의 다른 칸으로 답한다 */
       if (window.EZSignalChat && EZSignalChat.followAnswer) {
         try { text = String(EZSignalChat.followAnswer(sid, aiMsg._q || "", roleKey()) || ""); } catch (e) { text = ""; }
@@ -3333,8 +3393,9 @@
   function offlineRespond(body, aiMsg, userText) {
     var built = (aiMsg && aiMsg._sigId) ? sigContinue(aiMsg) : offlineReceipt(body, userText);
     /* 못 알아들은 말인데 이야기 중인 신호가 있으면 거기서 이어 간다 (20-6차) */
-    if (built.intent === "unknown" && liveTopicId()) {
-      built = sigContinue({ _sigId: liveTopicId(), _sigNew: false, _q: userText });
+    var tid0 = liveTopicId(userText);
+    if (built.intent === "unknown" && tid0) {
+      built = sigContinue({ _sigId: tid0, _sigNew: false, _q: userText });
     }
     var full = built.text;
     var idx = 0;
@@ -3366,7 +3427,7 @@
        카드가 없는 턴은 floor 가 0이라 예전과 똑같이 120ms 뒤 시작한다. */
     afterWorkFloor(aiMsg, function () {
       if (aiMsg._stopped) return;
-      completeWork(aiMsg);
+      if (built.intent === "unknown") dropWork(aiMsg); else completeWork(aiMsg);
       setTimeout(tick, 120);
     });
   }
