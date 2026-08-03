@@ -1409,16 +1409,6 @@
     if (wait <= 0) { fn(); return; }
     setTimeout(fn, wait);
   }
-  /* 확인 카드가 끝나면 재워 둔 신호 답을 깨운다 (20-6차).
-     사용자가 중지를 눌렀어도 답 자체는 이미 계산돼 있으므로 감추지 않고 보여 준다 —
-     감추면 「무엇을 확인했는지」만 남고 결과가 사라진다. */
-  function revealSigAfterWork(aiMsg, sigMsg) {
-    afterWorkFloor(aiMsg, function () {
-      if (!sigMsg.pending) return;
-      sigMsg.pending = false;
-      renderMessages();
-    });
-  }
   /* 실 도구 호출 — 도구 이름을 사람 말로 바꿔 한 줄로 세운다.
      EZTools.labelOf는 「목표·KR 조회」처럼 일하는 사람 말이 아니라서 여기서 다시 쓴다. */
   var TOOL_SAY = {
@@ -2293,16 +2283,19 @@
     var workMsg = agentReady ? pushMessage(makeLiveWorkMsg())
       : sigId ? pushMessage(makeSigWorkMsg(sigId, state.perspective))
       : (aiMode() !== "offline") ? pushMessage(makeWorkMsg(state.perspective)) : null;
-    /* 신호 답 말풍선은 카드 뒤에 놓고 pending 으로 재워 둔다 — 카드가 제 몫을
-       다 보여 준 뒤 깨운다(아래 revealSig). pending 인 동안은 그려지지 않는다. */
-    var sigMsg = (sigId && !sigShown(sigId))
-      ? pushMessage({ role: "sig", id: sigId, at: Date.now(), pending: true }) : null;
+    /* 20-7차 — 사람은 먼저 답을 듣고 그 다음에 근거를 본다. 그래서 순서는
+       확인 카드 → **말로 하는 답** → 알림 카드(문구·근거·기준값·처리 단추)다.
+       예전에는 알림 카드를 먼저 앉히고 뒤에 한 줄을 붙여서, 물어본 사람이
+       답을 듣기 전에 근거 표부터 읽어야 했다. */
+    var sigNew = !!(sigId && !sigShown(sigId));
     /* _q = 원문 질문. 영수증 제목·What-if 가정 파싱이 완료 시점에 필요하다(SSE 경로 포함) */
-    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText, _sigId: sigId, _sigNew: !!sigMsg };
+    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText, _sigId: sigId, _sigNew: sigNew };
     pushMessage(aiMsg);
+    /* 알림 카드는 답 뒤에 놓고 pending 으로 재워 둔다 — 답을 다 하고 나서
+       깨운다(finishStreaming). pending 인 동안은 그려지지 않는다. */
+    if (sigNew) pushMessage({ role: "sig", id: sigId, at: Date.now(), pending: true });
     renderMessages();
     if (workMsg && !workMsg.live) animateWork(workMsg);
-    if (sigMsg) revealSigAfterWork(aiMsg, sigMsg);
 
     state.streaming = true;
     el.send.disabled = true;
@@ -2325,6 +2318,12 @@
   }
 
   function finishStreaming() {
+    /* 답을 다 했으면 재워 둔 알림 카드를 깨운다 (20-7차) — 답 아래 근거가 붙는 순서 */
+    var mm = msgs(), mi, woke = false;
+    for (mi = mm.length - 1; mi >= 0 && mi > mm.length - 6; mi--) {
+      if (mm[mi] && mm[mi].role === "sig" && mm[mi].pending) { mm[mi].pending = false; woke = true; }
+    }
+    if (woke) renderMessages();
     state.streaming = false;
     el.send.disabled = false;
     el.textarea.disabled = false;
@@ -3252,23 +3251,63 @@
     if (!(c >= 0xac00 && c <= 0xd7a3)) return "를";
     return ((c - 0xac00) % 28) ? "을" : "를";
   }
-  function sigNextLine(sid) {
-    var sig = null, i;
+  /* 물어본 사람에게 **말로** 하는 답 (20-7차).
+     세 마디로 끝낸다 — ① 무엇이 보이는가(알림 문구 그대로) ② 그래서 지금 어떤
+     상태인가(가장 넓은 근거 한 줄) ③ 그럼 무엇을 할까(처리 두 갈래).
+     문장은 전부 판정 함수가 실측한 것에서 왔다. 새로 지어낸 숫자는 없다.
+     자세한 근거·기준값·처리 단추는 이 말 바로 아래 알림 카드가 맡는다. */
+  function sigInst(sid) {
     try {
-      var all = (window.EZSignalCatalog && EZSignalCatalog.signals) || [];
-      for (i = 0; i < all.length; i++) if (all[i].id === sid) { sig = all[i]; break; }
-    } catch (e) { sig = null; }
+      if (window.EZSignalEngine && EZSignalEngine.evaluate) return EZSignalEngine.evaluate(sid, roleKey());
+    } catch (e) { /* 아래에서 null 처리 */ }
+    return null;
+  }
+  function actLabels(sid) {
+    var sig = null, i, all = (window.EZSignalCatalog && EZSignalCatalog.signals) || [];
+    for (i = 0; i < all.length; i++) if (all[i].id === sid) { sig = all[i]; break; }
     var acts = ((sig && sig.actions) || []).slice().sort(function (a, b) { return (a.rank || 9) - (b.rank || 9); });
-    var first = null;
-    for (i = 0; i < acts.length; i++) if (acts[i].type !== "A5") { first = acts[i]; break; }
-    if (!first) first = acts[0] || null;
-    var label = first ? String(first.label || "").replace(/\s*\([^)]*\)\s*$/, "") : "";
+    var out = [];
+    acts.forEach(function (a) {
+      if (a.type === "A5") return;                    /* 「상세 보기」는 제안이 아니다 */
+      var nm = String(a.label || "").replace(/\s*\([^)]*\)\s*$/, "");
+      if (window.EZSignalChat && EZSignalChat.scrub) {
+        try { nm = String(EZSignalChat.scrub(nm) || nm); } catch (e) { /* 원문 유지 */ }
+      }
+      if (nm) out.push(nm);
+    });
+    return out.slice(0, 2);
+  }
+  function sigSpeak(sid) {
+    var inst = sigInst(sid);
+    var notice = inst && inst.hit ? String(inst.notice || "") : "";
     if (window.EZSignalChat && EZSignalChat.scrub) {
-      try { label = String(EZSignalChat.scrub(label) || label); } catch (e2) { /* 원문 유지 */ }
+      try { notice = String(EZSignalChat.scrub(notice) || notice); } catch (e) { /* 원문 유지 */ }
     }
-    if (!label) return "여기까지가 지금 기록으로 확인한 내용이에요. 이어서 무엇을 도와드릴까요?";
-    return "여기까지가 지금 기록으로 확인한 내용이에요. 이어서 「" + label + "」" + eulReul(label)
-      + " 제가 잡아 드릴까요? 아래 버튼으로 바로 말씀하셔도 돼요.";
+    var P = [];
+    if (notice) P.push("네, 확인해 보니 " + notice.replace(/[.\s]+$/, "") + ".");
+    else P.push("확인해 봤는데 지금은 이 알림이 뜰 상태가 아니에요.");
+
+    /* ② 알림 문구가 짚지 않은 범위를 한 줄 덧붙인다. 같은 말 반복은 피한다. */
+    var rows = (inst && inst.evidence) || [], i, add = "";
+    var flat = notice.replace(/\s+/g, "");
+    for (i = 0; i < rows.length; i++) {
+      var t = String(rows[i].text || "").replace(/[.\s]+$/, "");
+      if (!t || rows[i].assumed) continue;            /* 추정 줄은 말로 단정하지 않는다 */
+      if (flat.indexOf(t.replace(/\s+/g, "")) >= 0) continue;
+      add = t; break;
+    }
+    if (add) P.push(add + ".");
+
+    /* ③ 두 갈래로 묻는다 — 카탈로그가 들고 있는 처리 그대로 */
+    var L = actLabels(sid);
+    if (L.length >= 2) {
+      P.push("「" + L[0] + "」부터 잡아볼까요, 아니면 「" + L[1] + "」" + eulReul(L[1]) + " 볼까요?");
+    } else if (L.length === 1) {
+      P.push("「" + L[0] + "」" + eulReul(L[0]) + " 제가 잡아 드릴까요?");
+    } else {
+      P.push("이어서 무엇을 도와드릴까요?");
+    }
+    return P.join(" ");
   }
   /* 지금 이야기 중인 신호 — EZSignalChat 이 걸어 둔 주제 */
   function liveTopicId() {
@@ -3286,7 +3325,7 @@
       }
       if (!text) text = "위에 정리해 둔 내용부터 보시고, 고치고 싶은 곳이 있으면 말씀해 주세요.";
     } else {
-      text = sigNextLine(sid);
+      text = sigSpeak(sid);
     }
     return { text: text, recos: [], receipt: null, intent: "signal" };
   }
