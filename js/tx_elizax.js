@@ -82,13 +82,57 @@
     } catch (e) { /* ignore */ }
     return "subject";
   }
-  /* 조직장/경영진 관점은 대상 직원이 필요 → 역할에 맞는 기본 대상 자동 선택(직속 부하 우선). */
+  /* talenx가 로그인시켜 둔 사람 — 역할 전환은 meta.currentUser를 갈아끼우므로 매번 다시 읽는다 */
+  function curUser() {
+    try {
+      var cu = window.TALENX_DATA && window.TALENX_DATA.meta && window.TALENX_DATA.meta.currentUser;
+      if (cu && cu.emp_id) return cu;
+    } catch (e) { /* ignore */ }
+    return CURRENT;
+  }
+  /* 19차 §5-2 — 대상은 talenx가 정한다.
+     예전에는 조직장·경영진 관점이면 첫 직속 부하를 자동으로 골라 헤더 검색창에 띄웠다.
+     그래서 talenx는 「최정남」인데 elizax는 남의 이름으로 답하는 어긋남이 생겼다.
+     이제 기본 대상은 언제나 로그인한 본인이고, 다른 사람 이야기는 대화 안에서 이름을 말해 정한다. */
   function defaultSubject() {
-    if (!needsSubject(rolePerspective())) return null;
-    var reports = EMPLOYEES.filter(function (e) { return e.manager_id === CURRENT.emp_id; });
-    var pick = reports[0] ||
-      EMPLOYEES.filter(function (e) { return e.org_id === CURRENT.org_id && e.emp_id !== CURRENT.emp_id; })[0];
-    return pick ? { emp_id: pick.emp_id, name: pick.name, jobTitle: pick.jobTitle } : null;
+    var cu = curUser();
+    return { emp_id: cu.emp_id, name: cu.name, jobTitle: cu.jobTitle || "" };
+  }
+  function isSelfSubject() {
+    return !state.subject || state.subject.emp_id === curUser().emp_id;
+  }
+  /* 이름 앞뒤가 말이 끊기는 자리인지 — "이지민님"은 잡고 "이지민수"는 안 잡는다 */
+  function nameHit(text, name) {
+    var i = text.indexOf(name);
+    while (i >= 0) {
+      var before = i === 0 ? "" : text.charAt(i - 1);
+      var after = text.charAt(i + name.length);
+      var okBefore = !before || /[\s,.!?·("'\[]/.test(before);
+      var okAfter = !after || /[\s,.!?·)"'\]님씨의은는이가을를과와도만부터에한테께]/.test(after);
+      if (okBefore && okAfter) return true;
+      i = text.indexOf(name, i + 1);
+    }
+    return false;
+  }
+  /* 사용자 문장에서 사원 이름을 찾아 대상을 바꾼다. 바꿨으면 그 사람 정보를 돌려준다.
+     이름이 없으면 null — 호출자는 팀 전체 집계로 답한다. */
+  function setSubjectByName(text) {
+    var t = String(text || "");
+    if (!t) return null;
+    var rk = roleKey();
+    if (rk !== "leader" && rk !== "hr" && rk !== "exec") return null;   /* 조직원은 남의 기록을 못 본다 */
+    var best = null;
+    for (var i = 0; i < EMPLOYEES.length; i++) {
+      var e = EMPLOYEES[i];
+      var nm = e && e.name ? String(e.name) : "";
+      if (nm.length < 2) continue;
+      if (!nameHit(t, nm)) continue;
+      if (!best || nm.length > String(best.name).length) best = e;
+    }
+    if (!best) return null;
+    if (state.subject && state.subject.emp_id === best.emp_id) return null;   /* 이미 그 사람 */
+    state.subject = { emp_id: best.emp_id, name: best.name, jobTitle: best.jobTitle || "" };
+    return state.subject;
   }
 
   /* ---------------- State ---------------- */
@@ -112,14 +156,53 @@
   var curTab = DEFAULT_TAB;
   var pastOpen = false;      /* [알림] 탭 「지난 알림」 접힘 상태 */
   var pastTouched = false;   /* 사용자가 직접 접었다 → 자동 펼침(카드 0장 폴백)보다 우선 */
+  var pastAll = false;       /* 「지난 알림」 30건 초과 시 「더 보기」를 눌렀는가 */
   var sigOpenId = null;      /* [알림] 탭에서 지금 펼쳐 둔 줄 — 한 번에 하나만 */
 
   /* ---------------- EZNotif — 알림 단일 스토어 (§6 잔존형 알림: 토스트→FAB 카운트→[알림] 탭) ---------------- */
   var EZNotif = (function () {
-    var KEY = "ezk_notif_v1", MAX = 50, subs = [];
-    function load() {
+    var KEY = "ezk_notif_v1", MIG = "ezk_notif_mig_v19b", MAX = 50, subs = [];
+    var migrated = false;
+    /* 19차 §5-3 — 「지난 알림」에 쌓여 있던 쓰레기 1회 청소.
+       읽을 내용이 없는 항목(제목이 「알림」뿐 · 테스트 알림 · 폴백 확인)이 50건 상한을
+       채워 버려서, 정작 사람이 받은 알림은 밀려나 사라지고 목록은 빈 줄만 보였다. */
+    function junk(n) {
+      if (!n || !n.title) return true;
+      var t = String(n.title).replace(/^\s+|\s+$/g, "");
+      var b = String(n.body || "").replace(/^\s+|\s+$/g, "");
+      if (t === "알림" && (!b || b === "알림")) return true;
+      if (/^테스트\s*알림/.test(t) || /^테스트\s*알림/.test(b)) return true;
+      if (t.indexOf("폴백 확인") >= 0 || b.indexOf("폴백 확인") >= 0) return true;
+      return false;
+    }
+    /* 이미 쌓인 본문에는 카드 버튼 글자가 문장에 달라붙어 있다
+       ("…벌어졌어요열어보기나중에이 밖에 1건 더"). 글자를 키우니 그대로 드러나서
+       한 번에 걷어낸다. 새로 들어오는 알림은 tx_proactive가 문장만 담는다. */
+    var GLUE = /(열어보기|나중에|이\s*밖에\s*\d+건\s*더|다시\s*실행)+\s*$/;
+    function repair(n) {
+      if (!n || !n.body) return n;
+      var b = String(n.body).replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+      var cut = b.replace(GLUE, "").replace(/^\s+|\s+$/g, "");
+      while (GLUE.test(cut)) cut = cut.replace(GLUE, "").replace(/^\s+|\s+$/g, "");
+      if (cut && cut !== b) n.body = cut;
+      return n;
+    }
+    function raw() {
       try { var a = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(a) ? a : []; }
       catch (e) { return []; }
+    }
+    function load() {
+      var arr = raw();
+      if (migrated) return arr;
+      migrated = true;
+      var done = false;
+      try { done = localStorage.getItem(MIG) === "1"; } catch (e) { done = true; }
+      if (done) return arr;
+      var before = JSON.stringify(arr);
+      var kept = arr.filter(function (n) { return !junk(n); }).map(repair);
+      try { localStorage.setItem(MIG, "1"); } catch (e) { /* ignore */ }
+      if (JSON.stringify(kept) !== before) { save(kept); return kept; }
+      return arr;
     }
     function save(arr) {
       try { localStorage.setItem(KEY, JSON.stringify(arr.slice(-MAX))); } catch (e) { /* storage 불가 무시 */ }
@@ -133,6 +216,7 @@
     return {
       push: function (n) {
         if (!n || !n.title) return null;
+        if (junk(n)) return null;   /* 읽을 내용이 없는 알림은 애초에 쌓지 않는다 */
         var arr = load();
         var item = {
           id: n.id || ("ntf-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
@@ -275,26 +359,10 @@
     /* perspective 스트립 제거 — 관점 자동전환 로직(setPerspective)은 유지, 시각 chrome만 삭제 */
     el.persp = null;
 
-    /* employee picker — [Phase1 IA] leader/hr/exec 역할에만 렌더 (member는 대상 선택 없음) */
+    /* 「대상 직원 검색」 입력·드롭다운 삭제 (19차 §5-2).
+       elizax에서 사람을 고르지 않는다 — 대상은 talenx가 로그인시킨 사람이고,
+       다른 사람 이야기는 대화 안에서 이름을 말하면 그때 바뀐다(setSubjectByName). */
     el.pickerInput = null; el.pickerList = null;
-    var rk0 = "member";
-    try {
-      rk0 = (window.CU && CU._role) ||
-        (window.TXRoles && TXRoles.current && (TXRoles.current() || {}).key) || "member";
-    } catch (e) { rk0 = "member"; }
-    if (rk0 === "leader" || rk0 === "hr" || rk0 === "exec") {
-      var picker = h("div", "ezx-picker");
-      var pin = h("input", "ezx-picker-in", { type: "text", placeholder: "대상 직원 검색 (이름)", "aria-label": "대상 직원 검색" });
-      var plist = h("div", "ezx-picker-list");
-      pin.addEventListener("input", function () { renderPickerList(pin.value); });
-      pin.addEventListener("focus", function () { renderPickerList(pin.value); });
-      document.addEventListener("click", function (e) {
-        if (!picker.contains(e.target)) plist.classList.remove("on");
-      });
-      picker.appendChild(pin); picker.appendChild(plist);
-      head.appendChild(picker);
-      el.pickerInput = pin; el.pickerList = plist;
-    }
 
     /* 맥락 칩 행 삭제 — 신원칩·현재 화면칩·「현재 화면 맥락」 토글 3종 제거 (18차 요청 2).
        state.attachContext는 true 고정(buildPayloadMessage 계약 불변).
@@ -308,12 +376,10 @@
     var list = h("div", "ezx-list", { role: "log", "aria-live": "polite" });
     el.list = list;
 
-    /* [알림] 패인 — 라이브 신호 카드 + 「지난 알림」 접이식.
-       성과 기록(recPane)은 탭이 아니라 「지난 알림」 안쪽 컨테이너로 강등된다
-       (renderNtf가 매 렌더마다 이 노드를 다시 붙인다 — ezl:changed 갱신 대상 유지). */
-    var recPane = h("div", "ezx-rec-pane");
+    /* [알림] 패인 — 라이브 알림 한 줄 목록 + 「지난 알림」 접이식.
+       성과 기록은 여기 들어오지 않는다 (19차 §5-3) — 자기 패널에서 연다. */
     var ntfPane = h("div", "ezx-pane ezx-ntf-pane");
-    el.recPane = recPane; el.ntfPane = ntfPane;
+    el.ntfPane = ntfPane;
 
     /* footer / composer */
     var foot = h("div", "ezx-foot");
@@ -340,7 +406,7 @@
     foot.appendChild(comp); foot.appendChild(footRow);
     el.textarea = ta; el.send = send;
 
-    /* 탭 스트립·패인은 위(el.tabBtns / el.recPane / el.ntfPane)에서 이미 구성됨 —
+    /* 탭 스트립·패인은 위(el.tabBtns / el.ntfPane)에서 이미 구성됨 —
        구 data-ezx-tab 스트립·.ezx-tabpane 이중 생성은 제거(astryx 리스킨 CSS가 .ezx-mode-* 단일 방식) */
     el.tabs = tabs;
 
@@ -348,7 +414,6 @@
     panel.appendChild(tabs);
     panel.appendChild(ctx);
     panel.appendChild(list);
-    /* recPane은 패널 직속이 아니라 renderNtf가 「지난 알림」 안쪽에 붙인다 */
     panel.appendChild(ntfPane);
     panel.appendChild(foot);
 
@@ -359,7 +424,9 @@
 
     // Esc closes
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && state.open) closePanel();
+      if (e.key !== "Escape") return;
+      if (el.cat) { closeCatalog(); return; }   /* 질문 브라우저가 먼저 닫힌다 */
+      if (state.open) closePanel();
     });
 
     /* 화면 이동(GNB·서브탭·로고) 시 화면칩 실시간 갱신 — 패널 열림 여부 무관 */
@@ -400,10 +467,9 @@
     el.root.classList.toggle("ezx-mode-ntf", curTab === "ntf");
     updateFabCount();
     updateStatus();
-    /* 성과 기록 변경 → 「지난 알림」이 펼쳐져 있으면 즉시 재렌더, 아니면 알림 탭 도트 */
+    /* 성과 기록이 늘었다 — 알림 탭 안내 줄의 건수만 다시 그린다 */
     document.addEventListener("ezl:changed", function () {
-      if (curTab === "ntf" && pastOpen) renderLedgerInto(null);
-      else toggleTabDot("ntf", true);
+      if (curTab === "ntf") renderNtf(null);
     });
   }
 
@@ -434,9 +500,27 @@
 
   /* ---------------- 2탭 전환 (알림 · 대화) ----------------
      hl = 성과 기록 하이라이트 대상 entry id.
-     외부 계약 유지: showTab("rec", id) → 알림 탭 + 「지난 알림」 펼침 + 해당 행 하이라이트. */
+     외부 계약 유지: showTab("rec", id) → 성과 기록 패널 + 해당 행 하이라이트. */
+  /* 19차 §5-3 — 「알림」과 「성과 기록」은 다른 것이다.
+     알림 = elizax가 먼저 건넨 말. 성과 기록 = 답변의 근거가 된 내 기록.
+     그래서 "rec"은 더 이상 알림 탭으로 접히지 않고 성과 기록 자기 패널을 연다.
+
+     주의(재진입): EZLedger.openPanel은 허브가 닫혀 있으면 다시 Elizax.showTab("rec")을
+     부른다. 그대로 두면 무한 왕복이므로, 우리가 연 왕복이라는 표시가 켜져 있을 때만
+     throw해서 EZLedger가 자기 폴백(슬라이드 패널)으로 착지하게 한다. 그쪽 호출은
+     try/catch 안이라 예외가 밖으로 새지 않는다. */
+  var recBusy = false;
+  function openLedger(hl) {
+    if (recBusy) throw new Error("ezx:rec-reentry");
+    if (!(window.EZLedger && EZLedger.openPanel)) return false;
+    recBusy = true;
+    try { EZLedger.openPanel(hl || null); }
+    catch (e) { /* 원장 모듈 오류 — 조용히 무시 */ }
+    recBusy = false;
+    return true;
+  }
   function setTab(k, hl) {
-    if (k === "rec") { k = "ntf"; pastOpen = true; }        /* 기록 탭 폐지 → 리다이렉트 */
+    if (k === "rec") { openLedger(hl); return; }
     if (k !== "chat" && k !== "ntf") k = DEFAULT_TAB;
     curTab = k;
     el.root.classList.toggle("ezx-mode-ntf", k === "ntf");
@@ -481,20 +565,6 @@
     if (el.fab) el.fab.title = n ? ("elizax · " + label) : "elizax";
   }
 
-  /* ---- 「지난 알림」 안쪽 성과 기록(EZLedger) 진입 ---- */
-  function renderLedgerInto(hl) {
-    var c = el.recPane;
-    if (!c) return;
-    /* hl 없이도 renderInto 를 쓴다 — renderRows 는 푸터가 없어 결정 흐름·규칙·내보내기가 닫힌다.
-       highlightId 는 선택 인자다(tx_ctx_ledger.js renderInto). */
-    if (window.EZLedger && EZLedger.renderInto) {
-      try { EZLedger.renderInto(c, hl || null); return; } catch (e) { /* fall through */ }
-    }
-    if (window.EZLedger && EZLedger.renderRows) {
-      try { EZLedger.renderRows(c); return; } catch (e2) { /* fall through */ }
-    }
-    c.innerHTML = '<div class="ezx-pane-empty">성과 기록 모듈이 아직 로드되지 않았습니다.</div>';
-  }
   function scrollPastIntoView() {
     var b = el.ntfPane && el.ntfPane.querySelector(".ezx-past");
     if (b && b.scrollIntoView) { try { b.scrollIntoView({ block: "nearest" }); } catch (e) { /* ignore */ } }
@@ -552,6 +622,7 @@
      줄을 누르면 제자리에서 펼쳐져 무슨 얘기인지 두 문장 보여 주고, 거기서 두 갈래로
      나간다 — 「대화에서 이어보기」(전체 답변) · 「관련 화면 열기」(갈 곳이 있을 때만).
      한 번에 한 줄만 펼쳐진다. 「지난 알림」의 EZNotif 행은 손대지 않는다.
+     성과 기록은 여기 없다 — 맨 아래 한 줄 링크로 자기 패널을 연다(19차 §5-3).
      엔진이 없으면 목록을 비우고 「지난 알림」을 펼쳐 폴백한다 — 어떤 경우에도 throw하지 않는다. */
   function renderNtf(hl) {
     var p = el.ntfPane;
@@ -610,12 +681,12 @@
     var arr = EZNotif.list();
     if (!nLive) {
       p.appendChild(h("div", "ezx-pane-empty ezx-sig-none", {
-        text: arr.length ? "지금 처리할 알림이 없습니다. 지난 알림을 아래에 모았습니다."
-          : "지금 처리할 알림이 없습니다."
+        text: arr.length ? "지금 처리할 알림이 없어요. 지난 알림을 아래에 모아 두었어요."
+          : "지금 처리할 알림이 없어요."
       }));
     }
 
-    /* (2) 지난 알림 — 접이식. 라이브 카드가 없으면 자동 펼침(구 EZNotif 목록 동작 보존),
+    /* (2) 지난 알림 — 접이식. 라이브 줄이 없으면 자동 펼침(구 동작 보존),
        단 사용자가 한 번 접었으면 그 선택을 존중한다 */
     var open = pastOpen || (!nLive && !pastTouched);
     var past = h("div", "ezx-past");
@@ -627,16 +698,36 @@
     hd.addEventListener("click", function () {
       pastTouched = true;
       pastOpen = !open;
+      pastAll = false;
       renderNtf(null);
     });
-    if (arr.length) fillNtfRows(bd, arr);
-    else bd.appendChild(h("div", "ezx-pane-empty", { text: "지난 알림이 아직 없습니다." }));
-    /* 성과 기록(EZLedger) 진입 — 원장은 저장소가 하나이므로 여기서 그대로 읽는다 */
-    bd.appendChild(h("div", "ezx-past-sec", { text: "성과 기록" }));
-    bd.appendChild(el.recPane);
+    /* 이 서랍이 무엇을 모아 둔 곳인지 한 줄로 밝힌다 — 성과 기록과 헷갈리지 않게 */
+    bd.appendChild(h("div", "ezx-past-cap", { text: "elizax가 건넨 알림을 모아 둔 곳이에요." }));
+    if (arr.length) {
+      /* 30건이 넘으면 최근 20건만 — 나머지는 눌러서 펼친다 */
+      var shown = (!pastAll && arr.length > 30) ? arr.slice(0, 20) : arr;
+      fillNtfRows(bd, shown);
+      if (shown.length < arr.length) {
+        var more = h("button", "ezx-past-more", {
+          type: "button", text: "더 보기 · 지난 알림 " + (arr.length - shown.length) + "건"
+        });
+        more.addEventListener("click", function () { pastAll = true; renderNtf(null); });
+        bd.appendChild(more);
+      }
+    } else {
+      bd.appendChild(h("div", "ezx-pane-empty", { text: "지난 알림이 아직 없어요." }));
+    }
     past.appendChild(hd); past.appendChild(bd);
     p.appendChild(past);
-    if (open) renderLedgerInto(hl || null);
+
+    /* (3) 성과 기록으로 가는 길 한 줄 — 저장소가 다르다는 것을 말로 밝힌다 */
+    var lg = h("button", "ezx-ntf-ledger", {
+      type: "button", text: "답변의 근거가 된 내 기록은 성과 기록에서 볼 수 있어요"
+    });
+    lg.addEventListener("click", function () {
+      try { openLedger(hl || null); } catch (e) { /* 원장 미로드 — 조용히 무시 */ }
+    });
+    p.appendChild(lg);
     updateFabCount();   /* 렌더 시점의 미처리 수와 배지를 항상 일치시킨다 */
   }
 
@@ -658,44 +749,17 @@
     var p = rolePerspective();
     if (p !== state.perspective) {
       state.perspective = p;
-      if (!state.subject) state.subject = defaultSubject();
+      state.subject = defaultSubject();   /* 역할이 바뀌면 대상도 그 사람 본인으로 되돌린다 */
     }
     var lab = el.persp && el.persp.querySelector("[data-ezx-plabel]");
     if (lab) lab.textContent = perspectiveLabel(p);
     syncSubjectUI();
   }
+  /* 대상 선택 UI가 사라졌으므로 남은 일은 화면칩 갱신뿐 —
+     호출자 3곳(setPerspective·syncPerspectiveFromRole·build)을 위해 함수는 유지한다. */
   function syncSubjectUI() {
-    var need = needsSubject(state.perspective);
-    el.root.classList.toggle("ezx-need-subject", need);
-    if (need && !state.subject && el.pickerInput) {
-      el.pickerInput.placeholder = "대상 직원 검색 (이름)";
-    }
-    if (need && state.subject && el.pickerInput && !el.pickerInput.value) {
-      el.pickerInput.value = state.subject.name;   // 자동 선택된 기본 대상 표시
-    }
+    if (el.root) el.root.classList.remove("ezx-need-subject");
     updateScreenChip();
-  }
-  function renderPickerList(q) {
-    var list = el.pickerList;
-    if (!list) return;   /* member 역할 — picker 미렌더 */
-    list.innerHTML = "";
-    var query = (q || "").trim();
-    var pool = EMPLOYEES;
-    if (query) pool = pool.filter(function (e) { return (e.name || "").indexOf(query) >= 0 || (e.emp_id || "").indexOf(query) >= 0; });
-    pool = pool.slice(0, 30);
-    if (!pool.length) { list.classList.remove("on"); return; }
-    pool.forEach(function (emp) {
-      var b = h("button", "", { type: "button" });
-      b.innerHTML = esc(emp.name) + "<small>" + esc(emp.jobTitle || "") + " · " + esc(emp.orgName || "") + "</small>";
-      b.addEventListener("click", function () {
-        state.subject = { emp_id: emp.emp_id, name: emp.name, jobTitle: emp.jobTitle };
-        el.pickerInput.value = emp.name;
-        list.classList.remove("on");
-        updateScreenChip();
-      });
-      list.appendChild(b);
-    });
-    list.classList.add("on");
   }
 
   /* 화면칩은 18차에 삭제됨 — 호출자 4곳(syncSubjectUI·openPanel·GNB 클릭·build)을
@@ -704,20 +768,18 @@
     if (!el.screenChip) return;
     var label = activeScreenLabel();
     var txt = "현재 화면 " + label;
-    if (needsSubject(state.perspective) && state.subject) {
-      txt = "대상 " + state.subject.name + " · " + label;
-    }
+    if (!isSelfSubject()) txt = state.subject.name + "님 기준 · " + label;
     el.screenChip.textContent = txt;
   }
 
-  /* who is the subject emp_id + actor */
+  /* 지금 누구 이야기를 하는가 + 묻는 사람은 누구인가.
+     기본은 본인이고, 대화에서 이름을 말했을 때만 대상과 요청자가 갈린다. */
   function resolveEmpIds() {
-    var p = state.perspective;
-    if (needsSubject(p) && state.subject) {
-      return { emp_id: state.subject.emp_id, actor_emp_id: CURRENT.emp_id };
+    var me = curUser().emp_id;
+    if (state.subject && state.subject.emp_id && state.subject.emp_id !== me) {
+      return { emp_id: state.subject.emp_id, actor_emp_id: me };
     }
-    // subject / hr / meta / (manager without pick) → current user
-    return { emp_id: CURRENT.emp_id, actor_emp_id: undefined };
+    return { emp_id: me, actor_emp_id: undefined };
   }
 
   /* ---------------- Rendering ---------------- */
@@ -734,50 +796,142 @@
     msgs().forEach(function (m) { list.appendChild(buildMsgNode(m)); });
     scrollToBottom();
   }
+  /* 역할마다 처음 물어보게 되는 세 가지 — 고정 스타터 (19차 §5-6) */
+  var FIXED_STARTERS = {
+    member: ["내 목표 진행상황 점검", "이번 달 근무기록 확인", "급여명세서 열어줘"],
+    leader: ["우리 팀 진척 정리해줘", "이번 주 1:1 안건 잡아줘", "팀 평가 준비 상태 봐줘"],
+    hr: ["조직별 목표 진행률 비교해줘", "평가 진행이 밀린 곳 알려줘", "이번 분기 인원 현황 보여줘"],
+    exec: ["전사 목표 진행 상황 요약해줘", "조직 간 격차 큰 곳 알려줘", "평가 일정 위험한 곳 알려줘"]
+  };
   function buildEmptyState() {
+    var role = roleKey();
     var wrap = h("div", "ezx-empty");
     wrap.appendChild(h("div", "eh", { text: "무엇을 도와드릴까요?" }));
-    var sub = h("div", "es");
-    sub.textContent = "목표·평가부터 근무·급여까지, 화면 이동·조회·초안 작성을 도와드립니다.";
-    wrap.appendChild(sub);
+    wrap.appendChild(h("div", "es", {
+      text: "목표·평가·근무·급여를 실제 기록으로 확인하고, 필요하면 그 화면까지 열어 드려요."
+    }));
 
     /* 연결 상태 문구(● 연결됨 / AI 미연결 배너)는 컴포저 위 단일 폴백 줄(updateStatus)로 일원화 */
 
-    /* ── 18-2차 R3: 카드 폐기. 빈 채팅창 + 추천 대화 버튼 두 묶음뿐 ──
-       (1) 「지금 볼 만한 것」 = EZSignalChat.starters(role)가 미처리 신호를
-           사용자 말투 질문으로 바꾼 것 최대 3개. 분류명·유형·단계는 노출하지 않는다.
-       (2) 기존 일반 스타터 3개 — 회색 그대로.
-       (1)은 AI가 실제 데이터를 보고 직접 권하는 질문이므로 회색으로 두면 눌러볼
-       이유가 보이지 않는다. .scn 강조(accent 계열)를 입혀 (2)와 구분한다. */
-    var sigQs = [];
-    if (window.EZSignalChat && EZSignalChat.starters) {
+    /* (1) 지금 볼 만한 것 — 실제 기록을 보고 고른 질문 6개(2열).
+       각 질문은 스스로 답을 만들 수 있는지 검사를 통과한 것만 온다(EZSignalChat.suggested). */
+    var sugg = [];
+    if (window.EZSignalChat && EZSignalChat.suggested) {
       try {
-        var raw = EZSignalChat.starters(roleKey()) || [];
-        for (var qi = 0; qi < raw.length && sigQs.length < 3; qi++) {
+        var raw = EZSignalChat.suggested(role) || [];
+        for (var qi = 0; qi < raw.length && sugg.length < 6; qi++) {
           var it = raw[qi];
-          if (it && it.q) sigQs.push({ q: String(it.q), id: it.id ? String(it.id) : "" });
+          if (it && it.q) sugg.push({ q: String(it.q), id: it.id ? String(it.id) : "" });
         }
-      } catch (e) { sigQs = []; }
+      } catch (e) { sugg = []; }
     }
-    if (sigQs.length) {
+    /* suggested가 아직 없으면 예전 starters로 물러선다 — 빈 화면을 만들지 않는다 */
+    if (!sugg.length && window.EZSignalChat && EZSignalChat.starters) {
+      try {
+        var raw2 = EZSignalChat.starters(role) || [];
+        for (var qj = 0; qj < raw2.length && sugg.length < 6; qj++) {
+          var it2 = raw2[qj];
+          if (it2 && it2.q) sugg.push({ q: String(it2.q), id: it2.id ? String(it2.id) : "" });
+        }
+      } catch (e2) { /* ignore */ }
+    }
+    if (sugg.length) {
       wrap.appendChild(h("div", "ezx-scn-lab", { text: "지금 볼 만한 것" }));
-      var srow = h("div", "ezx-starters");
-      sigQs.forEach(function (it) {
-        var b = h("button", "ezx-starter scn", { type: "button", text: it.q });
-        b.addEventListener("click", function () { askSignal(it.id, it.q); });
-        srow.appendChild(b);
+      var grid = h("div", "ezx-sugg");
+      sugg.forEach(function (x) {
+        var b = h("button", "ezx-starter scn", { type: "button", text: x.q });
+        b.addEventListener("click", function () { askSignal(x.id, x.q); });
+        grid.appendChild(b);
       });
-      wrap.appendChild(srow);
+      wrap.appendChild(grid);
     }
 
+    /* (2) 역할별 고정 스타터 3개 */
     var starters = h("div", "ezx-starters");
-    ["내 목표 진행상황 점검", "이번 달 근무기록 확인", "급여명세서 열어줘"].forEach(function (s) {
+    (FIXED_STARTERS[role] || FIXED_STARTERS.member).forEach(function (s) {
       var b = h("button", "ezx-starter", { text: s, type: "button" });
       b.addEventListener("click", function () { sendMessage(s); });
       starters.appendChild(b);
     });
     wrap.appendChild(starters);
+
+    /* (3) 질문 브라우저로 가는 한 줄 */
+    var more = h("button", "ezx-catlink", { type: "button", text: "이런 것도 물어볼 수 있어요" });
+    more.addEventListener("click", function () { openCatalog(); });
+    wrap.appendChild(more);
     return wrap;
+  }
+
+  /* ---------------- 질문 브라우저 (19차 §5-6) ----------------
+     "무엇을 물어보면 되는지 모르겠다"에 대한 답. 지금 역할이 받을 수 있는 질문을
+     단계별로 묶어 보여 주고, 누르면 그대로 보낸다. 오른쪽 한 낱말로 지금 답이
+     나오는지(지금 확인 가능) 기록이 더 쌓여야 하는지(기록 준비 중) 밝힌다.
+     단계 이름은 칩이 아니라 묶음 제목이고, 분류어 대신 일하는 때로 말한다(R2). */
+  var CAT_GROUPS = [
+    ["목표수립", "목표를 세울 때"],
+    ["중간점검", "진행 중간에 볼 때"],
+    ["평가", "평가할 때"],
+    ["피드백", "피드백을 나눌 때"]
+  ];
+  function catStageOf(id) {
+    var s = String(id || "");
+    var cut = s.indexOf("-");
+    return cut > 0 ? s.slice(0, cut) : "";
+  }
+  function closeCatalog() {
+    if (el.cat && el.cat.parentNode) el.cat.parentNode.removeChild(el.cat);
+    el.cat = null;
+  }
+  function openCatalog() {
+    closeCatalog();
+    var role = roleKey();
+    var rows = [];
+    if (window.EZSignalChat && EZSignalChat.catalogQuestions) {
+      try { rows = EZSignalChat.catalogQuestions(role) || []; } catch (e) { rows = []; }
+    }
+    var ov = h("div", "ezx-cat", { role: "dialog", "aria-label": "물어볼 수 있는 것", "aria-modal": "false" });
+    var box = h("div", "ezx-cat-box");
+    var hd = h("div", "ezx-cat-hd");
+    hd.appendChild(h("div", "ezx-cat-t", { text: "이런 것도 물어볼 수 있어요" }));
+    var x = h("button", "ezx-cat-x", { type: "button", "aria-label": "닫기", text: "✕" });
+    x.addEventListener("click", closeCatalog);
+    hd.appendChild(x);
+    box.appendChild(hd);
+    var bd = h("div", "ezx-cat-bd");
+    var used = {}, drawn = 0;
+    function section(title, list) {
+      if (!list.length) return;
+      bd.appendChild(h("div", "ezx-cat-sec", { text: title }));
+      list.forEach(function (r) {
+        var b = h("button", "ezx-cat-row", { type: "button" });
+        b.appendChild(h("span", "q", { text: String(r.q) }));
+        b.appendChild(h("span", "st" + (r.live ? " on" : ""), { text: r.live ? "지금 확인 가능" : "기록 준비 중" }));
+        b.addEventListener("click", function () {
+          closeCatalog();
+          askSignal(r.id ? String(r.id) : "", String(r.q));
+        });
+        bd.appendChild(b);
+        drawn++;
+      });
+    }
+    CAT_GROUPS.forEach(function (g) {
+      var list = rows.filter(function (r) {
+        if (!r || !r.q || used[r.id || r.q]) return false;
+        if (catStageOf(r.id) !== g[0]) return false;
+        used[r.id || r.q] = 1;
+        return true;
+      });
+      section(g[1], list);
+    });
+    section("그 밖에", rows.filter(function (r) { return r && r.q && !used[r.id || r.q]; }));
+    if (!drawn) {
+      bd.appendChild(h("div", "ezx-pane-empty", { text: "물어볼 수 있는 목록을 아직 불러오지 못했어요." }));
+    }
+    box.appendChild(bd);
+    ov.appendChild(box);
+    ov.addEventListener("click", function (ev) { if (ev.target === ov) closeCatalog(); });
+    (el.panel || document.body).appendChild(ov);
+    el.cat = ov;
   }
 
   /* 신호를 대화로 연다 — EZSignalChat.ask가 topic을 걸고 Elizax.send로 자연어 질문을 보낸다.
@@ -799,78 +953,276 @@
     resetConversation();   /* EZChat 부재 폴백 — 기존 초기화 경로 */
   }
 
-  /* ---------------- 작업중 카드 (계획 STEP + 원천 확인 내역 — W3 p6) ---------------- */
-  var WORK_STEPS = {
-    subject: [["talenx", "내 목표·KR 현황 조회"], ["ERP", "실적·체크인 기록 대조"], ["규정", "평가규정 해당 조항 확인"], ["맥락", "지난 대화·1:1 노트 로드"]],
-    manager: [["talenx", "팀 목표·등급 초안 조회"], ["ERP", "팀 실적 대조"], ["규정", "강제배분 상한 확인"], ["맥락", "1:1·피어리뷰 로드"]],
-    hr: [["talenx", "전사 등급 분포 스캔"], ["규정", "비율·가중치 규칙 검증"], ["ERP", "실적 대비 상승폭 대조"], ["맥락", "운영 이력 로드"]],
-    executive: [["talenx", "전사 목표 정렬 현황 조회"], ["통계", "등급 분포 리스크 산출"], ["ERP", "사업 실적 대조"], ["맥락", "이전 브리핑 로드"]]
-  };
-  function makeWorkMsg(p) {
-    var steps = (WORK_STEPS[p] || WORK_STEPS.subject).map(function (s) {
-      return { src: s[0], label: s[1], st: 0 }; // 0 대기 · 1 진행 · 2 완료
-    });
-    return { role: "work", steps: steps, done: false, _timers: [] };
+  /* ---------------- 「확인 내역」 = 살아 있는 피드 (19차 §5-4) ----------------
+     예전에는 스텝 아이콘(○◉✓)만 갈아끼우고 헤더 글자만 깜빡여서, 네 줄이 처음부터
+     전부 떠 있는 정지 화면처럼 보였다. 사용자가 "작업 중인데 멈춰 있는 것 같다"고 한
+     그 화면이다. 셋을 바꾼다.
+       ① 스텝은 처음부터 다 있지 않다 — 하나씩 아래로 나타난다(380~900ms 난수 간격).
+       ② 진행 중인 줄은 타이핑 점 3개로 지금 손이 가 있음을 보인다.
+       ③ 끝난 줄은 ✓ 와 함께 「무엇을 봤는지」를 실제 건수로 말한다.
+     헤더에는 0.1초 단위 경과 시간과 불확정 진행 막대가 흐르고, 끝나면
+     「확인 끝 · 2.4초 · 근거 4건」으로 접힌다(헤더를 누르면 다시 펼쳐진다).
+     움직임을 줄이도록 설정한 사용자에게는 CSS가 애니메이션을 끄고 초 단위로만 센다. */
+
+  function reduceMotion() {
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+    catch (e) { return false; }
   }
-  function workHTML(m) {
-    var head = m.live
-      ? (m.steps.length ? "확인 내역 · 도구 " + m.steps.length + "회 실행" : "확인 내역")
-      : "확인 내역 · " + m.steps.length + " 원천";
-    var html = '<div class="ezx-work-hd">' + head +
-      (m.done ? ' · <span class="ok">감사 기록됨</span>' : ' · <span class="run">작업 중</span>') + "</div>";
-    if (m.live && !m.steps.length && !m.done) {
-      html += '<div class="ezx-work-ln st1"><span class="ck">◉</span><span class="src">elizax</span><span>실데이터 조회 계획 수립 중…</span></div>';
-    }
-    m.steps.forEach(function (s) {
-      html += '<div class="ezx-work-ln st' + s.st + '"><span class="ck">' + (s.st === 2 ? "✓" : s.st === 1 ? "◉" : "○") +
-        '</span><span class="src">' + esc(s.src) + "</span><span>" + esc(s.label) + "</span></div>";
+  function nArr(k) { var v = DATA[k]; return Object.prototype.toString.call(v) === "[object Array]" ? v : []; }
+  function countBy(k, fn) {
+    var a = nArr(k), n = 0;
+    for (var i = 0; i < a.length; i++) { if (fn(a[i])) n++; }
+    return n;
+  }
+  function ledgerCount() {
+    if (!(window.EZLedger && EZLedger.list)) return 0;
+    try { return (EZLedger.list() || []).length; } catch (e) { return 0; }
+  }
+  /* 대본 스텝 — 각 줄이 실제로 센 건수를 말한다. 못 센 값은 아예 줄을 만들지 않는다. */
+  function scriptSteps(p) {
+    var me = resolveEmpIds().emp_id;
+    var myObjIds = {};
+    var myObjs = countBy("objectives", function (o) {
+      if (o && o.owner_emp_id === me) { myObjIds[o.objective_id] = 1; return true; }
+      return false;
     });
-    return html;
+    var myKrs = countBy("keyResults", function (k) { return k && myObjIds[k.objective_id]; });
+    var myChk = countBy("checkins", function (c) { return c && c.emp_id === me; });
+    var team = countBy("employees", function (e) { return e && e.manager_id === me; });
+    var teamIds = {};
+    nArr("employees").forEach(function (e) { if (e && e.manager_id === me) teamIds[e.emp_id] = 1; });
+    var teamChk = countBy("checkins", function (c) { return c && teamIds[c.emp_id]; });
+    var teamObjs = countBy("objectives", function (o) { return o && teamIds[o.owner_emp_id]; });
+    var headcount = nArr("employees").length;
+    var orgs = nArr("orgs").length;
+    var evals = nArr("evaluations").length;
+    var allObjs = nArr("objectives").length;
+    var lg = ledgerCount();
+    var lgFound = lg ? "내 기록 " + lg + "건" : "아직 쌓인 기록 없음";
+    var out = [];
+    /* run = 지금 하고 있는 말 · done = 끝나고 하는 말. 두 말투를 함께 들고 다닌다 */
+    function add(run, done, found) { if (found) out.push({ run: run, done: done, found: found }); }
+    if (p === "manager") {
+      add("팀원들의 목표를 펼쳐 보는 중", "팀원들의 목표를 펼쳐 봤어요", team + "명 · 목표 " + teamObjs + "건");
+      add("최근 체크인을 훑는 중", "최근 체크인을 훑었어요", "체크인 " + teamChk + "건");
+      add("평가 기준을 맞춰 보는 중", "평가 기준을 맞춰 봤어요", "평가 기록 " + evals + "건 기준");
+      add("지난 대화와 성과 기록을 불러오는 중", "지난 대화와 성과 기록을 불러왔어요", lgFound);
+    } else if (p === "hr") {
+      add("전사 인원과 조직을 확인하는 중", "전사 인원과 조직을 확인했어요", headcount + "명 · " + orgs + "개 조직");
+      add("평가 기록을 모으는 중", "평가 기록을 모아 봤어요", "평가 기록 " + evals + "건");
+      add("목표 진행 상황을 대조하는 중", "목표 진행 상황을 대조했어요", "목표 " + allObjs + "건");
+      add("지난 대화와 성과 기록을 불러오는 중", "지난 대화와 성과 기록을 불러왔어요", lgFound);
+    } else if (p === "executive") {
+      add("전사 목표 정렬을 살피는 중", "전사 목표 정렬을 살펴봤어요", "목표 " + allObjs + "건 · " + orgs + "개 조직");
+      add("평가 분포를 계산하는 중", "평가 분포를 계산했어요", "평가 기록 " + evals + "건");
+      add("조직별 인원을 확인하는 중", "조직별 인원을 확인했어요", headcount + "명");
+      add("지난 브리핑과 성과 기록을 불러오는 중", "지난 브리핑과 성과 기록을 불러왔어요", lgFound);
+    } else {
+      add("내 목표와 핵심 성과를 살피는 중", "내 목표와 핵심 성과를 살펴봤어요", myObjs + "건 · 핵심 성과 " + myKrs + "개");
+      add("체크인 기록을 훑는 중", "체크인 기록을 훑었어요", "체크인 " + myChk + "건");
+      add("평가 기준을 맞춰 보는 중", "평가 기준을 맞춰 봤어요", "평가 기록 " + evals + "건 기준");
+      add("지난 대화와 성과 기록을 불러오는 중", "지난 대화와 성과 기록을 불러왔어요", lgFound);
+    }
+    if (!out.length) {
+      out.push({ run: "지금 볼 수 있는 기록을 확인하는 중", done: "지금 볼 수 있는 기록을 확인했어요", found: "확인 완료" });
+    }
+    return out;
+  }
+  function makeWorkMsg(p) {
+    return {
+      role: "work", steps: [], plan: scriptSteps(p), done: false,
+      t0: Date.now(), ms: 0, collapsed: false, _timers: [], _tick: null
+    };
   }
   /* ---- 라이브 작업중 카드: Claude tool-use 이벤트로 실제 실행 내역 표시 ---- */
   function makeLiveWorkMsg() {
-    return { role: "work", live: true, steps: [], done: false, _timers: [] };
+    return {
+      role: "work", live: true, steps: [], plan: [], done: false,
+      t0: Date.now(), ms: 0, collapsed: false, _timers: [], _tick: null
+    };
+  }
+  /* 0.1초 아래로는 내려가지 않는다 — 「0초」는 안 센 것처럼 읽힌다 */
+  function secText(ms) {
+    var s = Math.max(0, ms) / 1000;
+    if (reduceMotion()) return Math.max(1, Math.round(s)) + "초";
+    return Math.max(0.1, Math.round(s * 10) / 10) + "초";
+  }
+  function workHTML(m) {
+    var elapsed = m.done ? (m.ms || 0) : (Date.now() - (m.t0 || Date.now()));
+    var doneN = 0;
+    m.steps.forEach(function (s) { if (s.st === 2) doneN++; });
+    var html;
+    if (m.done) {
+      html = '<button type="button" class="ezx-work-hd done" aria-expanded="' + (m.collapsed ? "false" : "true") + '">' +
+        '<span class="ezx-work-ar">' + (m.collapsed ? "▸" : "▾") + "</span>" +
+        "<span>확인 끝 · " + esc(secText(elapsed)) + " · 근거 " + doneN + "건</span></button>";
+    } else {
+      html = '<div class="ezx-work-hd">' +
+        '<span class="ezx-work-mk">✦</span><span>elizax가 확인하는 중</span>' +
+        '<span class="ezx-work-el" data-ezx-el="1">' + esc(secText(elapsed)) + "</span></div>" +
+        '<div class="ezx-work-bar" aria-hidden="true"></div>';
+    }
+    var body = "";
+    if (m.live && !m.steps.length) {
+      body += '<div class="ezx-work-ln st1"><span class="ck">·</span>' +
+        "<span>무엇부터 볼지 정하는 중</span>" + dotsHTML() + "</div>";
+    }
+    m.steps.forEach(function (s) {
+      if (s.st === 2) {
+        body += '<div class="ezx-work-ln st2"><span class="ck">✓</span><span>' + esc(s.label) +
+          '</span><span class="fnd">' + esc(s.found || "") + "</span></div>";
+      } else {
+        body += '<div class="ezx-work-ln st1"><span class="ck">·</span><span>' + esc(s.label) +
+          "</span>" + dotsHTML() + "</div>";
+      }
+    });
+    html += '<div class="ezx-work-bd"' + (m.collapsed ? ' hidden="hidden"' : "") + ">" + body + "</div>";
+    return html;
+  }
+  function dotsHTML() {
+    return '<span class="ezx-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
+  }
+  function refreshWork(m) {
+    if (m && m._node) { m._node.innerHTML = workHTML(m); scrollToBottom(); }
+  }
+  /* 경과 시간만 제자리에서 갱신 — 스텝 DOM을 다시 그리면 등장 애니메이션이 매번 재시작한다 */
+  function startTick(m) {
+    if (m._tick) return;
+    var every = reduceMotion() ? 1000 : 100;
+    m._tick = setInterval(function () {
+      if (m.done) { stopTick(m); return; }
+      if (!m._node || !document.body.contains(m._node)) return;
+      var n = m._node.querySelector("[data-ezx-el]");
+      if (n) n.textContent = secText(Date.now() - (m.t0 || Date.now()));
+    }, every);
+  }
+  function stopTick(m) {
+    if (m && m._tick) { clearInterval(m._tick); m._tick = null; }
+  }
+  /* 진행 중이던 줄을 끝난 줄로 넘긴다 — 말투도 완료형으로 바꾼다 */
+  function settleRunning(m) {
+    for (var k = 0; k < m.steps.length; k++) {
+      if (m.steps[k].st !== 1) continue;
+      m.steps[k].st = 2;
+      if (m.steps[k].doneLabel) m.steps[k].label = m.steps[k].doneLabel;
+    }
+  }
+  /* 대본 모드 — 계획된 스텝을 하나씩 피드에 밀어 넣는다 (380~900ms 난수 간격) */
+  /* 대본 경로 최소 진행 시간 (19-3차).
+     답이 10ms 만에 준비돼 버리면 스텝이 하나도 안 보이고 카드가 「확인 끝 · 0.1초」로
+     지나갔다 — 사용자가 말한 "정지 화면 같다"가 아예 "안 보인다"가 된 것이다.
+     그래서 대본 카드는 **스텝을 다 보여 준 뒤에** 완료한다. 총 1.6~3.5초.
+     실 도구 호출(live) 경로와 움직임 최소화 설정에는 이 바닥을 적용하지 않는다 —
+     거기서는 실제로 걸린 시간이 정답이고, 가짜 지연을 넣지 않는다. */
+  var WORK_MIN_MS = 1600, WORK_MAX_MS = 3500, WORK_LEAD = 240, WORK_TAIL = 260;
+  function animateWork(m) {
+    startTick(m);
+    var plan = m.plan || [];
+    var gaps = [], total = 0, i, g;
+    for (i = 0; i < plan.length; i++) {
+      g = 380 + Math.floor(Math.random() * 520);   /* 계약서 §5-4 — 380~900ms 난수 */
+      gaps.push(g); total += g;
+    }
+    /* 상한을 넘으면 간격을 비례 축소한다(스텝을 버리지 않는다) */
+    var budget = WORK_MAX_MS - WORK_LEAD - WORK_TAIL;
+    if (total > budget && total > 0) {
+      var k = budget / total;
+      total = 0;
+      for (i = 0; i < gaps.length; i++) { gaps[i] = Math.max(200, Math.round(gaps[i] * k)); total += gaps[i]; }
+    }
+    var at = WORK_LEAD;
+    for (i = 0; i < plan.length; i++) {
+      at += gaps[i];
+      (function (s, when) {
+        m._timers.push(setTimeout(function () {
+          if (m.done) return;
+          settleRunning(m);
+          m.steps.push({ label: s.run, doneLabel: s.done, found: s.found, st: 1 });
+          refreshWork(m);
+        }, when));
+      })(plan[i], at);
+    }
+    var floor = at + WORK_TAIL;
+    if (floor < WORK_MIN_MS) floor = WORK_MIN_MS;
+    m.floorAt = (m.t0 || Date.now()) + floor;
+  }
+  /* 이 답을 화면에 쓰기까지 남은 시간 — 대본 카드가 아직 스텝을 다 못 보여 줬으면 그만큼 */
+  function workFloorRemaining(aiMsg) {
+    var m = aiMsg && aiMsg._work;
+    if (!m || m.done || m.live || !m.floorAt) return 0;
+    if (reduceMotion()) return 0;   /* 움직임 최소화 — 바닥 없이 즉시 완료 */
+    var left = m.floorAt - Date.now();
+    return left > 0 ? left : 0;
+  }
+  /* 대본 카드가 제 몫을 다 보여 준 다음에 답을 앉힌다 */
+  function afterWorkFloor(aiMsg, fn) {
+    var wait = workFloorRemaining(aiMsg);
+    if (wait <= 0) { fn(); return; }
+    setTimeout(fn, wait);
+  }
+  /* 실 도구 호출 — 도구 이름을 사람 말로 바꿔 한 줄로 세운다.
+     EZTools.labelOf는 「목표·KR 조회」처럼 일하는 사람 말이 아니라서 여기서 다시 쓴다. */
+  var TOOL_SAY = {
+    search_employee: ["누구 이야기인지 찾는 중", "누구 이야기인지 찾았어요"],
+    get_employee_profile: ["그 사람의 기록을 여는 중", "그 사람의 기록을 봤어요"],
+    get_objectives: ["목표와 핵심 성과를 보는 중", "목표와 핵심 성과를 봤어요"],
+    get_checkins: ["체크인 기록을 훑는 중", "체크인 기록을 훑었어요"],
+    get_team_status: ["팀원들 상황을 모으는 중", "팀원들 상황을 모았어요"],
+    get_org_overview: ["전사 현황을 살피는 중", "전사 현황을 살펴봤어요"],
+    get_job_profile: ["직무 기준을 확인하는 중", "직무 기준을 확인했어요"],
+    get_upward_feedback: ["상향 피드백을 모으는 중", "상향 피드백을 모았어요"],
+    get_context_ledger: ["내 성과 기록을 불러오는 중", "내 성과 기록을 불러왔어요"],
+    simulate_whatif: ["숫자를 바꿔 다시 계산하는 중", "숫자를 바꿔 다시 계산했어요"],
+    get_org_objectives: ["연결할 상위 목표를 찾는 중", "연결할 상위 목표를 찾았어요"],
+    get_prev_cycle: ["지난 사이클을 이어보는 중", "지난 사이클을 이어봤어요"],
+    get_strategy_themes: ["회사 전략 방향을 맞춰 보는 중", "회사 전략 방향을 맞춰 봤어요"],
+    get_attendance: ["근무 기록을 보는 중", "근무 기록을 봤어요"],
+    get_leave_balance: ["연차 기록을 보는 중", "연차 기록을 봤어요"],
+    get_payslip: ["급여 명세를 여는 중", "급여 명세를 봤어요"],
+    get_screen_context: ["지금 보고 계신 화면을 확인하는 중", "지금 보고 계신 화면을 확인했어요"],
+    navigate: ["화면을 여는 중", "화면을 열었어요"]
+  };
+  function toolSay(name, i) {
+    var pair = TOOL_SAY[name];
+    if (pair) return pair[i];
+    return i === 0 ? "기록을 확인하는 중" : "기록을 확인했어요";
   }
   function addWorkStep(m, name, input) {
     if (!m) return;
-    var hint = input && (input.name || input.query || input.emp_id || input.section || "");
-    m.steps.push({
-      src: (window.EZTools && EZTools.srcOf(name)) || "talenx",
-      label: ((window.EZTools && EZTools.labelOf(name)) || name) + (hint ? " (" + hint + ")" : ""),
-      st: 1
-    });
+    startTick(m);
+    settleRunning(m);
+    m.steps.push({ label: toolSay(name, 0), doneLabel: toolSay(name, 1), found: "", st: 1 });
     refreshWork(m);
+    void input;
   }
   function finishWorkStep(m, summary) {
     if (!m) return;
     for (var i = m.steps.length - 1; i >= 0; i--) {
       if (m.steps[i].st === 1) {
         m.steps[i].st = 2;
-        if (summary) m.steps[i].label += " → " + summary;
+        if (m.steps[i].doneLabel) m.steps[i].label = m.steps[i].doneLabel;
+        m.steps[i].found = summary ? String(summary) : "";
         break;
       }
     }
     refreshWork(m);
   }
-  function refreshWork(m) {
-    if (m._node) { m._node.innerHTML = workHTML(m); scrollToBottom(); }
-  }
-  function animateWork(m) {
-    m.steps.forEach(function (s, i) {
-      m._timers.push(setTimeout(function () {
-        if (m.done) return;
-        s.st = 1;
-        if (i > 0) m.steps[i - 1].st = 2;
-        refreshWork(m);
-      }, 350 + i * 800));
-    });
-  }
   function completeWork(aiMsg) {
     var m = aiMsg && aiMsg._work;
     if (!m || m.done) return;
+    m.ms = Date.now() - (m.t0 || Date.now());
     m.done = true;
+    m.collapsed = true;   /* 끝나면 접힌다 — 헤더를 누르면 다시 펼쳐진다 */
     m._timers.forEach(function (t) { clearTimeout(t); });
-    m.steps.forEach(function (s) { s.st = 2; });
+    m._timers = [];
+    stopTick(m);
+    settleRunning(m);
+    /* 아직 피드에 못 올라간 계획 스텝도 결과만 남긴다 — 이미 센 값을 버리지 않는다 */
+    var seen = {};
+    m.steps.forEach(function (s) { seen[s.label] = 1; if (s.st !== 2) s.st = 2; });
+    (m.plan || []).forEach(function (s) {
+      if (!seen[s.done]) m.steps.push({ label: s.done, found: s.found, st: 2 });
+    });
     refreshWork(m);
   }
   /* ---------------- 답변은 말풍선이다 ----------------
@@ -1173,19 +1525,26 @@
   function buildMsgNode(m) {
     if (m.role === "work") {
       var wnode = h("div", "ezx-msg work ezx-work");
-      wnode.innerHTML = workHTML(m);
       m._node = wnode;
+      wnode.innerHTML = workHTML(m);
+      /* 끝난 카드의 헤더를 누르면 확인 내역이 다시 펼쳐진다 */
+      wnode.addEventListener("click", function (ev) {
+        var hd = ev.target && ev.target.closest ? ev.target.closest(".ezx-work-hd.done") : null;
+        if (!hd) return;
+        m.collapsed = !m.collapsed;
+        refreshWork(m);
+      });
       return wnode;
     }
-    if (m.role === "nav") {
-      /* 내비게이션 확인 카드 */
-      var nnode = h("div", "ezx-msg ai");
-      var ncard = h("div", "ezx-navcard");
-      ncard.innerHTML = '<span class="arr">➜</span><span>화면 전환 · <b>' + esc(m.target.label) + "</b>(으)로 이동합니다.</span>";
-      nnode.appendChild(ncard);
-      m._node = nnode;
-      return nnode;
+    if (m.role === "sysline") {
+      /* 한 줄 알림 — 말풍선이 아니다 (대상이 바뀌었다는 안내 등) */
+      var lnode = h("div", "ezx-msg sys");
+      lnode.appendChild(h("div", "ezx-sysline", { text: m.text || "" }));
+      m._node = lnode;
+      return lnode;
     }
+    if (m.role === "nav") return buildNavNode(m);
+    if (m.role === "navask") return buildNavAskNode(m);
     if (m.role === "scn") {
       /* 에이전트 시나리오 카드 — 재렌더 시 DOM 재사용 (애니메이션 재시작 방지) */
       if (m._node) return m._node;
@@ -1217,6 +1576,125 @@
     m._node = node; m._bubble = bubble;
     return node;
   }
+  /* ---- 이동 버블 — 가기 전에 1.2초 물러설 틈을 준다 (19차 §5-5) ----
+     화면 키는 두 표기가 돌아다닌다: EZNav는 `perf`, 화면 DOM은 `s-perf`.
+     어느 쪽으로 불려도 사람이 읽는 이름으로만 그린다 — 못 바꾸면 코드 대신 「관련 화면」.
+     (§1 "모르면 감춘다" — 원문 키를 화면에 대신 쓰지 않는다) */
+  var NAV_ALIAS = {
+    "s-home": "home", "s-perf": "perf", "s-appr": "appr", "s-msf": "msf", "s-work": "work",
+    "s-att": "att", "s-hrm": "hrm", "s-pay": "pay", "s-wf": "wf"
+  };
+  var NAV_LABEL = {
+    home: "홈", perf: "성과관리", appr: "평가관리", msf: "360 진단", work: "업무관리",
+    att: "근무관리", hrm: "인사관리", pay: "급여관리", wf: "신청/승인"
+  };
+  function navKey(s) {
+    var k = String(s == null ? "" : s);
+    return NAV_ALIAS[k] || k;
+  }
+  function navLabelOf(s, p, fallback) {
+    var k = navKey(s);
+    try {
+      if (window.EZNav && EZNav.labelOf) {
+        var l = EZNav.labelOf(k, p);
+        if (l && String(l) !== k) return String(l);
+      }
+    } catch (e) { /* ignore */ }
+    if (fallback && String(fallback) !== String(s) && String(fallback) !== k) return String(fallback);
+    return NAV_LABEL[k] || SCREEN_LABELS[s] || "관련 화면";
+  }
+  function navOpenLabel(s, p, fallback) {
+    var k = navKey(s);
+    try {
+      if (window.EZNav && EZNav.confirmLabel) {
+        var c = EZNav.confirmLabel(k, p);
+        if (c && String(c).indexOf(k) !== 0) return String(c);
+      }
+    } catch (e) { /* ignore */ }
+    return navLabelOf(s, p, fallback) + " 열기";
+  }
+  var NAV_HOLD = 1200;   /* 이동 전 물러설 틈 */
+  function buildNavNode(m) {
+    var t = m.target || {};
+    var node = h("div", "ezx-msg ai");
+    var card = h("div", "ezx-navcard");
+    card.appendChild(h("span", "arr", { text: "➜" }));
+    var label = navLabelOf(t.s, t.p, t.label);
+    card.appendChild(h("span", "", {
+      text: m.cancelled ? "여기서 계속할게요." : label + "(으)로 넘어갈게요."
+    }));
+    /* 아직 안 갔고 취소도 안 했으면 되돌릴 수 있다 — 재렌더로 버튼이 사라지지 않도록
+       "지났는가"는 노드가 아니라 시각(m.at)으로 판단한다 */
+    var left = NAV_HOLD - (Date.now() - (m.at || Date.now()));
+    if (!m.cancelled && !m.went && left > 0) {
+      var cancel = h("button", "ezx-nav-cancel", { type: "button", text: "취소" });
+      cancel.addEventListener("click", function () {
+        m.cancelled = true;
+        renderMessages();
+      });
+      card.appendChild(cancel);
+    }
+    node.appendChild(card);
+    m._node = node;
+    if (!m.fired) {
+      m.fired = true;
+      setTimeout(function () {
+        if (m.cancelled || m.went) return;
+        m.went = true;
+        var ok = false;
+        try { ok = window.EZNav && EZNav.go ? EZNav.go(navKey(t.s), t.p) : false; }
+        catch (e) { console.error("[elizax nav]", e); }
+        if (!ok) console.warn("[elizax nav] target not found:", t.s, t.p);
+        renderMessages();
+      }, Math.max(0, left));
+    }
+    return node;
+  }
+  /* ---- 물어보는 이동 — 답변을 먼저 내고, 갈지 말지는 사람이 정한다 ---- */
+  function buildNavAskNode(m) {
+    var node = h("div", "ezx-msg ai");
+    var card = h("div", "ezx-navask");
+    var label = navLabelOf(m.s, m.p, m.label);
+    if (m.answered === "go") {
+      card.appendChild(h("div", "ezx-navask-q", { text: label + "(으)로 넘어갈게요." }));
+    } else if (m.answered === "stay") {
+      card.appendChild(h("div", "ezx-navask-q", { text: "여기서 계속할게요." }));
+    } else {
+      card.appendChild(h("div", "ezx-navask-q", {
+        text: (m.reason ? m.reason + " " : "") + label + "에서 바로 고칠 수 있어요. 열어 드릴까요?"
+      }));
+      var row = h("div", "ezx-navask-row");
+      var go = h("button", "ezx-navask-btn go", { type: "button", text: navOpenLabel(m.s, m.p, m.label) });
+      go.addEventListener("click", function () {
+        m.answered = "go";
+        renderMessages();
+        /* onGo 가 있으면 그쪽이 화면 전환까지 책임진다(처리 초안 프리필 등).
+           함수는 직렬화되지 않아 새로고침 뒤에는 사라진다 — 그때는 단순 이동으로 떨어진다. */
+        try {
+          if (typeof m.onGo === "function") { m.onGo(); return; }
+          if (window.EZNav && EZNav.go) EZNav.go(m.s, m.p);
+        } catch (e) { console.error("[elizax nav]", e); }
+      });
+      var stay = h("button", "ezx-navask-btn", { type: "button", text: "여기서 계속" });
+      stay.addEventListener("click", function () { m.answered = "stay"; renderMessages(); });
+      row.appendChild(go); row.appendChild(stay);
+      card.appendChild(row);
+    }
+    node.appendChild(card);
+    m._node = node;
+    return node;
+  }
+  /* 공개 API — 처리 모듈(tx_signal_actions 등)이 「열어 드릴까요?」를 띄울 때 부른다 */
+  function askNav(s, p, reason) {
+    if (!s) return null;
+    var m = pushMessage({
+      role: "navask", s: navKey(s), p: (p == null ? null : p),
+      reason: reason ? String(reason) : "", label: ""
+    });
+    renderMessages();
+    return m;
+  }
+
   function buildRecos(recos) {
     var wrap = h("div", "ezx-recos");
     recos.forEach(function (r) {
@@ -1275,9 +1753,10 @@
   function buildPayloadMessage(userText) {
     if (!state.attachContext) return userText;
     var label = activeScreenLabel();
-    var line = "[현재 화면: " + label + " / 사용자: " + CURRENT.name + "·" + (CURRENT.jobTitle || "") + "]";
-    if (needsSubject(state.perspective) && state.subject) {
-      line = "[현재 화면: " + label + " / 대상: " + state.subject.name + "·" + (state.subject.jobTitle || "") + " / 요청자: " + CURRENT.name + "]";
+    var me = curUser();
+    var line = "[현재 화면: " + label + " / 사용자: " + me.name + "·" + (me.jobTitle || "") + "]";
+    if (!isSelfSubject()) {
+      line = "[현재 화면: " + label + " / 대상: " + state.subject.name + "·" + (state.subject.jobTitle || "") + " / 요청자: " + me.name + "]";
     }
     var ledger = buildLedgerContext();
     if (ledger) line += "\n" + ledger;
@@ -1325,27 +1804,54 @@
     scrollToBottom();
   }
 
+  /* ---- 19차 §5-5 — 답이 먼저다 ----
+     예전에는 `EZNav.resolve`가 맨 앞에 있어서 "1차 평가자 검토가 제대로 되고 있는지
+     확인해줘"가 「평**가자**」의 「가자」에 걸려 화면으로 튀었다. 물어본 사람은 답을
+     못 받았다. 순서를 뒤집는다 —
+       ① 질문이거나(EZNav.askIntent) 아는 신호를 부르는 말이면(EZSignalChat.matchAny)
+          → 내비 판정을 아예 건너뛰고 답변 경로
+       ② 그 밖에 EZNav.resolve가 「이동」이라고 분명히 말할 때만 → 이동
+       ③ 나머지 → 답변 경로
+     ①②의 모듈은 다른 담당이 만드는 중이라 없을 수도 있다 — 없으면 조용히 ③으로 간다. */
+  function asksQuestion(text) {
+    try {
+      if (window.EZNav && EZNav.askIntent) return !!EZNav.askIntent(text);
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+  function signalHit(text) {
+    try {
+      if (window.EZSignalChat && EZSignalChat.matchAny) return EZSignalChat.matchAny(text, roleKey()) || null;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+  function explicitNav(text) {
+    var hit = null;
+    try {
+      if (window.EZNav && EZNav.resolve) hit = EZNav.resolve(text) || null;
+    } catch (e) { hit = null; }
+    if (!hit) return null;
+    /* strength를 아직 안 주는 구버전 EZNav와도 함께 돈다 — 없으면 명시로 본다 */
+    if (hit.strength && hit.strength !== "explicit") return null;
+    return hit;
+  }
+
   function sendMessage(userText) {
     if (state.streaming) return;
-    /* 화면 이동 의도면 LLM 없이 즉시 내비게이션 ("목표 화면으로 넘어가줘") */
-    if (window.EZNav && window.EZNav.resolve) {
-      var navHit = null;
-      try { navHit = window.EZNav.resolve(userText); } catch (e) { /* ignore */ }
+    /* 질문이거나 아는 신호를 부르는 말이면 — 이동 판정도, 대본 시나리오도 건너뛰고 답부터 낸다 */
+    var wantsAnswer = asksQuestion(userText) || !!signalHit(userText);
+    if (!wantsAnswer) {
+      var navHit = explicitNav(userText);
       if (navHit) {
         pushMessage({ role: "user", text: userText });
-        pushMessage({ role: "nav", target: navHit });
+        pushMessage({ role: "nav", target: navHit, at: Date.now() });
         renderMessages();
-        setTimeout(function () {
-          var ok = false;
-          try { ok = window.EZNav.go(navHit.s, navHit.p); } catch (e) { console.error("[elizax nav]", e); }
-          if (!ok) console.warn("[elizax nav] target not found:", navHit.s, navHit.p);
-        }, 380);
-        return;
+        return;   /* 실제 이동은 nav 버블이 1.2초 카운트다운 뒤에 한다 (취소 가능) */
       }
     }
     /* 오프라인일 때만 시나리오 가로채기 — 라이브 연결 시 Claude가 우선
        (시나리오 카드는 제안 칩으로 여전히 실행 가능) */
-    if (aiMode() === "offline" && window.TXAgent && window.TXAgent.intentFor) {
+    if (!wantsAnswer && aiMode() === "offline" && window.TXAgent && window.TXAgent.intentFor) {
       var scnKey = null;
       try { scnKey = window.TXAgent.intentFor(userText); } catch (e) { /* ignore */ }
       /* "오늘 점심 뭐 먹지"가 /오늘/ 한 단어로 home 브리핑 카드에 삼켜지던 오검출 차단 (G4).
@@ -1358,14 +1864,12 @@
           && !/(시나리오|데모|워크스페이스|허브)/.test(String(userText))) scnKey = null;
       if (scnKey) { runScenarioInChat(scnKey, userText); return; }
     }
-    // guard: manager/executive needs a subject
-    if (needsSubject(state.perspective) && !state.subject) {
-      pushMessage({ role: "err", text: "이 관점에서는 대상 직원을 먼저 선택해 주세요." });
-      renderMessages();
-      if (el.pickerInput) el.pickerInput.focus();
-      return;
-    }
+    /* 「대상 직원을 먼저 선택해 주세요」 차단 폐지 (19차 §5-2) — 막지 않는다.
+       대신 문장에 사원 이름이 있으면 그때만 대상을 바꾸고 한 줄로 알린다.
+       이름이 없으면 팀 전체 집계로 답한다. */
     pushMessage({ role: "user", text: userText });
+    var picked = setSubjectByName(userText);
+    if (picked) pushMessage({ role: "sysline", text: picked.name + "님 기준으로 볼게요." });
     /* 실 에이전트 가능(연결+키+도구) → 라이브 카드(실 도구 호출 표시),
        그 외 라이브 → 기존 연출 카드, 오프라인 → 카드 없음 */
     var agentReady = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
@@ -1416,11 +1920,7 @@
         m._stopped = true;
         if (!m.note) m.note = "생성 중지됨";
       }
-      if (m.role === "work" && !m.done) {
-        m.done = true;
-        (m._timers || []).forEach(function (t) { clearTimeout(t); });
-        refreshWork(m);
-      }
+      if (m.role === "work" && !m.done) completeWork({ _work: m });
     }
     finishStreaming();
     renderMessages();
@@ -1493,31 +1993,26 @@
         if (name === "navigate" && r && r.ok) aiMsg.note = "화면 전환 · " + (r.moved_to || "");
       },
       onDone: function () {
-        if (work) { work.done = true; work.steps.forEach(function (s) { s.st = 2; }); refreshWork(work); }
+        completeWork(aiMsg);
         aiMsg.streaming = false;
+        /* 도구만 돌리고 한 마디도 안 한 채 끝났다 — 폴백 사다리로 (19-2차) */
+        if (unusableAnswer(aiMsg)) { answerFallback(aiMsg, "에이전트가 답을 내지 않았다"); return; }
         extractCtxRefs(aiMsg); /* 실인용 근거 마커 → meta.ctxRefs */
         attachLiveReceipt(aiMsg, calls, userText || aiMsg._q); /* 실AI 응답 → 영수증 카드 */
-        /* 모델이 마커를 낸 경우의 폴백 (navigate 도구가 기본) */
+        /* 모델이 이동 마커를 냈어도 저절로 가지 않는다 (19차 §5-5) — 물어본다 */
+        var pending = null;
         if (window.EZNav && window.EZNav.extractMarker) {
           try {
             var ext = window.EZNav.extractMarker(aiMsg.text);
-            if (ext.nav) {
-              aiMsg.text = ext.clean;
-              aiMsg.note = "화면 전환 · " + ext.nav.label;
-              setTimeout(function () { try { window.EZNav.go(ext.nav.s, ext.nav.p); } catch (e) { /* ignore */ } }, 380);
-            }
+            if (ext.nav) { aiMsg.text = ext.clean; pending = ext.nav; }
           } catch (e) { /* ignore */ }
         }
         finishStreaming();
         renderMessages();
+        if (pending) askNav(pending.s, pending.p, "");
       },
       onError: function (m) {
-        if (work) { work.done = true; refreshWork(work); }
-        aiMsg.role = "err";
-        aiMsg.streaming = false;
-        aiMsg.text = m || "오류가 발생했습니다.";
-        finishStreaming();
-        renderMessages();
+        answerFallback(aiMsg, m);   /* 백엔드 오류 문자열은 화면에 닿지 않는다 */
       }
     });
   }
@@ -1548,26 +2043,33 @@
       if (ct.indexOf("text/event-stream") === -1) {
         // non-streaming JSON fallback
         return res.json().then(function (j) {
-          completeWork(aiMsg);
+          /* completeWork는 여기서 부르지 않는다 — 대본 카드가 스텝을 다 보여 준 뒤
+             afterWorkFloor 안에서 끝낸다 (19-3차) */
           aiMsg.streaming = false;
-          aiMsg.text = j.response || j.message || "(빈 응답)";
-          extractCtxRefs(aiMsg);
-          if (j.recommendations && j.recommendations.length) aiMsg.recos = j.recommendations;
-          if (j.type === "fallback" || j.source === "fallback") { aiMsg.note = "AI 미연결 — 기본 응답"; }
-          else attachLiveReceipt(aiMsg, aiMsg._calls, aiMsg._q);
-          finishStreaming();
-          renderMessages();
+          /* 백엔드가 폴백을 돌려줬다 = 실제 AI가 답한 게 아니다. 그 문구(자격증명 안내 등)를
+             그대로 쓰지 않고 우리 폴백 사다리로 넘긴다 (19-2차). */
+          if (j.type === "fallback" || j.source === "fallback") {
+            answerFallback(aiMsg, j.response || j.message || "fallback");
+            return;
+          }
+          aiMsg.text = j.response || j.message || "";
+          if (unusableAnswer(aiMsg)) { answerFallback(aiMsg, "응답이 비었거나 설정 안내문이다 (json)"); return; }
+          /* 스트리밍이 아니라 한 번에 온 답 — 대본 카드가 제 몫을 보여 준 뒤 앉힌다 */
+          afterWorkFloor(aiMsg, function () {
+            if (aiMsg._stopped) return;
+            completeWork(aiMsg);
+            extractCtxRefs(aiMsg);
+            if (j.recommendations && j.recommendations.length) aiMsg.recos = j.recommendations;
+            attachLiveReceipt(aiMsg, aiMsg._calls, aiMsg._q);
+            finishStreaming();
+            renderMessages();
+          });
         });
       }
       return readSSE(res, aiMsg);
     }).catch(function (err) {
-      completeWork(aiMsg);
-      aiMsg.role = "err";
-      aiMsg.streaming = false;
-      aiMsg.text = "연결에 실패했습니다 (" + (err && err.message ? err.message : "network") +
-        "). 잠시 후 다시 시도해 주세요.";
-      finishStreaming();
-      renderMessages();
+      /* 상태코드·네트워크 오류 문구는 화면에 쓰지 않는다 — console.warn 으로만 남는다 */
+      answerFallback(aiMsg, (err && err.message) ? err.message : "network");
     });
   }
 
@@ -1626,8 +2128,6 @@
     ["work", /(근무|근태|출퇴근|출근|퇴근|휴가|연차|반차|병가|초과\s*근[무로]|연장\s*근[무로]|야근|지각|조퇴|재택|근로\s*시간|소정)/]
   ];
   var OFF_GREET = /^(안녕|하이|반가|고마|감사|수고|ㅎㅇ|헬로|hi|hello|hey|누구|뭐\s*해|뭐하|테스트|test)/i;
-  /* 약한 이동 동사 — "급여명세서 열어줘"처럼 화면 단어 없이 말한 경우 보강 판정 */
-  var OFF_NAV_VERB = /(열어|띄워|이동|가\s*줘|가줘|넘어가|바로\s*가)/;
 
   function offlineIntent(text) {
     var t = String(text || "").trim();
@@ -1638,16 +2138,9 @@
     }
     return "unknown";
   }
-  function offlineNav(text) {
-    if (!window.EZNav || !EZNav.resolve) return null;
-    var t = String(text || "");
-    var hit = null;
-    try { hit = EZNav.resolve(t); } catch (e) { hit = null; }
-    if (hit) return hit;
-    if (!OFF_NAV_VERB.test(t)) return null;
-    /* 화면 단어를 보태 EZNav의 이동 의도 판정을 통과시킨 뒤 동일 라우팅표로 해석 */
-    try { return EZNav.resolve(t + " 화면으로") || null; } catch (e2) { return null; }
-  }
+  /* `offlineNav()` 폐지 (19차 §5-5) — 답변 경로에서는 이동 판정을 하지 않는다.
+     여기까지 온 문장은 이미 「이동이 아니다」로 판정된 것이고, 화면 이동 판정을 한 번 더
+     느슨하게(“열어줘”만 보고) 하는 바람에 질문이 답 없이 화면으로 튀었다. */
 
   /* ---- 의도별 응답 빌더 — 모두 {text, recos?, receipt?} 또는 null ---- */
   function offBlocked(sname, policy) {
@@ -2185,9 +2678,8 @@
 
   /* 질문 의도 → 로컬 데이터 조회 → 영수증. 미매칭이면 가짜 영수증 대신 정직한 안내. */
   function offlineReceipt(body, userText) {
-    var p = body.perspective || "subject";
-    var sid = body.emp_id || CURRENT.emp_id;
-    var sname = (needsSubject(p) && state.subject) ? state.subject.name : CURRENT.name;
+    var sid = body.emp_id || curUser().emp_id;
+    var sname = isSelfSubject() ? curUser().name : state.subject.name;
     var q = String(userText || "");
     var intent = offlineIntent(q);
     var out = null;
@@ -2212,20 +2704,89 @@
     };
   }
 
-  function offlineRespond(body, aiMsg, userText) {
-    /* ① 화면 이동 요청 — EZNav 1차 판정이 놓친 약한 표현("…열어줘")까지 실제 이동 */
-    var nav = offlineNav(userText);
-    if (nav) {
-      aiMsg.text = "화면 전환 · **" + nav.label + "**(으)로 이동합니다.";
+  /* ---------------- 답이 못 나왔을 때 — 단 하나의 문 (19-2차) ----------------
+     AI 경로가 오류·빈 응답·자격증명 실패로 끝나면 예전에는 백엔드가 준 문자열을
+     말풍선에 그대로 그렸다. 그래서 「ANTHROPIC_API_KEY 또는 AWS 키(AWS_KEYS_CSV…)를
+     설정한 뒤 다시 실행해 주세요」가 사용자 화면에 떴다 — §1 「화면에 코드 금지」 위반이고,
+     정작 이 질문이 부르던 신호의 답은 나오지 못했다.
+
+     이제 실패는 전부 이 함수 하나를 지난다. 순서:
+       ① 이 턴이 부른 신호가 있으면 그 신호의 답(EZSignalChat.answerText)
+       ② 로컬 기록으로 답할 수 있는 질문이면 그 조회 결과(offlineReceipt)
+       ③ 둘 다 아니면 사람 말 한 문장
+     환경변수 이름·URL·상태코드·스택은 console.warn 으로만 남고 화면에 닿지 않는다. */
+  var DEAD_END = "지금은 elizax가 회사 데이터에 연결되어 있지 않아 확인해 드리지 못했어요. 잠시 뒤 다시 물어봐 주세요.";
+
+  /* 무엇으로 답할지만 정한다 — 화면에는 아직 쓰지 않는다 */
+  function pickFallbackAnswer(aiMsg) {
+    var q = aiMsg._q || "";
+    var rk = roleKey();
+
+    /* ① 이 질문이 부른 신호의 답 */
+    var hit = signalHit(q);
+    var sid = hit && (hit.id || (hit.sig && hit.sig.id));
+    if (sid && window.EZSignalChat && EZSignalChat.answerText) {
+      var t = "";
+      try { t = String(EZSignalChat.answerText(sid, rk) || ""); } catch (e) { t = ""; }
+      t = t.replace(/^\s+|\s+$/g, "");
+      if (t) return { text: t, note: "지금 보이는 기록만으로 정리했어요." };
+    }
+
+    /* ② 로컬 기록으로 답할 수 있는 질문인가 — 못 알아들은 질문(unknown)이면 넘긴다 */
+    var built = null;
+    try {
+      built = offlineReceipt({ perspective: state.perspective, emp_id: resolveEmpIds().emp_id }, q);
+    } catch (e2) { built = null; }
+    if (built && built.text && built.intent && built.intent !== "unknown") {
+      return {
+        text: built.text, note: "지금 보이는 기록으로 확인했어요.",
+        recos: built.recos, receipt: built.receipt
+      };
+    }
+
+    /* ③ 사람 말 한 문장 */
+    return { text: DEAD_END, note: "" };
+  }
+
+  function answerFallback(aiMsg, detail) {
+    if (!aiMsg) return false;
+    if (detail) {
+      try { console.warn("[elizax] 답변 경로 실패 — 화면에는 내보내지 않는다:", detail); }
+      catch (e) { /* ignore */ }
+    }
+    var ans = pickFallbackAnswer(aiMsg);
+    /* 답은 벌써 준비됐지만, 대본 카드가 스텝을 다 보여 줄 때까지 기다렸다 앉힌다
+       (19-3차) — 그래야 "지금 일하고 있다"가 눈에 보인다. */
+    afterWorkFloor(aiMsg, function () {
+      if (aiMsg._stopped) return;   /* 그 사이 사용자가 중지했다 */
+      completeWork(aiMsg);
+      aiMsg.role = "ai";            /* err 버블로 두면 붉은 상자에 오류처럼 보인다 */
       aiMsg.streaming = false;
-      aiMsg.note = "AI 미연결 · 화면 이동은 로컬에서 처리";
+      aiMsg.text = ans.text;
+      aiMsg.note = ans.note || "";
+      aiMsg.noteWarn = false;
+      if (ans.recos && ans.recos.length) aiMsg.recos = ans.recos;
+      if (ans.receipt) {
+        aiMsg.receipt = ans.receipt;
+        if (!aiMsg.meta) aiMsg.meta = {};
+        aiMsg.meta.receipt = ans.receipt;
+      }
       finishStreaming();
       renderMessages();
-      setTimeout(function () {
-        try { EZNav.go(nav.s, nav.p); } catch (e) { console.warn("[elizax nav]", e); }
-      }, 320);
-      return;
-    }
+    });
+    return true;
+  }
+  /* 답으로 쓸 수 없는 응답인가.
+     ① 빈 문자열 ② 설정·자격증명 안내문 — 백엔드가 200으로 돌려주기도 해서
+     오류 분기만 막아서는 새어 나온다. 환경변수 이름·키 이름이 보이면 답이 아니다. */
+  var CONFIG_LEAK = /(ANTHROPIC_API_KEY|AWS_KEYS_CSV|AWS_ACCESS_KEY_ID|AWS_SECRET|API[_\s-]?KEY|자격\s*증명|환경\s*변수|\.env\b)/i;
+  function unusableAnswer(aiMsg) {
+    var t = String((aiMsg && aiMsg.text) || "");
+    if (!t.replace(/\s+/g, "")) return true;
+    return CONFIG_LEAK.test(t);
+  }
+
+  function offlineRespond(body, aiMsg, userText) {
     var built = offlineReceipt(body, userText);
     var full = built.text;
     var idx = 0;
@@ -2349,7 +2910,7 @@
   }
   function rcTitle(question, calls) {
     var intent = offlineIntent(question);
-    var subj = (needsSubject(state.perspective) && state.subject) ? state.subject.name : CURRENT.name;
+    var subj = isSelfSubject() ? curUser().name : state.subject.name;
     var t = RC_INTENT_TITLE[intent];
     if (t) return RC_SELF_INTENT[intent] ? t : (subj + " · " + t);
     for (var i = 0; i < calls.length; i++) {
@@ -2452,6 +3013,8 @@
         if (r.done) {
           if (buffer.trim()) handleEvent(buffer);
           aiMsg.streaming = false;
+          /* 스트림이 한 글자도 안 주고 닫혔다 — 폴백 사다리로 (19-2차) */
+          if (unusableAnswer(aiMsg)) { answerFallback(aiMsg, "스트림이 답 없이 닫혔다"); return; }
           finishStreaming();
           renderMessages();
           return;
@@ -2480,20 +3043,15 @@
     } else if (msg.type === "done") {
       completeWork(aiMsg);
       aiMsg.streaming = false;
+      /* 아무 말도 못 받고 끝났다 = 답이 없는 것 — 폴백 사다리로 (19-2차) */
+      if (unusableAnswer(aiMsg)) { answerFallback(aiMsg, "응답이 비었거나 설정 안내문이다 (stream)"); return; }
       extractCtxRefs(aiMsg); /* 실인용 근거 마커 → meta.ctxRefs */
-      /* LLM이 화면 이동을 지시했으면 마커 제거 후 실행 */
+      /* LLM이 화면 이동을 지시했어도 저절로 가지 않는다 (19차 §5-5) — 마커만 걷고 물어본다 */
+      var pending2 = null;
       if (window.EZNav && window.EZNav.extractMarker) {
         try {
           var ext = window.EZNav.extractMarker(aiMsg.text);
-          if (ext.nav) {
-            aiMsg.text = ext.clean;
-            aiMsg.note = "화면 전환 · " + ext.nav.label;
-            setTimeout(function () {
-              var ok = false;
-              try { ok = window.EZNav.go(ext.nav.s, ext.nav.p); } catch (e) { console.error("[elizax nav]", e); }
-              if (!ok) console.warn("[elizax nav] target not found:", ext.nav.s, ext.nav.p);
-            }, 380);
-          }
+          if (ext.nav) { aiMsg.text = ext.clean; pending2 = ext.nav; }
         } catch (e) { /* ignore */ }
       }
       if (msg.recommendations && msg.recommendations.length) aiMsg.recos = msg.recommendations;
@@ -2502,17 +3060,12 @@
       attachLiveReceipt(aiMsg, aiMsg._calls, aiMsg._q);
       saveHistory();
       renderMessages();
+      if (pending2) askNav(pending2.s, pending2.p, "");
     } else if (msg.type === "fallback") {
-      completeWork(aiMsg);
-      aiMsg.streaming = false;
-      aiMsg.text = msg.response || aiMsg.text || "";
-      aiMsg.note = "AI 미연결 — 기본 응답";
-      renderMessages();
+      /* 백엔드 폴백 문구(자격증명 안내 등)를 쓰지 않는다 — 우리 폴백 사다리로 (19-2차) */
+      answerFallback(aiMsg, msg.response || "fallback");
     } else if (msg.type === "error") {
-      aiMsg.role = "err";
-      aiMsg.streaming = false;
-      aiMsg.text = msg.message || "오류가 발생했습니다.";
-      renderMessages();
+      answerFallback(aiMsg, msg.message || "error");
     }
   }
 
@@ -2580,7 +3133,7 @@
   function closePanel() {
     state.open = false;
     el.root.classList.remove("ezx-open");
-    if (el.pickerList) el.pickerList.classList.remove("on");
+    closeCatalog();
     try { el.fab.focus(); } catch (e) {}
   }
 
@@ -2612,6 +3165,12 @@
       renderMessages();
     },
     isStreaming: function () { return state.streaming; },
+    /* 19차 §5-5 — 이동은 물어보고 간다. 처리 모듈이 이걸 부른다.
+       askNav(s, p, reason) → 답변 아래에 [<화면> 열기] [여기서 계속] 두 버튼을 붙인다. */
+    askNav: askNav,
+    /* 19차 §5-2 — 대화 안에서 대상 바꾸기. 이름을 못 찾으면 null */
+    setSubjectByName: setSubjectByName,
+    subject: function () { return state.subject ? { emp_id: state.subject.emp_id, name: state.subject.name } : null; },
     showTab: showTab,                   /* [Phase1 IA] 도킹 패널 탭 전환 ("chat"|"rec"|"ntf"[, highlightId]) */
     stopStreaming: stopStreaming,
     regenerate: regenerate,

@@ -165,3 +165,32 @@
   font-size: var(--text-supporting-size);
 }
 [data-astryx-theme="talenx"] .ezk-lock .ezk-lock-until { color: var(--color-text-disabled); margin-left: auto; }
+
+/* ---- EZSurf — 화면에 박히는 elizax 조각 공통 표시 (§9, PLAN-19)
+   좌측 악센트 레일 + 틴트 배경 + ✦ 제목줄로, 어떤 talenx 화면에 끼워 넣어도 "이건 elizax가 만든 조각"임을
+   즉시 알아보게 한다. 최소 글자 크기 12.5px(본문)/13.5px(제목) — 11px 이하 금지. ---- */
+[data-astryx-theme="talenx"] .ezsurf {
+  position: relative;
+  border-radius: var(--radius-container);
+  padding: 14px 16px 14px 20px;
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-background-card));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+[data-astryx-theme="talenx"] .ezsurf::before {
+  content: "";
+  position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  border-radius: var(--radius-container) 0 0 var(--radius-container);
+  background: var(--color-accent);
+}
+[data-astryx-theme="talenx"] .ezsurf-hd {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 13.5px; font-weight: 600;
+  color: var(--color-text-accent);
+  margin: 0 0 8px;
+}
+[data-astryx-theme="talenx"] .ezsurf-hd::before { content: "✦"; flex: none; }
+[data-astryx-theme="talenx"] .ezsurf-note {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}

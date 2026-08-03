@@ -114,6 +114,16 @@
   }
 
   /* ---------- verifiable-answer receipt (평가관리 · 평가 현황) ---------- */
+  /* 19차 §10 — 기록 번호를 화면에 쓰지 않는다. 출처 사전이 사람 말로 바꿔 주고,
+     바꾸지 못하면 칩 자체를 만들지 않는다(코드를 대신 남기지 않는다). */
+  function ridChip(src) {
+    var lab = "";
+    try { if (window.EZSource && EZSource.label) lab = String(EZSource.label(src) || ""); }
+    catch (e) { lab = ""; }
+    if (!lab) return "";
+    return ' <span class="txr-rid">' + esc(lab) + "</span>";
+  }
+
   function sb(kind, label) { return '<span class="txr-sb ' + kind + '">' + esc(label) + "</span>"; }
 
   /* ---------- 실데이터 계산 helpers (하드코딩 지표 대체) ---------- */
@@ -357,7 +367,7 @@
       verdict = name + "님 팀(" + m.teamCount + "명) 등급 초안 분포입니다. <b>상위(S~A) 편중</b> 여부를 강제배분 밴드와 대조했습니다. <span class=\"warn\">자동 확정 아님.</span>";
       metrics = [["팀 인원", m.teamCount + "명"], ["S~A 비율", teamTop], ["밴드 상한", "≤30%"]];
       steps = [
-        ["분포 스캔", "팀원 등급 초안 분포 집계 → S~A " + esc(teamTop) + " " + sb("rule", "규칙") + ' <span class="txr-rid">calib.dist.' + esc(m.cu.org_id || "") + "</span>"],
+        ["분포 스캔", "팀원 등급 초안 분포 집계 → S~A " + esc(teamTop) + " " + sb("rule", "규칙") + ridChip("calib.dist." + (m.cu.org_id || ""))],
         ["규칙 대조", "강제배분 가이드 상위 ≤ 30% " + (tc && tc.moved ? "초과 감지 · 초과 " + tc.moved + "명" : "준수 확인") + " <span class=\"txr-badge ok\">평가규정 v3.1 · 검증됨</span> <span class=\"txr-badge ref\">§12</span>"],
         ["근거 대비", "상위 등급자 실적 달성률 대조 " + sb("erp", "ERP") + " → 상승폭 설명력 점검"]
       ];
@@ -384,7 +394,7 @@
       verdict = "전사 목표·평가에서 <b>규칙 위반·미연결 신호</b>를 먼저 보고합니다. 가중치·직무 근거·전략 연결은 전수 검증했고, 본부별 등급 분포로 관대화 의심을 점검했습니다. <span class=\"warn\">재검토 제안 · 자동 수정 아님.</span>";
       metrics = [["가중치 이상", wBad + "건"], ["직무근거 없는 KR", noJobKr + "건"], ["관대화 의심", lenLabel]];
       steps = [
-        ["규칙 스캔", "목표별 KR 가중치 합 100% 검증 → 이상 " + wBad + "건 " + sb("rule", "규칙") + ' <span class="txr-rid">rule.weight.sum</span>'],
+        ["규칙 스캔", "목표별 KR 가중치 합 100% 검증 → 이상 " + wBad + "건 " + sb("rule", "규칙") + ridChip("rule.weight.sum")],
         ["정렬 검증", "목표 " + osAll.length + "건 전략 미연결 " + noTheme + "건 · KR " + ksAll.length + "건 직무근거 누락 " + noJobKr + "건 " + sb("talenx", "talenx") + " " + sb("rule", "원칙") + " 전사 정렬 필수"],
         ["분포 대비", gsHr
           ? "본부별 상위(S~A) 비율 전수 계산 → 전사 " + gsHr.topPct + "% · 임계 " + gsHr.thrPct + "% 초과 " + lenList.length + "본부(" + esc(lenNames) + ") " + sb("erp", "ERP") + " 실적 대비 상승폭 점검"
@@ -408,7 +418,7 @@
         ["분포 리스크", risk]
       ];
       steps = [
-        ["정렬 현황 조회", "목표 " + xs.total + "건 × 전략 테마 " + xs.themeCount + "종 연결 검증 → 미정렬 " + xs.mis.length + "건 · 정렬률 " + xs.alignPct + "% " + sb("talenx", "talenx") + ' <span class="txr-rid">okr.tree.FY2026</span>'],
+        ["정렬 현황 조회", "목표 " + xs.total + "건 × 전략 테마 " + xs.themeCount + "종 연결 검증 → 미정렬 " + xs.mis.length + "건 · 정렬률 " + xs.alignPct + "% " + sb("talenx", "talenx") + ridChip("okr.tree.FY2026")],
         ["실적 대조", "전사(company) 목표 진척 평균 " + xs.prog + "% " + sb("erp", "ERP")],
         ["본부별 요약", xs.divs.length
           ? "본부별 목표 진척 상위 " + esc(divTop.name) + " " + divTop.avg + "% · 하위 " + esc(divLow.name) + " " + divLow.avg + "% → 등급 조정 우선순위 제안"
@@ -422,7 +432,7 @@
       verdict = name + "님 상반기 등급 초안은 <span class=\"g\">" + esc(grade) + "</span>입니다. 담당 목표 " + m.owned.length + "건, 평균 진행률 " + (m.avg != null ? m.avg + "%" : "-") + ". 목표 달성률과 피어리뷰가 안정적입니다.";
       metrics = [["등급 초안", grade], ["종합 점수", score], ["담당 목표", m.owned.length + "건"]];
       steps = [
-        ["실적 조회", "목표 달성률 집계 → 종합 " + esc(score) + "/100 " + sb("erp", "ERP") + ' <span class="txr-rid">eval.FY2026.' + esc(m.cu.emp_id || "") + "</span>"],
+        ["실적 조회", "목표 달성률 집계 → 종합 " + esc(score) + "/100 " + sb("erp", "ERP") + ridChip("eval.FY2026." + (m.cu.emp_id || ""))],
         ["규칙 적용", "평가규정 등급 매핑 (초과달성 120%↑) <span class=\"txr-badge ok\">규정 v3.1 · 검증됨</span> <span class=\"txr-badge ref\">§12</span>"],
         ["과정 근거", "중간 1:1 기록 대조 · 자기주도 근거 " + sb("talenx", "talenx")]
       ];

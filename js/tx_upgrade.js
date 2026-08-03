@@ -13,16 +13,21 @@
    ------------------------------------------------------------
    [계약] window.EZApply.popover(opts) → handle          (ez:apply 규약)
    ------------------------------------------------------------
-   인라인 AI 트리거(✦ 정제·초안)가 결과를 채팅에 흘려보내지 않고, 원 필드
-   옆 미니 팝오버로 되돌려 [적용] 한 번에 필드에 반영시키기 위한 공용 API.
+   인라인 AI 트리거(✦ 다듬기·초안)가 결과를 채팅에 흘려보내지 않고, 사용자가
+   지금 글을 쓰고 있는 그 칸에 되돌려 [이대로 적용] 한 번에 반영시키기 위한 공용 API.
    tx_fix_perf·tx_fix_appr·tx_meeting 등 다른 파일도 그대로 호출하면 된다.
+
+   ★ 19차 §8-2 — 실제 그리기는 window.EZInline(js/ez_inline.js)이 맡는다.
+     예전에는 필드 「옆」에 뜨는 380px 상자였다. 지금은 필드 「위」에 정확히 겹치는
+     오버레이 + 필드 폭에 맞춘 실행 바다. opts·handle 계약은 그대로라 기존 호출부는
+     한 줄도 고칠 필요가 없다. ez_inline.js가 없으면 legacyPopover(옛 상자)로 떨어진다.
 
    opts (모두 선택, 단 field/fieldSel 또는 draft/run 중 하나는 필요)
      field     : HTMLElement  결과가 착지할 input/textarea
      fieldSel  : string       field 대신 CSS 선택자(적용 시점에 재조회 — 재렌더 안전)
      anchor    : HTMLElement  위치 기준 요소 (기본 field)
      original  : string       원문 (기본 field.value). 없으면 "초안" 단일행 모드
-     title     : string       팝오버 제목 (기본 "elizax 정제안")
+     title     : string       제목 (기본 "이렇게 바꿔 볼까요")
      note      : string       제목 아래 한 줄 설명 (역할 관점 등)
      draft     : string       즉시 표시할 결과 (run 없이 쓸 때)
      run       : fn(ctx)      결과 생성기. ctx.done(text) / ctx.fail(msg) 호출.
@@ -183,10 +188,10 @@
   var CTX_SUGGEST = {
     home: { chip: "이번 주 성과 브리핑", ask: "이번 주 내 성과 현황을 브리핑해줘" },
     perf: { chip: "목표 정렬 점검", ask: "팀 목표 정렬·중복 점검해줘" },
-    "perf-1": { chip: "피드백 문장 정제", ask: "피드백 문장 정제해줘" },
+    "perf-1": { chip: "피드백 문장 다듬기", ask: "피드백 문장을 다듬어줘" },
     "perf-2": { chip: "1:1 미팅 브리핑", ask: "__brief__" },
     "perf-3": { chip: "리뷰 초안 지원", ask: "리뷰 초안 작성 도와줘" },
-    appr: { chip: "평가 문장 품질 린트", ask: "평가 코멘트 근거 초안 도와줘" },
+    appr: { chip: "평가 문장 다듬기", ask: "평가 코멘트 근거 초안 도와줘" },
     msf: { chip: "360 피드백 요약", ask: "동료 피드백 요약해줘" },
     work: { chip: "주간 체크인 요약", ask: "주간 중간점검 요약해줘" }
   };
@@ -291,7 +296,35 @@
     el.style.left = left + "px";
     el.style.top = top + "px";
   }
+  /* 19차 §8-2 — popover는 EZInline.suggest로 위임한다.
+     계약(opts·handle)은 그대로 두고 「필드 옆 380px 상자」만 「필드 위 겹침」으로 바꾼다.
+     ez_inline.js가 아직 로드되지 않은 순간에도 죽지 않게 아래 legacyPopover를 폴백으로 남긴다. */
   function popover(opts) {
+    opts = opts || {};
+    var field = opts.field || (opts.fieldSel ? document.querySelector(opts.fieldSel) : null);
+    var anchor = opts.anchor || field;
+    if (!field && !anchor) return null;
+    if (window.EZInline && EZInline.suggest) {
+      apClose(); /* 구 팝오버가 떠 있으면 정리 */
+      /* run이 있으면 로딩부터 — draft는 run 없이 즉시 보여 줄 때만 쓴다(구 계약 그대로) */
+      return EZInline.suggest(field, opts.run ? null : (opts.draft != null ? opts.draft : ""), {
+        anchor: anchor,
+        fieldSel: opts.fieldSel,
+        title: opts.title,
+        why: opts.note,
+        original: opts.original,
+        applyLabel: opts.applyLabel,
+        run: opts.run,
+        chat: opts.chat,
+        audit: opts.audit,
+        chips: opts.chips,
+        onApply: opts.onApply,
+        onClose: opts.onClose
+      });
+    }
+    return legacyPopover(opts);
+  }
+  function legacyPopover(opts) {
     opts = opts || {};
     apClose();
     var field = opts.field || (opts.fieldSel ? document.querySelector(opts.fieldSel) : null);
@@ -303,12 +336,12 @@
     el.setAttribute("data-astryx-theme", "talenx");
     var K = window.EZKit;
     el.innerHTML =
-      '<div class="ezup-ap-h"><span class="sp">' + ((K && K.marker) || "✦") + "</span>" + esc(opts.title || "elizax 정제안") +
+      '<div class="ezup-ap-h"><span class="sp">' + ((K && K.marker) || "✦") + "</span>" + esc(opts.title || "이렇게 바꿔 볼까요") +
       (K && K.status ? '<span style="margin-left:6px;font-weight:500">' + K.status("suggest") + "</span>" : "") +
       '<button type="button" class="x" aria-label="닫기">✕</button></div>' +
       (opts.note ? '<div class="ezup-ap-note">' + esc(opts.note) + "</div>" : "") +
       (original ? '<div class="ezup-ap-row old"><div class="ezup-ap-lab">원문</div><div class="ezup-ap-txt">' + esc(original) + "</div></div>" : "") +
-      '<div class="ezup-ap-row new"><div class="ezup-ap-lab">' + (original ? "정제안" : "초안") + '</div><div class="ezup-ap-txt" data-ap-new></div></div>' +
+      '<div class="ezup-ap-row new"><div class="ezup-ap-lab">' + (original ? "이렇게 바꿔 볼까요" : "초안") + '</div><div class="ezup-ap-txt" data-ap-new></div></div>' +
       '<div class="ezup-ap-acts">' +
       '<button type="button" class="ezup-ap-btn primary" data-ap-apply disabled>' + esc(opts.applyLabel || "적용") + "</button>" +
       '<button type="button" class="ezup-ap-btn" data-ap-cancel>닫기</button>' +
@@ -400,13 +433,17 @@
     requestAnimationFrame(function () { apPlace(el, anchor); el.classList.add("show"); });
     return h;
   }
-  window.EZApply = { popover: popover, close: apClose };
+  function closeAny() {
+    apClose();
+    try { if (window.EZInline && EZInline.close) EZInline.close(); } catch (e) {}
+  }
+  window.EZApply = { popover: popover, close: closeAny };
 
   /* EZAI 단발 호출을 EZApply.run 규격으로 감싼 헬퍼 (이 파일 내부용) */
   function aiRunner(system, user) {
     return function (ctx) {
       if (!(window.EZAI && EZAI.direct && EZAI.ready && EZAI.ready())) {
-        ctx.fail("elizax 미연결 — 아래 “대화로 계속”로 이어가거나 ⚙ 설정에서 키를 등록하세요.");
+        ctx.fail("elizax가 아직 연결되지 않았어요 · 「대화로 계속」으로 이어가거나 ⚙ 설정에서 키를 등록해 주세요");
         return;
       }
       window.EZAI.direct({
@@ -427,26 +464,26 @@
   function isBinaryMode(mode) { return mode === 3 || mode === "3" || mode === "여부" || String(mode).toLowerCase() === "binary"; }
   var LINT_RULES = {
     review: [
-      { id: "review-1", re: /(항상|절대|전혀|결코|맨날)/, tag: "단정 표현", cls: "bad", tip: "근거 없는 일반화 — 구체 사례로 교체" },
-      { id: "review-2", re: /(열심히|성실히|많이 노력|태도가 좋|잘함|잘 함)/, tag: "모호 표현", cls: "warn", tip: "측정 불가 — 행동·결과 중심으로" },
-      { id: "review-3", re: /(최근|요즘|지난달부터)/, tag: "최신 편향 위험", cls: "warn", tip: "평가 기간 전체 근거를 인용했는지 확인" },
-      { id: "review-4", re: /(여직원|남직원|여자|남자)\s*(치고|답게|라서)/, tag: "성별화 표현", cls: "bad", tip: "속성 언급 제거" }
+      { id: "review-1", re: /(항상|절대|전혀|결코|맨날)/, tag: "너무 단정적이에요", cls: "bad", tip: "실제로 있었던 일 하나로 바꿔 주세요" },
+      { id: "review-2", re: /(열심히|성실히|많이 노력|태도가 좋|잘함|잘 함)/, tag: "무엇을 했는지 안 보여요", cls: "warn", tip: "한 일과 그 결과로 바꿔 주세요" },
+      { id: "review-3", re: /(최근|요즘|지난달부터)/, tag: "최근 일만 보고 있어요", cls: "warn", tip: "기간 전체를 놓고 쓴 게 맞는지 확인해 주세요" },
+      { id: "review-4", re: /(여직원|남직원|여자|남자)\s*(치고|답게|라서)/, tag: "사람 속성을 말하고 있어요", cls: "bad", tip: "그 사람의 성별·나이 같은 말은 빼 주세요" }
     ],
     goal: [
-      { id: "goal-1", re: /업계\s*(Top|톱|최고|선도)|최고\s*수준|세계적\s*수준|글로벌\s*(리더|Top|수준)/i, tag: "측정 불가 표현", cls: "bad", tip: '평가 시점에 "달성 근거"를 다투게 됩니다 — 수치·순위·기한으로 바꾸세요' },
-      { id: "goal-2", re: /(체계|기반|프로세스|시스템)\s*(구축|마련|정착)\s*완료?|고도화\s*완료/, tag: "완료 판정 기준 없음", cls: "warn", tip: "무엇이 되면 완료인지 검증 조건을 명시하세요 (예: 적용 조직 3곳·만족도 80점)" },
-      { id: "goal-3", re: /(향상|개선|강화|확대|제고)\s*$/, tag: "측정 기준 없음", cls: "warn", tip: "얼마나·언제까지인지 목표 수치와 기준선을 붙이세요" },
-      { id: "goal-4", re: /(적극|최선|열심히|노력)/, tag: "행동·결과 아님", cls: "warn", tip: "노력 표현 대신 결과 지표로" },
+      { id: "goal-1", re: /업계\s*(Top|톱|최고|선도)|최고\s*수준|세계적\s*수준|글로벌\s*(리더|Top|수준)/i, tag: "확인할 방법이 없어요", cls: "bad", tip: "나중에 「했다·아니다」를 다투게 됩니다 — 숫자·순위·기한으로 바꿔 주세요" },
+      { id: "goal-2", re: /(체계|기반|프로세스|시스템)\s*(구축|마련|정착)\s*완료?|고도화\s*완료/, tag: "무엇이 되면 끝인지 없어요", cls: "warn", tip: "끝났다고 말할 조건을 적어 주세요 (예: 적용 조직 3곳·만족도 80점)" },
+      { id: "goal-3", re: /(향상|개선|강화|확대|제고)\s*$/, tag: "얼마나인지 없어요", cls: "warn", tip: "얼마나·언제까지인지와 지금 값을 같이 적어 주세요" },
+      { id: "goal-4", re: /(적극|최선|열심히|노력)/, tag: "결과가 아니라 다짐이에요", cls: "warn", tip: "무엇이 얼마나 달라지는지로 바꿔 주세요" },
       /* goal-5~7 구조 규칙 — 문장이 아니라 KR 구조 필드를 검사(lintKR 전용, re 없음) */
-      { id: "goal-5", tag: "목표 수치 없음", cls: "bad", tip: "목표 수치가 없습니다 — 달성을 판정할 숫자를 넣으세요",
+      { id: "goal-5", tag: "숫자가 없어요", cls: "bad", tip: "달성했는지 가릴 숫자를 넣어 주세요",
         check: function (kr) {
           if (isBinaryMode(kr.mode)) return false; /* 여부형은 goal-7이 판정 조건을 검사 */
           var tv = (kr.targetValue != null && String(kr.targetValue).trim()) ? kr.targetValue : kr.name;
           return !/\d/.test(String(tv || ""));
         } },
-      { id: "goal-6", tag: "기준선 없음", cls: "warn", tip: "무엇에서 출발하는지 없으면 달성률을 다툽니다 — 현재값·전년 실적을 남기세요",
+      { id: "goal-6", tag: "어디서 출발하는지 없어요", cls: "warn", tip: "지금 값이나 작년 실적을 남겨야 얼마나 올렸는지 말할 수 있어요",
         check: function (kr) { return !String(kr.baseline == null ? "" : kr.baseline).trim(); } },
-      { id: "goal-7", tag: "판정 조건 없음", cls: "warn", tip: "무엇이 되면 완료인지 판정 조건 필수",
+      { id: "goal-7", tag: "무엇이 되면 되는지 없어요", cls: "warn", tip: "「이렇게 되면 한 것」이라고 적어 주세요",
         check: function (kr) { return isBinaryMode(kr.mode) && !String(kr.verifyCond == null ? "" : kr.verifyCond).trim(); } }
     ]
   };
@@ -512,13 +549,13 @@
       var hits = isKrName ? lintKR(krFromRow(krRow)) : lintText(v, scope);
       if (!v.trim()) { bar.style.display = "none"; return; }
       bar.style.display = "flex";
-      var html = '<span class="lab">품질 린트</span>';
-      if (!hits.length) html += '<span class="ezup-lint-chip ok">' + (scope === "goal" ? "✓ 측정 가능한 표현입니다" : "✓ 문제 없음") + "</span>";
+      var html = '<span class="lab">' + (scope === "goal" ? "이렇게 쓰면 나중에 다툽니다" : "문장 다듬기") + "</span>";
+      if (!hits.length) html += '<span class="ezup-lint-chip ok">' + (scope === "goal" ? "✓ 숫자로 확인할 수 있어요" : "✓ 지금 이대로 괜찮아요") + "</span>";
       else hits.forEach(function (hi) {
         html += '<span class="ezup-lint-chip ' + hi.cls + '" title="' + esc(hi.tip) + '">' + esc(hi.tag) + (hi.word ? " · “" + esc(hi.word) + "”" : "") + "</span>";
       });
       var lens = roleLens();
-      html += '<button type="button" class="ezup-lint-fix" title="' + esc(lens.label) + ' 관점으로 정제 — 결과는 이 필드 옆에서 [적용]">✦ elizax로 정제</button>';
+      html += '<button type="button" class="ezup-lint-fix" title="' + esc(lens.label) + ' 관점으로 다시 써 드려요 — 고친 문장이 이 칸 위에 겹쳐 뜹니다">✦ elizax로 다듬기</button>';
       bar.innerHTML = html;
       var fix = bar.querySelector(".ezup-lint-fix");
       /* F6 — 결과를 채팅에 흘리지 않고 이 필드 옆 팝오버로 착지시킨다.
@@ -541,15 +578,16 @@
           field: field,
           anchor: fix,
           original: body,
-          title: "elizax 정제안",
-          note: lz.label + " 관점 · 지적된 항목: " + tagList,
+          title: "이렇게 바꿔 볼까요",
+          note: lz.label + " 관점으로 다시 썼어요",
+          chips: hits.map(function (hi) { return hi.tag; }).slice(0, 3),
           run: aiRunner(
             "당신은 elizax — HR 성과관리 문장 코치입니다. " + lz.prompt +
             " 사용자가 준 문장 하나만 고쳐서 돌려줍니다. 설명·머리말·따옴표 없이 고친 문장만 출력합니다. " +
             "원문에 없는 수치·사실은 만들지 말고, 채울 값이 필요하면 [   ] 자리표시자로 남깁니다.",
             ask + "\n\n지적된 문제: " + tagList + "\n고친 문장만 한 줄로."),
           chat: { label: "대화로 계속", prompt: ask },
-          audit: { source: "lint.apply", title: "품질 린트 정제안 적용", summary: (scope === "goal" ? "목표/KR" : "평가·피드백") + " 문장 정제 — " + lz.label + " 관점" }
+          audit: { source: "lint.apply", title: "다듬은 문장을 반영", summary: (scope === "goal" ? "목표·핵심 성과" : "평가·피드백") + " 문장을 " + lz.label + " 관점으로 다시 씀" }
         });
       });
     }

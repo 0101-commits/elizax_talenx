@@ -1,38 +1,30 @@
 /* ============================================================================
  * tx_chat_actions.js — elizax 메시지 호버 액션 바
  * ----------------------------------------------------------------------------
- * [기획 스펙]
+ * [기획 스펙 — 19차 §5-1로 축소]
  * ① 배경/문제
- *    - FAB 도킹창·전체화면 허브의 대화 메시지에는 복사/재생성/수정 수단이 없다.
- *    - AI 답변을 다른 곳에 옮기거나, 마지막 질문을 고쳐 다시 묻는 기본 UX가
- *      빠져 있어 데모에서 "일반 챗 서비스 대비 미완성" 인상을 준다.
+ *    - 「⧉ 복사」·「↻ 재생성」은 일반 챗 서비스의 습관일 뿐, 성과관리 대화에서
+ *      쓰이지 않으면서 말풍선마다 따라다녀 시선만 뺏었다. 사용자 요청 1 = 삭제.
+ *    - 남길 이유가 분명한 것은 하나뿐 — 방금 한 질문을 고쳐 다시 묻는 것.
  * ② 사용자 시나리오
- *    - AI 답변 위에 마우스를 올리면 버블 하단 우측에 작은 액션 바가 나타난다.
- *      [⧉ 복사]로 답변 텍스트를 클립보드에 담고, 마지막 AI 답변이면 [↻ 재생성]
- *      으로 같은 질문을 다시 보낸다.
- *    - 내 질문(user) 위에 올리면 [⧉ 복사]가, 마지막 질문이면 [✎ 수정]이 추가로
- *      나타난다. [✎ 수정]을 누르면 그 텍스트가 현재 보이는 입력창(FAB .ezx-ta
- *      또는 허브 [data-agh-chatta])에 채워지고 포커스된다 — 전송은 사용자 몫.
+ *    - 마지막으로 보낸 내 질문 위에 마우스를 올리면 버블 아래 우측에 [✎ 수정]
+ *      하나가 나타난다. 누르면 그 문장이 지금 보이는 입력창(FAB .ezx-ta 또는
+ *      허브 [data-agh-chatta])에 채워지고 포커스된다 — 전송은 사용자 몫.
+ *    - AI 답변에는 액션 바를 아예 만들지 않는다.
  * ③ 동작 정의
  *    - document 레벨 mouseover 위임: 재렌더로 액션 바가 사라져도 다음 호버 때
  *      해당 .ezx-msg 노드에 다시 append 되므로 안전하다 (계약 규칙 7).
  *    - 메시지 판별: EZChat.messages()의 m._node === 호버된 노드 (렌더러가
  *      buildMsgNode에서 매 렌더마다 _node를 재할당) — 실패 시 리스트 내
  *      .ezx-msg 순번으로 폴백. role이 "user"/"ai"인 메시지만 대상.
- *      (nav 카드도 .ezx-msg.ai로 렌더되므로 role 검사로 걸러낸다.)
- *    - "마지막" 판정: EZChat.messages()에서 role==="ai"/"user"인 마지막 항목.
- *    - 복사: 버블 innerText → navigator.clipboard.writeText, 실패·미지원 시
- *      숨김 textarea + execCommand("copy") 폴백, 성공 시 TX.toast("복사됨").
- *    - 재생성: Elizax.regenerate() 호출. 스트리밍 중에는 버튼 자체를 숨긴다.
- *    - 액션 바는 버블을 가리지 않도록 버블 "아래" 우측 정렬로 흐르게 배치
- *      (11px, 반투명 → 호버 시 진하게). 다른 메시지로 이동하면 이전 바 제거.
+ *    - "마지막" 판정: EZChat.messages()에서 role==="user"인 마지막 항목.
+ *    - 버튼이 하나도 없으면 바 자체를 만들지 않는다.
  * ④ 엣지 케이스
- *    - work/nav/scn/err 메시지: 액션 없음 (role 검사에서 제외).
- *    - 스트리밍 중(Elizax.isStreaming()): 재생성·수정 숨김, 복사만 노출.
+ *    - work/nav/navask/scn/err/AI 답변: 액션 없음.
+ *    - 스트리밍 중(Elizax.isStreaming()): 수정 숨김 → 바 없음.
  *      "streaming" 이벤트 수신 시 표시 중인 바를 갱신한다.
  *    - 재렌더("messages" 이벤트 등)로 innerHTML이 리셋되면 바는 자연 소멸 —
  *      전역 상태만 정리하고 다음 호버에서 재생성한다.
- *    - clipboard API가 없는 환경(파일 프로토콜 등)은 textarea 폴백으로 동작.
  *    - 수정 클릭 시 어느 입력창도 보이지 않으면 Elizax.open()으로 FAB을 연다.
  *    - EZChat/Elizax 미로드 시 모듈은 조용히 아무 것도 하지 않는다.
  * ========================================================================== */
@@ -88,7 +80,7 @@
       }
     }
     if (!m) return null;
-    if (m.role !== "user" && m.role !== "ai") return null; /* work/nav/scn/err 제외 */
+    if (m.role !== "user" && m.role !== "ai") return null; /* work/nav/navask/scn/err 제외 */
     if (!node.querySelector(".ezx-bubble")) return null;   /* nav 카드 등 방어 */
     return m;
   }
@@ -105,36 +97,6 @@
   function streaming() {
     try { return !!(window.Elizax && Elizax.isStreaming && Elizax.isStreaming()); }
     catch (e) { return false; }
-  }
-
-  /* ---------------- 복사 ---------------- */
-  function copyText(text) {
-    var t = String(text == null ? "" : text);
-    function fallback() {
-      try {
-        var ta = document.createElement("textarea");
-        ta.value = t;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        ta.style.top = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        var ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-        toast(ok ? "복사됨" : "복사 실패", ok ? "ok" : "warn");
-      } catch (e) {
-        toast("복사 실패", "warn");
-      }
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(t).then(
-        function () { toast("복사됨", "ok"); },
-        function () { fallback(); }
-      );
-    } else {
-      fallback();
-    }
   }
 
   /* ---------------- 수정 후 재전송 (입력창 채우기) ---------------- */
@@ -171,18 +133,16 @@
     cur.node = null; cur.msg = null; cur.bar = null;
   }
 
+  /* 남은 액션은 「✎ 수정」 하나뿐 — 조건에 안 맞으면 바를 만들지 않는다 */
+  function wantsBar(m) {
+    return !!(m && m.role === "user" && !streaming() && isLastOfRole(m, "user"));
+  }
   function buildBar(node, m) {
+    if (!wantsBar(m)) return null;
     var bar = document.createElement("div");
     bar.className = "ezcx-act-bar";
-    var busy = streaming();
-    var html = '<button type="button" class="ezcx-act-btn" data-ezcx-act="copy" title="내용 복사">⧉ 복사</button>';
-    if (m.role === "ai" && !busy && isLastOfRole(m, "ai")) {
-      html += '<button type="button" class="ezcx-act-btn" data-ezcx-act="regen" title="같은 질문으로 다시 생성">↻ 재생성</button>';
-    }
-    if (m.role === "user" && !busy && isLastOfRole(m, "user")) {
-      html += '<button type="button" class="ezcx-act-btn" data-ezcx-act="edit" title="입력창으로 불러와 수정 후 재전송">✎ 수정</button>';
-    }
-    bar.innerHTML = html;
+    bar.innerHTML = '<button type="button" class="ezcx-act-btn" data-ezcx-act="edit"' +
+      ' title="입력창으로 불러와 수정 후 재전송">✎ 수정</button>';
     node.appendChild(bar);
     return bar;
   }
@@ -190,20 +150,18 @@
   function showBar(node, m) {
     if (cur.node === node && cur.bar && cur.bar.parentNode === node) return; /* 이미 표시 중 */
     removeBar();
-    cur.node = node; cur.msg = m;
-    cur.bar = buildBar(node, m);
+    var bar = buildBar(node, m);
+    if (!bar) return;
+    cur.node = node; cur.msg = m; cur.bar = bar;
   }
 
-  /* 스트리밍 시작/종료 시 표시 중인 바 갱신 (재생성·수정 표시/숨김) */
+  /* 스트리밍 시작/종료 시 표시 중인 바 갱신 (수정 버튼 표시/숨김) */
   function refreshBar() {
     if (!cur.node || !cur.bar) return;
     if (!cur.bar.parentNode) { removeBar(); return; } /* 재렌더로 이미 소멸 */
     var node = cur.node, m = cur.msg;
     removeBar();
-    if (node && m && document.body.contains(node)) {
-      cur.node = node; cur.msg = m;
-      cur.bar = buildBar(node, m);
-    }
+    if (node && m && document.body.contains(node)) showBar(node, m);
   }
 
   /* ---------------- 이벤트 위임 ---------------- */
@@ -230,19 +188,10 @@
     var host = btn.closest(".ezx-msg");
     var m = host ? msgOfNode(host) : null;
     if (!m) return;
-    var act = btn.getAttribute("data-ezcx-act");
+    if (btn.getAttribute("data-ezcx-act") !== "edit") return;
+    if (streaming()) { toast("답하는 중에는 수정할 수 없습니다", "warn"); return; }
     var bubble = host.querySelector(".ezx-bubble");
-    if (act === "copy") {
-      copyText(bubble ? bubble.innerText : (m.text || ""));
-    } else if (act === "regen") {
-      if (streaming()) { toast("생성 중에는 재생성할 수 없습니다", "warn"); return; }
-      if (window.Elizax && Elizax.regenerate) {
-        try { Elizax.regenerate(); } catch (e2) { toast("재생성 실패", "warn"); }
-      }
-    } else if (act === "edit") {
-      if (streaming()) { toast("생성 중에는 수정할 수 없습니다", "warn"); return; }
-      editIntoComposer(m.text || (bubble ? bubble.innerText : ""));
-    }
+    editIntoComposer(m.text || (bubble ? bubble.innerText : ""));
   }
 
   /* ---------------- 부트스트랩 ---------------- */
@@ -250,7 +199,7 @@
     injectStyle();
     document.addEventListener("mouseover", onMouseOver, false);
     document.addEventListener("click", onClick, false);
-    /* 스트리밍 상태 변화 → 표시 중인 바의 재생성/수정 버튼 갱신 */
+    /* 스트리밍 상태 변화 → 표시 중인 바의 수정 버튼 갱신 */
     var tries = 0;
     (function hook() {
       if (window.EZChat && EZChat.on) {

@@ -52,13 +52,25 @@
   ];
 
   /* 이동 의도 판정: 강한 동사는 단독 OK, 약한 동사(보여줘/열어/띄워)는
-     화면·탭·메뉴·페이지 단어 동반 시에만 내비로 인정 (데이터 질문과 구분) */
-  var GO_STRONG = /(넘어가|이동|가\s*줘|가줘|가자|전환|들어가|접속|탭\s*으로|화면\s*으로|메뉴\s*로|페이지\s*로|으로\s*가|로\s*가)/;
+     화면·탭·메뉴·페이지 단어 동반 시에만 내비로 인정 (데이터 질문과 구분)
+     "가자"는 낱말 경계(문장 시작/공백/쉼표·마침표 ~ 문장 끝/공백/구두점)를
+     둘러 매치한다 — "평가자" 안의 "가자"에 오탐하지 않도록. */
+  var GO_STRONG = /(넘어가|이동|전환|들어가|접속|탭\s*으로|화면\s*으로|메뉴\s*로|페이지\s*로|(?:^|[\s,.])가\s*줘|(?:^|[\s,.])가줘|(?:^|[\s,.])가자(?:$|[\s,.!?])|으로\s*가(?:$|[\s,.!?])|로\s*가(?:$|[\s,.!?]))/;
   var GO_WEAK = /(열어|보여\s*줘|보여줘|띄워|바꿔)/;
   var SCREEN_WORD = /(화면|탭|메뉴|페이지)/;
+  /* 질문 가드 — 아래 어미·표현이 있으면 "화면 이동"이 아니라 "질문"으로 본다.
+     단, 「화면」·「탭」·「메뉴」·「페이지」 + 강한 이동 동사가 함께 있으면
+     사용자가 실제로 이동을 말한 것이므로 가드를 넘긴다. */
+  var ASK_GUARD = /(는지|은지|나요|까요|인가|일까|어때|얼마나|몇\s|왜\b|어떤|어디가|무슨|알려\s*줘|알려줘|봐\s*줘|봐줘|확인해\s*줘|확인해줘|점검해|보여\s*주세요|어떻게\s*되)/;
   function hasGoIntent(t) {
     if (GO_STRONG.test(t)) return true;
     return GO_WEAK.test(t) && SCREEN_WORD.test(t);
+  }
+  /* text가 "질문"으로 보이면 true — 호출자는 이 경우 내비 판정보다
+     답변(대화) 경로를 먼저 태운다. */
+  function askIntent(text) {
+    var t = String(text || "").trim();
+    return !!t && ASK_GUARD.test(t);
   }
 
   function labelOf(s, p) {
@@ -67,17 +79,27 @@
     return lab;
   }
 
-  /* 자연어 → 목적지. 이동 의도가 없으면 null (일반 질문은 LLM으로). */
+  /* 자연어 → 목적지. 이동 의도가 없으면 null (일반 질문은 LLM으로).
+     질문 가드(ASK_GUARD)에 걸리면 화면·탭 단어 + 강한 이동 동사가 함께
+     있지 않은 한 무조건 null — "1차 평가자 검토가 제대로 되고 있는지
+     확인해줘" 같은 문장이 이동으로 오인되지 않게 한다. */
   function resolve(text) {
     var t = String(text || "").trim();
-    if (!t || !hasGoIntent(t)) return null;
+    if (!t) return null;
+    if (ASK_GUARD.test(t) && !(SCREEN_WORD.test(t) && GO_STRONG.test(t))) return null;
+    if (!hasGoIntent(t)) return null;
     for (var i = 0; i < ROUTES.length; i++) {
       if (ROUTES[i].re.test(t)) {
         var r = ROUTES[i];
-        return { s: r.s, p: r.p, label: labelOf(r.s, r.p) };
+        return { s: r.s, p: r.p, label: labelOf(r.s, r.p), strength: "explicit" };
       }
     }
     return null;
+  }
+
+  /* 확인 버튼 문구 단일 원천: "성과관리 › 목표 현황 열기" */
+  function confirmLabel(s, p) {
+    return labelOf(s, p) + " 열기";
   }
 
   /* 실제 화면 전환 — 실 컨트롤 클릭 (tx_fix_home.js nav()와 동일 전략) */
@@ -115,5 +137,8 @@
     return { clean: t.replace(/@@NAV\{[\s\S]*?\}@@/g, "").replace(/\n{3,}/g, "\n\n").trim(), nav: nav };
   }
 
-  window.EZNav = { resolve: resolve, go: go, extractMarker: extractMarker, labelOf: labelOf };
+  window.EZNav = {
+    resolve: resolve, go: go, extractMarker: extractMarker, labelOf: labelOf,
+    askIntent: askIntent, confirmLabel: confirmLabel
+  };
 })();

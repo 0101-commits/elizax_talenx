@@ -25,10 +25,30 @@
   var SIGNAL = { "ezs-slot": 1, "ezs-card": 1 };   // [알림] 적재 대상 = 신호 카드만
   var active = null; // { id, dismiss }
 
+  /* 카드 전체 textContent를 그대로 적재하면 버튼 글자까지 문장에 달라붙는다
+     ("…벌어졌어요열어보기나중에"). 19차: 알림 문장만 골라 담는다 —
+     `.ezs-tx`(문장) → `.ezs-line`(권유+문장) → 버튼(.ezs-btns) 뺀 나머지 순. */
+  function norm(s) {
+    return String(s == null ? "" : s).replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+  }
+  function bodyOf(el) {
+    if (!el) return "";
+    var pick = el.querySelector(".ezs-tx") || el.querySelector(".ezs-line");
+    if (pick) return norm(pick.textContent);
+    var t = "";
+    try {
+      var clone = el.cloneNode(true);
+      var btns = clone.querySelectorAll(".ezs-btns, button, .ezs-more");
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].parentNode) btns[i].parentNode.removeChild(btns[i]);
+      }
+      t = norm(clone.textContent);
+    } catch (e) { t = norm(el.textContent); }
+    return t;
+  }
   function snapshot(id) {
     var el = SEL[id] ? document.querySelector(SEL[id]) : null;
-    var t = el ? (el.textContent || "").replace(/\s+/g, " ").trim() : "";
-    return t || LABEL[id] || id;
+    return bodyOf(el) || LABEL[id] || id;
   }
   /* "다시 실행" 복원용 질문 문구 — 표면 DOM에 _ask가 붙어 있으면 그대로 적재한다
      (밀려난 제안을 [알림] 탭에서 다시 물어볼 수 있게 하는 유일한 경로) */
@@ -39,8 +59,18 @@
       return el._ask === "__brief__" ? "1:1 미팅 브리핑해줘" : String(el._ask);
     } catch (e) { return null; }
   }
+  /* 19차 §5-3 — 「지난 알림」 쓰레기 차단.
+     스냅샷 본문이 라벨과 같거나(「알림」) 8자 미만이면 사용자가 읽을 내용이 없다.
+     그런 항목이 50건 상한을 채워 「지난 알림」이 빈 줄 목록처럼 보이던 근본원인. */
+  function worthArchiving(id, body) {
+    var t = norm(body);
+    if (!t) return false;
+    if (t === (LABEL[id] || id)) return false;
+    return t.length >= 8;
+  }
   function archive(id, body) {
     if (!SIGNAL[id]) return;   // 신호 카드가 아니면 아무 흔적도 남기지 않는다 (배지 폭주 차단)
+    if (!worthArchiving(id, body)) return;   // 라벨뿐인 빈 스냅샷은 적재하지 않는다
     if (!(window.EZNotif && typeof window.EZNotif.push === "function")) return;
     try { window.EZNotif.push({ kind: "proactive", src: id, title: LABEL[id] || id, body: body, action: askOf(id) }); } catch (e) { /* 스토어 미로드 등 — 무해화 */ }
   }

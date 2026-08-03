@@ -284,6 +284,13 @@
       ".ezmt-agform input{border:1px solid #E3E8F0;border-radius:7px;padding:5px 9px;font-size:12.5px}" +
       ".ezmt-agform .dir{flex:1;min-width:180px}" +
       ".ezmt-btn{border:0;background:#1F7AF0;color:#fff;border-radius:7px;padding:6px 13px;font-size:12.5px;font-weight:700;cursor:pointer}" +
+      /* §9(PLAN-19) — 이 화면은 elizax의 독립 오버레이(talenx 화면에 끼워지지 않음)라 대부분
+         카드는 이미 elizax 도구임이 분명하다. 유일하게 헷갈리는 지점은 "✦ 쟁점 요약 초안" 카드 —
+         나머지 표·리스트와 같은 흰 카드라 AI가 만든 문장인지 사람이 적은 것인지 구분이 안 된다.
+         좌측 레일 + 옅은 틴트로 이 카드만 표시(.ez_kit.css의 .ezsurf와 같은 시각 언어, 이 파일은
+         토큰 없이 자체 hex 팔레트로 짜여 있어 같은 팔레트(#1F7AF0)로 재현) */
+      ".ezmt-ai-card{position:relative;padding-left:18px;background:#F3F8FF;border-color:#BFDBFE}" +
+      ".ezmt-ai-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:12px 0 0 12px;background:#1F7AF0}" +
       ".ezmt-btn.ghost{background:#fff;border:1px solid #E3E8F0;color:#48505E}" +
       ".ezmt-btn:disabled{opacity:.45;cursor:default}" +
       ".ezmt-st{display:inline-block;border-radius:12px;padding:2px 10px;font-size:11.5px;font-weight:700}" +
@@ -611,7 +618,7 @@
           '<button class="ezmt-btn ghost" style="flex:none" data-ezmt-copy="' + i + '">안건 메모로 복사</button></div>';
       }).join("");
     }
-    return '<details class="ezmt-card" open><summary style="cursor:pointer;font-weight:800;font-size:14px">✦ 쟁점 요약 초안' +
+    return '<details class="ezmt-card ezmt-ai-card" open><summary style="cursor:pointer;font-weight:800;font-size:14px">✦ 쟁점 요약 초안' +
       (S.ai.label
         ? (S.ai.fallback
           ? ' <span class="ezmt-tag warn">' + esc(S.ai.label) + "</span>"

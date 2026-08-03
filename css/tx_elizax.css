@@ -6,6 +6,14 @@
    - 모션 3계층: fast 175 / medium 410 / slow 975 + --ease-standard
    - keyframes는 ez_kit.css의 ezk* 단일 정의 참조 (자체 재정의 금지)
    - FAB origin 원칙 유지: 모든 elizax 표면은 FAB에서 발원
+
+   [19차 — 글자 크기 하한] 사용자 요청 11 "elizax 글씨가 작아 안 보인다".
+   본문 최소 12.5px · 제목 13.5px. 10~11.5px은 이 파일에 남기지 않는다.
+   숫자 배지(.ezx-cnt · .ezx-tab-n · .ezx-past-n)도 읽어야 하는 정보이므로
+   12.5px로 올리고 알약 지름을 함께 키웠다(16→20~22px).
+   예외 = 글자가 없는 순수 장식뿐이라 font-size 자체를 갖지 않는다:
+     .ezx-tab-dot(6px 점) · .ezx-dots span(3px 타이핑 점) · .ezx-caret(입력 캐럿)
+     .ezx-rec-row .dot / .ezx-ntf-row .dot(상태 점) · .ezx-work-bar(2px 진행 막대)
    ============================================================ */
 
 .ezx-root{
@@ -31,13 +39,14 @@
 .ezx-fab svg{ width:24px; height:24px; }
 .ezx-root.ezx-open .ezx-fab{ opacity:0; transform:scale(.6); pointer-events:none; }
 
-/* FAB 카운트 — 처리하지 않은 알림 수 (18차: --color-error 폐지, accent 파란 계열로 통일) */
+/* FAB 카운트 — 처리하지 않은 알림 수 (18차: --color-error 폐지, accent 파란 계열로 통일)
+   19차: 숫자도 읽어야 하는 정보다 — 12.5px로 올리고 알약을 22px로 키웠다 */
 .ezx-cnt{
-  position:absolute; top:-4px; right:-4px; min-width:20px; height:20px;
-  padding:0 5px; box-sizing:border-box; border-radius:var(--radius-full);
+  position:absolute; top:-5px; right:-5px; min-width:22px; height:22px;
+  padding:0 6px; box-sizing:border-box; border-radius:var(--radius-full);
   background:var(--color-accent); color:var(--color-on-accent);
   border:2px solid var(--color-background-card);
-  font-size:11px; font-weight:700; line-height:16px; text-align:center;
+  font-size:12.5px; font-weight:700; line-height:18px; text-align:center;
   font-variant-numeric:tabular-nums; pointer-events:none; z-index:2;
 }
 
@@ -91,24 +100,24 @@
 }
 .ezx-tab{
   flex:1; display:inline-flex; align-items:center; justify-content:center; gap:5px;
-  font-size:12px; font-weight:600; color:var(--color-text-secondary);
-  padding:6px 4px; border-radius:var(--radius-element);
+  font-size:13.5px; font-weight:600; color:var(--color-text-secondary);
+  padding:7px 4px; border-radius:var(--radius-element);
   transition:background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 .ezx-tab:hover{ background:var(--color-background-muted); }
 .ezx-tab.on{ color:var(--color-accent); background:var(--color-accent-muted); }
 .ezx-tab-dot{ width:6px; height:6px; border-radius:50%; background:var(--color-accent); }
 .ezx-tab-n{
-  min-width:16px; height:16px; padding:0 4px; border-radius:var(--radius-full);
+  min-width:20px; height:20px; padding:0 5px; border-radius:var(--radius-full);
   background:var(--color-accent); color:var(--color-on-accent);
-  font-size:10px; font-weight:700; line-height:16px; text-align:center;
+  font-size:12.5px; font-weight:700; line-height:20px; text-align:center;
   font-variant-numeric:tabular-nums;
 }
 /* 탭 모드 — 대화 앵커(.ezx-list/.ezx-foot)는 DOM 유지, 표시만 전환 */
 .ezx-mode-ntf .ezx-list, .ezx-mode-ntf .ezx-foot{ display:none; }
 .ezx-pane{ display:none; flex:1; min-height:0; overflow-y:auto; padding:12px 14px; }
 .ezx-mode-ntf .ezx-ntf-pane{ display:block; }
-.ezx-pane-empty{ padding:36px 10px; text-align:center; color:var(--color-text-secondary); font-size:12px; line-height:1.6; }
+.ezx-pane-empty{ padding:36px 10px; text-align:center; color:var(--color-text-secondary); font-size:12.5px; line-height:1.6; }
 
 /* [알림] 탭 — 한 줄 목록(18-2차 R6) + 「지난 알림」 접이식.
    한 줄 = 알림 문구 한 문장. 칩·근거·처리 버튼 없음. 누르면 대화가 열린다.
@@ -130,10 +139,10 @@
 .ezx-sig-item .ezx-sig-row{ border-bottom:0; }
 .ezx-sig-item.open .ezx-sig-row{ color:var(--color-accent); }
 .ezx-sig-ex{ padding:0 6px 12px; }
-.ezx-sig-pv{ font-size:12px; line-height:1.6; color:var(--color-text-secondary); }
+.ezx-sig-pv{ font-size:12.5px; line-height:1.6; color:var(--color-text-secondary); }
 .ezx-sig-exits{ display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; }
 .ezx-sig-exit{
-  font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:var(--radius-full);
+  font-size:12.5px; font-weight:600; padding:6px 13px; border-radius:var(--radius-full);
   border:1px solid var(--ezx-hairline); background:var(--color-background-card); color:var(--color-text-secondary);
   transition:border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast) var(--ease-standard);
 }
@@ -142,24 +151,21 @@
 .ezx-past{ margin-top:12px; border-top:1px solid var(--ezx-hairline); }
 .ezx-past-h{
   display:flex; align-items:center; gap:6px; width:100%; text-align:left;
-  padding:10px 4px; font-size:11.5px; font-weight:700; color:var(--color-text-secondary);
+  padding:11px 4px; font-size:13.5px; font-weight:700; color:var(--color-text-secondary);
   transition:color var(--duration-fast) var(--ease-standard);
 }
 .ezx-past-h:hover{ color:var(--color-text-primary); }
-.ezx-past-ar{ width:11px; flex:none; color:var(--color-text-disabled); }
+.ezx-past-ar{ width:12px; flex:none; color:var(--color-text-disabled); }
 .ezx-past-n{
-  min-width:16px; height:16px; padding:0 5px; border-radius:var(--radius-full);
+  min-width:20px; height:20px; padding:0 6px; border-radius:var(--radius-full);
   background:var(--color-background-muted); color:var(--color-text-secondary);
-  font-size:10px; font-weight:700; line-height:16px; text-align:center; font-variant-numeric:tabular-nums;
+  font-size:12.5px; font-weight:700; line-height:20px; text-align:center; font-variant-numeric:tabular-nums;
 }
-.ezx-past-sec{
-  margin:12px 0 2px; padding-top:9px; border-top:1px dashed var(--ezx-hairline);
-  font-size:10.5px; font-weight:700; letter-spacing:.03em; color:var(--color-text-secondary);
-}
-.ezx-rec-pane{ display:block; }
+/* .ezx-past-sec / .ezx-rec-pane — 19차 §5-3에 폐기.
+   성과 기록은 「지난 알림」 안에 접혀 있지 않고 자기 패널에서 열린다. */
 
 /* 성과 기록 행 — rows, not Cards (EZLedger.renderRows 마크업) */
-.ezx-rec-head{ display:flex; align-items:center; justify-content:space-between; gap:6px; padding:2px 4px 8px; font-size:10.5px; color:var(--color-text-secondary); }
+.ezx-rec-head{ display:flex; align-items:center; justify-content:space-between; gap:6px; padding:2px 4px 8px; font-size:12.5px; color:var(--color-text-secondary); }
 .ezx-rec-row{
   display:flex; align-items:flex-start; gap:8px; padding:8px 6px;
   border-bottom:1px solid var(--ezx-hairline); cursor:pointer;
@@ -167,8 +173,8 @@
 }
 .ezx-rec-row:hover{ background:var(--color-background-muted); }
 .ezx-rec-row .dot{ flex:none; width:8px; height:8px; border-radius:50%; margin-top:4px; background:var(--ezl-c, var(--color-accent)); }
-.ezx-rec-row .tt{ flex:1; min-width:0; font-size:12.5px; color:var(--color-text-primary); line-height:1.45; }
-.ezx-rec-row .tt small{ display:block; font-size:10.5px; color:var(--color-text-disabled); margin-top:2px; }
+.ezx-rec-row .tt{ flex:1; min-width:0; font-size:13.5px; font-weight:600; color:var(--color-text-primary); line-height:1.45; }
+.ezx-rec-row .tt small{ display:block; font-size:12.5px; font-weight:400; color:var(--color-text-secondary); margin-top:3px; line-height:1.5; }
 
 /* [알림] 탭 행 */
 .ezx-ntf-row{
@@ -178,13 +184,13 @@
 .ezx-ntf-row .dot{ flex:none; width:7px; height:7px; border-radius:50%; margin-top:5px; background:transparent; }
 .ezx-ntf-row.unread .dot{ background:var(--color-accent); }
 .ezx-ntf-row .bd{ flex:1; min-width:0; }
-.ezx-ntf-row .tt{ font-size:12.5px; font-weight:600; color:var(--color-text-primary); }
+.ezx-ntf-row .tt{ font-size:13.5px; font-weight:600; color:var(--color-text-primary); line-height:1.45; }
 .ezx-ntf-row.unread .tt{ font-weight:700; }
-.ezx-ntf-row .bs{ font-size:11.5px; color:var(--color-text-secondary); margin-top:2px; line-height:1.5; }
-.ezx-ntf-row .ba{ font-size:10px; color:var(--color-text-disabled); margin-top:3px; }
+.ezx-ntf-row .bs{ font-size:12.5px; color:var(--color-text-secondary); margin-top:3px; line-height:1.5; }
+.ezx-ntf-row .ba{ font-size:12.5px; color:var(--color-text-disabled); margin-top:4px; }
 .ezx-ntf-act{
-  flex:none; font-size:11px; font-weight:600; color:var(--color-accent);
-  border:1px solid var(--ezx-hairline); border-radius:var(--radius-full); padding:4px 10px;
+  flex:none; font-size:12.5px; font-weight:600; color:var(--color-accent);
+  border:1px solid var(--ezx-hairline); border-radius:var(--radius-full); padding:5px 11px;
   transition:background var(--duration-fast) var(--ease-standard);
 }
 .ezx-ntf-act:hover{ background:var(--color-accent-muted); }
@@ -196,37 +202,18 @@
 .ezx-agent-btn{
   display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left;
   border:1px solid var(--ezx-hairline); background:var(--color-background-card); color:var(--color-text-primary);
-  font-size:13px; padding:11px 14px; border-radius:var(--radius-container);
+  font-size:13.5px; padding:11px 14px; border-radius:var(--radius-container);
   transition:border-color var(--duration-fast), background var(--duration-fast), transform var(--duration-fast) var(--ease-standard); cursor:pointer;
 }
-.ezx-agent-btn small{ font-size:11px; color:var(--color-text-secondary); font-weight:400; }
+.ezx-agent-btn small{ font-size:12.5px; color:var(--color-text-secondary); font-weight:400; line-height:1.5; }
 .ezx-agent-btn:hover{ border-color:var(--color-accent); background:var(--color-accent-muted); }
 .ezx-agent-btn:active{ transform:scale(.98); }
 .ezx-agent-btn.primary{ border-color:var(--color-accent); background:var(--color-accent-muted); }
 .ezx-agent-btn.primary b{ color:var(--color-accent); }
 
-/* employee picker (manager/executive) */
-.ezx-picker{ position:relative; margin-top:9px; display:none; }
-.ezx-root.ezx-need-subject .ezx-picker{ display:block; }
-.ezx-picker-in{
-  width:100%; border:1px solid var(--ezx-hairline); background:var(--color-background-card); color:var(--color-text-primary);
-  border-radius:var(--radius-full); padding:7px 14px; font-size:12.5px; font-family:inherit;
-}
-.ezx-picker-in::placeholder{ color:var(--color-text-disabled); }
-.ezx-picker-in:focus{ outline:none; border-color:var(--color-accent); box-shadow:0 0 0 3px var(--color-accent-muted); }
-.ezx-picker-list{
-  position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:5;
-  background:var(--color-background-popover); border:1px solid var(--ezx-hairline); border-radius:var(--radius-container);
-  box-shadow:var(--ezx-float-shadow); max-height:220px; overflow:auto; display:none;
-}
-.ezx-picker-list.on{ display:block; }
-.ezx-picker-list button{
-  display:block; width:100%; text-align:left; padding:8px 11px; font-size:12.5px; color:var(--color-text-primary);
-  border-bottom:1px solid var(--ezx-hairline);
-}
-.ezx-picker-list button:last-child{ border-bottom:0; }
-.ezx-picker-list button:hover{ background:var(--color-background-muted); }
-.ezx-picker-list button small{ color:var(--color-text-secondary); margin-left:6px; font-size:11px; }
+/* 「대상 직원 검색」 picker — 19차 §5-2에 DOM째 삭제.
+   대상은 talenx가 로그인시킨 사람이고, 다른 사람 이야기는 대화 안에서 이름을 말해 정한다.
+   (.ezx-picker* / .ezx-need-subject 규칙 전부 폐기 — 생산자가 없어졌다) */
 .ezx-subject-tag{ font-weight:700; color:var(--color-accent); }
 
 /* ---------- Context chip row — 18차에 삭제 ----------
@@ -255,8 +242,8 @@
 .ezx-bubble p{ margin:0 0 8px; } .ezx-bubble p:last-child{ margin-bottom:0; }
 .ezx-bubble h3{ font-size:13.5px; font-weight:700; letter-spacing:-.02em; margin:10px 0 6px; } .ezx-bubble h3:first-child{ margin-top:0; }
 .ezx-bubble ul{ margin:6px 0; padding-left:18px; } .ezx-bubble li{ margin:2px 0; }
-.ezx-bubble code{ background:var(--color-background-card); border:1px solid var(--ezx-hairline); border-radius:var(--radius-inner); padding:1px 5px; font-size:12px; font-family:var(--font-family-code); }
-.ezx-bubble table{ border-collapse:collapse; margin:6px 0; font-size:12px; width:100%; }
+.ezx-bubble code{ background:var(--color-background-card); border:1px solid var(--ezx-hairline); border-radius:var(--radius-inner); padding:1px 5px; font-size:12.5px; font-family:var(--font-family-code); }
+.ezx-bubble table{ border-collapse:collapse; margin:6px 0; font-size:12.5px; width:100%; }
 .ezx-bubble th, .ezx-bubble td{ border:1px solid var(--ezx-hairline); padding:4px 7px; text-align:left; }
 .ezx-bubble th{ background:var(--color-background-card); font-weight:600; }
 .ezx-bubble a{ color:var(--color-accent); }
@@ -266,7 +253,7 @@
 /* typing caret */
 .ezx-caret{ display:inline-block; width:7px; height:14px; background:var(--color-accent); border-radius:1px; margin-left:2px; vertical-align:-2px; animation:ezkBlink 1s step-end infinite; }
 
-.ezx-note{ font-size:11px; color:var(--color-text-secondary); margin-top:6px; font-weight:400; }
+.ezx-note{ font-size:12.5px; line-height:1.5; color:var(--color-text-secondary); margin-top:6px; font-weight:400; }
 .ezx-note.warn{ color:var(--color-warning); }
 
 /* ---------- 답변은 말풍선이다. 데이터 타일은 그 아래 작은 띠 ----------
@@ -279,55 +266,55 @@
 .ezx-msg.ezx-rcptmsg{ max-width:88%; align-self:flex-start; }
 .ezx-rc-metrics{ display:flex; flex-wrap:wrap; gap:6px; margin:7px 0 0; }
 .ezx-rc-metric{
-  display:flex; flex-direction:column; gap:1px; min-width:72px; padding:5px 10px;
+  display:flex; flex-direction:column; gap:2px; min-width:80px; padding:7px 11px;
   border:1px solid var(--ezx-hairline); border-radius:var(--radius-element);
   background:var(--color-background-muted);
 }
-.ezx-rc-metric .k{ font-size:10px; letter-spacing:.02em; color:var(--color-text-secondary); }
-.ezx-rc-metric .v{ font-size:14px; font-weight:700; letter-spacing:-.02em; color:var(--color-text-primary); }
-.ezx-rc-metric .s{ font-size:10px; color:var(--color-text-secondary); }
+.ezx-rc-metric .k{ font-size:12.5px; letter-spacing:.02em; color:var(--color-text-secondary); }
+.ezx-rc-metric .v{ font-size:15px; font-weight:700; letter-spacing:-.02em; color:var(--color-text-primary); }
+.ezx-rc-metric .s{ font-size:12.5px; color:var(--color-text-secondary); }
 
 /* 답변 꼬리의 조용한 한 줄 — 「화면에서 직접 고칠게」와 What-if 재계산.
    버튼 줄이 아니라 밑줄 텍스트다(처리 버튼 6종을 되살리는 것이 아니다). */
 .ezx-rc-foot{ display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; margin-top:7px; }
 .ezx-rc-golink{
-  font-size:11.5px; font-weight:600; color:var(--color-accent); cursor:pointer;
+  font-size:12.5px; font-weight:600; color:var(--color-accent); cursor:pointer;
   background:none; border:0; padding:0; text-decoration:underline; text-underline-offset:2px;
   transition:color var(--duration-fast) var(--ease-standard);
 }
 .ezx-rc-golink:hover{ color:var(--color-text-primary); }
-.ezx-rc-wihint{ font-size:10px; color:var(--color-text-secondary); }
+.ezx-rc-wihint{ font-size:12.5px; line-height:1.5; color:var(--color-text-secondary); }
 .ezx-rc-wiout{
   flex:1 1 100%; margin-top:2px; padding:8px 10px;
   border:1px solid var(--ezx-hairline); border-radius:var(--radius-element);
   background:var(--color-background-muted);
 }
 .ezx-rc-wiout:empty{ display:none; }
-.ezx-rc-wirow{ display:flex; gap:8px; align-items:baseline; font-size:11.5px; padding:2px 0; color:var(--color-text-primary); }
-.ezx-rc-wirow .lb{ width:52px; flex:none; font-size:10px; font-weight:700; color:var(--color-text-secondary); }
+.ezx-rc-wirow{ display:flex; gap:8px; align-items:baseline; font-size:12.5px; line-height:1.5; padding:3px 0; color:var(--color-text-primary); }
+.ezx-rc-wirow .lb{ width:66px; flex:none; font-size:12.5px; font-weight:700; color:var(--color-text-secondary); }
 .ezx-rc-wirow.warn{ color:var(--color-warning); }
-.ezx-rc-wirow .chg{ font-style:normal; font-size:10px; font-weight:700; color:var(--color-warning); }
-.ezx-rc-wirow .keep{ font-style:normal; font-size:10px; color:var(--color-text-secondary); }
-.ezx-rc-winote{ margin-top:5px; font-size:10px; line-height:1.45; color:var(--color-text-secondary); }
+.ezx-rc-wirow .chg{ font-style:normal; font-size:12.5px; font-weight:700; color:var(--color-warning); }
+.ezx-rc-wirow .keep{ font-style:normal; font-size:12.5px; color:var(--color-text-secondary); }
+.ezx-rc-winote{ margin-top:6px; font-size:12.5px; line-height:1.5; color:var(--color-text-secondary); }
 
 /* recommendations (OKR suggestions) */
 .ezx-recos{ margin-top:10px; display:flex; flex-direction:column; gap:8px; }
 .ezx-reco{ border:1px solid var(--ezx-hairline); border-radius:var(--radius-container); padding:10px 11px; background:var(--color-background-card); }
-.ezx-reco-obj{ font-size:12.5px; font-weight:700; letter-spacing:-.02em; color:var(--color-text-primary); line-height:1.4; }
-.ezx-reco-why{ font-size:11.5px; color:var(--color-text-secondary); margin-top:3px; line-height:1.45; }
-.ezx-kr{ display:flex; align-items:baseline; gap:6px; margin-top:6px; font-size:11.5px; color:var(--color-text-secondary); }
+.ezx-reco-obj{ font-size:13.5px; font-weight:700; letter-spacing:-.02em; color:var(--color-text-primary); line-height:1.4; }
+.ezx-reco-why{ font-size:12.5px; color:var(--color-text-secondary); margin-top:4px; line-height:1.5; }
+.ezx-kr{ display:flex; align-items:baseline; gap:6px; margin-top:7px; font-size:12.5px; line-height:1.5; color:var(--color-text-secondary); }
 .ezx-kr .knm{ flex:1; color:var(--color-text-primary); }
-.ezx-kr .kmeta{ color:var(--color-text-secondary); font-size:11px; white-space:nowrap; }
+.ezx-kr .kmeta{ color:var(--color-text-secondary); font-size:12.5px; white-space:nowrap; }
 .ezx-kr-diff{ font-weight:700; color:var(--color-accent); }
 
 /* empty state / starters */
 .ezx-empty{ margin:auto; text-align:center; padding:10px 6px; }
-.ezx-empty .eh{ font-size:14px; font-weight:700; letter-spacing:-.022em; color:var(--color-text-primary); }
-.ezx-empty .es{ font-size:12px; color:var(--color-text-secondary); margin-top:5px; line-height:1.5; }
+.ezx-empty .eh{ font-size:15px; font-weight:700; letter-spacing:-.022em; color:var(--color-text-primary); }
+.ezx-empty .es{ font-size:12.5px; color:var(--color-text-secondary); margin-top:6px; line-height:1.6; }
 .ezx-starters{ display:flex; flex-wrap:wrap; gap:7px; justify-content:center; margin-top:14px; }
 .ezx-starter{
   border:1px solid var(--ezx-hairline); background:var(--color-background-card); color:var(--color-text-secondary);
-  font-size:12px; font-weight:400; padding:7px 14px; border-radius:var(--radius-full);
+  font-size:12.5px; font-weight:400; padding:8px 14px; border-radius:var(--radius-full);
   transition:border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast), transform var(--duration-fast) var(--ease-standard);
 }
 .ezx-starter:hover{ border-color:var(--color-accent); color:var(--color-accent); background:var(--color-accent-muted); }
@@ -347,7 +334,7 @@
   -webkit-backdrop-filter:saturate(180%) blur(20px);
 }
 /* 연결 상태 배너(.ezx-status) 삭제 — 남은 유일한 폴백은 AI 미연결 한 줄 */
-.ezx-warnline{ margin-top:0; padding:0 4px 6px; font-size:10.5px; line-height:1.45; }
+.ezx-warnline{ margin-top:0; padding:0 4px 7px; font-size:12.5px; line-height:1.5; }
 .ezx-warnline[hidden]{ display:none; }
 .ezx-composer{ display:flex; align-items:flex-end; gap:8px; }
 .ezx-ta{
@@ -368,32 +355,82 @@
 .ezx-foot-row{ display:flex; align-items:center; gap:8px; margin-top:7px; }
 /* 「대화 초기화」(.ezx-reset) 삭제 → 「＋ 새 채팅 시작」 한 칸 */
 .ezx-newchat{
-  font-size:11.5px; font-weight:600; color:var(--color-accent);
+  flex:none; font-size:12.5px; font-weight:600; color:var(--color-accent);
   border:1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
-  border-radius:var(--radius-full); padding:5px 12px;
+  border-radius:var(--radius-full); padding:6px 13px;
   transition:background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast);
 }
 .ezx-newchat:hover{ background:var(--color-accent-muted); border-color:var(--color-accent); }
 .ezx-newchat:active{ transform:scale(.96); }
-.ezx-hint{ margin-left:auto; font-size:10.5px; color:var(--color-text-disabled); }
+.ezx-hint{ margin-left:auto; font-size:12.5px; color:var(--color-text-disabled); white-space:nowrap; }
 
-/* ---------- 작업중 카드 (확인 내역) ---------- */
+/* ---------- 「확인 내역」 = 살아 있는 피드 (19차 §5-4) ----------
+   정지 화면처럼 보이던 원인 셋을 그대로 뒤집는다:
+   ① 스텝이 하나씩 아래로 나타난다(ezxStepIn) ② 진행 줄에 타이핑 점 ③ 헤더에
+   경과 시간과 불확정 진행 막대. 끝나면 접히고, 헤더를 누르면 다시 펼쳐진다. */
 .ezx-msg.ezx-work { align-self: flex-start; max-width: 88%; }
-.ezx-work { background: var(--color-background-muted); border: 1px solid var(--ezx-hairline); border-radius: var(--radius-container); padding: 10px 13px; font-size: 12px; }
-.ezx-work-hd { font-weight: 700; color: var(--color-text-secondary); font-size: 11px; margin-bottom: 6px; letter-spacing:-.01em; }
-.ezx-work-hd .ok { color: var(--color-success); }
-.ezx-work-hd .run { color: var(--color-accent); animation: ezkPulse 1.2s ease-in-out infinite; }
-.ezx-work-ln { display: flex; align-items: center; gap: 7px; padding: 3px 0; color: var(--color-text-disabled); }
+.ezx-work { background: var(--color-background-muted); border: 1px solid var(--ezx-hairline); border-radius: var(--radius-container); padding: 11px 14px; font-size: 12.5px; }
+.ezx-work-hd {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  font-weight: 700; color: var(--color-text-secondary); font-size: 13.5px; letter-spacing: -.01em;
+}
+.ezx-work-hd.done { cursor: pointer; transition: color var(--duration-fast) var(--ease-standard); }
+.ezx-work-hd.done:hover { color: var(--color-text-primary); }
+.ezx-work-ar { width: 12px; flex: none; color: var(--color-text-disabled); }
+.ezx-work-mk { color: var(--color-accent); }
+.ezx-work-el {
+  margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600;
+  color: var(--color-text-disabled);
+}
+/* 불확정 진행 막대 — 얼마나 남았는지 모를 때 쓰는 흐르는 띠 */
+.ezx-work-bar {
+  position: relative; overflow: hidden; height: 2px; margin: 7px 0 3px;
+  border-radius: var(--radius-full); background: var(--ezx-hairline);
+}
+.ezx-work-bar::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%;
+  border-radius: var(--radius-full); background: var(--color-accent);
+  animation: ezxWorkBar 1.1s linear infinite;
+}
+@keyframes ezxWorkBar { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+.ezx-work-bd { margin-top: 4px; }
+.ezx-work-ln {
+  display: flex; align-items: baseline; gap: 7px; padding: 3px 0;
+  color: var(--color-text-disabled); line-height: 1.5;
+  animation: ezxStepIn 220ms var(--ease-standard) both;
+}
+@keyframes ezxStepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .ezx-work-ln .ck { width: 14px; text-align: center; flex: none; }
-.ezx-work-ln .src { font-family: var(--font-family-code); font-size: 10px; font-weight: 600; background: var(--color-background-card); border:1px solid var(--ezx-hairline); border-radius: var(--radius-inner); padding: 1px 6px; color: var(--color-text-secondary); }
+.ezx-work-ln .fnd { margin-left: auto; padding-left: 8px; font-size: 12.5px; color: var(--color-text-secondary); text-align: right; }
 .ezx-work-ln.st1 { color: var(--color-accent); font-weight: 600; }
 .ezx-work-ln.st2 { color: var(--color-text-primary); }
 .ezx-work-ln.st2 .ck { color: var(--color-success); }
+/* 타이핑 점 3개 — 지금 이 줄에 손이 가 있다는 표시 */
+.ezx-dots { display: inline-flex; gap: 3px; align-items: center; }
+.ezx-dots span {
+  width: 3px; height: 3px; border-radius: 50%; background: currentColor;
+  animation: ezkBlink 1.05s ease-in-out infinite;
+}
+.ezx-dots span:nth-child(2) { animation-delay: .15s; }
+.ezx-dots span:nth-child(3) { animation-delay: .3s; }
+/* 움직임을 줄이도록 설정한 사용자 — 글자만 갱신한다 */
+@media (prefers-reduced-motion: reduce) {
+  .ezx-work-ln, .ezx-work-bar::after, .ezx-dots span { animation: none; }
+  .ezx-work-bar::after { width: 100%; opacity: .45; }
+  .ezx-dots span { opacity: .55; }
+}
+
+/* ---------- 한 줄 안내 (대상이 바뀌었어요 등) ---------- */
+.ezx-msg.sys { align-self: stretch; max-width: 100%; }
+.ezx-sysline {
+  font-size: 12.5px; line-height: 1.5; color: var(--color-text-secondary); text-align: center;
+  padding: 2px 0;
+}
 
 /* ---------- 인라인 시나리오 카드 + 제안 칩 ---------- */
 .ezx-msg.scn { align-self: stretch; max-width: 100%; }
 .ezx-scnhost { min-width: 0; }
-.ezx-scn-lab { font-size: 11px; font-weight: 700; color: var(--color-text-secondary); margin: 14px 0 6px; letter-spacing: .03em; }
+.ezx-scn-lab { font-size: 13.5px; font-weight: 700; color: var(--color-text-secondary); margin: 16px 0 7px; letter-spacing: .01em; }
 .ezx-starter.scn {
   border-color: color-mix(in srgb, var(--color-accent) 38%, transparent);
   background: color-mix(in srgb, var(--color-accent-muted) 55%, transparent);
@@ -409,3 +446,87 @@
 }
 .ezx-navcard .arr{ color:var(--color-accent); font-weight:700; }
 .ezx-navcard b{ color:var(--color-accent); font-weight:600; }
+/* 가기 전 1.2초 — 물러설 틈 (19차 §5-5) */
+.ezx-nav-cancel{
+  margin-left:auto; flex:none; font-size:12.5px; font-weight:600; padding:4px 11px;
+  border-radius:var(--radius-full); border:1px solid var(--ezx-hairline);
+  background:var(--color-background-card); color:var(--color-text-secondary);
+  transition:border-color var(--duration-fast), color var(--duration-fast) var(--ease-standard);
+}
+.ezx-nav-cancel:hover{ border-color:var(--color-accent); color:var(--color-accent); }
+
+/* ---------- 물어보는 이동 — 답이 먼저, 이동은 사람이 정한다 (19차 §5-5) ---------- */
+.ezx-navask{
+  border:1px solid var(--ezx-hairline); border-radius:var(--radius-container);
+  background:var(--color-background-card); padding:11px 13px;
+}
+.ezx-navask-q{ font-size:12.5px; line-height:1.6; color:var(--color-text-primary); }
+.ezx-navask-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.ezx-navask-btn{
+  font-size:12.5px; font-weight:600; padding:7px 14px; border-radius:var(--radius-full);
+  border:1px solid var(--ezx-hairline); background:var(--color-background-card); color:var(--color-text-secondary);
+  transition:border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast) var(--ease-standard);
+}
+.ezx-navask-btn:hover{ border-color:var(--color-accent); color:var(--color-accent); background:var(--color-accent-muted); }
+.ezx-navask-btn.go{
+  color:var(--color-accent); border-color:color-mix(in srgb, var(--color-accent) 40%, transparent);
+  background:color-mix(in srgb, var(--color-accent-muted) 55%, transparent);
+}
+
+/* ---------- 빈 화면 추천 질문 2열 + 질문 브라우저 (19차 §5-6) ---------- */
+.ezx-sugg{ display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:8px; }
+.ezx-sugg .ezx-starter{ width:100%; text-align:left; line-height:1.45; }
+.ezx-catlink{
+  display:block; margin:16px auto 2px; font-size:12.5px; font-weight:600;
+  color:var(--color-text-secondary); text-decoration:underline; text-underline-offset:3px;
+  transition:color var(--duration-fast) var(--ease-standard);
+}
+.ezx-catlink:hover{ color:var(--color-accent); }
+.ezx-cat{
+  position:absolute; inset:0; z-index:var(--z-overlay);
+  display:flex; align-items:flex-end; justify-content:center;
+  background:color-mix(in srgb, var(--color-text-primary) 28%, transparent);
+}
+.ezx-cat-box{
+  display:flex; flex-direction:column; width:100%; max-height:82%;
+  border-top-left-radius:var(--radius-container); border-top-right-radius:var(--radius-container);
+  background:var(--color-background-popover); border:1px solid var(--ezx-hairline); border-bottom:0;
+  box-shadow:var(--ezx-float-shadow); overflow:hidden;
+  animation:ezkInsert 200ms var(--ease-standard) both;
+}
+.ezx-cat-hd{
+  display:flex; align-items:center; gap:8px; padding:12px 14px 10px;
+  border-bottom:1px solid var(--ezx-hairline);
+}
+.ezx-cat-t{ flex:1; font-size:13.5px; font-weight:700; color:var(--color-text-primary); }
+.ezx-cat-x{ flex:none; width:24px; height:24px; border-radius:var(--radius-full); color:var(--color-text-secondary); }
+.ezx-cat-x:hover{ background:var(--color-background-muted); color:var(--color-text-primary); }
+.ezx-cat-bd{ flex:1; overflow-y:auto; padding:6px 8px 14px; }
+.ezx-cat-sec{
+  margin:14px 6px 4px; font-size:13.5px; font-weight:700; letter-spacing:.01em;
+  color:var(--color-text-secondary);
+}
+.ezx-cat-row{
+  display:flex; align-items:baseline; gap:10px; width:100%; text-align:left;
+  padding:9px 8px; border-radius:var(--radius-inner);
+  transition:background var(--duration-fast) var(--ease-standard);
+}
+.ezx-cat-row:hover{ background:var(--color-background-muted); }
+.ezx-cat-row .q{ flex:1; min-width:0; font-size:12.5px; line-height:1.5; color:var(--color-text-primary); }
+.ezx-cat-row .st{ flex:none; font-size:12.5px; font-weight:600; white-space:nowrap; color:var(--color-text-disabled); }
+.ezx-cat-row .st.on{ color:var(--color-accent); }
+
+/* ---------- 알림 탭 — 서랍 설명 · 더 보기 · 성과 기록 링크 (19차 §5-3) ---------- */
+.ezx-past-cap{ padding:2px 6px 9px; font-size:12.5px; color:var(--color-text-secondary); line-height:1.5; }
+.ezx-past-more{
+  display:block; width:100%; text-align:center; padding:10px 6px; font-size:12.5px; font-weight:600;
+  color:var(--color-text-secondary); transition:color var(--duration-fast) var(--ease-standard);
+}
+.ezx-past-more:hover{ color:var(--color-accent); }
+.ezx-ntf-ledger{
+  display:block; width:100%; text-align:left; margin-top:12px; padding:11px 8px;
+  border-top:1px solid var(--ezx-hairline);
+  font-size:12.5px; font-weight:600; line-height:1.5; color:var(--color-text-secondary);
+  transition:color var(--duration-fast) var(--ease-standard);
+}
+.ezx-ntf-ledger:hover{ color:var(--color-accent); }

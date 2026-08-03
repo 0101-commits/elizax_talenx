@@ -93,7 +93,7 @@
       krNames: { 'KR-T191-1': '온보딩 완료율(%)' },
       comment: '7월 2주차 온보딩 자동화 배포 완료로 리드타임 지표가 개선되어 진척값 반영을 요청드립니다.',
       at: '2026-07-21', ai: false,
-      src: '체크인 기록 · 업무보드 tsk.wb-0714'
+      src: '체크인 기록 · 업무보드'
     });
     if (!sget(CK_PREFIX + 'OBJ-T193')) sset(CK_PREFIX + 'OBJ-T193', {
       seed: true, owner_emp_id: 'EMP-0193',
@@ -102,7 +102,7 @@
       krNames: { 'KR-T193-1': '분기 CSAT 점수' },
       comment: '6/30 1:1 합의사항 이행과 7월 설문 회수분을 반영한 elizax 자동 감지 초안입니다.',
       at: '2026-07-19', ai: true,
-      src: '1:1 노트 memo.0630 · 7월 CSAT 설문'
+      src: '1:1 노트 · 7월 CSAT 설문'
     });
     // ② 목표 수정 요청 시드 1건
     if (!sget(IB_PREFIX + 'goal1')) sset(IB_PREFIX + 'goal1', {
@@ -110,7 +110,7 @@
       title: '신규 리드 창출 파이프라인 구축',
       field: '목표 기간', cur: '2026 상반기', req: '2026 3분기까지 연장',
       comment: '핵심 파트너사 일정 지연으로 기간 조정이 필요합니다. 6/30 1:1에서 사전 합의된 내용입니다.',
-      at: '2026-07-18', src: '1:1 노트 memo.0630 · 파트너사 공문'
+      at: '2026-07-18', src: '1:1 노트 · 파트너사 공문'
     });
     // ③ 가중치 변경 요청 시드 1건
     if (!sget(IB_PREFIX + 'wt1')) sset(IB_PREFIX + 'wt1', {
@@ -159,13 +159,13 @@
       });
       if (cur == null && d.prev) cur = d.prev[kid];
       var dv = (parseFloat(vals[kid]) || 0) - (parseFloat(cur) || 0);
-      deltas.push({ name: name || kid, cur: cur == null ? '—' : String(cur), req: String(vals[kid]),
+      deltas.push({ name: name || '핵심 성과', cur: cur == null ? '—' : String(cur), req: String(vals[kid]),
         delta: (dv > 0 ? '+' : '') + (Math.round(dv * 10) / 10) });
     }
     return {
       key: key, kind: 'checkin', kindLabel: '체크인 승인',
       reqName: empName(owner), reqTeam: empTeam(owner),
-      title: d.title || (o && o.title) || oid,
+      title: d.title || (o && o.title) || '목표 기록',
       summary: '진척값 ' + deltas.length + '건 변경' + (d.ai ? ' · ✦ AI 초안' : ''),
       at: d.at || '', ago: daysAgo(d.at), status: d.status || '', seed: !!d.seed,
       deltas: deltas, comment: d.comment || '', src: d.src || '체크인 기록', data: d
@@ -248,6 +248,16 @@
   function drKV(k, v) {
     return '<div class="ezib-dr"><span class="ezib-dk">' + k + '</span><span class="ezib-dv">' + v + '</span></div>';
   }
+  /* 출처 표시 — 코드성 문자열(점 표기·대문자-숫자 ID)이면 화면 이름으로 바꾸고,
+   * 바꿀 수 없으면 감춘다(EZSource 부재/미매핑 모두 동일 처리). 사람 말이면 그대로 둔다. */
+  function srcLabel(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '';
+    var looksCoded = /[a-z][a-z0-9_]*\.[a-z0-9_.-]/i.test(s) || /\b[A-Z]{2,6}-[A-Z0-9-]+\b/.test(s);
+    if (!looksCoded) return s;
+    if (window.EZSource && typeof EZSource.label === 'function') return EZSource.label(s) || '';
+    return '';
+  }
   function openDrawer(it) {
     if (!window.TX || !window.TX.drawer) return;
     var deltaRows = it.deltas.map(function (dl) {
@@ -266,7 +276,7 @@
       + '<div class="ezib-rsec">변경 사항 <small>현재값 → 요청값</small></div>' + deltaRows
       + '<div class="ezib-rsec">근거</div>'
       + '<div class="ezib-cmt">' + esc(it.comment || '요청 사유가 없습니다.') + '</div>'
-      + '<div class="ezib-src">출처 · ' + esc(it.src) + '</div>'
+      + (function () { var sl = srcLabel(it.src); return sl ? '<div class="ezib-src">출처 · ' + esc(sl) + '</div>' : ''; })()
       + '<div class="ezib-gate">결정 게이트 · 사람이 확정 — 승인 전에는 아무것도 반영되지 않음</div>'
       + '</div>'
       + (it.status ? '' :

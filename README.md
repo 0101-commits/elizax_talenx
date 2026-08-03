@@ -183,6 +183,38 @@ python server.py    # 또는 ./run.sh  → uvicorn :8080, /talenx 서빙
 
 브라우저 통합 검증(게이트·QW7·캘리브·원장 체인·AI 게이트) 콘솔 에러 0 확인.
 
+### 18차: 신호 카탈로그 계층 — 150건을 대화로
+
+원천 = `성과평가 AI Agent_AX Consulting_W5_signal catalogue_260730.xlsx` (v0.6 문법, 신호 150건). `scripts/build_signals.py` 가 이를 `js/ez_signals.js`(`window.EZSignalCatalog`)로 굽는다. **직접 고치지 않는다.**
+
+| 모듈 | 역할 |
+|---|---|
+| `js/ez_signals.js` | 신호 150건 원천 — 알림 문구·근거·기준값·처리·재알림 규칙 |
+| `js/ez_signal_engine.js` | 실데이터 평가기. **150건 중 15건만 실계산**(`now:1`), 나머지 135건은 열람 전용. 근거 문장의 숫자를 실측값으로 치환하고, 못 센 줄은 버리지 않고 「추정」으로 남긴다 |
+| `js/ez_signal_chat.js` | 신호 → **대화**. 150건 전체 질문 사전 + 자연문 답변 + 금지 표현 정제(`scrub`) |
+| `js/tx_signal_actions.js` | 처리 배선 — 초안 작성·직접 수정·알려주기·면담·화면 열기·승인 요청을 기존 화면에 연결 |
+
+**카드가 아니라 대화다**(18-2차 사용자 재지시). 신호는 ①빈 채팅창 아래 추천 질문 버튼 ②알림 탭 한 줄 목록 ③자연스러운 답변 문장으로만 나타난다. 유형·단계·처리 라벨(`기한 도래`·`목표수립`·`내가 고치기`), 분류 코드, 데이터 필드명(`keyResults.competency_id`)은 **화면에 한 글자도 쓰지 않는다.**
+
+### 19차: 연결성 복구 · 사람 말 · 인라인 (`docs/PLAN-19-elizax-connective-tissue.md`)
+
+워크스루 피드백 12건. 진단 → 근본원인 → 수정.
+
+| 요청 | 근본원인 | 수정 |
+|---|---|---|
+| 질문했는데 화면으로 튄다 | `tx_nav.js` `GO_STRONG` 의 `가자` 가 **"평_가자_"** 에 오탐 + 자유 질문 경로가 `EZSignalCatalog` 를 한 번도 참조하지 않음 | 낱말 경계 + `ASK_GUARD` 질문 가드 신설(`EZNav.askIntent`), `sendMessage` 순서를 **답변 먼저**로 뒤집음 |
+| 어떤 질문을 해야 알림이 답으로 나오는지 모른다 | 질문 사전이 라이브 15건뿐 | **150건 전량 질문 사전**(`EZSignalChat.questionFor`·`matchAny`·`catalogQuestions`). 못 센 신호는 「예시」임을 밝히고 무엇이 없어서 못 셌는지 말한다 |
+| talenx=명숙 / elizax=이지민 | `defaultSubject()` 가 조직장의 **첫 직속**을 자동 선택해 패널 헤더에 노출 | elizax 안의 사람 검색창 삭제. 대상 = **talenx 현재 사용자 고정**. 특정 팀원은 대화에서 이름을 말해 정한다 |
+| 「지난 알림」과 「성과 기록」이 뭐가 다른가 | 저장소는 둘인데 같은 탭에 붙여 놨고, 알림 저장소가 테스트 데이터로 50건 상한을 채움 | **분리** — 지난 알림 = elizax가 건넨 알림 / 성과 기록 = 답변 근거가 된 내 기록. 1회 마이그레이션으로 빈 스냅샷·테스트 알림 제거 |
+| 출처가 `goal.ai.draft` 같은 개발자 말 | 조인 키를 그대로 그림 | **`js/ez_source_map.js` 신설** — 출처 → 화면 이름(`목표 생성`·`목표 상세`·`평가 작성`…) + 딥링크. **모르면 그 줄을 아예 그리지 않는다**(코드를 대신 쓰지 않는다) |
+| 「확인 내역 작업 중」이 정지 화면 같다 | 아이콘만 갈아끼움 | 스텝이 하나씩 등장하는 **피드**로 재작성 — 경과 시간·타이핑 점·shimmer·완료 시 접힘, 각 줄이 실제 건수를 말한다 |
+| 실제 입력란에서 인라인으로 고치고 싶다 | 제안이 필드 **옆** 별도 상자로 떴고, 목표 상세는 편집 필드가 아예 없음 | **`js/ez_inline.js` 신설** — 필드 rect·글꼴·여백을 복사해 **필드 위에 정확히 겹치는** 제안 오버레이. 목표 상세는 `MutationObserver` 로 그 자리 편집(제목·핵심결과 이름·가중치) 주입 |
+| 「인용 이력 · 답변 인용 0회」가 무슨 뜻인지 모르겠다 | 카운터만 있고 기록 사이 연결이 없음 | **앞뒤 노드 지도** — 앞선 기록 → 이 기록 → 뒤따른 기록 + 이 기록을 근거로 쓴 답변. 0이면 숫자를 안 보여 준다 |
+| 발송 초안이 대화 원문 그대로, 수신자도 틀림 | 자리표시자 미치환 + 수신자 고정 | 신호 수신 주체 → 처리 상대 표(구성원↔조직장 / 조직장↔팀원 / 상위조직장↔하위조직장 / HR↔조직장). 미치환 자리표시자가 남으면 **발송 차단**. 확인 모달에 실명·관계·보낼 문장 |
+| 「그 자리로 옮겨 드릴게요」가 무작위로 뜬다 | 확인 없이 이동 | 자동 이동 폐지. `"열어 드릴까요?"` + `[화면 열기] [여기서 계속]` 버튼(`Elizax.askNav`) |
+| elizax 배너가 작고 화면과 구분이 안 된다 | 공통 표시가 없고 11.5px | **`.ezsurf` 공통 표면**(`css/ez_kit.css`) — 왼쪽 강조 레일 + 옅은 배경 + ✦ 머리표. 본문 12.5px / 제목 13.5px 하한 |
+| 대화 복사·재생성 | — | 삭제(✎ 수정만 남김) |
+
 ### W1 참조 조망 뷰
 
 도킹 상단 "조망" 바 — **⌗ 에이전트 구조**(W1 5계층 오케스트레이션)와 **◈ E2E 프로세스 맵**(목표수립→중간점검→평가→피드백, 승인 게이트·Pillar 표기). 관점(페르소나)에 따라 참여 계층/단계 자동 강조, 각 단계에서 elizax 작업으로 드릴인.
@@ -203,8 +235,10 @@ elizax_talenx/
 │   └── enrich_assets/             job_profiles_new.json — 신규 직무 프로파일 병합 소스
 ├── docs/
 │   ├── PLAN-11-walkthrough-upgrade.md   11차(plan11) 워크스루 피드백 6건 기획서
+│   ├── PLAN-18-signal-alert-card.md     18차 신호 계층 계약서 (18-2차 「카드 폐기, 전부 대화로」 개정 포함)
+│   ├── PLAN-19-elizax-connective-tissue.md  19차 계약서 — 연결성 복구·사람 말·인라인 (피드백 12건)
 │   ├── 성과관리Agent_신호근거행동_기획_260728.md   휴넬 내장 Agent 신호·근거·행동 설계 문법 (기준 문서)
-│   └── 성과관리Agent_신호카탈로그.xlsx           위 문법으로 채운 신호 목록 76건 (개발 인계용 산출물)
+│   └── 성과관리Agent_신호카탈로그.xlsx           위 문법으로 채운 신호 목록 (개발 인계용 산출물)
 ├── reference/                     실서비스(app.talenx.com) 크롤링 스크린샷 3계정분 (Playwright 산출물)
 │   ├── talenx_user_screens_20260714/
 │   ├── talenx_user_screens_minsoopark_20260714/
@@ -228,7 +262,14 @@ elizax_talenx/
 | `tx_agent.js` (+ `css/tx_agent.css`) | 전체화면 딥워크 Hub + 시나리오 + 선제 팝업 (`window.TXAgent`) |
 | `tx_ai.js` | 통합 AI 클라이언트 — engine/cloud/direct/proxy/offline 자동 전환 + 15초 재프로브 + tool-use 에이전트 루프 `EZAI.agent` + 키 설정 UI (`window.EZAI`) |
 | `tx_ai_tools.js` | 에이전트 도구 8종 — TALENX_DATA 실조회 + 화면 전환 (`window.EZTools`) |
-| `tx_nav.js` | 자연어 내비게이션 intent 라우터 (`window.EZNav`) |
+| `tx_nav.js` | 자연어 내비게이션 intent 라우터 (`window.EZNav`) — 질문 가드 `askIntent` 포함. **질문에는 이동하지 않는다** |
+| `ez_signals.js` | 신호 카탈로그 150건 (`window.EZSignalCatalog`) — `scripts/build_signals.py` 자동 생성물, 직접 수정 금지 |
+| `ez_signal_engine.js` | 신호 실데이터 평가기 (`window.EZSignalEngine`) — 실계산 15건 / 열람 135건 |
+| `ez_signal_chat.js` | 신호 → 대화 (`window.EZSignalChat`) — 150건 질문 사전·자연문 답변·금지 표현 정제 |
+| `tx_signal_actions.js` | 신호 처리 배선 (`window.EZSignalAct`) — 초안·수정·알려주기·면담·화면·승인을 기존 화면에 연결 |
+| `ez_source_map.js` | 출처 → 화면 이름 사전 + 딥링크 (`window.EZSource`). 모르는 출처는 빈 문자열 = 화면에 안 그린다 |
+| `ez_inline.js` | 실제 입력란 **위에 겹치는** 인라인 제안 · 읽기 전용 화면 그 자리 편집 (`window.EZInline`) |
+| `tx_proactive.js` | 우하단 선제 슬롯 단일 코디네이터 (`window.EZProactive`) — 배지 폭주 차단 |
 | `tx_upgrade.js` | 2025-26 고도화 5종 (글로우 오브·컨텍스트 칩·품질 린트 리뷰/목표 2스코프·AI 고지·1:1 브리핑, `window.EZUpgrade`) |
 | `tx_chat_*.js` (9개) | 대화창 기능 10종 — 세션/액션/중지/검색/내보내기/피드백/후속질문/슬래시커맨드/안읽음/퀵애스크 |
 | `tx_chatstore.js` | 대화 영속화 스토어 |

@@ -47,6 +47,10 @@
     });
     emps.forEach(function (e) { (empByOrg[e.org_id] = empByOrg[e.org_id] || []).push(e); });
 
+    /* 역량 ID → 사람이 읽는 이름. 모르는 ID는 화면에 내지 않는다(코드 노출 금지). */
+    var compKrName = {};
+    (D.competencies || []).forEach(function (c) { compKrName[c.dimension_id] = c.name; });
+
     /* ---------------- helpers ---------------- */
     function wnum(k) { return parseFloat(k.weight) || 0; }
     function pct(n) { return Math.round(n || 0) + '%'; }
@@ -886,11 +890,11 @@
       var wv = (data.weight == null || data.weight === '') ? nextKRWeight() : data.weight;
       var modeIx = (typeof data.mode === 'number' && data.mode >= 0) ? data.mode : 0;
       var srcs = data.sources || [];
-      var srcHTML = srcs.length
-        ? ' ' + srcs.map(function (s) {
-            return '<span class="txf-src" data-txf="src" data-sid="' + esc(s) + '" title="출처 원본 보기">' + esc(s) + '</span>';
-          }).join(' ')
-        : '';
+      var srcHTML = srcs.map(function (s) {
+            var lbl = srcLabel(s);
+            if (!lbl) return '';
+            return ' <span class="txf-src" data-txf="src" data-sid="' + esc(s) + '" title="출처 원본 보기">' + esc(lbl) + '</span>';
+          }).join('');
       var whyBody = data.why || (data.whyText ? esc(data.whyText) : '');
       return '<div class="txf-kr" data-kr="' + id + '"'
         + ' data-why="' + esc(data.whyText || '') + '"'
@@ -925,7 +929,7 @@
         + '<div class="txf-diffwhy">ⓘ 무엇과 비교해 어려운지(작년 실적·동료 수준) 남겨야 평가 시점의 난이도 반영이 가능합니다.</div>'
         + ((whyBody || srcHTML) ? '<div class="txf-krwhy">✦ 이 핵심 성과의 근거 — ' + whyBody
             + (data.jobTask ? ' <b>· 직무 과업 ' + esc(data.jobTask) + '</b>' : '')
-            + (data.competencyId ? ' <b>· 역량 ' + esc(data.competencyId) + '</b>' : '')
+            + (data.competencyId && compKrName[data.competencyId] ? ' <b>· 역량 ' + esc(compKrName[data.competencyId]) + '</b>' : '')
             + srcHTML + '</div>' : '')
         + '</div>';
     }
@@ -1128,9 +1132,21 @@
     if (prevEval) srcMap[prevEval.evaluation_id] = 'FY2025 평가 — 등급 ' + prevEval.grade + (prevEval.score != null ? ' · ' + prevEval.score + '점' : '') + '. ' + (prevEval.rationale_summary || '');
     prevFbs.forEach(function (f) { srcMap[f.fb_id] = 'FY2025 피드백(' + (f.source_type === 'leader' ? '리더' : '동료') + ') — ' + f.summary; });
     if (jobChg) srcMap['JOB-CHG'] = '직무 전환 ' + jobChg.prev_label + ' → ' + jobChg.new_label + '. ' + (jobChg.note || '');
+    /* 출처 ID → 화면에 낼 짧은 사람 말. 모르는 ID는 빈 문자열(호출부가 감춘다). */
+    function srcLabel(id) {
+      if (!id) return '';
+      if (prevEval && id === prevEval.evaluation_id) return '작년 평가';
+      var fbHit = null;
+      prevFbs.forEach(function (f) { if (f.fb_id === id) fbHit = f; });
+      if (fbHit) return fbHit.source_type === 'leader' ? '작년 리더 피드백' : '작년 동료 피드백';
+      if (id === 'JOB-CHG') return '직무 전환';
+      return '';
+    }
     function srcChip(id, label) {
       if (!id || !srcMap[id]) return '';
-      return ' <span class="txf-src" data-txf="src" data-sid="' + esc(id) + '" title="출처 원본 보기">' + esc(label || id) + '</span>';
+      var lbl = label || srcLabel(id);
+      if (!lbl) return '';
+      return ' <span class="txf-src" data-txf="src" data-sid="' + esc(id) + '" title="출처 원본 보기">' + esc(lbl) + '</span>';
     }
     function undoneKRs() {
       return prevEval ? (prevEval.krs || []).filter(function (k) { return !k.done; }) : [];
@@ -1227,13 +1243,11 @@
       if (window.EZLedger && typeof EZLedger.openPanel === 'function') {
         try {
           EZLedger.openPanel(sid);
-          if (summary) TX.toast && TX.toast('[' + sid + '] ' + summary);
+          if (summary) TX.toast && TX.toast(summary);
           return;
         } catch (e) { /* 원장 열기 실패 — 토스트 폴백 */ }
       }
-      TX.toast && TX.toast(summary
-        ? '[' + sid + '] ' + summary
-        : '[' + sid + '] 원본 요약을 찾지 못했습니다 — 출처 ID는 감사 기록에 그대로 남습니다.');
+      TX.toast && TX.toast(summary || '원본 기록을 찾지 못했습니다.');
     }
     /* F3: 미완 KR 그대로 이월 (진척 개념 없는 폼 — name 프리필) */
     function carryTo(i) {
@@ -1248,7 +1262,7 @@
       }));
       renumberKR();
       emitGoalCtx('goal.carryover', '작년 미완 핵심 성과 이월 — ' + ck.name,
-        '출처 ' + prevEval.evaluation_id + ' · 작년 달성률 ' + ck.achievement_pct + '%');
+        '출처 ' + srcLabel(prevEval.evaluation_id) + ' · 작년 달성률 ' + ck.achievement_pct + '%');
       TX.toast && TX.toast('작년 미완 핵심 성과를 이월했습니다. 출처가 함께 기록됩니다.', 'ok');
     }
     /* F3: 좁은 화면(≤1100px)에서 carry 패널이 숨겨졌을 때의 검토 경로 */
@@ -1394,7 +1408,7 @@
         alignment_reason: String(o.alignment_reason == null ? '' : o.alignment_reason).trim()
       };
       if (obj.parent_objective_id && !objById[obj.parent_objective_id]) {
-        W.push('제안한 상위 목표 ID(' + obj.parent_objective_id + ')가 데이터에 없어 무시했습니다.');
+        W.push('제안한 상위 목표가 데이터에 없어 무시했습니다.');
         obj.parent_objective_id = '';
       }
       var list = (raw.keyResults || raw.key_results || []);
@@ -1616,8 +1630,8 @@
         + '<span class="mc">' + esc(MODE_LABELS[k.mode]) + '</span>'
         + '<span class="mc">난이도 ' + esc(k.diff) + ' · ' + esc(CMP_LABELS[k.difftype]) + '</span>'
         + (k.jobTask ? '<span class="mc">직무 과업 ' + esc(k.jobTask) + '</span>' : '')
-        + (k.competencyId ? '<span class="mc">역량 ' + esc(k.competencyId) + '</span>' : '')
-        + k.sources.map(function (s) { return '<span class="mc">출처 ' + esc(s) + '</span>'; }).join('');
+        + (k.competencyId && compKrName[k.competencyId] ? '<span class="mc">역량 ' + esc(compKrName[k.competencyId]) + '</span>' : '')
+        + k.sources.map(function (s) { var lbl = srcLabel(s); return lbl ? '<span class="mc">출처 ' + esc(lbl) + '</span>' : ''; }).join('');
       return '<label class="txf-dsc" data-dsc="' + id + '">'
         + '<input type="checkbox" data-dspick="' + id + '"' + (on ? ' checked' : '') + '>'
         + '<div class="bd"><div class="lb">핵심 성과 ' + (i + 1) + (dup ? ' · 유사 항목이 이미 있습니다' : '') + '</div>'
@@ -1749,7 +1763,10 @@
       }
       /* 원장 기록 — 조건 없이 항상 (carryCtx 게이팅 제거) */
       var srcAll = [];
-      picked.forEach(function (k) { (k.sources || []).forEach(function (s) { if (srcAll.indexOf(s) < 0) srcAll.push(s); }); });
+      picked.forEach(function (k) { (k.sources || []).forEach(function (s) {
+        var lbl = srcLabel(s);
+        if (lbl && srcAll.indexOf(lbl) < 0) srcAll.push(lbl);
+      }); });
       emitGoalCtx('goal.ai.draft',
         'elizax 목표 초안 적용 — ' + applied + '개 항목 (핵심 성과 ' + picked.length + '건)',
         (dsState.live ? '실AI' : '템플릿') + ' · 확인한 데이터: ' + (dsState.tools.join(', ') || '로컬 직무·작년 기록')
@@ -2174,16 +2191,12 @@
       var lines = [];
       if (sig.stale) lines.push('마지막 체크인(' + esc(sig.last.checkin_date) + ') 이후 ' + sig.days + '일이 지났습니다');
       if (sig.events.length) lines.push('성과 기록에 이 목표를 언급한 항목 ' + sig.events.length + '건이 최근 쌓였습니다');
-      var ids = [];
-      if (sig.last && sig.last.checkin_id) ids.push('체크인 <b>' + esc(sig.last.checkin_id) + '</b>');
-      sig.events.forEach(function (it) { ids.push('성과 기록 <b>' + esc(it.id) + '</b>'); });
       return '<div class="txf-fcard" style="border:1px solid rgba(31,122,240,.3);background:rgba(31,122,240,.03)">'
         + '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'
         + '<span style="font-size:10.5px;font-weight:800;color:#356CB5;background:rgba(31,122,240,.1);border-radius:4px;padding:2px 7px">● 제안만</span>'
         + '<b style="font-size:13.5px">✦ elizax가 체크인 시점을 확인했습니다</b></div>'
         + '<p style="font-size:12.5px;color:var(--ink-2);line-height:1.6;margin:7px 0 9px">' + lines.join(' · ')
-        + '. 기록된 추세로 체크인 초안을 만들어 드릴까요?'
-        + (ids.length ? ' <span style="color:var(--ink-4)">근거: ' + ids.join(' · ') + '</span>' : '') + '</p>'
+        + '. 기록된 추세로 체크인 초안을 만들어 드릴까요?</p>'
         + '<div style="display:flex;gap:7px"><button class="btn-blue" data-txf="gd-aick">체크인 초안 열기</button>'
         + '<button class="ghost-btn" data-txf="gd-aidismiss">무시</button></div></div>';
     }
@@ -2205,7 +2218,7 @@
         var r = k.job_task_ref || {};
         return '<div class="txf-linkrow"><b style="min-width:0;flex:1">' + esc(k.name) + '</b>'
           + (r.task_area ? '<span class="txf-linkchip">직무 과업 · ' + esc(r.task_area) + '</span>' : '')
-          + (k.competency_id ? '<span class="txf-linkchip" style="color:#166534;background:rgba(47,163,107,.1)">역량 · ' + esc(compName[k.competency_id] || k.competency_id) + '</span>' : '')
+          + (k.competency_id && compName[k.competency_id] ? '<span class="txf-linkchip" style="color:#166534;background:rgba(47,163,107,.1)">역량 · ' + esc(compName[k.competency_id]) + '</span>' : '')
           + '</div>';
       }).join('');
       return '<div class="txf-fcard"><h3>연결 근거 — 이 목표가 서 있는 자리</h3>' + head + rows

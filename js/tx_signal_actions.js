@@ -260,7 +260,10 @@
       ".ezsa-chip{font-size:11.5px;font-weight:700;border-radius:999px;padding:4px 11px;cursor:pointer;" +
       "border:1px solid var(--color-border-emphasized,#c9d3e4);background:transparent;" +
       "color:var(--color-text-accent,#1F7AF0)}" +
-      ".ezsa-ev{font-size:11.5px;line-height:1.7;color:var(--color-text-secondary,#5C6474);margin-top:9px}" +
+      /* 19차: 화면 안 elizax 조각 글자 하한 12.5px (§9-1) */
+      ".ezsa-ev{font-size:12.5px;line-height:1.7;color:var(--color-text-secondary,#5C6474);margin-top:9px}" +
+      ".ezsa-ev-row{display:flex;gap:8px;padding:3px 0}" +
+      ".ezsa-ev-row b{flex:0 0 88px;font-weight:600;color:var(--color-text,#1A1A1A)}" +
       /* 착지 쪽지 — 화면 안에 흐름대로 끼워 넣는다(떠 있는 층을 새로 만들지 않으므로 z 값이 없다) */
       ".ezsa-carry{margin:0 0 11px;padding:10px 13px;border:1px solid var(--color-border-blue);" +
       "background:var(--color-background-blue);border-radius:var(--radius-container)}" +
@@ -603,7 +606,7 @@
   function record(inst, sig, act, summary) {
     var detail = {
       type: ledgerType(sig, act),
-      source: "signal." + (sig.no || 0) + ".a" + actNo(act),
+      source: "signal." + (sig.id || sig.no || 0) + ".a" + actNo(act),
       title: "알림 처리 — " + actName(sig, act),
       summary: scrub(String(summary || sig.notice || "")),
       weight: 2
@@ -669,12 +672,21 @@
       requestRedraft(opts.inst, want, ta);
     });
 
-    var actions = [{ label: "닫기", kind: "ghost" }];
+    var actions = [{ label: opts.cancelLabel || "닫기", kind: "ghost" }];
     actions.push({
       label: "문안 복사", kind: "ghost", onClick: function () {
         copyText(ta ? ta.value : "");
         return false;
       }
+    });
+    /* 19차: 발송 대신 고를 수 있는 다른 길(예: 「1:1로 이야기하기」) */
+    (opts.extra || []).forEach(function (x) {
+      if (!x || !x.label) return;
+      actions.push({
+        label: x.label, kind: "ghost", onClick: function () {
+          return x.onClick ? x.onClick(ta ? String(ta.value || "").trim() : "") : true;
+        }
+      });
     });
     if (opts.onSubmit) {
       actions.push({
@@ -1071,6 +1083,116 @@
      9) 전달
      ====================================================================== */
 
+  /* ---- 19차 §6-1 : 신호를 「받는 사람」과 처리의 「상대」는 다르다 ----
+     구성원이 받은 알림 → 상대는 내 조직장.  조직장이 받은 알림 → 상대는 그 팀원.
+     상위 조직장이 받은 알림 → 상대는 하위 조직장.  HR·경영진 → 해당 조직의 조직장.
+     대상 특정 순서: ①inst.facts.subjectIds[0] ②inst.facts.orgId의 조직장 ③위 관계.
+     셋 다 못 정하면 null 을 돌려주고, 부르는 쪽은 발송 버튼을 만들지 않는다. */
+  function empIndex() {
+    var d = data(), m = {};
+    (d.employees || []).forEach(function (e) { if (e && e.emp_id) m[e.emp_id] = e; });
+    return m;
+  }
+  function orgHeadOf(orgId) {
+    var d = data(), head = null;
+    (d.orgs || []).forEach(function (o) { if (o && o.org_id === orgId && o.head_id) head = o.head_id; });
+    return head;
+  }
+  function relOf(emp, me) {
+    if (!emp) return "";
+    if (me && emp.emp_id === me.manager_id) return "내 조직장";
+    if (me && emp.manager_id === me.emp_id) return "우리 팀 구성원";
+    return String(emp.orgName || "");
+  }
+  function factsOf(inst) { return (inst && inst.facts) || {}; }
+
+  function recipientFor(inst, act) {
+    var sig = signalOf(inst) || {}, CU = cu(), by = empIndex(), f = factsOf(inst);
+    var me = by[CU.emp_id] || CU, i, e, id = null, why = "";
+    var actor = String(sig.actor || "");
+    var n = actNo(act);
+
+    /* ① 신호가 지목한 사람이 있으면 그 사람이다 */
+    var subj = f.subjectIds || f.subjectId || null;
+    if (subj) {
+      id = (Object.prototype.toString.call(subj) === "[object Array]") ? subj[0] : subj;
+      if (id && by[id]) why = "이 알림이 가리키는 " + (relOf(by[id], me) || "구성원") + "이에요";
+      else id = null;
+    }
+    /* ② 신호가 지목한 조직이 있으면 그 조직의 조직장 */
+    if (!id && f.orgId) {
+      id = orgHeadOf(f.orgId);
+      if (id) why = "이 알림이 가리키는 조직의 조직장이에요";
+    }
+    /* ③ 관계로 정한다 */
+    if (!id) {
+      if (n === 6) {                                   /* 승인 요청은 언제나 위로 */
+        id = me.manager_id || orgHeadOf(me.org_id);
+        why = "결재를 올릴 조직장이에요";
+      } else if (actor === "구성원" || !actor) {
+        id = me.manager_id || orgHeadOf(me.org_id);
+        why = "내 조직장이에요";
+      } else if (actor === "팀장") {
+        var d0 = data();
+        for (i = 0; i < (d0.employees || []).length; i++) {
+          e = d0.employees[i];
+          if (e && e.manager_id === me.emp_id) { id = e.emp_id; why = "이 일을 맡고 있는 우리 팀 구성원이에요"; break; }
+        }
+      } else if (actor === "상위조직장") {
+        var d1 = data();
+        for (i = 0; i < (d1.employees || []).length; i++) {
+          e = d1.employees[i];
+          if (!e || e.manager_id !== me.emp_id) continue;
+          var h = orgHeadOf(e.org_id);
+          if (h && h !== me.emp_id) { id = h; why = "이 알림이 걸린 하위 조직의 조직장이에요"; break; }
+          if (!id) { id = e.emp_id; why = "내 아래에서 이 일을 맡고 있어요"; }
+        }
+      } else {                                          /* HR·경영진 */
+        id = orgHeadOf(f.orgId || me.org_id);
+        why = "해당 조직의 조직장이에요";
+      }
+    }
+    if (!id || id === CU.emp_id) return null;
+    var who = by[id];
+    if (!who) return null;
+    var bits = [];
+    if (relOf(who, me)) bits.push(relOf(who, me));
+    if (who.jobTitle) bits.push(who.jobTitle);
+    return { id: id, name: who.name || "", why: why || relOf(who, me), desc: bits.join(" · ") };
+  }
+
+  /* ---- 19차 §6-2 : 문안의 {{자리표시자}}를 실데이터로 채운다 ----
+     채우지 못한 자리가 하나라도 남으면 발송을 막는다(부르는 쪽이 left 를 본다). */
+  function templateCtx(inst, rcp) {
+    var CU = cu(), f = factsOf(inst), d = data();
+    var oid = null, title = "", i;
+    try { oid = pickObjectiveId(inst); } catch (e0) { oid = null; }
+    for (i = 0; i < (d.objectives || []).length; i++) {
+      if (d.objectives[i].objective_id === oid) { title = d.objectives[i].title || ""; break; }
+    }
+    var me = empIndex()[CU.emp_id] || CU;
+    var cnt = (f.count != null) ? f.count : ((f.n != null) ? f.n : null);
+    var nm = (rcp && rcp.name) || "";
+    return {
+      "팀원명": nm, "수신자명": nm, "이름": nm, "받는사람": nm, "대상자명": nm,
+      "보낸사람": CU.name || "", "내이름": CU.name || "",
+      "목표명": title, "목표": title,
+      "조직명": me.orgName || "", "팀명": me.orgName || "",
+      "직무명": me.jobTitle || "",
+      "기한": f.dueDate || f.deadline || "",
+      "건수": (cnt == null ? "" : String(cnt) + "건")
+    };
+  }
+  function fillTemplate(draft, ctx) {
+    var s = String(draft == null ? "" : draft), left = [];
+    s = s.replace(/\{\{\s*([^}]+?)\s*\}\}/g, function (all, key) {
+      var v = ctx && ctx[key];
+      if (v == null || v === "") { left.push(key); return all; }
+      return String(v);
+    });
+    return { text: s, left: left };
+  }
+
   /* 수신자 후보 — 실데이터의 manager_id / head_id / 직속 팀원에서만 만든다 */
   function recipients() {
     var d = data(), CU = cu(), rk = roleKey(), out = [], seen = {};
@@ -1094,45 +1216,61 @@
     return out;
   }
 
+  /* 19차 §6-2 — 확인 창은 세 줄로 고정한다: 받는 사람 · 왜 이 사람인가 · 보낼 문장.
+     보낼 문장은 **언제나 카탈로그 초안을 실데이터로 채운 것**이다. 대화 원문을 쓰지 않는다. */
   function runA3(inst, sig, act) {
-    var rcp = recipients();
-    var sel = "";
-    if (rcp.length) {
-      sel = '<label class="ezsa-note" style="display:block">받는 사람' +
-        '<select data-ezsa-to style="width:100%;margin-top:5px;padding:8px 10px;font:inherit;' +
-        'font-size:13px;border:1px solid var(--color-border,#e0e0e0);border-radius:8px;appearance:auto">';
-      for (var i = 0; i < rcp.length; i++) {
-        sel += '<option value="' + esc(rcp[i].id) + '">' + esc(rcp[i].name) +
-          (rcp[i].why ? " · " + esc(rcp[i].why) : "") + "</option>";
-      }
-      sel += "</select></label>";
+    var rcp = recipientFor(inst, act);
+    if (!rcp) {
+      /* 누구에게 보낼지 정하지 못했다 — 발송 창을 만들지 않는다(§6-1) */
+      toast("이 알림을 누구에게 보내야 할지 아직 정하지 못했어요. 대화에서 이어가 볼게요.", "warn");
+      return chatResolve(inst, sig, act);
     }
-    var text = scrub(String((act && act.draft) || sig.notice || ""));
+    var ctx = templateCtx(inst, rcp);
+    var f = fillTemplate(String((act && act.draft) || sig.notice || ""), ctx);
+    var text = scrub(f.text);
+    var blocked = f.left.length > 0;
+
+    var head = '<div class="ezsa-ev-row"><b>받는 사람</b> ' + esc(rcp.name) +
+      (rcp.desc ? " <span class=\"ezsa-note\">(" + esc(rcp.desc) + ")</span>" : "") + "</div>" +
+      '<div class="ezsa-ev-row"><b>왜 이 사람인가</b> ' + esc(rcp.why || "이 알림의 상대예요") + "</div>";
+    if (blocked) {
+      head += '<div class="ezsa-ev-row"><b>보낼 수 없음</b> 보낼 문장에 아직 채워지지 않은 자리가 있어요 — ' +
+        esc(f.left.join(" · ")) + "</div>";
+    }
+
     var mo = openDraftModal({
       inst: inst,
-      title: "이대로 보낼까요 — " + actName(sig, act),
-      note: "받는 사람의 성과 기록에 그대로 남아요. 문안은 고칠 수 있어요.",
+      title: rcp.name + "님에게 보낼까요",
+      note: blocked
+        ? "채워지지 않은 자리가 남아 있어 지금은 보낼 수 없어요. 문장을 직접 고쳐 주세요."
+        : "받는 사람의 성과 기록에 그대로 남아요. 문안은 고칠 수 있어요.",
       text: text,
       chips: act.chips || [],
-      evidence: sel,
+      evidence: head,
+      cancelLabel: "안 보낼래요",
+      extra: [{
+        label: "1:1로 이야기하기",
+        onClick: function (v) {
+          try { pushAgenda(scrub(v || text)); } catch (e) { /* 무시 */ }
+          finish(inst, sig, act, rcp.name + "님과의 1:1 안건으로 옮겼어요.");
+          return true;
+        }
+      }],
       submitLabel: "보내기",
       onSubmit: function (v) {
-        var to = null, name = "";
-        try {
-          var s = mo && mo.box ? mo.box.querySelector("[data-ezsa-to]") : null;
-          if (s) {
-            to = s.value;
-            name = s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : to;
-          }
-        } catch (e) { /* 무시 */ }
-        deliver(inst, sig, act, to, name, v);
+        var again = fillTemplate(v, ctx);
+        if (again.left.length) {
+          toast("보낼 문장에 아직 채워지지 않은 자리가 있어요 — " + again.left.join(" · "), "warn");
+          return false;
+        }
+        deliver(inst, sig, act, rcp.id, rcp.name, again.text);
         return true;
       }
     });
     if (!mo) {
       /* 모달을 못 띄웠다 — elizax로 문안을 흘려보내는 마지막 폴백 */
       sendToElizax(text);
-      finish(inst, sig, act, "발송 폼을 띄우지 못해 문안을 elizax 대화로 보냈습니다.");
+      finish(inst, sig, act, "발송 창을 띄우지 못해 문안을 elizax 대화로 보냈습니다.");
     }
     /* AI가 살아 있으면 문안을 실초안으로 갈아끼운다 */
     if (mo && aiLive()) {
@@ -1152,7 +1290,7 @@
         if (window.EZLedger && EZLedger.add) {
           EZLedger.add({
             type: ledgerType(sig, act),
-            source: "signal." + (sig.no || 0) + ".a3.to." + toId,
+            source: "signal." + (sig.id || sig.no || 0) + ".a3.to." + toId,
             title: "알림 전달 — " + (scrub(sig.notice) || actName(sig, act)),
             summary: (CU.name || "보낸 사람") + " → " + (toName || toId) + " · " + text,
             weight: 2, emp_id: toId
@@ -1315,20 +1453,34 @@
       if (d.objectives[i].objective_id === oid) { title = d.objectives[i].title; break; }
     }
     var curVal = isWeight ? (weightSnapshot(oid) || "현재 가중치") : "현재 내용";
+    /* 19차 §6-2 — 「조직장에게」 같은 고정 문구를 쓰지 않는다. 실명·관계로 말한다. */
+    var appr = recipientFor(inst, act);
+    var apprName = (appr && appr.name) ? appr.name + "님" : "결재자";
+    var a6ctx = templateCtx(inst, appr);
+    var a6fill = fillTemplate(String((act && act.draft) || sig.notice || ""), a6ctx);
     var mo = openDraftModal({
       inst: inst,
-      title: "조직장에게 올릴까요 — " + actName(sig, act),
-      note: "조직장 결재 대기함(신청/승인 › 받은 문서)으로 올라가요. 승인 전에는 아무것도 반영되지 않아요.",
-      text: scrub(String((act && act.draft) || sig.notice || "")),
+      title: apprName + "에게 올릴까요",
+      note: apprName + " 결재 대기함(신청/승인 › 받은 문서)으로 올라가요. 승인 전에는 아무것도 반영되지 않아요.",
+      text: scrub(a6fill.text),
       chips: act.chips || [],
-      evidence: '<b>대상</b> ' + esc(title || "대상 미확정") +
-        " · <b>항목</b> " + esc(isWeight ? "핵심 성과 가중치" : "목표 내용") +
-        " · <b>현재</b> " + esc(curVal),
+      evidence: '<div class="ezsa-ev-row"><b>받는 사람</b> ' + esc((appr && appr.name) || "미정") +
+          ((appr && appr.desc) ? " <span class=\"ezsa-note\">(" + esc(appr.desc) + ")</span>" : "") + "</div>" +
+        '<div class="ezsa-ev-row"><b>왜 이 사람인가</b> ' + esc((appr && appr.why) || "결재를 올릴 조직장이에요") + "</div>" +
+        '<div class="ezsa-ev-row"><b>대상</b> ' + esc(title || "대상 미확정") +
+          " · " + esc(isWeight ? "핵심 성과 가중치" : "목표 내용") + " · 현재 " + esc(curVal) + "</div>",
+      cancelLabel: "안 올릴래요",
       submitLabel: "올리기",
       onSubmit: function (v) {
+        var again = fillTemplate(v, a6ctx);
+        if (again.left.length) {
+          toast("올릴 문장에 아직 채워지지 않은 자리가 있어요 — " + again.left.join(" · "), "warn");
+          return false;
+        }
+        v = again.text;
         var ok = writeInboxRequest(sig, isWeight, title, curVal, v);
         if (!ok) {
-          toast("올리지 못했어요 — 문안을 복사해 조직장에게 직접 전달해 주세요.", "warn");
+          toast("올리지 못했어요 — 문안을 복사해 " + apprName + "에게 직접 전달해 주세요.", "warn");
           return false;
         }
         finish(inst, sig, act,
@@ -1341,7 +1493,7 @@
       }
     });
     if (!mo) {
-      sendToElizax(scrub(String((act && act.draft) || sig.notice || "")));
+      sendToElizax(scrub(a6fill.text));
       toast("올리는 창을 띄우지 못해 문안을 대화로 보냈어요.", "warn");
       return false;
     }
@@ -1488,13 +1640,12 @@
      목적지 단어가 없는 「직접 고칠게」류만 여기서 보탠다. */
   var SCREEN_INTENT = /(자세히|화면\s*에서|화면\s*으로|직접\s*(고치|수정|입력|쓰|쓸|작성)|거기서\s*(고치|수정|쓰|작성)|가서\s*(고치|수정)|열어\s*줘|열어\s*볼)/;
 
+  /* 19차 §6-3 — EZNav.resolve 를 쓰지 않는다. 이동 판정을 두 곳에서 하지 않고,
+     여기서는 「내가 직접 화면에서 하겠다」는 명시적 표현만 본다. */
   function wantsScreen(text) {
     var t = String(text == null ? "" : text);
     if (!t) return false;
-    if (SCREEN_INTENT.test(t)) return true;
-    try { if (window.EZNav && EZNav.resolve && EZNav.resolve(t)) return true; }
-    catch (e) { /* 파서 부재 — 위 판정만 쓴다 */ }
-    return false;
+    return SCREEN_INTENT.test(t);
   }
 
   /* 「이대로 보내줘」처럼 기록을 남기라고 확정한 말 */
@@ -1527,13 +1678,21 @@
 
   /* 처리 한 건을 사용자 말투 요청 한 줄로 바꾼다. 이 문장이 대화에 그대로 올라가고,
      실측 근거는 B1의 EZSignalChat.contextFor()가 보이지 않게 실어 준다. */
+  /* 19차 — 알림 문구와 처리 이름을 이어 붙여 「사용자가 한 말」처럼 올리지 않는다.
+     그건 화면에 신호 원문이 그대로 노출되는 원인이었다(요청 8).
+     사용자 말투 질문은 EZSignalChat 이 150건 전부 갖고 있으므로 그것을 쓴다. */
   function chatRequest(sig, act) {
-    var head = scrub(sig.notice || "");
-    var what = actName(sig, act);
+    var q = "";
+    try {
+      if (window.EZSignalChat && EZSignalChat.questionFor && sig && sig.id) {
+        q = String(EZSignalChat.questionFor(sig.id) || "");
+      }
+    } catch (e) { q = ""; }
+    if (!q) q = "지금 챙길 게 있는지 봐줘";
     var tail = writesRecord(act)
-      ? " 보낼 문안을 먼저 채팅에서 보여줘. 확인하고 보낼게."
-      : " 지금 데이터로 채팅에서 바로 정리해줘. 화면은 아직 안 옮겨도 돼.";
-    return tidy(head + (head && what ? " — " : "") + what + tail);
+      ? " 보낼 문장을 먼저 보여줘. 확인하고 보낼게."
+      : " 화면은 아직 안 옮겨도 돼.";
+    return tidy(q + tail);
   }
 
   function chatResolve(inst, sig, act) {
@@ -1600,9 +1759,24 @@
     try { if (window.EZNav && EZNav.labelOf) label = EZNav.labelOf(dst.s, dst.p); } catch (e) { label = ""; }
     /* 화면으로 넘어갈 때는 왜 넘어가는지 한 줄 (R5). 사용자가 말해서 가는 경우와
        답변 끝의 진입 장치로 가는 경우의 사유가 다르므로 문장을 나눈다. */
-    sayWhy(wantsScreen(text)
-      ? "직접 고치시겠다고 하셔서 " + (label || "해당 화면") + "으로 넘어갈게요."
-      : (label || "해당 화면") + "에서 바로 고칠 수 있어요. 그 자리로 옮겨 드릴게요.");
+    /* 19차 §6-3 — 사용자가 화면으로 가겠다고 말하지 않았으면 **옮기지 않는다.**
+       답변 아래에 「열어 드릴까요?」 버튼을 붙이고, 누를 때 이 처리를 그대로 이어 준다. */
+    if (!wantsScreen(text)) {
+      var asked = null;
+      try {
+        if (window.Elizax && Elizax.askNav) {
+          asked = Elizax.askNav(dst.s, dst.p, "");
+          if (asked) {
+            asked.onGo = function () { openScreen(inst, actionIdx, "화면에서 직접 고칠게"); };
+            return true;
+          }
+        }
+      } catch (e0) { asked = null; }
+      /* 물어볼 자리를 못 만들었다 — 옮기지 않고 그대로 말만 한다 */
+      sayWhy((label || "해당 화면") + "에서 바로 고칠 수 있어요. 열어 드릴까요?");
+      return false;
+    }
+    sayWhy("직접 고치시겠다고 하셔서 " + (label || "해당 화면") + "으로 넘어갈게요.");
     try {
       switch (actNo(g.act)) {
         case 1: return runA1(inst, g.sig, g.act);

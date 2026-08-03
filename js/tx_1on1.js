@@ -235,16 +235,16 @@
     var st = document.createElement("style");
     st.id = "ez1o-style";
     st.textContent = [
-      /* 주입 바 */
-      ".ez1o-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;margin:0 0 14px;",
-      "border:1px solid var(--color-border,#E4E7EC);border-radius:12px;background:var(--color-background-muted,#F8FAFC);}",
+      /* 주입 바 — §9(PLAN-19): .ezsurf(공통 표시) + 제목줄/버튼줄 분리(.ez1o-barrow) */
+      ".ez1o-bar{display:flex;flex-direction:column;gap:8px;margin:0 0 14px;}",
+      ".ez1o-barrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;}",
       ".ez1o-btn{cursor:pointer;border:none;border-radius:var(--radius-full,999px);padding:7px 14px;font-size:12.5px;font-weight:700;",
       "color:var(--color-on-accent,#fff);background:var(--color-accent,#1F7AF0);transition:filter var(--duration-fast,.12s);}",
       ".ez1o-btn:hover{filter:brightness(1.07);}",
       ".ez1o-btn:disabled{opacity:.5;cursor:default;}",
       ".ez1o-badge{font-size:10px;font-weight:600;border-radius:var(--radius-full,999px);padding:2px 9px;white-space:nowrap;",
       "color:var(--color-trust,#23408E);background:color-mix(in srgb, var(--color-accent,#17F) 7%, transparent);border:1px solid color-mix(in srgb, var(--color-accent,#17F) 30%, transparent);}",
-      ".ez1o-note{font-size:11.5px;color:var(--color-text-secondary,#6B7280);}",
+      ".ez1o-note{font-size:12.5px;color:var(--color-text-secondary,#6B7280);}",
       ".ez1o-linkbtn{cursor:pointer;margin-left:auto;border:1px solid var(--color-border,#E4E7EC);border-radius:var(--radius-full,999px);",
       "padding:5px 12px;font-size:11.5px;font-weight:600;color:var(--color-accent,#1F7AF0);background:var(--color-background-card,#fff);}",
       ".ez1o-linkbtn:hover{border-color:var(--color-accent,#1F7AF0);background:color-mix(in srgb, var(--color-accent,#17F) 5%, transparent);}",
@@ -261,7 +261,7 @@
       ".ez1o-wave i:nth-child(3){height:9px;animation-delay:.3s}.ez1o-wave i:nth-child(4){height:16px;animation-delay:.45s}",
       ".ez1o-wave i:nth-child(5){height:7px;animation-delay:.6s}.ez1o-wave i:nth-child(6){height:12px;animation-delay:.75s}",
       "@keyframes ez1oWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}",
-      ".ez1o-reclab{font-size:11.5px;color:var(--color-text-secondary,#6B7280);}",
+      ".ez1o-reclab{font-size:12.5px;color:var(--color-text-secondary,#6B7280);}",
       ".ez1o-stop{cursor:pointer;margin-left:auto;border:1px solid var(--color-error,#DC2626);border-radius:var(--radius-full,999px);padding:5px 13px;",
       "font-size:11.5px;font-weight:700;color:var(--color-error,#DC2626);background:var(--color-background-card,#fff);}",
       ".ez1o-stop:hover{background:color-mix(in srgb, var(--color-error,#d32) 6%, transparent);}",
@@ -388,6 +388,12 @@
     return '<select class="ez1o-sel" data-ez1o-mem title="1:1 대상 팀원 선택">' + opts + "</select>";
   }
 
+  /* barHTML — §9-2(PLAN-19): .ezsurf 공통 표시를 두른다. 제목 줄(.ezsurf-hd = "elizax ...")과
+     동작 줄(.ez1o-barrow = 버튼·안내·링크)을 분리해 배너가 talenx 화면과 뚜렷이 구분되게 한다.
+     .ezsurf가 참조하는 astryx 토큰(--color-accent 등)은 `[data-astryx-theme="talenx"] .ezsurf`로
+     스코프돼 있다 — 이건 "자손" 선택자라 같은 엘리먼트에 속성과 클래스를 같이 찍으면 매치되지
+     않는다(별개 노드여야 함). 그래서 바깥 `.ez1o-bar`에 속성을 찍고, `.ezsurf`는 그 자식으로 둔다.
+     3역할 분기 모두 통일 — 이전엔 member 분기에만 속성이 있어 hr·leader 배너는 토큰 스코프 밖이었다. */
   function barHTML() {
     var rk = roleKey();
     var mapBtn = '<button class="ez1o-linkbtn" data-ez1o="map">&#128506; 지원 범위 맵</button>';
@@ -395,32 +401,38 @@
       /* HR — 녹음 바 대신 실시율 요약 칩. ponytail: 실시율=시드 수치, 부서별 집계는 후속 */
       var n = 0, L = ledgerList();
       for (var i = 0; i < L.length; i++) if (L[i].type === "oneonone") n++;
-      return '<div class="ez1o-bar" data-ez1o-bar>'
-        + '<span class="ez1o-badge">1:1 실시 현황</span>'
-        + '<span class="ez1o-note"><b>받아쓰기 기록 ' + n + '건</b> · 최근 30일 실시율 62% (예시 수치)</span>'
-        + '<span class="ez1o-note">부서별 상세는 준비 중입니다</span>'
-        + mapBtn + '</div>'
-        + '<div class="ez1o-panel" data-ez1o-panel></div>';
+      return '<div class="ez1o-bar" data-ez1o-bar data-astryx-theme="talenx"><div class="ezsurf">'
+        + '<div class="ezsurf-hd">elizax 1:1 실시 현황</div>'
+        + '<div class="ez1o-barrow">'
+        + '<span class="ez1o-badge">받아쓰기 기록 ' + n + '건</span>'
+        + '<span class="ezsurf-note">최근 30일 실시율 62% (예시 수치) · 부서별 상세는 준비 중입니다</span>'
+        + mapBtn + '</div></div></div>'
+        + '<div class="ez1o-panel" data-ez1o-panel data-astryx-theme="talenx"></div>';
     }
     if (rk === "leader") {
       var tm = teamMembers();
-      return '<div class="ez1o-bar" data-ez1o-bar>'
-        + '<button class="ez1o-btn" data-ez1o="start">✦ elizax 녹음·요약</button>'
-        + (tm.length ? memSelectHTML() : '<span class="ez1o-note">1:1 대상 팀원이 없습니다</span>')
-        + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">◐ 제안만</span>'
-        + '<span class="ez1o-note">팀원을 선택해 1:1을 주관하세요 · 기록 확정은 사람</span>'
-        + mapBtn + '</div>'
-        + '<div class="ez1o-panel" data-ez1o-panel></div>';
+      return '<div class="ez1o-bar" data-ez1o-bar data-astryx-theme="talenx"><div class="ezsurf">'
+        + '<div class="ezsurf-hd">elizax 녹음·요약'
+        + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">◐ 제안만</span></div>'
+        + '<div class="ez1o-barrow">'
+        + '<button class="ez1o-btn" data-ez1o="start">녹음 시작</button>'
+        + (tm.length ? memSelectHTML() : '<span class="ezsurf-note">1:1 대상 팀원이 없습니다</span>')
+        + '<span class="ezsurf-note">팀원을 선택해 1:1을 주관하세요 · 기록 확정은 사람</span>'
+        + mapBtn + '</div></div></div>'
+        + '<div class="ez1o-panel" data-ez1o-panel data-astryx-theme="talenx"></div>';
     }
     var confirmed = !!loadState().confirmedAt;
-    /* AI 관여 마커는 ✦ 하나(§4) — ⏺는 녹음(REC) 상태 인디케이터로만 존속 */
-    return '<div class="ez1o-bar" data-ez1o-bar data-astryx-theme="talenx">'
-      + '<button class="ez1o-btn" data-ez1o="start">✦ elizax 녹음·요약</button>'
+    /* AI 관여 마커는 ✦ 하나(§4, .ezsurf-hd::before가 그린다) — ⏺는 녹음(REC) 상태 인디케이터로만 존속 */
+    return '<div class="ez1o-bar" data-ez1o-bar data-astryx-theme="talenx"><div class="ezsurf">'
+      + '<div class="ezsurf-hd">elizax 녹음·요약'
       + (window.EZKit ? EZKit.status("suggest") : '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9684; 제안만</span>')
-      + '<span class="ez1o-note">녹음→받아쓰기→요약은 자동, 기록 확정은 사람</span>'
+      + '</div>'
+      + '<div class="ez1o-barrow">'
+      + '<button class="ez1o-btn" data-ez1o="start">녹음 시작</button>'
+      + '<span class="ezsurf-note">녹음→받아쓰기→요약은 자동, 기록 확정은 사람</span>'
       + (confirmed ? '<span class="ez1o-donetag">&#10003; 요약 확정됨 · 성과 기록 저장</span>' : '')
       + mapBtn
-      + '</div>'
+      + '</div></div></div>'
       + '<div class="ez1o-panel" data-ez1o-panel data-astryx-theme="talenx"></div>';
   }
 

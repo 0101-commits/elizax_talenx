@@ -156,6 +156,40 @@
       .replace(/^\s*·\s*|\s*·\s*$/g, "");
     return norm(t);
   }
+  /* 「출처」 표시 — EZSource(window.EZSource, B 소유)가 화면 이름을 알면 그 라벨만 쓴다.
+     모르면 감춘다: 라벨이 빈 문자열이면 부른 쪽이 그 줄 자체를 그리지 않는다 (§7-2).
+     EZSource가 아직 없거나 실패하면 기존 humanSrc()/SRC_WORDS 폴백으로 대신하되
+     그 경로도 코드·점 경로를 지우므로 원문 조인 키가 그대로 나가는 일은 없다. */
+  function sourceLabelOf(src) {
+    if (window.EZSource && typeof window.EZSource.label === "function") {
+      try { return String(window.EZSource.label(src) || ""); } catch (e) { /* 폴백으로 진행 */ }
+    }
+    return humanSrc(src);
+  }
+  /* 상세 뷰의 「출처」 행 — 라벨이 없으면 행 자체를 만들지 않는다.
+     라벨이 있으면 EZSource.chip()이 만든 클릭 가능한 칩(그 화면으로 이동)을 쓰고,
+     칩을 못 만들면(화면 없음 등) 같은 라벨을 읽기 전용 칩으로 보여준다. */
+  function sourceRowHtml(it, restricted) {
+    if (restricted) {
+      return '<div class="ezl-drow"><label>출처</label><div>타인 기록이라 출처는 비공개입니다</div></div>';
+    }
+    var label = sourceLabelOf(it.source);
+    if (!label) return "";
+    var chipHtml = "";
+    if (window.EZSource && typeof window.EZSource.chip === "function") {
+      try {
+        var chip = window.EZSource.chip(it.source);
+        if (chip && chip.outerHTML) chipHtml = chip.outerHTML;
+      } catch (e) { /* 폴백으로 진행 */ }
+    }
+    if (!chipHtml) chipHtml = '<span class="ezl-src">' + esc(label) + "</span>";
+    return '<div class="ezl-drow"><label>출처</label><div>' + chipHtml + "</div></div>";
+  }
+  /* 목록 행의 출처 칩 — 라벨이 없으면 아무것도 그리지 않는다(원문 코드 대신 빈 자리). */
+  function sourceListHtml(it) {
+    var label = sourceLabelOf(it.source);
+    return label ? '<span class="ezl-src">' + esc(label) + "</span>" : "";
+  }
   function z2(n) { return (n < 10 ? "0" : "") + n; }
   function nowStamp() {
     var t = new Date();
@@ -688,6 +722,26 @@
       ".ezl-cite:hover{border-color:var(--color-accent);}",
       ".ezl-cite small{display:block;font-size:10px;color:var(--color-text-secondary);margin-top:3px;}",
       ".ezl-cite .gs{color:var(--color-text-orange);font-weight:700;}",
+      /* ---- 이 기록의 앞뒤 노드 지도 (§7-1) ---- */
+      ".ezl-nm-row{display:flex;align-items:stretch;gap:6px;margin:6px 0 4px;}",
+      ".ezl-nm-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}",
+      ".ezl-nm-arrow{flex:none;align-self:center;font-size:14px;color:var(--color-text-secondary);}",
+      ".ezl-nm-center{flex:none;align-self:center;display:flex;flex-direction:column;align-items:center;gap:2px;",
+      "font-size:11.5px;font-weight:700;color:var(--color-text-primary);min-width:60px;text-align:center;}",
+      ".ezl-nm-dot{font-size:15px;color:var(--color-accent);}",
+      ".ezl-nm-node{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;text-align:left;",
+      "font:inherit;cursor:pointer;background:var(--color-background-card);border:1px solid var(--color-border);",
+      "border-radius:var(--radius-container);padding:6px 8px;color:var(--color-text-primary);}",
+      ".ezl-nm-node:hover{border-color:var(--ezl-c,var(--color-accent));}",
+      ".ezl-nm-tb{font-size:9px;font-weight:700;color:var(--ezl-c,var(--color-accent));}",
+      ".ezl-nm-tt{font-size:11.5px;font-weight:600;line-height:1.4;}",
+      ".ezl-nm-at{font-size:10px;color:var(--color-text-secondary);}",
+      ".ezl-nm-empty{display:block;font-size:11px;color:var(--color-text-secondary);padding:6px 0;text-align:center;}",
+      ".ezl-nm-branch{margin-top:8px;padding-top:8px;border-top:1px dashed var(--color-border);}",
+      ".ezl-nm-branch-arrow{font-size:13px;color:var(--color-text-secondary);margin-right:4px;}",
+      ".ezl-nm-branch-label{font-size:11px;color:var(--color-text-secondary);font-weight:600;}",
+      ".ezl-nm-branch-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}",
+      ".ezl-nm-cite{width:auto;min-width:112px;}",
       ".ezl-empty{padding:30px 8px;text-align:center;color:var(--color-text-secondary);font-size:12px;}",
       ".ezl-foot{flex:none;padding:11px 18px;border-top:1px solid var(--color-border);background:var(--color-background-muted);",
       "font-size:11px;line-height:1.55;color:var(--color-text-secondary);}",
@@ -840,7 +894,9 @@
         + "</div>";
     }
     var pin = isPinned(it) ? '<span class="ezl-pin">평가 인용됨 · 보존 대상</span>' : "";
-    return '<div class="ezl-item' + (hl ? " ezl-hl" : "") + '" data-ezl-id="' + esc(it.id) + '" title="클릭하면 원문·출처·인용 이력을 봅니다" style="--ezl-c:' + meta.color + '">'
+    /* 답변에 실제로 쓰인 적 없으면(0회) 배지 자체를 그리지 않는다 — "0회" 숫자는 정보가 아니다 (§7-1) */
+    var usedBadge = used > 0 ? '<span class="ezl-used hot">답변 ' + used + "건의 근거</span>" : "";
+    return '<div class="ezl-item' + (hl ? " ezl-hl" : "") + '" data-ezl-id="' + esc(it.id) + '" title="클릭하면 원문·출처·앞뒤 기록을 봅니다" style="--ezl-c:' + meta.color + '">'
       + '<div class="ezl-row1"><span class="ezl-tb">' + esc(meta.label) + "</span>"
       + (it.seed ? '<span class="ezl-seedb">예시</span>' : "")
       + '<span class="ezl-at">' + esc(it.at || "") + "</span>"
@@ -850,8 +906,8 @@
       + '<div class="ezl-row2">'
       + (lv === "summ"
         ? '<span class="ezl-lvchip" title="타인 기록이라 열람 규칙상 요약까지만 제공됩니다">요약까지 열람 — 타인 기록</span>'
-        : '<span class="ezl-src">' + esc(it.source || "") + "</span>")
-      + '<span class="ezl-used' + (used > 0 ? " hot" : "") + '">답변 인용 ' + used + "회</span>" + pin + "</div>"
+        : sourceListHtml(it))
+      + usedBadge + pin + "</div>"
       + "</div>";
   }
 
@@ -881,6 +937,77 @@
     return out;
   }
 
+  /* ---------------- 이 기록의 앞뒤 (§7-1) ----------------
+     "답변 인용 N회"라는 의미 없는 숫자 대신, 이 기록과 실제로 이어진 다른 기록을
+     보여준다. 연결 판정: source에서 앵커(OBJ-/KR-/EMP- 토큰)를 뽑아 같은 앵커를
+     공유하는 기록을 시각순으로 줄 세우고 직전 2건·직후 2건을 취한다. 앵커가 없으면
+     같은 type + 같은 날짜(at의 M/D)로 대체한다. */
+  function anchorTok(src) {
+    var m = /\b(OBJ|KR|EMP)-[A-Za-z0-9_-]+/.exec(String(src || ""));
+    return m ? m[0] : "";
+  }
+  function dateTok(at) {
+    var s = String(at || ""), i = s.indexOf(" ");
+    return i >= 0 ? s.slice(0, i) : s;
+  }
+  function findNeighbors(it) {
+    var pool = loadStore().filter(function (x) { return x && polCheck(x) !== "no"; });
+    var anchor = anchorTok(it.source);
+    if (anchor) {
+      pool = pool.filter(function (x) { return anchorTok(x.source) === anchor; });
+    } else {
+      var dt = dateTok(it.at);
+      pool = pool.filter(function (x) { return x.type === it.type && dateTok(x.at) === dt; });
+    }
+    pool.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+    var idx = -1, i;
+    for (i = 0; i < pool.length; i++) { if (pool[i].id === it.id) { idx = i; break; } }
+    if (idx < 0) return { prev: [], next: [] };
+    return { prev: pool.slice(Math.max(0, idx - 2), idx), next: pool.slice(idx + 1, idx + 3) };
+  }
+  /* 노드는 제목 한 줄 + 날짜만 — 기록 번호·표 이름은 올리지 않는다 */
+  function mapNodeHtml(n) {
+    var meta = TYPES[n.type] || TYPES.org;
+    return '<button type="button" class="ezl-nm-node" data-ezl-id="' + esc(n.id) + '" style="--ezl-c:' + meta.color + '" title="클릭하면 이 기록을 봅니다">'
+      + '<span class="ezl-nm-tb">' + esc(meta.label) + "</span>"
+      + '<span class="ezl-nm-tt">' + esc(shorten(n.title, 18)) + "</span>"
+      + '<span class="ezl-nm-at">' + esc(n.at || "") + "</span></button>";
+  }
+  function mapCiteNodeHtml(c) {
+    return '<button type="button" class="ezl-nm-node ezl-nm-cite" data-ezl-goto="' + esc(c.sid) + '" title="클릭하면 그 대화로 이동합니다">'
+      + '<span class="ezl-nm-tt">' + esc(shorten(c.title || "대화", 18)) + "</span>"
+      + '<span class="ezl-nm-at">' + esc(c.at || "") + (c.cited ? "" : " · 추정") + "</span></button>";
+  }
+  /* 앞뒤 노드 지도 — 연결이 하나도 없으면 숫자 없이 한 문장만 정직하게 보여준다 */
+  function nodeMapHtml(it) {
+    var nb = findNeighbors(it);
+    var cites = citingAnswers(it.id);
+    if (!nb.prev.length && !nb.next.length && !cites.length) {
+      return '<div class="ezl-dhead">이 기록의 앞뒤</div>'
+        + '<div class="ezl-why">아직 앞뒤로 이어진 기록이 없어요.</div>';
+    }
+    var i, prevHtml = "", nextHtml = "";
+    for (i = 0; i < nb.prev.length; i++) prevHtml += mapNodeHtml(nb.prev[i]);
+    for (i = 0; i < nb.next.length; i++) nextHtml += mapNodeHtml(nb.next[i]);
+    var html = '<div class="ezl-dhead">이 기록의 앞뒤</div>'
+      + '<div class="ezl-nm-row">'
+      + '<div class="ezl-nm-col">' + (prevHtml || '<span class="ezl-nm-empty">-</span>') + "</div>"
+      + '<span class="ezl-nm-arrow">&#8594;</span>'
+      + '<div class="ezl-nm-center"><span class="ezl-nm-dot">&#9679;</span>이 기록</div>'
+      + '<span class="ezl-nm-arrow">&#8594;</span>'
+      + '<div class="ezl-nm-col">' + (nextHtml || '<span class="ezl-nm-empty">-</span>') + "</div>"
+      + "</div>";
+    if (cites.length) {
+      var citeHtml = "";
+      for (i = 0; i < cites.length; i++) citeHtml += mapCiteNodeHtml(cites[i]);
+      html += '<div class="ezl-nm-branch">'
+        + '<span class="ezl-nm-branch-arrow">&#8600;</span>'
+        + '<span class="ezl-nm-branch-label">이 기록을 근거로 쓴 답변 ' + cites.length + "건</span>"
+        + '<div class="ezl-nm-branch-row">' + citeHtml + "</div></div>";
+    }
+    return html;
+  }
+
   function detailHtml(it, lv) {
     var meta = TYPES[it.type] || TYPES.org;
     var back = '<button type="button" class="ezl-back" data-ezl-back="1">&#8592; 목록으로</button>';
@@ -895,13 +1022,9 @@
         + '<div class="ezl-why">응답자 보호 정책에 따라 이 기록은 익명 집계로만 제공됩니다 — 원문·출처는 열람 대상이 아닙니다 (보관·열람 규칙 v3.1).</div>';
     }
     var restricted = (lv === "summ");
-    var cites = citingAnswers(it.id);
-    var used = it.usedCount || 0;
 
     var rows = '<div class="ezl-drow"><label>기록 시각</label><div>' + esc(it.at || "-") + "</div></div>"
-      + '<div class="ezl-drow"><label>출처</label><div>'
-      + (restricted ? "타인 기록이라 출처는 비공개입니다" : '<span class="ezl-src">' + esc(it.source || "-") + "</span>")
-      + "</div></div>"
+      + sourceRowHtml(it, restricted)
       + '<div class="ezl-drow"><label>판단 기여도</label><div>' + (it.weight || 1) + " / 3</div></div>"
       + '<div class="ezl-drow"><label>보존</label><div>'
       + (isPinned(it) ? "평가에 인용됨 · 롤링 삭제 대상 제외" : "임시 기록 · 80건 롤링 보관 대상") + "</div></div>"
@@ -910,27 +1033,12 @@
         : "")
       + (it.seed ? '<div class="ezl-why">데모용 예시 기록입니다 — 실제 사용으로 쌓인 기록과 구분됩니다.</div>' : "");
 
-    var citeBody;
-    if (!window.EZChat || !EZChat.exportAll) {
-      citeBody = '<div class="ezl-why">대화 저장소를 불러올 수 없어 역추적할 수 없습니다.</div>';
-    } else if (!cites.length) {
-      citeBody = '<div class="ezl-why">이 기록을 인용한 답변이 아직 없습니다' + (used ? " (인용 카운트 " + used + "회 — 이전 세션 정리분)" : "") + ".</div>";
-    } else {
-      citeBody = cites.map(function (c) {
-        return '<button type="button" class="ezl-cite" data-ezl-goto="' + esc(c.sid) + '">'
-          + esc(c.text)
-          + "<small>" + esc(c.title) + (c.at ? " · " + esc(c.at) : "")
-          + (c.cited ? " · AI 실인용" : ' · <span class="gs">추측 매칭</span>') + "</small></button>";
-      }).join("");
-    }
-
     return back + head
       + '<div class="ezl-dt">' + esc(it.title) + "</div>"
       + (it.summary ? '<div class="ezl-dsum">' + esc(it.summary) + "</div>" : "")
       + (restricted ? '<div class="ezl-why">타인 기록이라 열람 규칙상 요약까지만 제공됩니다 — 원문·출처는 비공개 (보관·열람 규칙 v3.1).</div>' : "")
       + rows
-      + '<div class="ezl-dhead">인용 이력 · 답변 인용 ' + used + "회</div>"
-      + citeBody
+      + nodeMapHtml(it)
       + (window.EZJourney && EZJourney.openLedger
         ? '<button type="button" class="ezl-foot-policy" data-ezl-journey="' + esc(it.id) + '" title="이 기록이 어느 단계의 결정으로 이어졌는지 봅니다" style="margin:10px 0 0">&#9672; 결정 흐름에서 보기</button>'
         : "");
@@ -1026,7 +1134,7 @@
     var c = renderCore(highlightId);
     p.innerHTML =
       '<div class="ezl-head"><div class="ezl-head-top">'
-      + '<div class="ezl-title">성과 기록<small>확정된 목표·체크인·1:1·평가가 자동으로 쌓이는 원장입니다</small></div>'
+      + '<div class="ezl-title">성과 기록<small>답변의 근거가 된 내 기록이에요. elizax가 건넨 알림은 알림 탭에 있어요.</small></div>'
       + '<button type="button" class="ezl-x" data-ezl-close="1" aria-label="닫기">×</button></div>'
       + '<div class="ezl-sub"><span class="ezl-asof">📌 기준 ' + esc(asOfStr()) + "</span>"
       + "<span>총 <b>" + c.total + "</b>건 기록</span></div></div>"
@@ -1045,7 +1153,7 @@
     container.innerHTML =
       '<div class="ezl-tabhead">'
       + '<div class="ezl-title">성과 기록' + (hasSeed() ? '<span class="ezl-demo">데모 데이터</span>' : "") + "</div>"
-      + '<div class="ezl-tabdef">elizax가 답변 근거로 쓰는 나의 성과 타임라인</div>'
+      + '<div class="ezl-tabdef">답변의 근거가 된 내 기록이에요. elizax가 건넨 알림은 알림 탭에 있어요.</div>'
       + '<div class="ezl-sub"><span class="ezl-asof">📌 기준 ' + esc(asOfStr()) + "</span>"
       + "<span>총 <b>" + c.total + "</b>건</span></div></div>"
       + c.strip + c.body + c.foot;
