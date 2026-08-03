@@ -413,7 +413,7 @@
       var tm = teamMembers();
       return '<div class="ez1o-bar" data-ez1o-bar data-astryx-theme="talenx"><div class="ezsurf">'
         + '<div class="ezsurf-hd">elizax 녹음·요약'
-        + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">◐ 제안만</span></div>'
+        + '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 합니다. 확정은 사람이 합니다">◐ 제안만</span></div>'
         + '<div class="ez1o-barrow">'
         + '<button class="ez1o-btn" data-ez1o="start">녹음 시작</button>'
         + (tm.length ? memSelectHTML() : '<span class="ezsurf-note">1:1 대상 팀원이 없습니다</span>')
@@ -425,7 +425,7 @@
     /* AI 관여 마커는 ✦ 하나(§4, .ezsurf-hd::before가 그린다) — ⏺는 녹음(REC) 상태 인디케이터로만 존속 */
     return '<div class="ez1o-bar" data-ez1o-bar data-astryx-theme="talenx"><div class="ezsurf">'
       + '<div class="ezsurf-hd">elizax 녹음·요약'
-      + (window.EZKit ? EZKit.status("suggest") : '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 — 확정은 사람">&#9684; 제안만</span>')
+      + (window.EZKit ? EZKit.status("suggest") : '<span class="ez1o-badge" title="요약은 근거와 함께 제안만 합니다. 확정은 사람이 합니다">&#9684; 제안만</span>')
       + '</div>'
       + '<div class="ez1o-barrow">'
       + '<button class="ez1o-btn" data-ez1o="start">녹음 시작</button>'
@@ -608,7 +608,7 @@
     }
     if (!chips) {
       /* 고정 문자열로 채우지 않는다 — 없으면 없다고 말한다 */
-      chips = '<div class="ez1o-empty">이번 사이클 기록이 아직 없습니다 — 목표 기준으로 시작하세요.'
+      chips = '<div class="ez1o-empty">이번 사이클 기록이 아직 없습니다. 목표 기준으로 시작하세요.'
         + (objectivesOwned(empId).length
             ? ' 현재 목표: <b>' + esc(objTitleFor(empId)) + "</b>"
             : " 등록된 목표도 아직 없습니다.")
@@ -619,7 +619,7 @@
     if (prom) {
       var done = !!(loadState().promiseDone || {})[prom.id];
       promHTML = '<div class="ez1o-prom" data-ez1o-prom="' + esc(prom.id) + '">'
-        + '<span>&#128203; 지난 약속 (' + esc(String(prom.at || "").split(" ")[0]) + ' 1:1) — ' + esc(cut(prom.summary || prom.title, 56)) + "</span>"
+        + '<span>&#128203; 지난 약속 (' + esc(String(prom.at || "").split(" ")[0]) + ' 1:1) : ' + esc(cut(prom.summary || prom.title, 56)) + "</span>"
         + '<button class="tg' + (done ? " done" : "") + '" data-ez1o="promise">' + (done ? "&#10003; 이행 완료" : "이행 확인") + "</button></div>";
     }
     var who = "";
@@ -671,7 +671,7 @@
       + '<span class="ez1o-wave"><i></i><i></i><i></i><i></i><i></i><i></i></span>'
       + '<span class="ez1o-reclab">녹음 중 · 실시간 받아쓰기 (' + esc(REC_ID) + ')</span>'
       /* 대본은 데모 자산 — 실제 대화로 오인하지 않도록 녹음 중에도 계속 표시한다 */
-      + '<span class="ez1o-demo" title="받아쓰기 줄은 시연용 고정 대본입니다 — 실제 녹음이 아닙니다">데모 전사문</span>'
+      + '<span class="ez1o-demo" title="받아쓰기 줄은 시연용 고정 대본입니다. 실제 녹음이 아닙니다">데모 전사문</span>'
       + '<button class="ez1o-stop" data-ez1o="stop">&#9632; 종료·요약 생성</button>'
       + '</div>'
       + '<div class="ez1o-tr" data-ez1o-tr></div>'
@@ -720,7 +720,7 @@
     var lines = sess.script.slice(0, sess.idx), transcript = "";
     for (var i = 0; i < lines.length; i++) transcript += lines[i].t + " " + lines[i].name + ": " + lines[i].text + "\n";
     panel.innerHTML = '<div class="ez1o-rec"><div class="ez1o-gen"><span class="ez1o-spin"></span>'
-      + '요약 생성 중 — 받아쓰기 ' + sess.idx + '줄 분석 · 주제/액션/신호 추출…</div></div>';
+      + '요약을 만들고 있습니다. 받아쓰기 ' + sess.idx + '줄 분석 · 주제/액션/신호 추출…</div></div>';
     setTimeout(function () {
       if (!document.body.contains(panel)) { killSession(); return; }
       panel.innerHTML = summaryHTML();
@@ -876,28 +876,28 @@
   function summaryHTML() {
     var p = pair(), MGR = p.mgr, MEM = p.mem;
     var K = window.EZKit;
-    var title = '✦ 1:1 미팅 요약' + (lastRun && lastRun.memName ? ' — ' + lastRun.memName : '');
+    var title = '✦ 1:1 미팅 요약' + (lastRun && lastRun.memName ? ' · ' + lastRun.memName : '');
     /* 고정 요약의 액션 아이템 2건이 곧 합의 사항 — 착지 버튼의 원천 */
     setAgreements([
-      { text: "외부 연동 지연 건 파트너십 팀 에스컬레이션 — 담당 " + MGR + " · 기한 7/18" },
-      { text: "머신러닝 기초 교육 과정 선정·예산 신청 — 담당 " + MEM + " · 기한 7/22" }
+      { text: "외부 연동 지연 건 파트너십 팀 에스컬레이션 : 담당 " + MGR + " · 기한 7/18" },
+      { text: "머신러닝 기초 교육 과정 선정·예산 신청 : 담당 " + MEM + " · 기한 7/22" }
     ]);
     var demoNote = '<div class="ez1o-note" style="margin:2px 0 6px">'
       + '<span class="ez1o-demo">데모 전사문 기반</span> 아래 요약의 인용 시각(' + esc(REC_ID)
-      + ')은 시연용 고정 대본에서 나온 것입니다 — 실제 녹음 기록이 아닙니다. '
+      + ')은 시연용 고정 대본에서 나온 것입니다. 실제 녹음 기록이 아닙니다. '
       + '실AI가 연결되면 대상자의 실제 목표·체크인 데이터를 함께 참조해 다시 요약합니다.</div>';
     var body = demoNote
       + agendaSectionHTML()
       + '<div class="ez1o-h4">논의 주제 3</div>'
-      + '<div class="ez1o-topic"><span class="no">1</span><span>KR2 진척 — 신규 기획 3건 사용자 검증 통과, 잔여 2건 설계 중 (진행률 68%)' + chip("00:16") + '</span></div>'
-      + '<div class="ez1o-topic"><span class="no">2</span><span>일정 리스크 — 외부 연동 파트너 응답 2주 지연, 잔여 검증 일정 순연 가능성' + chip("00:42") + '</span></div>'
-      + '<div class="ez1o-topic"><span class="no">3</span><span>성장 니즈 — 추천 로직 업무 희망, 머신러닝 기초 교육 수강 요청' + chip("01:24") + '</span></div>'
+      + '<div class="ez1o-topic"><span class="no">1</span><span>KR2 진척 : 신규 기획 3건 사용자 검증 통과, 잔여 2건 설계 중 (진행률 68%)' + chip("00:16") + '</span></div>'
+      + '<div class="ez1o-topic"><span class="no">2</span><span>일정 리스크 : 외부 연동 파트너 응답 2주 지연, 잔여 검증 일정 순연 가능성' + chip("00:42") + '</span></div>'
+      + '<div class="ez1o-topic"><span class="no">3</span><span>성장 니즈 : 추천 로직 업무 희망, 머신러닝 기초 교육 수강 요청' + chip("01:24") + '</span></div>'
       + '<div class="ez1o-h4">액션 아이템 2</div>'
-      + '<div class="ez1o-act"><span class="bx"></span><span>외부 연동 지연 건 파트너십 팀 에스컬레이션 <span class="own">— 담당 ' + esc(MGR) + ' · 기한 7/18</span></span></div>'
-      + '<div class="ez1o-act"><span class="bx"></span><span>머신러닝 기초 교육 과정 선정·예산 신청 <span class="own">— 담당 ' + esc(MEM) + ' · 기한 7/22</span></span></div>'
+      + '<div class="ez1o-act"><span class="bx"></span><span>외부 연동 지연 건 파트너십 팀 에스컬레이션 <span class="own">담당 : ' + esc(MGR) + ' · 기한 7/18</span></span></div>'
+      + '<div class="ez1o-act"><span class="bx"></span><span>머신러닝 기초 교육 과정 선정·예산 신청 <span class="own">담당 : ' + esc(MEM) + ' · 기한 7/22</span></span></div>'
       + '<div class="ez1o-h4">감지 신호 2</div>'
-      + '<div class="ez1o-sig risk"><span class="ic">&#9888;</span><span><b>리스크</b> · 일정 지연(외부 연동) — 이번 주 체크인 초안에 리스크 항목 반영을 제안합니다' + chip("00:42") + '</span></div>'
-      + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · 머신러닝 교육 수요 감지 — 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>'
+      + '<div class="ez1o-sig risk"><span class="ic">&#9888;</span><span><b>리스크</b> · 일정 지연(외부 연동) : 이번 주 체크인 초안에 리스크 항목 반영을 제안합니다' + chip("00:42") + '</span></div>'
+      + '<div class="ez1o-sig grow"><span class="ic">&#8599;</span><span><b>성장 니즈</b> · 머신러닝 교육 수요 감지 : 교육 신청 연계 후보로 표시했습니다' + chip("01:37") + '</span></div>'
       + agreementsSectionHTML();
     var gate = '<div class="ez1o-gate" data-ez1o-gate>'
       + '<span class="lab">결정 게이트 · 사람이 확정 (승인 전에는 아무것도 반영되지 않음)</span>'
@@ -929,7 +929,7 @@
         body.setAttribute("contenteditable", "true");
         body.style.outline = "2px dashed color-mix(in srgb, var(--color-accent,#17F) 40%, transparent)";
         body.style.borderRadius = "8px";
-        toast("수정 모드 — 요약을 직접 고친 뒤 [기록 확정·성과 기록 저장]을 누르세요.", "");
+        toast("수정 모드입니다. 요약을 직접 고친 뒤 [기록 확정·성과 기록 저장]을 누르세요.", "");
       }
       return;
     }
@@ -982,14 +982,14 @@
           bar.insertBefore(tag, link || null);
         }
       }
-      toast("기록 확정 — 성과 기록에 저장되었습니다 (감사 기록 남김).", "ok");
+      toast("기록을 확정했습니다. 성과 기록에 저장되었습니다 (감사 기록 남김).", "ok");
     } else { /* drop */
       card.classList.add("ez1o-collapsed");
       var note = document.createElement("div");
       note.className = "ez1o-drop";
-      note.textContent = "폐기됨 — 성과 기록에 아무것도 남지 않았습니다. 확정되지 않은 요약은 기록에 섞이지 않습니다.";
+      note.textContent = "폐기했습니다. 성과 기록에 아무것도 남지 않았습니다. 확정되지 않은 요약은 기록에 섞이지 않습니다.";
       card.appendChild(note);
-      toast("요약 폐기 — 성과 기록에는 남지 않았습니다.", "");
+      toast("폐기했습니다. 성과 기록에는 남지 않았습니다.", "");
     }
     var startBtn = document.querySelector('[data-ez1o="start"]');
     if (startBtn) startBtn.disabled = false;
@@ -1052,7 +1052,7 @@
       + '<span class="tt">지원 범위 맵 · 성과관리 전 주기 × elizax 기능 지원 범위</span>'
       + '<span class="ez1o-asof">📌 기준 시점 ' + esc(AS_OF()) + '</span>'
       + '<button class="ez1o-mapx" data-ez1o="mapclose" title="닫기">&#10005;</button>'
-      + '<span class="principle">선정 원칙 — 초기엔 <b>기록 기여도 우선</b>: 기록이 충분히 쌓이면 <b>빈도 우선</b>으로 전환. '
+      + '<span class="principle">선정 원칙 : 초기엔 <b>기록 기여도 우선</b>: 기록이 충분히 쌓이면 <b>빈도 우선</b>으로 전환. '
       + '이번 신규 1순위 = 1on1 (빈도 ★★★ · 기록 기여 ★★★, 유일한 미지원 공백)</span>'
       + '</div>'
       + '<div class="ez1o-legend">'
@@ -1144,7 +1144,7 @@
             detail: { emp_id: eid2, objective_id: primaryObjectiveId(eid2) || "", text: agC.text }
           }));
           act.disabled = true; act.textContent = "✓ 체크인 초안으로 보냄";
-          toast("체크인 초안으로 보냈습니다 — 확정은 체크인 화면에서 하세요.", "ok");
+          toast("체크인 초안으로 보냈습니다. 확정은 체크인 화면에서 합니다.", "ok");
         }
       }
       else if (kind === "ag-next") {       /* 합의 → 다음 1:1 아젠다로 이월 */

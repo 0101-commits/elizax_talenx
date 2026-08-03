@@ -348,7 +348,7 @@
     { key: "qw1",    chip: "주간 체크인 브리핑 만들어줘",        desc: "직속 팀원(manager_id)의 체크인·KR 진척 기록을 스캔해 체크인 공백·진척 지연 인원을 실집계하고, 실 레코드 id를 근거로 붙인 메시지 초안까지 준비합니다.", roles: ["leader"],        heavy: false, mode: "auto" },
     { key: "qw2",    chip: "이번 분기 목표 초안 잡아줘",         desc: "작년 평가·피드백과 직무 R&R을 이어받아 목표 초안 3안을 만들고 상위목표 정렬을 검증합니다.",                   roles: ["member"],        heavy: false, mode: "suggest" },
     { key: "qw7",    chip: "팀 목표 정렬·중복 점검해줘",         desc: "팀 목표 전건을 문장 품질(중복·미연계·측정불가)과 운영 신호(체크인 공백·진척 정체) 두 축으로 점검합니다.",     roles: ["leader", "exec"], heavy: true,  mode: "suggest" },
-    { key: "qw4",    chip: "내 성과 근거 타임라인 보여줘",       desc: "체크인·KR 달성·평가 이력·피드백·성과 기록 원장에 실제로 남은 기록만 발생 시점 순으로 모아 근거 타임라인을 만듭니다. 기록이 없으면 만들지 않습니다.",                        roles: ["member"],        heavy: true,  mode: "suggest" },
+    { key: "qw4",    chip: "내 성과 근거 타임라인 보여줘",       desc: "체크인·KR 달성·평가 이력·피드백·성과 기록 원장에 실제로 남은 기록만 남은 시점 순으로 모아 근거 타임라인을 만듭니다. 기록이 없으면 만들지 않습니다.",                        roles: ["member"],        heavy: true,  mode: "suggest" },
     { key: "qw6",    chip: "피드백 문장 다듬어줘",              desc: "SBI 구조로 피드백 문장을 정제합니다. 의도는 유지하고 전달 방식만 다듬습니다.",                              roles: ["leader"],        heavy: false, mode: "suggest" },
     { key: "qw3",    chip: "평가 코멘트 초안 써줘",             desc: "ERP 실적·직무군 분포·평가규정을 대조해 문장별 출처가 붙은 코멘트 초안을 만듭니다.",                          roles: ["leader"],        heavy: false, mode: "human_approve" },
     /* 칩에서 특정 이름을 빼고 대상자는 인계 컨텍스트(targetEmp)가 정한다 — 데이터에 없는 이름 고정 금지 */
@@ -1497,8 +1497,8 @@
       return lo.slice(0, 4) + "." + lo.slice(4, 6) + " ~ " + hi.slice(0, 4) + "." + hi.slice(4, 6);
     })();
     host.innerHTML = screenHead("qw4") +
-      '<div class="agh-brief"><span class="ic">🗂</span><div><b>기억을 소환하지 않습니다 — ' + esc(emp.name) +
-      ' 님 기록 ' + items.length + '건이 이미 모여 있습니다.</b> 체크인·KR 달성·평가 이력·피드백·성과 기록 원장에서 발생 시점 그대로 모았습니다' +
+      '<div class="agh-brief"><span class="ic">🗂</span><div><b>기억을 소환하지 않습니다. ' + esc(emp.name) +
+      ' 님 기록 ' + items.length + '건이 이미 모여 있습니다.</b> 체크인·KR 달성·평가 이력·피드백·성과 기록 원장에 남은 시점 그대로 모았습니다' +
       (span ? " (" + esc(span) + ")" : "") + '. 없는 근거는 만들지 않습니다.</div></div>' +
       '<div class="agh-tl" data-agh-tl>' +
       shown.map(function (it, i) {
@@ -2874,7 +2874,7 @@
     var id = (state.ctx && state.ctx.empId) || null;
     logAudit("결정 흐름 열기", "EZJourney" + (id ? " · " + id : " · 기본 대상"), "journey.open");
     closeHub();
-    try { EZJourney.open(id || undefined); } catch (e) { toast("결정 흐름을 여는 중 오류가 발생했습니다."); return false; }
+    try { EZJourney.open(id || undefined); } catch (e) { toast("결정 흐름을 열지 못했어요."); return false; }
     return true;
   }
 

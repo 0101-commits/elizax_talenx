@@ -691,8 +691,12 @@
     var stage = S(id).split('-')[0];
     return STARTER_GEN[stage] || '지금 챙길 게 있는지 봐줘';
   }
+  /* STARTER 는 이제 「보내는 문장」이 아니다 — 낱말 대조(scoreOf·qHitLen)에만 쓴다.
+     사용자에게 보이고 실제로 전송되는 문장은 QMAP 하나뿐이다(20차). 카탈로그 엑셀
+     「이 알림을 부르는 질문」 열이 QMAP 을 그대로 옮긴 것이라, 표에 적힌 문장과
+     화면·전송 문장이 갈라지면 그 표가 거짓이 된다. */
   function starterFor(id) {
-    return STARTER[id] || questionFor(id);
+    return questionFor(id);
   }
 
   /* 카탈로그 뒤지기 — 라이브가 아니어도 신호 원본은 늘 찾을 수 있다 */
@@ -1180,7 +1184,7 @@
         + '인데 지금 측정값은 ' + scrub(th.actual) + '네요'));
     }
     if (ev.soft.length && out.length < 5) {
-      out.push(sent(ev.soft[0] + ' — 이 부분은 아직 확인되지 않아 잠정으로 봤어요'));
+      out.push(sent(ev.soft[0] + '. 이 부분은 아직 확인되지 않아 잠정으로 봤어요'));
     }
     var close = scrub(inst.agent || (inst.sig && inst.sig.agent) || '');
     if (close) out.push(sent(close));
@@ -1215,7 +1219,7 @@
     }
 
     /* ③ 갖춰지면 이렇게 알려 준다 (예시임을 밝힌다) */
-    var p3 = '기록이 갖춰지면 이렇게 알려드려요 — 「' + notice + '」 '
+    var p3 = '기록이 갖춰지면 이렇게 알려드려요 : 「' + notice + '」 '
       + '여기 숫자는 실제로 센 값이 아니라 예시로 적어 둔 거예요.';
     if (help) p3 += ' 그때는 「' + help + '」 같은 문안까지 대신 잡아 드릴 수 있어요.';
     P.push(p3);

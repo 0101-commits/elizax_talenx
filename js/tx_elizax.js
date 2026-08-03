@@ -728,6 +728,18 @@
       try { openLedger(hl || null); } catch (e) { /* 원장 미로드 — 조용히 무시 */ }
     });
     p.appendChild(lg);
+
+    /* (4) 신호 카탈로그로 가는 길 한 줄 (20차 §1) — 「어떤 알림이 오게 되어 있는가」를
+       알림이 오기 전에도 볼 수 있어야 한다. 건수는 카탈로그에서 직접 센다. */
+    var catN = 0;
+    try { catN = ((window.EZSignalCatalog || {}).signals || []).length; } catch (e0) { catN = 0; }
+    if (catN) {
+      var cl = h("button", "ezx-ntf-ledger", {
+        type: "button", text: "오게 되어 있는 알림 " + catN + "건을 미리 볼 수 있어요"
+      });
+      cl.addEventListener("click", function () { openCatalog(); });
+      p.appendChild(cl);
+    }
     updateFabCount();   /* 렌더 시점의 미처리 수와 배지를 항상 일치시킨다 */
   }
 
@@ -855,8 +867,8 @@
     });
     wrap.appendChild(starters);
 
-    /* (3) 질문 브라우저로 가는 한 줄 */
-    var more = h("button", "ezx-catlink", { type: "button", text: "이런 것도 물어볼 수 있어요" });
+    /* (3) 신호 카탈로그 열람으로 가는 한 줄 (20차 §1 — 물어볼 수 있는 것 전부와 그 설계) */
+    var more = h("button", "ezx-catlink", { type: "button", text: "물어볼 수 있는 것 전부 보기" });
     more.addEventListener("click", function () { openCatalog(); });
     wrap.appendChild(more);
     return wrap;
@@ -878,10 +890,112 @@
     var cut = s.indexOf("-");
     return cut > 0 ? s.slice(0, cut) : "";
   }
+  /* 도킹 패널이 지금 눈에 보이는가 — display·visibility·opacity 로만 판단한다 */
+  function panelShown() {
+    if (!el.panel) return false;
+    var cs = null;
+    try { cs = window.getComputedStyle(el.panel); } catch (e) { return false; }
+    if (!cs) return false;
+    if (cs.display === "none" || cs.visibility === "hidden") return false;
+    return parseFloat(cs.opacity || "1") > 0.05;
+  }
   function closeCatalog() {
     if (el.cat && el.cat.parentNode) el.cat.parentNode.removeChild(el.cat);
     el.cat = null;
   }
+  /* 20차 §1 — 질문 목록을 신호 카탈로그 열람으로 넓힌다.
+     여기는 답변 화면이 아니라 설계 원본을 그대로 보는 자리다. 그래서 답변에서는
+     감추는 분류 이름(단계·받는 사람·언제 오는 알림인가)을 오히려 밝혀 적는다.
+     대신 기계 식별자는 여기서도 내보내지 않는다 — 근거·참조는 scrub()을 지나며
+     사람이 읽는 이름으로 바뀌고, 기준값의 내부 코드(TH-…)는 아예 그리지 않는다. */
+  var catFilter = { stage: "", live: false, mine: false, q: "" };
+  var CAT_STAGE_CHIPS = [["", "전체"], ["목표수립", "목표수립"], ["중간점검", "중간점검"],
+    ["평가", "평가"], ["피드백", "피드백"]];
+  function catSig(id) {
+    var cat = window.EZSignalCatalog;
+    var list = (cat && cat.signals) || [];
+    for (var i = 0; i < list.length; i++) if (list[i] && list[i].id === id) return list[i];
+    return null;
+  }
+  function catClean(text) {
+    var s = String(text == null ? "" : text);
+    if (window.EZSignalChat && EZSignalChat.scrub) {
+      try { s = EZSignalChat.scrub(s); } catch (e) { /* 원문 유지 */ }
+    }
+    return s.replace(/\{\{\s*팀원명\s*\}\}/g, "어떤 팀원")
+      .replace(/\{\{\s*조직명\s*\}\}/g, "어떤 조직")
+      .replace(/\{\{\s*목표명\s*\}\}/g, "어떤 목표")
+      .replace(/\{\{[^}]*\}\}/g, "");
+  }
+  /* 상세 한 묶음 = 제목 + 줄들. 빈 묶음은 만들지 않는다(없는 것을 있는 척하지 않는다) */
+  function catBlock(wrap, title, lines) {
+    var real = (lines || []).filter(function (t) { return t && String(t).replace(/\s/g, ""); });
+    if (!real.length) return;
+    wrap.appendChild(h("div", "ezx-cd-h", { text: title }));
+    real.forEach(function (t) { wrap.appendChild(h("div", "ezx-cd-l", { text: String(t) })); });
+  }
+  function catDetail(sig, q) {
+    var wrap = h("div", "ezx-cat-det");
+    if (!sig) {
+      wrap.appendChild(h("div", "ezx-cd-l", { text: "이 알림의 설계 내용을 아직 불러오지 못했어요." }));
+      return wrap;
+    }
+    var meta = h("div", "ezx-cd-meta");
+    [sig.stage,
+      sig.actor === "HR경영진" ? "HR·경영진" : (sig.actor === "상위조직장" ? "상위 조직장" : sig.actor),
+      sig.level,
+      sig.now === 1 ? "지금 확인 가능" : "기록이 더 쌓여야 확인 가능"
+    ].forEach(function (t) { if (t) meta.appendChild(h("span", "ezx-cd-chip", { text: String(t) })); });
+    wrap.appendChild(meta);
+
+    catBlock(wrap, "이 알림이 오는 때", [catClean(sig.principle)]);
+    catBlock(wrap, "화면에 나가는 문장", [catClean(sig.notice)]);
+
+    catBlock(wrap, "무엇을 근거로 말하는가", (sig.evidence || []).map(function (e) {
+      var lead = e.axis ? "(" + e.axis + ") " : "";
+      return lead + catClean(e.text) + (e.assumed ? " (추정)" : "");
+    }));
+
+    catBlock(wrap, "쓰는 기준값 (모두 예시)", (sig.thresholds || []).map(function (t) {
+      return t.name + " = " + t.value + (t.range && t.range !== t.value ? " (조정 범위 " + t.range + ")" : "");
+    }));
+    catBlock(wrap, "무엇과 비교하는가", [sig.compare && sig.compare !== "없음" ? sig.compare : ""]);
+    catBlock(wrap, "판단할 때 읽는 기록", [catClean(sig.refs)]);
+
+    var acts = (sig.actions || []).slice().sort(function (a, b) { return (a.rank || 9) - (b.rank || 9); });
+    catBlock(wrap, "받은 사람이 할 수 있는 일", acts.map(function (a) {
+      return a.kind + " · " + catClean(a.label) + (a.store ? " → 남는 기록 : " + catClean(a.store) : "");
+    }));
+
+    var m = sig.mute || {};
+    catBlock(wrap, "알림 조절", [
+      m.repeat ? "다시 보내기 : " + m.repeat : "",
+      m.minCount && m.minCount !== "해당 없음" ? "묶어 보내는 최소 건수 : " + m.minCount : "",
+      m.clear ? "그만 보내는 때 : " + m.clear : ""
+    ]);
+
+    if (sig.now !== 1) {
+      catBlock(wrap, "켜기 전에 남은 일", [
+        sig.todoDecide ? "사람이 정할 것 : " + catClean(sig.todoDecide) : "",
+        sig.todoCreate ? "새로 만들 기록 : " + catClean(sig.todoCreate) : "",
+        (!sig.todoDecide && !sig.todoCreate && sig.ai) ? sig.ai + "에 켤 수 있어요" : ""
+      ]);
+    }
+
+    var go = h("button", "ezx-cd-go", { type: "button", text: "이 질문 보내기" });
+    go.addEventListener("click", function () {
+      closeCatalog();
+      askSignal(sig.id, q);
+    });
+    wrap.appendChild(go);
+    wrap.appendChild(h("div", "ezx-cd-note", {
+      text: sig.now === 1
+        ? "지금 이 질문을 보내면 실제 기록으로 센 답이 옵니다."
+        : "지금 보내면 예시 숫자로 답합니다. 무엇이 없어서 못 셌는지도 같이 말해 줍니다."
+    }));
+    return wrap;
+  }
+
   function openCatalog() {
     closeCatalog();
     var role = roleKey();
@@ -889,48 +1003,131 @@
     if (window.EZSignalChat && EZSignalChat.catalogQuestions) {
       try { rows = EZSignalChat.catalogQuestions(role) || []; } catch (e) { rows = []; }
     }
-    var ov = h("div", "ezx-cat", { role: "dialog", "aria-label": "물어볼 수 있는 것", "aria-modal": "false" });
+    var ov = h("div", "ezx-cat", { role: "dialog", "aria-label": "신호 카탈로그", "aria-modal": "false" });
     var box = h("div", "ezx-cat-box");
     var hd = h("div", "ezx-cat-hd");
-    hd.appendChild(h("div", "ezx-cat-t", { text: "이런 것도 물어볼 수 있어요" }));
+    hd.appendChild(h("div", "ezx-cat-t", { text: "신호 카탈로그" }));
+    hd.appendChild(h("div", "ezx-cat-n", { text: rows.length + "건" }));
     var x = h("button", "ezx-cat-x", { type: "button", "aria-label": "닫기", text: "✕" });
     x.addEventListener("click", closeCatalog);
     hd.appendChild(x);
     box.appendChild(hd);
-    var bd = h("div", "ezx-cat-bd");
-    var used = {}, drawn = 0;
-    function section(title, list) {
-      if (!list.length) return;
-      bd.appendChild(h("div", "ezx-cat-sec", { text: title }));
-      list.forEach(function (r) {
-        var b = h("button", "ezx-cat-row", { type: "button" });
-        b.appendChild(h("span", "q", { text: String(r.q) }));
-        b.appendChild(h("span", "st" + (r.live ? " on" : ""), { text: r.live ? "지금 확인 가능" : "기록 준비 중" }));
-        b.addEventListener("click", function () {
-          closeCatalog();
-          askSignal(r.id ? String(r.id) : "", String(r.q));
-        });
-        bd.appendChild(b);
-        drawn++;
-      });
-    }
-    CAT_GROUPS.forEach(function (g) {
-      var list = rows.filter(function (r) {
-        if (!r || !r.q || used[r.id || r.q]) return false;
-        if (catStageOf(r.id) !== g[0]) return false;
-        used[r.id || r.q] = 1;
-        return true;
-      });
-      section(g[1], list);
+
+    /* 고르는 줄 — 무엇을 물어볼 수 있는지 좁혀 보는 장치 */
+    var tools = h("div", "ezx-cat-tools");
+    var find = h("input", "ezx-cat-find", {
+      type: "search", value: catFilter.q,
+      placeholder: "질문·문장으로 찾기", "aria-label": "카탈로그 검색"
     });
-    section("그 밖에", rows.filter(function (r) { return r && r.q && !used[r.id || r.q]; }));
-    if (!drawn) {
-      bd.appendChild(h("div", "ezx-pane-empty", { text: "물어볼 수 있는 목록을 아직 불러오지 못했어요." }));
+    tools.appendChild(find);
+    var chips = h("div", "ezx-cat-chips");
+    CAT_STAGE_CHIPS.forEach(function (c) {
+      var b = h("button", "ezx-cat-chip", { type: "button", text: c[1], "data-stage": c[0] });
+      b.addEventListener("click", function () { catFilter.stage = c[0]; draw(); });
+      chips.appendChild(b);
+    });
+    var bLive = h("button", "ezx-cat-chip", { type: "button", text: "지금 확인 가능", "data-flag": "live" });
+    bLive.addEventListener("click", function () { catFilter.live = !catFilter.live; draw(); });
+    chips.appendChild(bLive);
+    var bMine = h("button", "ezx-cat-chip", { type: "button", text: "내가 받는 것", "data-flag": "mine" });
+    bMine.addEventListener("click", function () { catFilter.mine = !catFilter.mine; draw(); });
+    chips.appendChild(bMine);
+    tools.appendChild(chips);
+    box.appendChild(tools);
+
+    var cap = h("div", "ezx-cat-cap");
+    box.appendChild(cap);
+    var bd = h("div", "ezx-cat-bd");
+    var openId = "";
+
+    function keep(r) {
+      if (!r || !r.q) return false;
+      if (catFilter.stage && catStageOf(r.id) !== catFilter.stage) return false;
+      if (catFilter.live && !r.live) return false;
+      if (catFilter.mine && !r.mine) return false;
+      var q = catFilter.q.replace(/\s/g, "").toLowerCase();
+      if (q) {
+        var sig = catSig(r.id);
+        var hay = String(r.q) + " " + (sig ? sig.notice + " " + sig.principle + " " + sig.actor : "");
+        if (hay.replace(/\s/g, "").toLowerCase().indexOf(q) < 0) return false;
+      }
+      return true;
     }
+    function row(r) {
+      var wrap = h("div", "ezx-cat-item" + (openId === r.id ? " open" : ""));
+      var b = h("button", "ezx-cat-row", { type: "button", "aria-expanded": openId === r.id ? "true" : "false" });
+      var left = h("span", "qwrap");
+      left.appendChild(h("span", "q", { text: String(r.q) }));
+      var sig = catSig(r.id);
+      if (sig) left.appendChild(h("span", "nt", { text: catClean(sig.notice) }));
+      b.appendChild(left);
+      b.appendChild(h("span", "st" + (r.live ? " on" : ""), { text: r.live ? "지금 확인 가능" : "기록 준비 중" }));
+      b.addEventListener("click", function () { openId = (openId === r.id) ? "" : r.id; draw(); });
+      wrap.appendChild(b);
+      if (openId === r.id) wrap.appendChild(catDetail(sig, String(r.q)));
+      return wrap;
+    }
+    function draw() {
+      /* 칩 상태를 다시 그린다 — 목록만 갈아끼우면 눌린 칩이 안 따라온다 */
+      var cbs = chips.querySelectorAll(".ezx-cat-chip"), ci, cb, on;
+      for (ci = 0; ci < cbs.length; ci++) {
+        cb = cbs[ci];
+        if (cb.getAttribute("data-flag") === "live") on = catFilter.live;
+        else if (cb.getAttribute("data-flag") === "mine") on = catFilter.mine;
+        else on = (cb.getAttribute("data-stage") || "") === catFilter.stage;
+        cb.className = "ezx-cat-chip" + (on ? " on" : "");
+      }
+      bd.innerHTML = "";
+      var shown = rows.filter(keep), drawn = 0, used = {};
+      CAT_GROUPS.forEach(function (g) {
+        var list = shown.filter(function (r) {
+          if (used[r.id]) return false;
+          if (catStageOf(r.id) !== g[0]) return false;
+          used[r.id] = 1;
+          return true;
+        });
+        if (!list.length) return;
+        bd.appendChild(h("div", "ezx-cat-sec", { text: g[1] }));
+        list.forEach(function (r) { bd.appendChild(row(r)); drawn++; });
+      });
+      var rest = shown.filter(function (r) { return !used[r.id]; });
+      if (rest.length) {
+        bd.appendChild(h("div", "ezx-cat-sec", { text: "그 밖에" }));
+        rest.forEach(function (r) { bd.appendChild(row(r)); drawn++; });
+      }
+      if (!drawn) {
+        bd.appendChild(h("div", "ezx-pane-empty", {
+          text: rows.length ? "고른 조건에 맞는 알림이 없어요." : "카탈로그를 아직 불러오지 못했어요."
+        }));
+      }
+      var live = shown.filter(function (r) { return r.live; }).length;
+      cap.textContent = rows.length
+        ? drawn + "건 보임 · 지금 확인 가능 " + live + "건 · 카탈로그 전체 " + rows.length + "건"
+        : "";
+    }
+    var timer = null;
+    find.addEventListener("input", function () {
+      catFilter.q = find.value || "";
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(draw, 120);
+    });
+    draw();
     box.appendChild(bd);
     ov.appendChild(box);
     ov.addEventListener("click", function (ev) { if (ev.target === ov) closeCatalog(); });
-    (el.panel || document.body).appendChild(ov);
+    /* 전체화면(허브)에서는 도킹 패널이 닫혀 있다. 그 안에 붙이면 아무것도 안 보인다.
+       패널이 화면에 없으면 문서에 붙이고 fixed 로 띄운다(20차).
+       패널은 position:fixed 라 offsetParent 가 늘 null 이다 — 실제 표시값으로 가른다. */
+    var host = panelShown() ? el.panel : null;
+    if (!host) {
+      /* 색 토큰은 astryx `@scope ([data-astryx-theme="talenx"])` 안에서만 산다.
+         문서에 그냥 붙이면 배경·글자색이 전부 사라져 뒤 화면이 그대로 비친다.
+         오버레이 자신에게 그 표시를 달아 스코프 뿌리로 만든다. */
+      ov.className = "ezx-cat fixed";
+      ov.setAttribute("data-astryx-theme", "talenx");
+      host = document.body;
+    }
+    host.appendChild(ov);
     el.cat = ov;
   }
 
@@ -2646,7 +2843,7 @@
       ? { label: "급여관리", what: "급여 명세·연말정산" }
       : { label: "근무관리", what: "근무·휴가 기록" };
     return {
-      text: "AI 미연결 상태입니다 — " + m.what + " 원천 데이터는 이 데모의 로컬 데이터셋에 없어 수치로 답할 수 없습니다. 지어내지 않겠습니다.\n\n" +
+      text: "AI 미연결 상태입니다. " + m.what + " 원천 데이터는 이 데모의 로컬 데이터셋에 없어 수치로 답할 수 없습니다. 지어내지 않겠습니다.\n\n" +
         "지금 확인 가능한 것\n" +
         "- **" + m.label + " 화면**에서 직접 조회 — \"" + m.label + " 화면으로 가줘\"라고 하면 이동합니다\n" +
         "- 목표·체크인·평가 등급·팀 현황·직무 기준은 로컬 데이터로 바로 답할 수 있습니다"
@@ -2662,7 +2859,7 @@
 
   function offUnknown() {
     return {
-      text: "AI 미연결 상태입니다 — 이 질문은 연결 후 답할 수 있습니다.\n\n" +
+      text: "AI 미연결 상태입니다. 이 질문은 연결 후 답할 수 있습니다.\n\n" +
         "지금 확인 가능한 것\n" +
         "- 내 목표·KR 진척 — \"내 목표 진척 알려줘\"\n" +
         "- 최근 체크인·블로커 — \"최근 체크인 보여줘\"\n" +
@@ -2808,7 +3005,7 @@
         }
         aiMsg.note = built.receipt
           ? "AI 미연결 · 로컬 데이터 조회 결과"
-          : (built.intent === "unknown" ? "AI 미연결 — 연결 후 답변 가능" : "AI 미연결 · 로컬 확인 결과");
+          : (built.intent === "unknown" ? "AI 미연결 · 연결 후 답변 가능" : "AI 미연결 · 로컬 확인 결과");
         aiMsg.noteWarn = built.intent === "unknown";
         finishStreaming();
         renderMessages();
@@ -3114,7 +3311,7 @@
     try { if (window.EZAI && EZAI.ready) rdy = !!EZAI.ready(); } catch (e) { rdy = true; }
     if (rdy) { s.hidden = true; s.textContent = ""; return; }
     s.hidden = false;
-    s.textContent = "AI 미연결 — 연결 없이 예시 응답으로 보여드립니다.";
+    s.textContent = "AI 미연결 상태예요. 연결 없이 예시 응답으로 보여드립니다.";
   }
 
   function openPanel() {

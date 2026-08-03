@@ -516,6 +516,71 @@
 .ezx-cat-row .st{ flex:none; font-size:12.5px; font-weight:600; white-space:nowrap; color:var(--color-text-disabled); }
 .ezx-cat-row .st.on{ color:var(--color-accent); }
 
+/* ---------- 신호 카탈로그 열람 (20차 §1) ----------
+   같은 서랍을 쓰되 ① 고르는 줄 ② 한 줄에 두 층(질문 + 화면 문장)
+   ③ 펼치면 설계 원본(근거·기준값·처리) 을 더한다. */
+/* 전체화면(허브)에서 열 때 — 도킹 패널 바깥이라 화면 기준으로 띄운다 */
+.ezx-cat.fixed{ position:fixed; z-index:4200; }
+.ezx-cat.fixed .ezx-cat-box{ max-width:520px; }
+.ezx-cat-n{ flex:none; font-size:12.5px; font-weight:600; color:var(--color-text-secondary); }
+.ezx-cat-tools{ padding:10px 12px 6px; border-bottom:1px solid var(--ezx-hairline); }
+.ezx-cat-find{
+  box-sizing:border-box; width:100%; padding:7px 10px; font:inherit; font-size:12.5px;
+  color:var(--color-text-primary); background:var(--color-background-muted);
+  border:1px solid var(--ezx-hairline); border-radius:var(--radius-inner);
+}
+.ezx-cat-find:focus{ outline:none; border-color:var(--color-accent); }
+.ezx-cat-chips{ display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+.ezx-cat-chip{
+  flex:none; padding:4px 9px; font-size:12px; font-weight:600; line-height:1.4;
+  color:var(--color-text-secondary); background:var(--color-background-card);
+  border:1px solid var(--ezx-hairline); border-radius:var(--radius-full);
+  transition:color var(--duration-fast) var(--ease-standard),
+             border-color var(--duration-fast) var(--ease-standard),
+             background var(--duration-fast) var(--ease-standard);
+}
+.ezx-cat-chip:hover{ color:var(--color-text-primary); border-color:var(--color-accent); }
+.ezx-cat-chip.on{
+  color:var(--color-accent); border-color:color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background:var(--color-accent-muted);
+}
+.ezx-cat-cap{
+  padding:7px 14px 8px; font-size:12px; line-height:1.5;
+  color:var(--color-text-secondary); border-bottom:1px solid var(--ezx-hairline);
+}
+.ezx-cat-item{ border-radius:var(--radius-inner); }
+.ezx-cat-item.open{ background:var(--color-background-muted); }
+.ezx-cat-item .ezx-cat-row{ align-items:flex-start; }
+.ezx-cat-row .qwrap{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.ezx-cat-row .nt{
+  font-size:12px; line-height:1.5; color:var(--color-text-secondary);
+  overflow-wrap:anywhere;
+}
+.ezx-cat-det{ padding:2px 10px 12px; }
+.ezx-cd-meta{ display:flex; flex-wrap:wrap; gap:4px; margin:2px 0 9px; }
+.ezx-cd-chip{
+  padding:2px 7px; font-size:11.5px; font-weight:600; color:var(--color-text-secondary);
+  background:var(--color-background-card); border:1px solid var(--ezx-hairline);
+  border-radius:var(--radius-full);
+}
+.ezx-cd-h{
+  margin:9px 0 3px; font-size:12px; font-weight:700; letter-spacing:.01em;
+  color:var(--color-text-accent);
+}
+.ezx-cd-l{
+  font-size:12.5px; line-height:1.6; color:var(--color-text-primary);
+  padding-left:9px; border-left:2px solid var(--ezx-hairline); margin-bottom:3px;
+  overflow-wrap:anywhere;
+}
+.ezx-cd-go{
+  display:block; width:100%; margin:12px 0 6px; padding:9px 10px;
+  font-size:12.5px; font-weight:700; color:var(--color-on-accent);
+  background:var(--color-accent); border-radius:var(--radius-element);
+  transition:opacity var(--duration-fast) var(--ease-standard);
+}
+.ezx-cd-go:hover{ opacity:.88; }
+.ezx-cd-note{ font-size:12px; line-height:1.5; color:var(--color-text-secondary); }
+
 /* ---------- 알림 탭 — 서랍 설명 · 더 보기 · 성과 기록 링크 (19차 §5-3) ---------- */
 .ezx-past-cap{ padding:2px 6px 9px; font-size:12.5px; color:var(--color-text-secondary); line-height:1.5; }
 .ezx-past-more{

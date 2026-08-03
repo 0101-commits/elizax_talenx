@@ -324,20 +324,20 @@
         title: "elizax AI 연결 설정",
         body: body,
         actions: [
-          { label: "키 삭제", kind: "ghost", onClick: function () { setKey(""); if (TX.toast) TX.toast("API 키 삭제됨 — 오프라인 예시 응답 모드", "ok"); if (onChange) onChange(); } },
+          { label: "키 삭제", kind: "ghost", onClick: function () { setKey(""); if (TX.toast) TX.toast("API 키를 삭제했습니다. 오프라인 예시 응답 모드입니다", "ok"); if (onChange) onChange(); } },
           {
             label: "저장", kind: "primary", onClick: function (box) {
               var k = box.querySelector("[data-ezai-key]").value.trim();
               var m = box.querySelector("[data-ezai-model]").value.trim();
               setKey(k); if (m) setModel(m);
-              if (TX.toast) TX.toast(k ? "저장됨 — " + modeLabel() : "키 없음 — 오프라인 예시 응답 모드", "ok");
+              if (TX.toast) TX.toast(k ? "저장했습니다. " + modeLabel() : "키가 없습니다. 오프라인 예시 응답 모드입니다", "ok");
               if (onChange) onChange();
             }
           }
         ]
       });
     } else {
-      var k = window.prompt("Anthropic API 키 (sk-ant-...) — 비우면 삭제", cur);
+      var k = window.prompt("Anthropic API 키 (sk-ant-...) (비우면 삭제)", cur);
       if (k !== null) { setKey(k.trim()); if (onChange) onChange(); }
     }
   }
