@@ -28,6 +28,17 @@
     (D.orgs || []).forEach(function (o) { var p = o.parent_id || '__root'; (kidsOf[p] = kidsOf[p] || []).push(o); });
     (D.employees || []).forEach(function (e) { (directMembers[e.org_id] = directMembers[e.org_id] || []).push(e); });
 
+    /* 기준일은 전역 as-of(EZKit.clock) 한 곳에서 온다 — index.html 에 박힌 날짜가
+       달력·근태 요약과 다른 날을 가리키던 문제를 여기서 덮어쓴다. */
+    var AS_OF_DOT = (function () {
+      var d = '2026-07-16';
+      try { if (window.EZKit && EZKit.clock) d = EZKit.clock.asOfDate(); } catch (e) { /* ignore */ }
+      return d.replace(/-/g, '.');
+    })();
+    root.querySelectorAll('.fdate, .cp-date').forEach(function (n) {
+      n.innerHTML = n.innerHTML.replace(/[\d]{4}[.\-][\d]{2}[.\-][\d]{2}/, AS_OF_DOT);
+    });
+
     function empNo(id) { return (id || '').replace(/^EMP-?/, '') || '----'; }
     function orgName(id) { return (orgById[id] && orgById[id].name) || ''; }
     function orgPathNames(id) {
@@ -442,7 +453,7 @@
       });
       var html = list.map(function (e, i) {
         var lead = e.is_leader ? '<span class="lead-b"><span class="vf">✓</span>조직장</span>' : '';
-        return '<tr>' +
+        return '<tr data-emp="' + esc(e.emp_id) + '">' +
           '<td>' + (i + 1) + '</td>' +
           '<td><span class="txf-mrow">' + F.avatar(e.name, 32) + '<a class="mlink">' + esc(e.name) + '</a></span></td>' +
           '<td>' + esc(e.orgName || orgName(e.org_id)) + lead + '</td>' +
@@ -524,7 +535,9 @@
         return (e.name && e.name.indexOf(q) >= 0) || empNo(e.emp_id).indexOf(q) >= 0;
       });
       var rows = list.map(function (e, i) {
-        return '<tr>' +
+        /* data-emp: 이 행의 대상자를 명시. 상세 드로어(tx_revive)가 셀 위치가 아니라
+           이 사번으로 사람을 찾는다 — 열 구성이 바뀌어도 엉뚱한 사람이 뜨지 않는다. */
+        return '<tr data-emp="' + esc(e.emp_id) + '">' +
           '<td><input type="checkbox"></td>' +
           '<td>' + (i + 1) + '</td>' +
           '<td>HCG</td>' +
@@ -571,7 +584,9 @@
       /* axis note + chart sub */
       var axisNote = p3.querySelector('.chart-card .axis-note');
       if (axisNote) axisNote.innerHTML = '축: 회사 / 범례: 고용 형태<span class="st">재직 상태: 재직</span>';
-      p3.querySelectorAll('.cc-head .sub').forEach(function (s) { s.textContent = '필터링한 인원 : ' + EMP_TOTAL + '/221명'; });
+      /* 분모도 실측 — 221 을 박아 두면 데이터가 바뀔 때 분자와 어긋난다. */
+      var HEAD_TOTAL = (D.company && D.company.employee_count) || (D.employees || []).length || EMP_TOTAL;
+      p3.querySelectorAll('.cc-head .sub').forEach(function (s) { s.textContent = '필터링한 인원 : ' + EMP_TOTAL + '/' + HEAD_TOTAL + '명'; });
 
       /* rebuild chart (bars scaled to 250) */
       var yax = p3.querySelector('.chart .yax');

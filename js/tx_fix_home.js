@@ -820,6 +820,26 @@
       }
     }
 
+    /* ---- 예정 휴가: 원본 목업의 정적 예시(2027.01.07) 제거 → D.leaves[본인].requests 실데이터 ---- */
+    var lvCard = cardByTitle(home, '예정 휴가');
+    if (lvCard) {
+      var lvBody = lvCard.querySelector('.body');
+      var lv = (D.leaves || []).filter(function (x) { return x.emp_id === CU.emp_id; })[0];
+      var asOf = (window.EZKit && EZKit.clock) ? EZKit.clock.asOfDate() : '2026-07-16';
+      var up = (((lv && lv.requests) || []).filter(function (r) { return String(r.start || '') >= asOf; }))
+        .sort(function (a, b) { return String(a.start) < String(b.start) ? -1 : 1; });
+      if (lvBody) lvBody.innerHTML = up.length
+        ? up.map(function (r) {
+            var span = r.end && r.end !== r.start
+              ? String(r.start).replace(/-/g, '.') + ' ~ ' + String(r.end).slice(5).replace('-', '.')
+              : String(r.start).replace(/-/g, '.');
+            return '<div class="frow"><div class="tx">' + esc(span) + ' · ' + esc(r.days) + '일' +
+              '<small>' + esc(r.type || '') + (r.reason ? ' · ' + esc(r.reason) : '') + '</small></div>' +
+              '<div class="tag-r">' + esc(r.status || '') + ' ›</div></div>';
+          }).join('')
+        : '<div class="frow"><div class="tx" style="color:var(--ink-3)">예정된 휴가가 없습니다.</div></div>';
+    }
+
     /* ---- 처리할 문서: 결재함(받은 문서) 승인필요 실건수와 정합 ---- */
     var wfHead = cardByTitle(home, '처리할 문서');
     if (wfHead) {
@@ -875,10 +895,18 @@
       if (!wcard && /근무\s*현황/.test(w.textContent || '') && w.querySelector('.selectbar')) wcard = w;
     });
     if (wcard) {
+      /* 본인 조직 + 하위 조직 체인 (조직장 열람 범위) */
+      var inTeam = function (e) {
+        var o = F.org && F.org(e.org_id), g = 0;
+        while (o && g++ < 12) { if (o.org_id === CU.org_id) return true; o = o.parent_id ? F.org(o.parent_id) : null; }
+        return e.org_id === CU.org_id;
+      };
       var mine = (D.employees || []).filter(function (e) { return e.org_id === CU.org_id; });
-      var others = (D.employees || []).filter(function (e) { return e.org_id !== CU.org_id; });
-      /* member 관점: 타 조직원 근무상태는 제외하고 같은 조직만 표시 */
-      var members = (curRole() === 'member' ? mine : mine.concat(others)).slice(0, 17);
+      var team = (D.employees || []).filter(inTeam);
+      var others = (D.employees || []).filter(function (e) { return !inTeam(e); });
+      /* member=같은 조직만 · leader=본인 조직+하위만 · hr/exec=전사 */
+      var rk = curRole();
+      var members = (rk === 'member' ? mine : rk === 'leader' ? team : team.concat(others)).slice(0, 17);
       var selBar = wcard.querySelector('.selectbar .sp');
       if (selBar) selBar.textContent = '전체 (' + members.length + ') ⌄';
       wcard.querySelectorAll('.mrow').forEach(function (r) { r.remove(); });

@@ -181,10 +181,18 @@
     var moved = Math.max(0, top - allow);
     return { n: n, beforePct: Math.round(100 * top / n), afterPct: Math.round(100 * Math.min(top, allow) / n), moved: moved };
   }
+  /* 조직장 팀 로스터 — tx_fix_appr.js:reportsOf 와 같은 원천 규칙(직속 팀원, 없으면 동일 조직 − 본인).
+     평가 검토 매트릭스·팀 평가 결과 요약이 이 집합을 쓰므로 영수증의 '팀 N명'도 같아야 한다. */
+  function teamRoster(cu) {
+    var emps = D().employees || [];
+    var r = emps.filter(function (e) { return e.manager_id === cu.emp_id; });
+    if (!r.length) r = emps.filter(function (e) { return e.org_id === cu.org_id && e.emp_id !== cu.emp_id; });
+    return r;
+  }
   function teamEvals(cu) {
-    var d = D(), evBy = {};
-    (d.evaluations || []).forEach(function (e) { evBy[e.emp_id] = e; });
-    return (d.employees || []).filter(function (e) { return e.org_id === cu.org_id; })
+    var evBy = {};
+    (D().evaluations || []).forEach(function (e) { evBy[e.emp_id] = e; });
+    return teamRoster(cu)
       .map(function (e) { return evBy[e.emp_id]; })
       .filter(function (e) { return !!e; });
   }
@@ -345,8 +353,7 @@
     var ev = (d.evaluations || []).find(function (e) { return e.emp_id === cu.emp_id; });
     var owned = (d.objectives || []).filter(function (o) { return o.owner_emp_id === cu.emp_id; });
     var avg = owned.length ? Math.round(owned.reduce(function (a, o) { return a + (o.progress || 0); }, 0) / owned.length) : null;
-    var team = (d.employees || []).filter(function (e) { return e.org_id === cu.org_id; });
-    return { cu: cu, ev: ev, owned: owned, avg: avg, teamCount: team.length, role: curRole() };
+    return { cu: cu, ev: ev, owned: owned, avg: avg, teamCount: teamRoster(cu).length, role: curRole() };
   }
 
   function receiptHTML() {

@@ -25,6 +25,19 @@
     var p = AS_OF.split('-');
     return new Date(+p[0], +p[1] - 1, +p[2]);
   })();
+  /* 화면에 찍는 "지금"은 하나여야 한다 — 달력·근태요약과 툴바 날짜가 서로 다른 날을
+     가리키면 안 되므로 라벨도 EZKit.clock 에서 만든다. */
+  function asOfDot() { return AS_OF.replace(/-/g, '.'); }
+  function asOfTime() {
+    var raw = AS_OF + ' 06:00';
+    try { if (window.EZKit && EZKit.clock) raw = EZKit.clock.asOf(); } catch (e) { /* ignore */ }
+    var hm = ((raw.split(' ')[1]) || '06:00').split(':');
+    var h = +hm[0];
+    return (h < 12 ? '오전' : '오후') + ' ' + (h % 12 || 12) + ':' + hm[1];
+  }
+  function asOfStamp() {
+    return asOfDot() + ' (' + ['일', '월', '화', '수', '목', '금', '토'][TODAY.getDay()] + ') ' + asOfTime();
+  }
   function q(r, s) { return r ? r.querySelector(s) : null; }
   function qa(r, s) { return r ? Array.prototype.slice.call(r.querySelectorAll(s)) : []; }
   function stop(e) { if (e) e.stopPropagation(); }
@@ -390,7 +403,7 @@
         }, false);
         dark.parentNode.insertBefore(b, dark);
       }
-      var wt = q(w0, '.wtime'); if (wt) wt.innerHTML = '오후 4:17 ↻';
+      var wt = q(w0, '.wtime'); if (wt) wt.innerHTML = asOfTime() + ' ↻';
     }
 
     /* 근무현황 패널 — 월 요약 실측치 (최신 기간 = 부분월 2026-07) */
@@ -602,10 +615,16 @@
       blue.childNodes[0].nodeValue = '요청 모아보기 1';    // badge 21 -> 1 (fix #7)
       if (once(blue)) blue.addEventListener('click', function (e) {
         stop(e);
+        /* 요청자는 실제 구성원에서 고른다 — '김소희(유럽팀)'은 HCG 에 없는 사람·조직이었다. */
+        var reqPool = (DATA().employees || []).filter(function (e) {
+          return e && e.name && e.emp_id !== (F.CU && F.CU.emp_id) && (!teamFilter || teamFilter(e));
+        });
+        var who = reqPool[0] || { name: '구성원', orgName: '' };
         MODAL({
           title: '근무 요청 모아보기', wide: true,
           body: '<div class="txf-sigrow"><b style="color:var(--ink)">' +
-                '김소희(유럽팀)</b><span style="flex:1"></span>근무시간 변경 요청 · 07.14</div>' +
+                esc(who.name) + (who.orgName ? '(' + esc(who.orgName) + ')' : '') +
+                '</b><span style="flex:1"></span>근무시간 변경 요청 · ' + AS_OF.slice(5).replace('-', '.') + '</div>' +
                 '<div class="txf-sigrow" style="color:var(--ink-3)">승인 대기 1건</div>',
           actions: [{ label: '닫기', kind: 'ghost' }, { label: '전체 승인', kind: 'primary', onClick: function () { TOAST('요청을 승인했습니다.', 'ok'); } }]
         });
@@ -633,11 +652,17 @@
       }
       /* wire toolbar (fix #7) */
       var dt = q(card, '.dtbox');
-      if (dt && once(dt)) dt.addEventListener('click', function (e) { stop(e); TOAST('날짜를 선택하세요. (2026.07.14)'); }, false);
+      if (dt) {
+        dt.innerHTML = dt.innerHTML.replace(/[\d]{4}[.\-][\d]{2}[.\-][\d]{2}/, asOfDot());
+        if (once(dt)) dt.addEventListener('click', function (e) { stop(e); TOAST('날짜를 선택하세요. (' + asOfDot() + ')'); }, false);
+      }
       var sel = q(card, '.selbox');
       if (sel) wireSelbox(sel, ['요청중 포함', '요청중 제외', '승인만 보기'], function (v) { sel.innerHTML = v + ' <span class="cv">▾</span>'; TOAST(v + '으로 조회합니다.'); });
       var rf = q(card, '.refresh');
-      if (rf && once(rf)) rf.addEventListener('click', function (e) { stop(e); TOAST('새로고침했습니다.'); }, false);
+      if (rf) {
+        rf.innerHTML = rf.innerHTML.replace(/(오전|오후)\s*\d{1,2}:\d{2}/, asOfTime());
+        if (once(rf)) rf.addEventListener('click', function (e) { stop(e); TOAST('새로고침했습니다.'); }, false);
+      }
     }
 
     /* 일정 / 현황 segtabs (fix #7 wiring) */
@@ -678,6 +703,8 @@
   function patchLeaveMember(root) {
     var p = q(root, '.subpage[data-p="3"]');
     if (!p || !once(p)) return;
+    var dt3 = q(p, '.dtbox');
+    if (dt3) dt3.innerHTML = dt3.innerHTML.replace(/[\d]{4}[.\-][\d]{2}[.\-][\d]{2}/, asOfDot());
     /* 구성원 근무(p=2)와 동일 스코프: member=차단, leader=본인 팀, hr/exec=전사 */
     var ROLE = (F.CU && F.CU._role) || (window.TXRoles && TXRoles.current && TXRoles.current().key) || 'member';
     if (ROLE === 'member') {
@@ -690,10 +717,35 @@
         '나의 휴가는 ‘내 휴가’ 탭에서 확인하세요.</div>';
       return;
     }
-    if (ROLE === 'leader') {
-      /* 본인 팀 범위 명시 (현재 데이터 0건 — 전사와 동일하므로 스코프 문구만 조정) */
-      var er = q(p, '.emptyrow');
-      if (er) er.textContent = ((F.teamName && F.CU) ? F.teamName(F.CU) + ' ' : '') + '구성원의 휴가 내역이 없습니다.';
+    /* 연차 대장(leaves)에 실제 휴가 요청이 있으므로 표를 채운다 — 조직장은 본인 팀,
+       HR·경영진은 전사. 비어 있던 'No rows' 가 곧 "휴가 내역 없음"으로 읽히던 문제. */
+    var teamOnly = (ROLE === 'leader' && F.teamName && F.CU)
+      ? function (e) { return F.teamName(e) === F.teamName(F.CU); } : null;
+    var empOf = {};
+    (DATA().employees || []).forEach(function (e) { if (e && e.name) empOf[e.emp_id] = e; });
+    var rows = [];
+    (DATA().leaves || []).forEach(function (lv) {
+      var e = empOf[lv.emp_id];
+      if (!e || (teamOnly && !teamOnly(e))) return;
+      (lv.requests || []).forEach(function (r) {
+        if (r.status !== '승인' || r.start > AS_OF) return;   // 기준일까지 확정된 건만
+        rows.push({ e: e, r: r });
+      });
+    });
+    rows.sort(function (a, b) { return a.r.start < b.r.start ? 1 : -1; });
+    var tb = q(p, 'table.tbl tbody');
+    if (tb && rows.length) {
+      var shown = rows.slice(0, 100);
+      tb.innerHTML = shown.map(function (x, i) {
+        var span = x.r.end && x.r.end !== x.r.start ? x.r.start + ' ~ ' + x.r.end : x.r.start;
+        return '<tr><td>' + (i + 1) + '</td>' +
+          '<td>' + esc(x.e.name) + '</td><td>HCG</td>' +
+          '<td>' + esc(x.e.orgName || '') + '</td>' +
+          '<td>' + esc(span) + ' (' + esc(x.r.type) + ')</td>' +
+          '<td>' + (x.r.days * 8) + '시간</td><td>-</td><td>-</td></tr>';
+      }).join('');
+      var pg = qa(p, '.pager span').filter(function (s) { return /of/.test(s.textContent) && s.className !== 'rpp'; })[0];
+      if (pg) pg.textContent = '1–' + shown.length + ' of ' + rows.length;
     }
   }
 
@@ -733,7 +785,7 @@
     if (sels[1]) wireSelbox(sels[1], ['01월', '02월', '03월', '04월', '05월', '06월', '07월', '08월', '09월', '10월', '11월', '12월'], function (v) { sels[1].innerHTML = v + ' <span class="cv">▾</span>'; TOAST(v + ' 이력을 조회합니다.'); });
     var rf = q(p, '.refresh');
     if (rf) {
-      rf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11A8 8 0 106 6l-2 2m0-4v4h4"/></svg>2026.07.14 (화) 오후 4:17';
+      rf.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11A8 8 0 106 6l-2 2m0-4v4h4"/></svg>' + asOfStamp();
       if (once(rf)) rf.addEventListener('click', function (e) { stop(e); TOAST('위치정보 이력을 새로고침했습니다.'); }, false);
     }
   }

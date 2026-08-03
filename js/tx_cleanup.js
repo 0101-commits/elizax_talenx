@@ -50,6 +50,9 @@
     function realPath(orgId) {
       var out = [], o = orgById[orgId], g = 0;
       while (o && g++ < 20) { out.unshift(o.name); o = o.parent_id ? orgById[o.parent_id] : null; }
+      /* 'CEO' 는 조직트리의 루트일 뿐 소속 경로로 읽히지 않는다 —
+         인사관리(tx_fix_hrm.orgPathStr)와 같은 표기를 쓴다. */
+      if (out[0] === 'CEO') out.shift();
       out.unshift(COMPANY_LABEL);
       return out;
     }

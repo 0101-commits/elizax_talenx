@@ -171,7 +171,7 @@
      칩을 못 만들면(화면 없음 등) 같은 라벨을 읽기 전용 칩으로 보여준다. */
   function sourceRowHtml(it, restricted) {
     if (restricted) {
-      return '<div class="ezl-drow"><label>출처</label><div>타인 기록이라 출처는 비공개입니다</div></div>';
+      return '<div class="ezl-drow"><label>출처</label><div>' + esc(summReason(it)) + '이라 출처는 비공개입니다</div></div>';
     }
     var label = sourceLabelOf(it.source);
     if (!label) return "";
@@ -280,6 +280,11 @@
   function recRelation(it) {
     /* 현 원장은 본인 키 저장이라 대부분 self — emp_id가 붙은 레코드만 관계 판정 */
     return (it && it.emp_id && it.emp_id !== CU.emp_id) ? "team" : "self";
+  }
+  /* summ(요약까지)의 사유 — 남의 기록이라서인지, 본인 기록이지만 확정 전이라서인지.
+     eval_draft는 self 관계에서도 summ이라(EZPolicy) 사유를 관계로 갈라야 라벨이 사실과 맞는다. */
+  function summReason(it) {
+    return recRelation(it) === "self" ? "확정 전 기록" : "타인 기록";
   }
   function polCheck(it) {
     try {
@@ -905,7 +910,7 @@
       + (it.summary ? '<div class="ezl-it-sum">' + esc(it.summary) + "</div>" : "")
       + '<div class="ezl-row2">'
       + (lv === "summ"
-        ? '<span class="ezl-lvchip" title="타인 기록이라 열람 규칙상 요약까지만 제공됩니다">요약까지 열람 — 타인 기록</span>'
+        ? '<span class="ezl-lvchip" title="' + esc(summReason(it)) + '이라 열람 규칙상 요약까지만 제공됩니다">요약까지 열람 — ' + esc(summReason(it)) + '</span>'
         : sourceListHtml(it))
       + usedBadge + pin + "</div>"
       + "</div>";
@@ -1036,7 +1041,7 @@
     return back + head
       + '<div class="ezl-dt">' + esc(it.title) + "</div>"
       + (it.summary ? '<div class="ezl-dsum">' + esc(it.summary) + "</div>" : "")
-      + (restricted ? '<div class="ezl-why">타인 기록이라 열람 규칙상 요약까지만 제공됩니다 — 원문·출처는 비공개 (보관·열람 규칙 v3.1).</div>' : "")
+      + (restricted ? '<div class="ezl-why">' + esc(summReason(it)) + '이라 열람 규칙상 요약까지만 제공됩니다 — 원문·출처는 비공개 (보관·열람 규칙 v3.1).</div>' : "")
       + rows
       + nodeMapHtml(it)
       + (window.EZJourney && EZJourney.openLedger
@@ -1411,7 +1416,7 @@
         var clickable = chLv !== "core";
         /* 누를 수 있으면 강조 알약, 아니면 중립 알약 — 기하는 같고 색만 다르다 (공용 문법) */
         open += '<span class="' + (clickable ? "ezcx-row-chip" : "ezcx-row-token") + ' ezl-ev-chip" style="--ezl-c:' + meta.color + '"'
-          + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 원문·인용 이력 보기"' : ' title="' + esc(it2.title) + ' — 타인 기록이라 요약까지만 제공됩니다"') + ">"
+          + (clickable ? ' data-ezl-open="' + esc(it2.id) + '" title="성과 기록에서 원문·인용 이력 보기"' : ' title="' + esc(it2.title) + ' — ' + esc(summReason(it2)) + '이라 요약까지만 제공됩니다"') + ">"
           /* 종류 배지 + 제목이면 사람이 알아볼 정보는 다 있다. 출처(조인 키)는 덧붙이지
              않는다 — 사람 말로 옮겨도 제목을 되풀이하거나(「…향상」) 조인 키가 뭉개져
              나오기만 했다(1on1.rec.0630 → "1기록.0630"). 출처는 물었을 때(칩 클릭 →
@@ -1427,7 +1432,7 @@
       if (blocked || summCnt) {
         var why = [];
         if (blocked) why.push("타인·집계 기록 " + blocked + "건은 열람 규칙상 제외했어요");
-        if (summCnt) why.push("타인 기록 " + summCnt + "건은 요약까지만 보여요");
+        if (summCnt) why.push("열람 규칙에 걸린 " + summCnt + "건은 요약까지만 보여요");
         open += '<span class="ezl-ev-note" title="보관·열람 규칙 v3.1">' + esc(why.join(" · ")) + "</span>";
       }
       /* [F15] 산출 로직은 "이 답이 어떻게 만들어졌는가" = 본인 검증 동선 — 역할로 통째 차단하지 않는다 */

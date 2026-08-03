@@ -151,7 +151,7 @@
           '<span class="badge b-org" style="font-size:12px;padding:3px 9px;font-weight:600;color:var(--ink-2)">재직</span>' +
         '</div>' +
         '<div style="margin-top:9px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 34px">' +
-          '<span style="font-size:15px;font-weight:700;color:var(--ink)">' + esc((function(){var p=[],o=F.org(CU.org_id||'ORG-010'),g=0;while(o&&g++<8){p.unshift(o.name);o=o.parent_id?F.org(o.parent_id):null;}return 'HCG > '+p.join(' > ');})()) + '</span>' +
+          '<span style="font-size:15px;font-weight:700;color:var(--ink)">' + esc((function(){var p=[],o=F.org(CU.org_id||'ORG-010'),g=0;while(o&&g++<8){p.unshift(o.name);o=o.parent_id?F.org(o.parent_id):null;}if(p[0]==='CEO')p.shift();return ['HCG'].concat(p).join(' > ');})()) + '</span>' +
           '<span style="font-size:14px"><span style="color:var(--ink-3)">직급/직책</span> &nbsp;<b style="color:var(--ink)">' + esc(CU.level_kr || '사원') + '</b></span>' +
           '<span style="font-size:14px"><span style="color:var(--ink-3)">입사일</span> &nbsp;<b style="color:var(--ink)">' + fmtDate(CU.join_date) + '</b></span>' +
           '<span style="font-size:14px"><span style="color:var(--ink-3)">관리자</span> &nbsp;<b style="color:var(--ink)">' + esc(CU.managerName || '-') + '</b></span>' +

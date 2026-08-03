@@ -35,16 +35,20 @@
 
   /* ---------- data lookups ---------- */
   function empByName(n){ return (D.employees||[]).find(function(e){ return e.name===n; }); }
+  function empById(id){ return id ? (D.employees||[]).find(function(e){ return e.emp_id===id; }) : null; }
+  /* 직위는 직급에서 파생된다(tx_fix_hrm.jikwi 와 같은 규칙). */
+  function jikwi(lv){
+    if(/사장|부사장|상무|이사/.test(lv||'')) return '임원';
+    if(/부장|차장/.test(lv||'')) return '책임매니저';
+    if(/과장|대리/.test(lv||'')) return '선임매니저';
+    return '매니저';
+  }
+  function objectivesOf(empId){
+    return (D.objectives||[]).filter(function(o){ return o.owner_emp_id===empId; }).slice(0,3);
+  }
   function evalForSeed(seed){ return pick(D.evaluations||[], seed); }
   function evalByEmp(id){ return (D.evaluations||[]).find(function(e){ return e.emp_id===id; }); }
   function historyByEmp(id){ var h=(D.evalHistory||[]).find(function(x){ return x.emp_id===id; }); return h?h.history:[]; }
-  function objectivesForSeed(seed){
-    var objs = D.objectives||[];
-    if(!objs.length) return [];
-    var start = hash(seed)%objs.length, out=[], i;
-    for(i=0;i<3&&i<objs.length;i++){ out.push(objs[(start+i)%objs.length]); }
-    return out;
-  }
   function krsFor(objId){ return (D.keyResults||[]).filter(function(k){ return k.objective_id===objId; }); }
 
   /* ---------- employee detail drawer (인사관리 .mlink) ---------- */
@@ -56,17 +60,20 @@
       org = txt(tds[2]).replace(/조직장$/,'').replace(/✓/,'').trim();
       empno = txt(tds[3]); duty = txt(tds[4]); rank = txt(tds[5]); pos = txt(tds[6]);
     }
-    var emp = empByName(name);
-    var ev  = emp ? (evalByEmp(emp.emp_id)||evalForSeed(name)) : evalForSeed(name);
-    var seedId = emp ? emp.emp_id : (ev? ev.emp_id : name);
-    var hist = historyByEmp(seedId);
-    var objs = objectivesForSeed(seedId);
+    /* 대상자는 행이 밝힌 사번으로 찾는다. 셀 위치로 이름을 주워오면 표 열이
+       바뀌었을 때 남의 등급이 이 사람 것처럼 붙는다(인재검색 표가 그랬다). */
+    var emp = (row.getAttribute && empById(row.getAttribute('data-emp'))) || empByName(name);
+    if(emp) name = emp.name;
+    /* 사람을 특정하지 못하면 등급·목표를 지어내지 않는다. */
+    var ev  = emp ? evalByEmp(emp.emp_id) : null;
+    var hist = emp ? historyByEmp(emp.emp_id) : [];
+    var objs = emp ? objectivesOf(emp.emp_id) : [];
 
     var basic = rowsHtml([
       ['직무', emp? emp.jobTitle : (duty||'-')],
       ['소속', emp? emp.orgName : (org||'-')],
       ['레벨', emp? (emp.level_kr+' / '+emp.level) : (rank||'-')],
-      ['직위', pos||'-'],
+      ['직위', emp? jikwi(emp.level_kr) : (pos||'-')],
       ['사번', empno||(emp?emp.emp_id:'-')],
       ['입사일', emp? emp.join_date : '-'],
       ['근속', emp? (emp.tenure_years+'년') : '-'],
@@ -404,8 +411,8 @@
     if(scr==='s-hrm'){
       el = t.closest('.mlink');
       if(el){ stop(e); openEmployeeDrawer(el.closest('tr')); return; }
-      el = t.closest('.btn-search');
-      if(el){ stop(e); openSearchModal(); return; }
+      /* '검색하기'(.btn-search)는 tx_fix_hrm 의 runSearch 가 실제 필터를 돈다 —
+         여기서 무관한 '구성원 검색' 모달까지 띄우면 한 버튼이 두 일을 한다. */
       el = t.closest('.freset');
       if(el){ stop(e); TX.toast('검색 조건을 초기화했습니다.'); return; }
       el = t.closest('.fmore');
