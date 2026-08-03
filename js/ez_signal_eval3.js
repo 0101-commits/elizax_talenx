@@ -302,7 +302,7 @@
     spec[0] = { m: [['{{팀원명}}', facts.memberName], ['2026년 5월', fmtMonthFull(target)], ['41.4시간', worst.ot + '시간']], emph: worst.ot + '시간', src: worst.att.emp_id + ' / ' + target + ' 근태' };
     if (worst.att.avg_out_time) spec[1] = { m: [['20:47', worst.att.avg_out_time], ['5회', (worst.att.late_count || 0) + '회']], emph: worst.att.avg_out_time, src: worst.att.att_id };
     spec[2] = { m: [['12.6시간', companyAvg + '시간'], ['3.3배', worst.ratio + '배']], emph: worst.ratio + '배', src: '전사 근태 ' + companyRows.length + '건 / ' + target };
-    spec[3] = { m: [['9명', team.length + '명'], ['한 사람', over30 === 1 ? '한 사람' : (over30 + '명')]], emph: over30 === 1 ? '한 사람' : (over30 + '명'), src: ctx.emp.org_id + ' / 팀원 ' + team.length + '명 근태' };
+    spec[3] = { m: [['9명', team.length + '명'], ['{{팀원명}}님 한 사람', over30 === 1 ? (facts.memberName + '님 한 사람') : (facts.memberName + '님을 포함해 ' + over30 + '명')]], emph: over30 === 1 ? '한 사람' : (over30 + '명'), src: ctx.emp.org_id + ' / 팀원 ' + team.length + '명 근태' };
     if (worst.last) spec[5] = { m: [['2026년 4월 25일', fmtDate(worst.last.checkin_date)]], emph: fmtDate(worst.last.checkin_date) + ' 이후', src: worst.att.emp_id + ' / ' + worst.last.checkin_id };
     return { hit: hit, facts: facts, notice: [['5월', fmtMonthShort(target)], ['3.3배', worst.ratio + '배'], ['82일째', (worst.gap || 0) + '일째']], ev: spec, th: { 'TH-초과근무배수-초과': worst.ratio + '배', 'TH-체크인공백-심각': (worst.gap || 0) + '일' } };
   });
