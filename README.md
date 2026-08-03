@@ -252,6 +252,7 @@ elizax_talenx/
 │   ├── enrich_prev_cycle.py       carry-over 실데이터(전기 평가·상향피드백·직무이력) mock 생성 (재실행 가능·멱등)
 │   ├── build_signals.py           신호 카탈로그(xlsx+JSON) → js/ez_signals.js 생성 (재실행 가능·멱등)
 │   ├── check_signal_questions.js  질문 150건 회귀 검사 — 빠짐·중복·라우팅·길이 (node)
+│   ├── check_signal_thresholds.js 판정 기준값이 카탈로그 값과 같은지 검사 (node)
 │   └── enrich_assets/             job_profiles_new.json — 신규 직무 프로파일 병합 소스
 ├── docs/
 │   ├── PLAN-11-walkthrough-upgrade.md   11차(plan11) 워크스루 피드백 6건 기획서

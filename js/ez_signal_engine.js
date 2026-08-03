@@ -69,6 +69,30 @@
   function arr(k) { var v = D()[k]; return (Object.prototype.toString.call(v) === '[object Array]') ? v : []; }
   function CAT() { return window.EZSignalCatalog || null; }
   function num(v) { var m = /(-?\d+(\.\d+)?)/.exec(String(v == null ? '' : v)); return m ? parseFloat(m[1]) : 0; }
+  /* 판정에 쓰는 기준값은 카탈로그가 단일 원천이다 (20차).
+     예전에는 각 EVAL 안에 숫자를 박아 두어서, 카탈로그 기준값을 고쳐도
+     화면 표시만 바뀌고 알림이 뜨는 선은 그대로였다. `thresholds[].code` 로 찾아
+     「50%」·「3건」·「15%p」·「1.63건」에서 수를 뽑아 쓴다.
+     카탈로그에 없는 값(엔진 자체 게이트)만 fallback 을 그대로 쓴다. */
+  var thvCache = null;
+  function thv(sigId, code, fallback) {
+    var cat, list, i, j, ths, raw, v;
+    if (!thvCache) {
+      thvCache = {};
+      cat = CAT();
+      list = (cat && cat.signals) || [];
+      for (i = 0; i < list.length; i++) {
+        ths = list[i].thresholds || [];
+        for (j = 0; j < ths.length; j++) {
+          if (ths[j] && ths[j].code) thvCache[list[i].id + '|' + ths[j].code] = ths[j].value;
+        }
+      }
+    }
+    raw = thvCache[sigId + '|' + code];
+    if (raw == null || raw === '') return fallback;
+    v = num(raw);
+    return isNaN(v) ? fallback : v;
+  }
   function r0(v) { return Math.round(v); }
   function r1(v) { return Math.round(v * 10) / 10; }
   /* 소수 첫째자리까지 — 정수면 정수로 (64.8 / 100) */
@@ -382,6 +406,7 @@
 
   /* --- 목표수립-구성원-04 : 핵심결과 직무 과업/1순위 역량 미연결 --------- */
   EVAL['목표수립-구성원-04'] = function (ctx) {
+    var SID = '목표수립-구성원-04';
     var C = co(), krs = ctx.myKrs, krN = krs.length, p = ctx.profile;
     var jp = ctx.jp, areas = taskAreas(jp);
     /* 직무 과업 미연결 = job_task_ref 없음 또는 소유 직무의 과업영역에 없는 참조 */
@@ -421,7 +446,8 @@
       top3sum: t3sum, top3Cover: t3cov, linkW: linkW, jobTitle: ctx.emp.jobTitle || '',
       coUncov: C.uncovObj, coUncovPct: C.uncovPct, coObjTotal: C.objTotal
     };
-    var hit = krN > 0 && (noJTPct >= 50 || cover === 0);
+    var hit = krN > 0 && (noJTPct >= thv(SID, 'TH-직무연결-미달', 50)
+      || cover <= thv(SID, 'TH-1순위역량-미커버', 0));
     var oids = ctx.myObjs.map(function (o) { return o.objective_id; }).join(' · ') || '목표 없음';
     var spec = {};
     if (top) spec[0] = { m: [['서비스기획담당', facts.jobTitle], ['직무 전문성', facts.top1], ['30%', facts.top1W + '%'], ['0건', cover + '건']],
@@ -460,6 +486,7 @@
 
   /* --- 목표수립-구성원-08 : 내 핵심결과명이 전사에서 반복 ---------------- */
   EVAL['목표수립-구성원-08'] = function (ctx) {
+    var SID = '목표수립-구성원-08';
     var C = co(), krs = ctx.myKrs, krN = krs.length;
     var mine = krs.map(function (k) { return { kr: k, n: dupCountOf(k.name) }; });
     var dupMine = mine.filter(function (x) { return x.n > 1; });
@@ -474,7 +501,8 @@
       jobTitle: ctx.emp.jobTitle || '', taskArea: areas[0] || '',
       coObjTotal: C.objTotal, coOrgTotal: arr('orgs').length
     };
-    var hit = dupMine.length >= 1 && maxDup >= 5;
+    var hit = dupMine.length >= thv(SID, 'TH-핵심결과중복-본인', 1)
+      && maxDup >= thv(SID, 'TH-핵심결과중복-전사', 5);
     var spec = {};
     spec[0] = { m: [['4건', krN + '건'], ['2건', dupMine.length + '건']], emph: dupMine.length + '건',
                 src: (dupMine[0] ? dupMine[0].kr.kr_id : (krs[0] ? krs[0].kr_id : '-')) + ' / keyResults.name 집계' };
@@ -496,6 +524,7 @@
 
   /* --- 목표수립-구성원-09 : 역량 쏠림 + 상위 역량 공백 ------------------- */
   EVAL['목표수립-구성원-09'] = function (ctx) {
+    var SID = '목표수립-구성원-09';
     var C = co(), krs = ctx.myKrs, krN = krs.length, p = ctx.profile;
     var dist = {}, dom = null;
     krs.forEach(function (k) { if (k.competency_id) dist[k.competency_id] = (dist[k.competency_id] || 0) + 1; });
@@ -514,7 +543,8 @@
       coDomComp: compKr(C.domDim), coDomPct: C.domPct, coKrTotal: C.krTotal,
       coDomIsMine: C.domDim === dom
     };
-    var hit = krN > 0 && domPct >= 70 && cover === 0;
+    var hit = krN > 0 && domPct >= thv(SID, 'TH-역량쏠림-구성원', 70)
+      && cover <= thv(SID, 'TH-1순위역량-미커버', 0);
     var spec = {};
     spec[0] = { m: [['4건', krN + '건'], ['모두', (domN === krN) ? '모두' : (domN + '건이')], ['실행력', facts.domComp || '미지정']],
                 emph: (domN === krN) ? '모두' : (domN + '건'),
@@ -535,6 +565,7 @@
 
   /* --- 목표수립-구성원-10 : 핵심결과는 과업 연결, 목표만 공백 ------------ */
   EVAL['목표수립-구성원-10'] = function (ctx) {
+    var SID = '목표수립-구성원-10';
     var C = co();
     var miss = ctx.myObjs.filter(function (o) { return !(o.job_ref && o.job_ref.task_area); });
     var missKrs = [];
@@ -566,6 +597,7 @@
 
   /* --- 목표수립-상위조직장-05 : 하위 팀 목표의 상위 연결 공백 ------------ */
   EVAL['목표수립-상위조직장-05'] = function (ctx) {
+    var SID = '목표수립-상위조직장-05';
     var C = co(), s = ctx.scope;
     if (!s) return { hit: false, facts: {}, ev: {}, th: {} };
     var missObjs = [];
@@ -587,7 +619,9 @@
       missTeamN: Object.keys(missTeams).length, theme: theme,
       scopeOrg: s.scopeOrg.org_id, scopeOrgName: s.scopeOrg.name, widened: s.widened
     };
-    var hit = missObjs.length >= 3;
+    /* 카탈로그 조건은 「일정 건수를 넘을 때」뿐이다. 누락 비율은 근거·표시용이라
+       판정에 넣지 않는다. 기준값은 카탈로그에서 읽는다 (20차) */
+    var hit = missObjs.length >= thv(SID, 'TH-상위연결-누락건수', 3);
     var srcScope = s.srcOrg + ' / OBJ ' + unitObjN + '건';
     var spec = {};
     spec[0] = { m: [['8개', s.unitN + '개'], ['22건', unitObjN + '건']], emph: unitObjN + '건', src: srcScope };
@@ -606,9 +640,10 @@
 
   /* --- 목표수립-상위조직장-07 : 팀 1순위 역량 미연결률 vs 전사 ----------- */
   EVAL['목표수립-상위조직장-07'] = function (ctx) {
+    var SID = '목표수립-상위조직장-07';
     var C = co(), s = ctx.scope;
     if (!s) return { hit: false, facts: {}, ev: {}, th: {} };
-    var TH = 70;
+    var TH = thv(SID, 'TH-역량커버-미달비율', 70);
     var bad = s.units.filter(function (u) { return u.uncovPct != null && u.uncov > 0 && u.uncovPct >= TH; });
     var rest = s.units.filter(function (u) { return u.uncovPct != null && bad.indexOf(u) < 0; });
     var badObjN = 0, badObjTot = 0, badKrN = 0, badKrs = [], unitObjN = s.unitObjN, unitKrN = s.unitKrN;
@@ -638,7 +673,7 @@
       restTeamN: rest.length, restPct: restPct, topList: topStr,
       scopeOrg: s.scopeOrg.org_id, scopeOrgName: s.scopeOrg.name, widened: s.widened
     };
-    var hit = bad.length >= 1 && diff >= 15;
+    var hit = bad.length >= 1 && diff >= thv(SID, 'TH-역량커버-편차', 15);
     var badSrc = bad.map(function (u) { return u.org; }).join(' · ') || s.scopeOrg.org_id;
     var spec = {};
     spec[0] = { m: [['8개', s.unitN + '개'], ['22건', unitObjN + '건'], ['146건', unitKrN + '건']], emph: unitObjN + '건',
@@ -665,6 +700,7 @@
 
   /* --- 목표수립-상위조직장-08 : 하위 팀 목표 직무 과업 연결 공백 --------- */
   EVAL['목표수립-상위조직장-08'] = function (ctx) {
+    var SID = '목표수립-상위조직장-08';
     var C = co(), s = ctx.scope;
     if (!s) return { hit: false, facts: {}, ev: {}, th: {} };
     var missObjs = [], unitObjN = 0, teams = {};
@@ -681,7 +717,7 @@
       elapsedDays: null,        /* objectives 에 저장일(updated_at)이 없어 계산 불가 */
       scopeOrg: s.scopeOrg.org_id, widened: s.widened
     };
-    var hit = missObjs.length >= 3;
+    var hit = missObjs.length >= thv(SID, 'TH-직무과업연결-누락건수', 3);
     var spec = {};
     spec[0] = { m: [['8개', s.unitN + '개'], ['22건', unitObjN + '건']], emph: unitObjN + '건',
                 src: s.srcOrg + ' / OBJ ' + unitObjN + '건' };
@@ -700,6 +736,7 @@
 
   /* --- 중간점검-구성원-08 : 체크인 없는 핵심결과 + 가중치 합 ------------- */
   EVAL['중간점검-구성원-08'] = function (ctx) {
+    var SID = '중간점검-구성원-08';
     var C = co(), krs = ctx.myKrs, krN = krs.length;
     var ckBy = {};
     arr('checkins').forEach(function (c) { ckBy[c.kr_id] = (ckBy[c.kr_id] || 0) + 1; });
@@ -717,7 +754,9 @@
       zeroWsum: r0(zeroW), withCkN: withCk.length, myCkOnMine: myCkOnMine.length,
       coCkTotal: C.ckTotal, coEmpTotal: C.empTotal, coCkAvg: C.ckPerEmp, startMonth: startM
     };
-    var hit = krN > 0 && zero.length >= 1 && facts.zeroPct >= 50 && facts.zeroWsum >= 50;
+    var hit = krN > 0 && zero.length >= 1
+      && facts.zeroPct >= thv(SID, 'TH-핵심결과체크인-없음', 50)
+      && facts.zeroWsum >= thv(SID, 'TH-미기록이중치-합', 50);
     var spec = {};
     spec[0] = { m: [['4건', krN + '건'], ['3건', zero.length + '건']], emph: zero.length + '건',
                 src: (ctx.myObjs[0] ? ctx.myObjs[0].objective_id : '-') + ' / checkins.kr_id' };
@@ -741,6 +780,7 @@
 
   /* --- 중간점검-상위조직장-03 : 하위 팀 진척 격차 ------------------------ */
   EVAL['중간점검-상위조직장-03'] = function (ctx) {
+    var SID = '중간점검-상위조직장-03';
     var C = co(), s = ctx.scope;
     if (!s) return { hit: false, facts: {}, ev: {}, th: {} };
     var rows = s.units.filter(function (u) { return u.krAvg != null && u.krN > 0; });
@@ -763,7 +803,10 @@
       coKrTotal: C.krTotal, coKrAvg: C.krAvg, elapsed: elapsed, planGap: planGap,
       period: per, scopeOrg: s.scopeOrg.org_id, widened: s.widened
     };
-    var hit = !!(hi && lo && gap >= 30);
+    /* 팀 간 격차가 기준을 넘고, 계획 대비 미달 폭도 기준을 넘을 때만 알린다.
+       계획 대비를 못 센 경우(planGap == null)는 격차만으로 판단한다 (20차) */
+    var hit = !!(hi && lo && gap >= thv(SID, 'TH-팀진척격차-폭', 30)
+      && (planGap == null || planGap >= thv(SID, 'TH-진척계획 대비 격차-하한', 15)));
     var spec = {};
     spec[0] = { m: [['8개', s.unitN + '개'], ['146건', unitKrN + '건']], emph: s.unitN + '개 팀',
                 src: s.srcOrg + ' / KR ' + unitKrN + '건' };
@@ -791,9 +834,10 @@
 
   /* --- 중간점검-상위조직장-05 : 최근 기간 장애요인 반복 ------------------ */
   EVAL['중간점검-상위조직장-05'] = function (ctx) {
+    var SID = '중간점검-상위조직장-05';
     var s = ctx.scope;
     if (!s) return { hit: false, facts: {}, ev: {}, th: {} };
-    var WIN = 14;
+    var WIN = thv(SID, 'TH-장애요인반복-기간', 14);
     var from = dayShift(asofMs(), -WIN), prevFrom = dayShift(asofMs(), -WIN * 2);
     var win = s.cks.filter(function (c) { return c.checkin_date > from && c.checkin_date <= asof(); });
     var prev = s.cks.filter(function (c) { return c.checkin_date > prevFrom && c.checkin_date <= from; });
@@ -821,7 +865,8 @@
         return d;
       })(), scopeOrg: s.scopeOrg.org_id, widened: s.widened
     };
-    var hit = topN >= 3 && teams.length >= 3;
+    var hit = topN >= thv(SID, 'TH-장애요인반복-건수', 3)
+      && teams.length >= thv(SID, 'TH-장애요인반복-팀수', 3);
     var spec = {};
     spec[0] = { m: [['하위 8개 팀', '기준 조직과 하위 ' + s.unitN + '개 팀'], ['41건', win.length + '건']], emph: win.length + '건',
                 src: s.srcOrgIncl + ' / 최근 ' + WIN + '일(' + from + '~' + asof() + ') 체크인 ' + win.length + '건' };
@@ -841,6 +886,7 @@
 
   /* --- 중간점검-상위조직장-06 : 팀 확신도 낮음 비중 ---------------------- */
   EVAL['중간점검-상위조직장-06'] = function (ctx) {
+    var SID = '중간점검-상위조직장-06';
     var C = co(), s = ctx.scope;
     if (!s) return { hit: false, facts: {}, ev: {}, th: {} };
     var MIN_CK = 10;
@@ -861,7 +907,8 @@
       coLowN: C.lowCk, coCkTotal: C.ckTotal, coLowPct: C.lowPct, diff: diff, isTop: isTop,
       scopeOrg: s.scopeOrg.org_id, widened: s.widened
     };
-    var hit = !!w && w.lowPct >= 40 && diff >= 20;
+    var hit = !!w && w.lowPct >= thv(SID, 'TH-저확신비중-팀', 40)
+      && diff >= thv(SID, 'TH-저확신비중-편차', 20);
     var spec = {};
     /* ⓪ 범위 문구가 「하위 N개 팀」이므로 기준 조직 자신을 뺀 하위 팀 합계를 쓴다 */
     spec[0] = { m: [['8개', s.unitN + '개'], ['360건', s.unitCkN + '건']], emph: s.unitCkN + '건',
@@ -885,6 +932,7 @@
 
   /* --- 중간점검-상위조직장-08 : 표시 진행률 vs 가중평균 ------------------ */
   EVAL['중간점검-상위조직장-08'] = function (ctx) {
+    var SID = '중간점검-상위조직장-08';
     var C = co(), s = ctx.scope;
     if (!s) return { hit: false, facts: {}, ev: {}, th: {} };
     var rows = [];
@@ -909,7 +957,9 @@
       bigN: bigN, coWdiffAvg: C.wdiffAvg, coObjTotal: C.objTotal,
       scopeOrg: s.scopeOrg.org_id, widened: s.widened
     };
-    var hit = !!w0 && w0.diff >= 25;
+    /* 카탈로그 조건은 「차이가 조직 평균을 크게 웃돌 때」다. 「차이 큰 목표 3건 이상」은
+       조건이 아니라 묶어 보내는 최소 건수(발송 규칙)라 판정에 넣지 않는다 (20차) */
+    var hit = !!w0 && w0.diff >= thv(SID, 'TH-진행률산식괴리-폭', 25);
     var spec = {};
     /* 산식 괴리는 기준 조직 자신의 목표에서도 생기므로 범위에 기준 조직을 포함하고
        ⓪ 문구도 「기준 조직과 하위 N개 팀」으로 바꿔 실제 대조군을 그대로 드러낸다 */
@@ -937,6 +987,7 @@
 
   /* --- 중간점검-HR경영진-09 : 조직 간 목표 진행률 격차 ------------------- */
   EVAL['중간점검-HR경영진-09'] = function (ctx) {
+    var SID = '중간점검-HR경영진-09';
     var C = co();
     var hi = C.orgMax, lo = C.orgMin;
     var per = null;
@@ -948,7 +999,8 @@
       loOrg: lo ? lo.org : '', loName: lo ? lo.name : '', loAvg: lo ? lo.avg : null,
       gap: C.orgGap, period: per, periodLabel: pw ? pw.label : ''
     };
-    var hit = !!(hi && lo) && C.orgGap >= 30 && C.orgN >= 5;
+    var hit = !!(hi && lo) && C.orgGap >= thv(SID, 'TH-진척조직간격차-초과', 30)
+      && C.orgN >= thv(SID, 'TH-진척비교조직-최소수', 5);
     var spec = {};
     spec[0] = { m: [['40건', C.objTotal + '건']], emph: C.objTotal + '건',
                 src: 'objectives ' + C.objTotal + '건 / orgs ' + C.orgN + '곳' };
@@ -968,6 +1020,7 @@
 
   /* --- 평가-구성원-02 : 자기평가 근거로 쓸 체크인 부족 ------------------- */
   EVAL['평가-구성원-02'] = function (ctx) {
+    var SID = '평가-구성원-02';
     var C = co();
     var per = (ctx.myObjs[0] && ctx.myObjs[0].period) || null;
     if (!per) arr('objectives').forEach(function (o) { if (!per && o.period) per = o.period; });
@@ -988,7 +1041,7 @@
       myCkN: inPeriod.length, myCkTotal: ctx.myCks.length, lastDate: last, gapDays: gapDays,
       coCkTotal: C.ckTotal, coEmpTotal: C.empTotal, coCkAvg: C.ckPerEmp
     };
-    var hit = inPeriod.length < 2;
+    var hit = inPeriod.length < thv(SID, 'TH-평가근거체크인-부족', 2);
     var spec = {};
     spec[0] = { m: [['1건', inPeriod.length + '건']], emph: inPeriod.length + '건',
                 src: 'checkins where emp_id=' + ctx.emp.emp_id + (from ? ' · ' + from + '~' + to : '') };
@@ -1006,6 +1059,7 @@
 
   /* --- 평가-구성원-10 : 직무 전환으로 평가 축 변동 ---------------------- */
   EVAL['평가-구성원-10'] = function (ctx) {
+    var SID = '평가-구성원-10';
     var C = co();
     var hist = (ctx.emp.jobHistory && ctx.emp.jobHistory.length) ? ctx.emp.jobHistory[ctx.emp.jobHistory.length - 1] : null;
     var jpm = D().jobProfiles || {};
@@ -1417,7 +1471,11 @@
     onChange: onChange,
     state: state,
     reset: reset,
-    flush: function () { cacheKey = null; cacheEval = {}; cacheCo = null; cacheScope = {}; },
+    /* thvCache 도 함께 비운다 — 카탈로그 기준값이 갈리면 판정선도 다시 읽어야 한다 (20차) */
+    flush: function () { cacheKey = null; cacheEval = {}; cacheCo = null; cacheScope = {}; thvCache = null; },
+    /* 판정에 쓰는 기준값을 그대로 돌려준다 — 검사기가 카탈로그와 대조하는 용도 (20차).
+       화면·프롬프트는 이 값을 쓰지 않는다(표시값은 evaluate 의 thresholds 에 있다). */
+    thresholdOf: function (id, code, fallback) { return thv(id, code, fallback == null ? null : fallback); },
     asof: asof,
     subject: subject,
     role: function () { return roleKey(); },
