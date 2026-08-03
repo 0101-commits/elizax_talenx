@@ -147,7 +147,16 @@
     spec[1] = { m: [['360건', CS.total + '건'], ['68건(18.9%)', CS.low + '건(' + pn(CS.lowPct) + '%)']], emph: CS.low + '건(' + pn(CS.lowPct) + '%)', src: 'checkins.confidence 집계' };
     spec[2] = { m: [['190건(52.8%)', CS.mid + '건(' + pn(CS.midPct) + '%)'], ['102건(28.3%)', CS.high + '건(' + pn(CS.highPct) + '%)']], emph: CS.mid + '건(' + pn(CS.midPct) + '%)', src: 'checkins.confidence 집계' };
     if (streak > 0) spec[3] = { m: [['세 번', streak + '번'], ['4.8%p', deltaSum + '%p']], emph: deltaSum + '%p', src: recent.map(function (c) { return c.checkin_id; }).join(' / ') };
+    /* 「세 번 모두 같은 장애요인」은 공통 장애요인이 있을 때만 참이다 — 없으면 예시
+       장애요인이 그대로 남으므로 실제로 적힌 사유(또는 빈 칸)로 다시 쓴다 */
+    var blkList = []; recent.forEach(function (c) { if (c.blocker && blkList.indexOf(c.blocker) < 0) blkList.push(c.blocker); });
+    var blkN = recent.filter(function (c) { return !!c.blocker; }).length;
     if (commonBlocker) spec[4] = { m: [['협력업체 납품 지연', commonBlocker]], emph: commonBlocker, src: recent[0].checkin_id };
+    else spec[4] = { m: [], emph: blkList.length ? blkList[0] : '비어 있어요',
+                     src: recent.map(function (c) { return c.checkin_id; }).join(' / ') || '해당 없음',
+                     text: blkList.length
+                       ? (streak + '번 가운데 장애요인이 적힌 체크인은 ' + blkN + '건이고, 「' + blkList.join('」·「') + '」만 남아 있어요')
+                       : (streak + '번 모두 장애요인 칸은 비어 있어요') };
     return { hit: hit, facts: facts, notice: [['2회', streak + '회'], ['18.9%', pn(CS.lowPct) + '%']], ev: spec, th: { 'TH-저확신-연속': streak + '회', 'TH-저확신-전사비율': pn(CS.lowPct) + '%' } };
   });
 
@@ -204,9 +213,17 @@
     var spec = {};
     spec[0] = { m: [['{{팀원명}}', worst.emp.name], ['2026년 6월 25일', fmtDate(worst.last.checkin_date)], ['21일', worst.gap + '일']], emph: worst.gap + '일', src: worst.emp.emp_id + ' / ' + worst.last.checkin_id };
     spec[1] = { m: [['8일', teamAvgGap + '일']], emph: teamAvgGap + '일', src: ctx.emp.org_id + ' / 팀 체크인 ' + rows.reduce(function (s, r) { return s + r.cks.length; }, 0) + '건' };
+    /* 「직전 두 회차」 문장은 간격이 2개 이상 있어야 성립한다 — 체크인이 1~2건뿐이면
+       예시 숫자(9일·11일·21일)가 그대로 남아 ①의 실측 공백일과 어긋나므로 다시 쓴다 */
     if (worst.intervals.length >= 2) {
       var i1 = worst.intervals[worst.intervals.length - 2], i2 = worst.intervals[worst.intervals.length - 1];
       spec[2] = { m: [['9일', i1 + '일'], ['11일', i2 + '일'], ['21일', worst.gap + '일']], emph: worst.gap + '일', src: worst.emp.emp_id + ' / 체크인 간격' };
+    } else if (worst.intervals.length === 1) {
+      spec[2] = { m: [], emph: worst.gap + '일', src: worst.emp.emp_id + ' / 체크인 간격',
+                  text: '직전 회차는 ' + worst.intervals[0] + '일 간격이었는데 이번만 ' + worst.gap + '일로 벌어졌어요' };
+    } else {
+      spec[2] = { m: [], emph: worst.gap + '일', src: worst.emp.emp_id + ' / ' + worst.last.checkin_id,
+                  text: worst.emp.name + '님의 체크인은 ' + fmtDate(worst.last.checkin_date) + ' 1건뿐이라 견줄 직전 간격이 없고, 그 뒤 공백만 ' + worst.gap + '일이에요' };
     }
     return { hit: hit, facts: facts, notice: [['{{팀원명}}', worst.emp.name], ['21일', worst.gap + '일'], ['8일', teamAvgGap + '일']], ev: spec, th: { 'TH-체크인공백-경고': worst.gap + '일', 'TH-기간잔여-존재': goalDaysLeft + '일' } };
   });
@@ -303,6 +320,18 @@
     if (worst.att.avg_out_time) spec[1] = { m: [['20:47', worst.att.avg_out_time], ['5회', (worst.att.late_count || 0) + '회']], emph: worst.att.avg_out_time, src: worst.att.att_id };
     spec[2] = { m: [['12.6시간', companyAvg + '시간'], ['3.3배', worst.ratio + '배']], emph: worst.ratio + '배', src: '전사 근태 ' + companyRows.length + '건 / ' + target };
     spec[3] = { m: [['9명', team.length + '명'], ['{{팀원명}}님 한 사람', over30 === 1 ? (facts.memberName + '님 한 사람') : (facts.memberName + '님을 포함해 ' + over30 + '명')]], emph: over30 === 1 ? '한 사람' : (over30 + '명'), src: ctx.emp.org_id + ' / 팀원 ' + team.length + '명 근태' };
+    /* 월별 추이 — 예시 문장은 「올랐다가 내려온」 모양이라 계속 오르는 실측에는 못 쓴다.
+       세 달치 근태가 다 있을 때만 실측으로 다시 쓰고, 없으면 계산 못 한 줄로 남긴다 */
+    var otBy = {}; arr('attendance').forEach(function (a) { if (a.emp_id === worst.att.emp_id) otBy[a.period] = r1(num(a.overtime_hours)); });
+    var mKeys = [monthKeyShift(target, -2), monthKeyShift(target, -1), target];
+    if (otBy[mKeys[0]] != null && otBy[mKeys[1]] != null && otBy[mKeys[2]] != null) {
+      var ov = mKeys.map(function (k) { return otBy[k]; });
+      var rising = ov[2] >= ov[1] && ov[1] >= ov[0];
+      spec[4] = { m: [], emph: ov[2] + '시간', src: worst.att.emp_id + ' / ' + mKeys[0] + '~' + mKeys[2] + ' 근태',
+                  text: '초과근무는 ' + fmtMonthShort(mKeys[0]) + ' ' + ov[0] + '시간, ' + fmtMonthShort(mKeys[1]) + ' ' + ov[1] + '시간'
+                      + (rising ? '을 거쳐 ' : '에서 ') + fmtMonthShort(mKeys[2]) + ' ' + ov[2] + '시간'
+                      + (rising ? '까지 올랐어요' : '이에요') };
+    }
     if (worst.last) spec[5] = { m: [['2026년 4월 25일', fmtDate(worst.last.checkin_date)]], emph: fmtDate(worst.last.checkin_date) + ' 이후', src: worst.att.emp_id + ' / ' + worst.last.checkin_id };
     return { hit: hit, facts: facts, notice: [['5월', fmtMonthShort(target)], ['3.3배', worst.ratio + '배'], ['82일째', (worst.gap || 0) + '일째']], ev: spec, th: { 'TH-초과근무배수-초과': worst.ratio + '배', 'TH-체크인공백-심각': (worst.gap || 0) + '일' } };
   });
@@ -332,7 +361,12 @@
     spec[0] = { m: [['221명', empTotal + '명'], ['38개', orgTotal + '개']], emph: empTotal + '명', src: 'EMP 전수 ' + empTotal + '명 / ORG 전수 ' + orgTotal + '개' };
     spec[1] = { m: [['221명', empTotal + '명'], ['147명', withCkN + '명']], emph: withCkN + '명', src: 'CHK(캐노니컬) ' + canon.length + '건' };
     spec[2] = { m: [['74명', (empTotal - withCkN) + '명']], emph: (empTotal - withCkN) + '명', src: 'CHK(캐노니컬) ' + canon.length + '건 / EMP 전수 ' + empTotal + '명' };
-    if (elapsed != null) spec[3] = { m: [['2026년 2분기(4~6월)', per.label], ['100%', elapsed + '%'], ['33.5%p', Math.abs(gap) + '%p']], emph: Math.abs(gap) + '%p', src: per.period_id };
+    /* 예시 문장은 경과율 100%(기간 종료)를 전제한 「이미 다 지나」다 — 아직 안 끝난
+       기간이면 그 구절째 바꿔야 경과율 실측과 어긋나지 않는다 */
+    var elapsedPair = (elapsed != null && elapsed < 100)
+      ? ['이미 다 지나 기간 경과율 100%', '기간 경과율 ' + elapsed + '%']
+      : ['100%', elapsed + '%'];
+    if (elapsed != null) spec[3] = { m: [['2026년 2분기(4~6월)', per.label], elapsedPair, ['33.5%p', Math.abs(gap) + '%p']], emph: Math.abs(gap) + '%p', src: per.period_id };
     return { hit: hit, facts: facts, notice: [['66.5%', pn(participRate) + '%']], ev: spec, th: { 'TH-체크인참여율-기간대비격차': (gap == null ? null : pn(gap) + '%p'), 'TH-체크인0건조직-건수': zeroOrgN + '곳' } };
   });
 

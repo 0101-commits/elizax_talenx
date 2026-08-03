@@ -889,9 +889,11 @@
       arr('employees').forEach(function (e) { if (e.org_id === o.org_id && recv[e.emp_id]) any = true; });
       return !any;
     });
+    var zeroHead = 0;
+    zeroOrgs.forEach(function (o) { zeroHead += (o.headcount_direct || o.headcount || 0); });
     var facts = {
       totalN: fh.length, leaderN: leaderN, peerN: peerN, recvN: recvN,
-      empN: empN, orgN: orgN, newN: newN, gapDays: gap, zeroOrgN: zeroOrgs.length,
+      empN: empN, orgN: orgN, newN: newN, gapDays: gap, zeroOrgN: zeroOrgs.length, zeroHead: zeroHead,
       perEmp: empN ? Math.round(fh.length / empN * 100) / 100 : 0
     };
     var hit = newN === 0 && gap != null && gap >= thv(SID, 'TH-피드백공백-일수', 60) && zeroOrgs.length >= 1;
@@ -911,7 +913,8 @@
       hit: hit, facts: facts,
       notice: [['7건', fh.length + '건']],
       ev: spec,
-      th: { 'TH-피드백공백-일수': (gap == null ? '?' : gap) + '일', 'TH-피드백0건조직-최소인원': zeroOrgs.length + '곳' }
+      /* 이름이 「…조직 소속 인원」(명)인데 조직 수(곳)를 넣고 있었다 — 단위를 맞춰 인원으로 센다 */
+      th: { 'TH-피드백공백-일수': (gap == null ? '?' : gap) + '일', 'TH-피드백0건조직-최소인원': zeroHead + '명' }
     };
   });
 
@@ -1054,8 +1057,10 @@
     var mKeys = Object.keys(months).sort();
     var mLabel = mKeys.length === 1 ? (mKeys[0].slice(0, 4) + '년 ' + (+mKeys[0].slice(5, 7)) + '월')
       : (mKeys.length + '개 월');
+    var minRev = null;
+    subs.forEach(function (sj) { var n = (sj.peerReviews || []).length; if (minRev == null || n < minRev) minRev = n; });
     var facts = {
-      subjectN: subs.length, empN: empN, reviewN: all.length, caseN: cases.length,
+      subjectN: subs.length, empN: empN, reviewN: all.length, caseN: cases.length, minRev: minRev,
       exTop1: ex ? ex.top1 : '', exW: ex ? ex.w : null, exLow: ex ? ex.low : null,
       exHiName: ex ? ex.hiName : '', exHi: ex ? ex.hi : null,
       topDist: topStr, monthLabel: mLabel, minReview: MINREV
@@ -1076,7 +1081,9 @@
       hit: hit, facts: facts,
       notice: [['5명', cases.length + '명']],
       ev: spec,
-      th: { 'TH-역량다면어긋남-인원': cases.length + '명', 'TH-다면응답-최소건수': MINREV + '건' }
+      /* 「1인당 응답 최소 건수」의 측정값은 기준(3건)이 아니라 대상자별 리뷰 건수의 실제 최솟값이다 */
+      th: { 'TH-역량다면어긋남-인원': cases.length + '명',
+            'TH-다면응답-최소건수': (minRev == null ? '확인 불가' : minRev + '건') }
     };
   });
 

@@ -972,7 +972,9 @@
       spec[4] = { m: [['4건', w0.krN + '건'], ['100%', w0.wsum + '%']], emph: w0.wsum + '%',
                   src: w0.id + ' / ' + krRange, assumed: (w0.wsum === 100 ? 0 : 1) };
     }
-    spec[2] = { m: [['4건', bigN + '건']], emph: bigN + '건', src: s.srcOrgIncl + ' / OBJ ' + bigN + '건' };
+    /* 대조군에 기준 조직 자신이 들어 있으므로 「하위 팀에서 N건」은 거짓이 될 수 있다
+       (실제로 이 판의 1건은 기준 조직 ORG-026 자신의 목표다) — ⓪가 정의한 범위로 되받는다 */
+    spec[2] = { m: [['하위 팀에서', '이 범위에서'], ['4건', bigN + '건']], emph: bigN + '건', src: s.srcOrgIncl + ' / OBJ ' + bigN + '건' };
     spec[3] = { m: [['40건', C.objTotal + '건'], ['11%p', pn(C.wdiffAvg) + '%p']], emph: pn(C.wdiffAvg) + '%p',
                 src: 'objectives.progress vs keyResults 가중평균 (' + C.objTotal + '건)' };
     spec[5] = { ok: 1, src: 'objectives.progress / keyResults.weight·progress' };

@@ -167,12 +167,19 @@
     if (target) spec[1] = { m: [['{{팀원명}}님의 평가가 아직 작성되지 않았어요', target.name + '님의 평가가 아직 작성되지 않았어요']],
                             emph: '작성되지 않았어요', src: target.emp_id + ' / evalStatus.first_submitted_at' };
     if (dleft != null) spec[2] = { m: [['5일', dleft + '일']], emph: dleft + '일', src: '평가 기간 FY2026 파생 일정' };
-    if (dleft != null && dleft === TH) spec[3] = { ok: 1, src: 'HR 평가 운영 기준(신설 예정)' };
+    /* 원문 "오늘이 그 시점이에요"는 남은 날 == 기준일 때만 맞는 문장이라 어긋나면 실제 위치로 다시 쓴다 */
+    if (dleft != null) spec[3] = (dleft === TH)
+      ? { ok: 1, src: 'HR 평가 운영 기준(신설 예정)' }
+      : { m: [['오늘이 그 시점이에요', dleft < TH ? '그 시점은 ' + (TH - dleft) + '일 전에 지났어요' : '그 시점까지 ' + (dleft - TH) + '일 남았어요']],
+          emph: dleft < TH ? (TH - dleft) + '일 전에 지났어요' : (dleft - TH) + '일 남았어요',
+          src: 'HR 평가 운영 기준(신설 예정)' };
     return {
       hit: hit, facts: facts,
       notice: (target && dleft != null) ? [['5일', dleft + '일'], ['{{팀원명}}', target.name]] : [],
       ev: spec,
-      th: { 'TH-마감임박-평가작성': (dleft == null ? null : dleft + '일'), 'TH-평가작성-없음': missing.length + '건' }
+      /* TH-평가작성-없음의 잣대는 「이 팀원의 평가 작성 건수」다 — 미작성 인원 수(missing.length)를
+         넣으면 알림의 "0건"과 정면으로 어긋난다. target 은 미작성자라 작성 건수는 0건이다 */
+      th: { 'TH-마감임박-평가작성': (dleft == null ? null : dleft + '일'), 'TH-평가작성-없음': (target ? '0건' : null) }
     };
   });
 
@@ -226,20 +233,31 @@
     var pct = r0(missing.length / team.length * 100);
     var vs0 = st[team[0].emp_id] || null;
     var dleft = dayLeft(vs0 ? vs0.due_first : null);
+    /* 최근 3일 신규 저장 건수 — 근거④·TH-저장정체-없음 둘 다 이 값을 잣대로 쓴다 */
+    var recentMs = asofMs() - 3 * 86400000;
+    var recentSaves = team.filter(function (e) {
+      var s = st[e.emp_id];
+      var t = (s && s.first_submitted_at) ? Date.parse(String(s.first_submitted_at).slice(0, 10) + 'T00:00:00Z') : NaN;
+      return !isNaN(t) && t >= recentMs;
+    }).length;
     var THrate = thv(SID, 'TH-미작성인원-초과', 30);
     var THday = thv(SID, 'TH-마감임박-평가작성', 5);
     var hit = missing.length >= 1 && pct >= THrate && dleft != null && dleft <= THday;
-    var facts = { teamN: team.length, missingN: missing.length, missingPct: pct, daysLeft: dleft };
+    var facts = { teamN: team.length, missingN: missing.length, missingPct: pct, daysLeft: dleft, recentSaves: recentSaves };
     var spec = {};
     spec[0] = { m: [['9명', team.length + '명'], ['4명', missing.length + '명']], emph: missing.length + '명',
                 src: ctx.emp.org_id + ' / 팀원 ' + team.length + '명' };
     if (dleft != null) spec[1] = { m: [['5일', dleft + '일']], emph: dleft + '일', src: '평가 기간 FY2026 파생 일정' };
     spec[2] = { m: [['44%', pct + '%'], ['30%', THrate + '%']], emph: pct + '%', src: ctx.emp.org_id + ' / 평가 저장 현황' };
+    spec[3] = { m: [['새로 저장된 평가가 0건이라 작성 인원이 그대로예요',
+                     '새로 저장된 평가가 ' + recentSaves + '건이라 작성 인원이 ' + (recentSaves ? '늘고 있어요' : '그대로예요')]],
+                emph: recentSaves + '건', src: ctx.emp.org_id + ' / evalStatus.first_submitted_at 최근 3일' };
     return {
       hit: hit, facts: facts,
       notice: [['5일', dleft == null ? '기간 미상' : dleft + '일'], ['9명', team.length + '명'], ['4명', missing.length + '명']],
       ev: spec,
-      th: { 'TH-미작성인원-초과': pct + '%', 'TH-마감임박-평가작성': (dleft == null ? null : dleft + '일') }
+      th: { 'TH-미작성인원-초과': pct + '%', 'TH-마감임박-평가작성': (dleft == null ? null : dleft + '일'),
+            'TH-저장정체-없음': recentSaves + '건' }
     };
   });
 
@@ -261,6 +279,10 @@
     }).filter(function (r) { return r.n > 0; });
     var badTeams = unitRows.filter(function (r) { return r.rate === 0; });
     var missSum = 0; badTeams.forEach(function (r) { missSum += r.missN; });
+    /* TH-팀평가제출률-저조가 재는 것은 「팀」 제출률이다 — 조직 전체 제출률(scopeRate)을 넣으면
+       "하위 팀 제출률 0%"라는 알림과 어긋난다. 기준선에 걸리는 가장 낮은 팀 값을 쓴다 */
+    var minRate = null;
+    unitRows.forEach(function (r) { if (r.rate != null && (minRate == null || r.rate < minRate)) minRate = r.rate; });
     var vs0 = st[scopeEmpIds[0]] || null;
     var dleft = dayLeft(vs0 ? vs0.due_first : null);
     var THday = thv(SID, 'TH-마감임박-평가제출', 2);
@@ -279,7 +301,8 @@
       hit: hit, facts: facts,
       notice: [['2일', dleft == null ? '기간 미상' : dleft + '일'], ['2개', badTeams.length + '개']],
       ev: spec,
-      th: { 'TH-마감임박-평가제출': (dleft == null ? null : dleft + '일'), 'TH-팀평가제출률-저조': scopeRate + '%' }
+      th: { 'TH-마감임박-평가제출': (dleft == null ? null : dleft + '일'),
+            'TH-팀평가제출률-저조': (minRate == null ? null : minRate + '%') }
     };
   });
 
@@ -297,9 +320,17 @@
     for (var eid in scopeEmpIds) if (has(scopeEmpIds, eid) && evalByEmp[eid]) scopeGraded.push(evalByEmp[eid]);
     var scopeTop = scopeGraded.filter(function (e) { return e.grade === 'S' || e.grade === 'A'; }).length;
     var scopeTopPct = scopeGraded.length ? r0(scopeTop / scopeGraded.length * 100) : 0;
+    /* 변경 전 비율 — gradeHistory 의 첫 before 등급으로 되돌려 다시 센다 (원문 "64%"는 예시값) */
+    var ghBefore = {};
+    gh.forEach(function (g) { if (!has(ghBefore, g.emp_id)) ghBefore[g.emp_id] = g.before; });
+    var beforeTop = scopeGraded.filter(function (e) {
+      var g = has(ghBefore, e.emp_id) ? ghBefore[e.emp_id] : e.grade;
+      return g === 'S' || g === 'A';
+    }).length;
+    var beforePct = scopeGraded.length ? r0(beforeTop / scopeGraded.length * 100) : 0;
     var TH = thv(SID, 'TH-등급변경-사유공백', 1);
     var hit = noReason.length >= TH;
-    var facts = { ghN: gh.length, noReasonN: noReason.length, scopeTopPct: scopeTopPct };
+    var facts = { ghN: gh.length, noReasonN: noReason.length, beforeTopPct: beforePct, scopeTopPct: scopeTopPct };
     /* 원문 "바뀐 2건 모두 ~ 비어 있어요"는 noReason===gh 일 때만 성립하는 문장이라
        건수가 어긋나면(0건·일부만) 문장 자체를 실제 상태로 다시 쓴다 */
     var origPhrase = '제출 뒤 등급이 바뀐 2건 모두 변경 사유 기록이 비어 있어요';
@@ -329,7 +360,11 @@
                 src: s.scopeOrg.org_id + ' / gradeHistory 사유 공백 ' + noReason.length + '건' };
     spec[2] = { m: [['변경 내용은 두 건 다 B에서 A로 한 단계 올린 것이에요', dirPhrase]], emph: gh.length + '건',
                 src: s.scopeOrg.org_id + ' / gradeHistory ' + gh.length + '건' };
-    spec[3] = { m: [['82%', scopeTopPct + '%']], emph: scopeTopPct + '%', src: s.scopeOrg.org_id + ' / evaluations 등급' };
+    /* 원문 "64%에서 82%로 올랐어요"의 앞자리·방향도 예시값이라 실제 변경 전/후 값으로 다시 쓴다 */
+    var pctPhrase = '변경 뒤 내 조직의 상위 등급 비율은 ' + beforePct + '%에서 ' + scopeTopPct + '%로 '
+      + (scopeTopPct > beforePct ? '올랐어요' : (scopeTopPct < beforePct ? '내렸어요' : '그대로예요'));
+    spec[3] = { m: [['변경 뒤 이 평가자의 상위 등급 비율은 64%에서 82%로 올랐어요', pctPhrase]],
+                emph: scopeTopPct + '%', src: s.scopeOrg.org_id + ' / evaluations 등급' };
     return {
       hit: hit, facts: facts,
       notice: [[origPhrase, phrase]],
@@ -373,7 +408,7 @@
                 src: s.srcOrgIncl + ' / evalStatus ' + scopeStatus.length + '건' };
     spec[1] = { m: [['18건', pending.length + '건']], emph: pending.length + '건',
                 src: s.scopeOrg.org_id + ' / evalStatus 2차 대기 ' + pending.length + '건' };
-    spec[2] = { m: [['8개', s.unitN + '개'], ['5개', pendingTeamN + '개']], emph: pendingTeamN + '개 팀',
+    spec[2] = { m: [['18건', pending.length + '건'], ['8개', s.unitN + '개'], ['5개', pendingTeamN + '개']], emph: pendingTeamN + '개 팀',
                 src: s.srcOrg + ' / 대기 ' + pending.length + '건 분포' };
     spec[3] = { m: [['71%', confirmRate + '%'], ['84%', coRate + '%']], emph: confirmRate + '%',
                 src: s.scopeOrg.org_id + ' / evalStatus ' + scopeStatus.length + '건' };
@@ -395,10 +430,12 @@
     var empOrg = {}; arr('employees').forEach(function (e) { empOrg[e.emp_id] = e.org_id; });
     var byOrg = {};
     vs.forEach(function (x) { var o = empOrg[x.emp_id] || '?'; (byOrg[o] = byOrg[o] || []).push(x); });
-    var lowOrgs = 0;
+    var lowOrgs = 0, minOrgRate = null;
     for (var o in byOrg) if (has(byOrg, o)) {
       var list = byOrg[o], s2 = list.filter(function (x) { return x.first_submitted_at; }).length;
-      if ((s2 / list.length * 100) < 50) lowOrgs++;
+      var oRate = s2 / list.length * 100;
+      if (oRate < 50) lowOrgs++;
+      if (minOrgRate == null || oRate < minOrgRate) minOrgRate = oRate;
     }
     var vs0 = vs[0] || null;
     var dleft = dayLeft(vs0 ? vs0.due_first : null);
@@ -417,7 +454,10 @@
       hit: hit, facts: facts,
       notice: [['2일', dleft == null ? '기간 미상' : dleft + '일'], ['52%', rate + '%'], ['85%', THrate + '%']],
       ev: spec,
-      th: { 'TH-전사제출률-미달': THrate + '%', 'TH-조직제출률-미달': '50%', 'TH-저조직-건수': lowOrgs + '곳' }
+      /* 측정값 자리에 기준값(THrate·50%)을 되돌려주면 "기준 85% / 측정값 85%"가 되어
+         알림의 12%와 어긋난다 — 실측 제출률과 가장 낮은 조직 제출률을 넣는다 */
+      th: { 'TH-전사제출률-미달': rate + '%', 'TH-조직제출률-미달': (minOrgRate == null ? null : r0(minOrgRate) + '%'),
+            'TH-저조직-건수': lowOrgs + '곳' }
     };
   });
 

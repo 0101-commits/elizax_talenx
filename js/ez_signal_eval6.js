@@ -247,7 +247,10 @@
       hit: hit, facts: facts,
       notice: prev && head ? [['60%', head.achievement_pct + '%'], ['2건', missed.length + '건']] : [],
       ev: spec,
-      th: { 'TH-이월-미승계': missed.length + '건', 'TH-이월-달성기준': CUT + '%' }
+      /* 「미완료 판단 달성률 기준」의 실측은 기준선 자신이 아니라 실제로 멈춘 달성률이다 —
+         CUT 을 그대로 넣으면 「기준 80% · 측정 80%」가 되어 어긋난 데가 없어 보인다 */
+      th: { 'TH-이월-미승계': missed.length + '건',
+            'TH-이월-달성기준': (facts.headPct != null ? facts.headPct : CUT) + '%' }
     };
   });
 

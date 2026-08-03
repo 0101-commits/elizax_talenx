@@ -218,7 +218,12 @@
     var zeros = reports.filter(function (e) { return arr('objectives').filter(function (o) { return o.owner_emp_id === e.emp_id; }).length === 0; });
     var daysLeft = per.days_left;
     var target = zeros[0] || null;
-    var facts = { teamN: teamN, zeroN: zeros.length, daysLeft: daysLeft, targetName: target ? target.name : '' };
+    /* 기준값 「저장된 목표 건수」가 재는 것은 알림이 지목한 그 사람의 저장 건수지
+       목표가 0건인 사람 수가 아니다 — 사람 수를 넣으면 「기준 0건 · 측정 4건」이 되어
+       「목표가 0건이에요」라는 알림 문구와 정면으로 어긋난다 */
+    var targetObjN = target ? arr('objectives').filter(function (o) { return o.owner_emp_id === target.emp_id; }).length : 0;
+    var facts = { teamN: teamN, zeroN: zeros.length, daysLeft: daysLeft, targetName: target ? target.name : '',
+                  targetObjN: targetObjN };
     var hit = !!target && daysLeft != null && daysLeft <= thv(SID, 'TH-마감임박-목표수립', 5);
     var dueStr = per.due ? per.due.slice(0, 10) : '';
     var spec = {};
@@ -231,7 +236,7 @@
       hit: hit, facts: facts,
       notice: [['5일', daysLeft + '일'], ['{{팀원명}}', target ? target.name : '팀원'], ['0건', '0건']],
       ev: spec,
-      th: { 'TH-마감임박-목표수립': daysLeft + '일', 'TH-목표건수-없음': zeros.length + '건' }
+      th: { 'TH-마감임박-목표수립': daysLeft + '일', 'TH-목표건수-없음': targetObjN + '건' }
     };
   });
 
