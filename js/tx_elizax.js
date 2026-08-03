@@ -132,6 +132,9 @@
     if (!best) return null;
     if (state.subject && state.subject.emp_id === best.emp_id) return null;   /* 이미 그 사람 */
     state.subject = { emp_id: best.emp_id, name: best.name, jobTitle: best.jobTitle || "" };
+    /* 1:1 화면(드롭다운·미팅 카드)도 같은 사람을 보게 한다 — 대화에서 이름을 말했는데
+       옆 화면은 다른 사람이 떠 있으면 한 화면에 두 사람이 동시에 보인다 */
+    if (window.EZPeer) EZPeer.set(best.emp_id, "elizax");
     return state.subject;
   }
 
@@ -765,11 +768,29 @@
     if (p !== state.perspective) {
       state.perspective = p;
       state.subject = defaultSubject();   /* 역할이 바뀌면 대상도 그 사람 본인으로 되돌린다 */
+      if (window.EZPeer) EZPeer.set(state.subject.emp_id, "elizax");   /* 되돌린 것도 알린다 */
     }
     var lab = el.persp && el.persp.querySelector("[data-ezx-plabel]");
     if (lab) lab.textContent = perspectiveLabel(p);
     syncSubjectUI();
   }
+  /* 1:1 화면에서 상대를 바꾸면 대화 대상도 그 사람으로 따라간다.
+     단서 둘 — ① 조직원은 남의 기록을 못 보므로 따라가지 않는다(setSubjectByName와 같은 기준).
+     ② 꼬리표가 "-init"이면 사람이 고른 게 아니라 화면이 처음 그려지며 알린 기본값이다.
+     이걸 받으면 페이지를 열자마자 대화 대상이 첫 팀원으로 밀려 「talenx는 본인인데
+     elizax는 남의 이름으로 답하는」 19차 §5-2 어긋남이 되살아난다. */
+  if (window.EZPeer) EZPeer.onChange(function (peer, src) {
+    if (src === "elizax" || /-init$/.test(src)) return;
+    var rk = roleKey();
+    if (rk !== "leader" && rk !== "hr" && rk !== "exec") return;
+    if (state.subject && state.subject.emp_id === peer.emp_id) return;
+    var e = null;
+    for (var i = 0; i < EMPLOYEES.length; i++) if (EMPLOYEES[i].emp_id === peer.emp_id) { e = EMPLOYEES[i]; break; }
+    if (!e) return;
+    state.subject = { emp_id: e.emp_id, name: e.name, jobTitle: e.jobTitle || "" };
+    syncSubjectUI();
+  });
+
   /* 대상 선택 UI가 사라졌으므로 남은 일은 화면칩 갱신뿐 —
      호출자 3곳(setPerspective·syncPerspectiveFromRole·build)을 위해 함수는 유지한다. */
   function syncSubjectUI() {

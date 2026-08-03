@@ -637,7 +637,11 @@
      * ============================================================= */
     var meetings = [];
     (function buildMeetingData() {
-      var partnerIds = [cuEmp.manager_id || 'EMP-0010', 'EMP-0080', 'EMP-0077'];
+      /* 「나의 1:1 미팅」 = 내가 대상자인 1:1 = 내 상사와의 1:1. 그것뿐이다.
+         예전에는 EMP-0080·EMP-0077을 덧붙였는데 두 사람은 나와 아무 관계가 없는
+         남의 부하였다 — 없는 미팅을 지어낸 것이라 지운다. 상사가 없으면(경영진)
+         이 탭은 정직하게 빈다. */
+      var partnerIds = cuEmp.manager_id ? [cuEmp.manager_id] : [];
       var dates = ['6월 16일 화요일 오전 10:23', '5월 20일 수요일 오후 5:52', '4월 30일 목요일 오후 2:10'];
       var myChk = (chkByEmp[CU.emp_id] || []);
       partnerIds.forEach(function (pid, i) {
@@ -708,8 +712,10 @@
       // A: 조직원은 본인 1:1(idx 0)만 — 관리자(idx 1)·열람가능(idx 2) 탭은 동료의 사적 1:1 노트라 비노출
       if (roleKey() === 'member' && idx !== 0) return [];
       if (mtTabs[idx]) return mtTabs[idx];
+      /* 내가 관리자인 1:1은 직속 부하 전원 — 좌측 드롭다운은 전원을 보여주는데 여기서
+         3명으로 잘라 두면 드롭다운에서 고른 사람의 카드가 없는 일이 생긴다 */
       var pool = idx === 1
-        ? emps.filter(function (e) { return e.manager_id === CU.emp_id; }).slice(0, 3)
+        ? emps.filter(function (e) { return e.manager_id === CU.emp_id; })
         : (empByOrg[cuEmp.org_id] || []).filter(function (e) { return e.emp_id !== CU.emp_id; }).slice(0, 3);
       if (!pool.length) pool = (empByOrg[cuEmp.org_id] || []).filter(function (e) { return e.emp_id !== CU.emp_id; }).slice(0, 2);
       var dates = idx === 1
@@ -718,9 +724,20 @@
       mtTabs[idx] = pool.map(function (e, i) { return makeAltMeeting(e, dates[i] || dates[0], idx * 10 + i); });
       return mtTabs[idx];
     }
-    function renderMeetingTab(idx) {
+    /* .mt-main을 통째로 갈아엎으면 tx_1on1이 여기 맨 앞에 꽂아 둔 elizax 녹음·요약 바와
+       아젠다 패널까지 같이 날아간다. MutationObserver가 바를 다시 꽂아 주긴 하지만
+       열어 둔 아젠다 준비 화면은 그대로 사라진다 — 대상만 바꿨는데 하던 일이 없어진다.
+       그래서 미팅 상세 부분만 갈아 끼운다. */
+    function setMeetingMain(main, html) {
+      main.querySelectorAll('.txf-md,.txf-mt-empty').forEach(function (n) { n.remove(); });
+      main.insertAdjacentHTML('beforeend', html);
+    }
+
+    var curMtTab = 0;
+    function renderMeetingTab(idx, peerSrc) {
       var page = sec.querySelector('.subpage[data-p="2"]');
       if (!page) return;
+      curMtTab = idx;
       curMt = tabMeetings(idx);
       var side = page.querySelector('.mt-side');
       if (side) {
@@ -730,21 +747,75 @@
       var main = page.querySelector('.mt-main');
       if (main) {
         main.classList.add('txf-open');
-        main.innerHTML = curMt.length ? meetingDetailHTML(curMt[0])
-          : '<div style="color:var(--ink-3);font-size:13.5px;padding:20px 0">'
-            + (idx === 1 ? '내가 관리자인 1:1 미팅이 없습니다.' : '열람 가능한 1:1 미팅이 없습니다.') + '</div>';
+        setMeetingMain(main, curMt.length ? meetingDetailHTML(curMt[0])
+          : '<div class="txf-mt-empty" style="color:var(--ink-3);font-size:13.5px;padding:20px 0">'
+            + (idx === 1 ? '내가 관리자인 1:1 미팅이 없습니다.'
+             : idx === 2 ? '열람 가능한 1:1 미팅이 없습니다.'
+                         : '나의 1:1 미팅이 없습니다.') + '</div>');
       }
+      /* 펼쳐 놓은 카드가 곧 「지금 이야기 중인 상대」 — 좌측 드롭다운·아젠다가 따라온다.
+         'none'은 곧바로 다른 카드를 펼 예정이라 알리지 않는다는 뜻(selectMeetingByEmp). */
+      if (curMt.length && window.EZPeer && peerSrc !== 'none') EZPeer.set(curMt[0].emp.emp_id, peerSrc || 'mtlist');
+    }
+
+    /* 첫 화면에서 어떤 탭을 펼칠 것인가 — 역할마다 답이 다르다.
+       조직장은 좌측 elizax 패널이 「팀원을 선택해 1:1을 주관하세요」라고 말하는 화면이다.
+       거기에 내 상사와의 1:1을 펼쳐 놓으면 문맥이 어긋나므로 「내가 관리자인 1:1」로 연다.
+       조직원은 상사와 하는 1:1이 맞으니 「나의 1:1」 그대로. 상사가 없는 경영진도
+       나의 1:1 탭이 비므로 관리자 탭으로 연다. */
+    function defaultMtTab() {
+      var hasReports = emps.some(function (e) { return e.manager_id === CU.emp_id; });
+      if (!hasReports) return 0;
+      var rk = roleKey();
+      return (rk === 'leader' || rk === 'exec' || !cuEmp.manager_id) ? 1 : 0;
+    }
+
+    /* 밖(좌측 드롭다운·elizax 대화)에서 대상이 바뀌면 그 사람 카드를 편다.
+       지금 탭에 없으면 그 사람이 있는 탭으로 옮겨 준다 — 없으면 조용히 둔다. */
+    function selectMeetingByEmp(empId) {
+      var page = sec.querySelector('.subpage[data-p="2"]');
+      if (!page) return;
+      var tab = -1, pos = -1, i, list;
+      for (i = 0; i < 3; i++) {
+        list = (i === curMtTab) ? curMt : tabMeetings(i);
+        for (var j = 0; j < list.length; j++) {
+          if (list[j].emp.emp_id === empId) { tab = i; pos = j; break; }
+        }
+        if (tab >= 0) break;
+      }
+      if (tab < 0) return;
+      if (tab !== curMtTab) {
+        var btns = page.querySelectorAll('.segtabs button');
+        if (btns[tab]) btns.forEach(function (b, bi) { b.classList.toggle('on', bi === tab); });
+        renderMeetingTab(tab, 'none');   /* 이 탭의 첫 카드가 아니라 요청받은 사람을 펼 것이므로 알리지 않는다 */
+      }
+      var items = page.querySelectorAll('[data-mt]');
+      if (!items[pos]) return;
+      items.forEach(function (x, xi) { x.classList.toggle('on', xi === pos); });
+      var main = page.querySelector('.mt-main');
+      if (main && curMt[pos]) { main.classList.add('txf-open'); setMeetingMain(main, meetingDetailHTML(curMt[pos])); }
     }
 
     (function buildMeetingPage() {
       var page = sec.querySelector('.subpage[data-p="2"]');
       if (!page) return;
+      var def = defaultMtTab();
       page.innerHTML = '<div class="mt-wrap">'
-        + '<div class="mt-main txf-open">' + (meetings.length ? meetingDetailHTML(meetings[0]) : '선택한 1:1 미팅이 없습니다.') + '</div>'
+        + '<div class="mt-main txf-open"></div>'
         + '<div class="mt-side"><div class="sh"><h3>1:1 미팅</h3><span class="plus">+</span></div>'
-        + '<div class="segtabs"><button class="on">나의 1:1 미팅</button><button>내가 관리자인 1:1 미팅</button><button>내가 열람할 수 있는 1:1 미팅</button></div>'
-        + mtListHTML(meetings) + '</div></div>';
+        + '<div class="segtabs">'
+        + '<button' + (def === 0 ? ' class="on"' : '') + '>나의 1:1 미팅</button>'
+        + '<button' + (def === 1 ? ' class="on"' : '') + '>내가 관리자인 1:1 미팅</button>'
+        + '<button>내가 열람할 수 있는 1:1 미팅</button>'
+        + '</div></div></div>';
+      /* 최초 렌더는 사람이 고른 것이 아니다 — "-init" 꼬리표로 알려 대화 대상이 끌려가지 않게 한다 */
+      renderMeetingTab(def, 'mtlist-init');
     })();
+
+    if (window.EZPeer) EZPeer.onChange(function (peer, src) {
+      if (src.indexOf('mtlist') === 0) return;   /* 내가 낸 변경 */
+      selectMeetingByEmp(peer.emp_id);
+    });
 
     /* ============================================================= *
      *  리뷰 (data-p=3) — generate rows from data (fix 11)            *
@@ -2722,7 +2793,9 @@
         var page2 = sec.querySelector('.subpage[data-p="2"]');
         page2.querySelectorAll('[data-mt]').forEach(function (x) { x.classList.toggle('on', x === mi); });
         var main = page2.querySelector('.mt-main');
-        if (main && curMt[idx]) { main.classList.add('txf-open'); main.innerHTML = meetingDetailHTML(curMt[idx]); }
+        if (main && curMt[idx]) { main.classList.add('txf-open'); setMeetingMain(main, meetingDetailHTML(curMt[idx])); }
+        /* 사람이 고른 상대 — 좌측 드롭다운·아젠다·elizax 대화가 같은 사람으로 따라온다 */
+        if (curMt[idx] && window.EZPeer) EZPeer.set(curMt[idx].emp.emp_id, 'mtlist');
         return;
       }
     });

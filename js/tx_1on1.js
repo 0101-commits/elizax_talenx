@@ -95,6 +95,25 @@
     return out;
   }
   var selMemId = null; /* leader가 드롭다운에서 고른 팀원 */
+  /* ---------------- 1:1 대상자 단일 원천 (EZPeer) ----------------
+     드롭다운·우측 미팅 카드·elizax 대화가 서로 다른 사람을 가리키던 것을 한 명으로 묶는다.
+     여기서는 팀원 목록 안의 사람만 다룬다 — 드롭다운에 없는 사람은 고를 수가 없다. */
+  function peerId() {
+    try { var p = window.EZPeer && EZPeer.get(); return p ? p.emp_id : ""; } catch (e) { return ""; }
+  }
+  function isTeamMember(id) {
+    var tm = teamMembers();
+    for (var i = 0; i < tm.length; i++) if (tm[i].emp_id === id) return true;
+    return false;
+  }
+  /* 그리기 직전 호출 — 밖에서 정해 둔 상대가 있으면 그 사람으로, 없으면 내 기본값을 알린다.
+     최초 렌더는 사람이 고른 것이 아니므로 "-init" 꼬리표를 단다(대화 대상이 끌려가지 않게). */
+  function syncSelFromPeer() {
+    var pid = peerId();
+    if (pid && isTeamMember(pid)) { selMemId = pid; return; }
+    var m = selMember();
+    if (m && window.EZPeer) EZPeer.set(m.emp_id, "1on1-init");
+  }
   function selMember() {
     var tm = teamMembers();
     if (!tm.length) return null;
@@ -379,6 +398,7 @@
      1) 주입 — .mt-main 상단 바 (MutationObserver + 초기 폴링, 멱등)
      ============================================================ */
   function memSelectHTML() {
+    syncSelFromPeer();
     var tm = teamMembers(), cur = selMember(), opts = "";
     for (var i = 0; i < tm.length; i++) {
       var m = tm[i], last = lastOneOnOneAt(m.emp_id);
@@ -1176,10 +1196,33 @@
     if (e.key === "Escape") closeMap();
   });
 
-  /* leader — 팀원 드롭다운 선택 */
+  /* 아젠다 준비 화면이 열려 있으면 새 대상 기준으로 다시 그린다.
+     녹음 중에는 손대지 않는다 — 진행 중인 세션의 받아쓰기를 날려 버리게 된다. */
+  function refreshAgendaForPeer() {
+    if (sess && !sess.finished) return;
+    var panel = document.querySelector("[data-ez1o-panel]");
+    if (panel && panel.querySelector(".ez1o-agenda")) renderAgenda(panel);
+  }
+
+  /* leader — 팀원 드롭다운 선택. 고른 사람이 곧 화면 전체의 1:1 상대다 */
   document.addEventListener("change", function (e) {
     var t = e.target;
-    if (t && t.getAttribute && t.hasAttribute && t.hasAttribute("data-ez1o-mem")) selMemId = t.value;
+    if (t && t.getAttribute && t.hasAttribute && t.hasAttribute("data-ez1o-mem")) {
+      selMemId = t.value;
+      if (window.EZPeer) EZPeer.set(t.value, "1on1");
+      refreshAgendaForPeer();
+    }
+  });
+
+  /* 밖(우측 미팅 카드·elizax 대화)에서 상대가 바뀌면 드롭다운·아젠다가 따라온다 */
+  if (window.EZPeer) EZPeer.onChange(function (peer, src) {
+    if (src.indexOf("1on1") === 0) return;          /* 내가 낸 변경 */
+    if (roleKey() !== "leader") return;             /* 대상 드롭다운은 조직장 화면에만 있다 */
+    if (!isTeamMember(peer.emp_id) || selMemId === peer.emp_id) return;
+    selMemId = peer.emp_id;
+    var sel = document.querySelector("[data-ez1o-mem]");
+    if (sel) sel.outerHTML = memSelectHTML();
+    refreshAgendaForPeer();
   });
 
   function boot() {
