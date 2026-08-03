@@ -40,7 +40,8 @@ global.localStorage = {
 var path = require('path');
 var JS = path.join(__dirname, '..', 'js');
 ['talenx_data.js', 'ez_kit.js', 'ez_signals.js', 'ez_signal_engine.js',
- 'ez_signal_eval2.js', 'ez_signal_eval3.js', 'ez_signal_eval4.js', 'ez_signal_eval5.js']
+ 'ez_signal_eval2.js', 'ez_signal_eval3.js', 'ez_signal_eval4.js', 'ez_signal_eval5.js',
+ 'ez_signal_eval6.js', 'ez_signal_eval7.js', 'ez_signal_eval8.js', 'ez_signal_eval9.js']
   .forEach(function (f) {
     try { require(path.join(JS, f)); } catch (e) { /* 아직 없는 판정 파일은 건너뛴다 */ }
   });
