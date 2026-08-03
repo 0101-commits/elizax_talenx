@@ -80,7 +80,9 @@
           store.sessions = j.sessions.filter(function (s) { return s && s.id; });
           store.sessions.forEach(function (s) {
             s.messages = (Array.isArray(s.messages) ? s.messages : []).filter(function (m) { return m && m.role; });
-            s.messages.forEach(function (m) { m.streaming = false; });
+            /* pending 은 「확인 카드가 끝나면 깨운다」는 진행 중 표시다 — 새로 열면
+               깨워 줄 카드가 없으므로 그대로 두면 그 답이 영영 안 보인다 (20-6차) */
+            s.messages.forEach(function (m) { m.streaming = false; m.pending = false; });
           });
           store.currentId = j.currentId;
         }

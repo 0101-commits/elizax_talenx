@@ -808,7 +808,11 @@
       list.appendChild(buildEmptyState());
       return;
     }
-    msgs().forEach(function (m) { list.appendChild(buildMsgNode(m)); });
+    /* pending 신호 답은 아직 그리지 않는다 — 확인 카드가 끝나면 깨어난다 (20-6차) */
+    msgs().forEach(function (m) {
+      if (m.role === "sig" && m.pending) return;
+      list.appendChild(buildMsgNode(m));
+    });
     scrollToBottom();
   }
   /* 역할마다 처음 물어보게 되는 세 가지 — 고정 스타터 (19차 §5-6) */
@@ -1245,6 +1249,40 @@
       t0: Date.now(), ms: 0, collapsed: false, _timers: [], _tick: null
     };
   }
+  /* ---- 신호 답변용 작업중 카드 (20-6차) ----------------------------------
+     신호의 답은 룰베이스로 이미 다 계산돼 있다. 그렇다고 사용자가 묻자마자 통째로
+     내려놓으면 「어디서 나온 말인지」가 화면에서 사라진다 — 답이 먼저 뜨고 근거를
+     나중에 대는 순서가 되기 때문이다. 그래서 이 카드가 그 신호가 실제로 본
+     기록(evidence[].src)을 한 줄씩 세우고, 다 세운 뒤에 답을 앉힌다.
+     지어낸 스텝이 아니다: 줄도 값도 판정 함수가 실제로 읽은 것 그대로다. */
+  function sigWorkPlan(sid) {
+    var inst = null;
+    try {
+      if (window.EZSignalEngine && EZSignalEngine.evaluate) inst = EZSignalEngine.evaluate(sid, roleKey());
+    } catch (e) { inst = null; }
+    var out = [], seen = {};
+    ((inst && inst.evidence) || []).forEach(function (ev) {
+      var src = String((ev && ev.src) || "").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+      if (!src || seen[src]) return;
+      seen[src] = 1;
+      out.push({ run: src + " 확인하는 중", done: src + " 확인했어요", found: String(ev.emph || "") || "확인" });
+    });
+    var th = (inst && inst.thresholds) || [];
+    if (th.length) {
+      out.push({
+        run: "회사 기준값과 대조하는 중", done: "회사 기준값과 대조했어요",
+        found: String(th[0].name || "기준값") + " " + String(th[0].value || "")
+      });
+    }
+    return out.length ? out.slice(0, 5) : null;
+  }
+  function makeSigWorkMsg(sid, p) {
+    var plan = sigWorkPlan(sid);
+    return {
+      role: "work", steps: [], plan: plan || scriptSteps(p), done: false,
+      t0: Date.now(), ms: 0, collapsed: false, _timers: [], _tick: null
+    };
+  }
   /* ---- 라이브 작업중 카드: Claude tool-use 이벤트로 실제 실행 내역 표시 ---- */
   function makeLiveWorkMsg() {
     return {
@@ -1370,6 +1408,16 @@
     var wait = workFloorRemaining(aiMsg);
     if (wait <= 0) { fn(); return; }
     setTimeout(fn, wait);
+  }
+  /* 확인 카드가 끝나면 재워 둔 신호 답을 깨운다 (20-6차).
+     사용자가 중지를 눌렀어도 답 자체는 이미 계산돼 있으므로 감추지 않고 보여 준다 —
+     감추면 「무엇을 확인했는지」만 남고 결과가 사라진다. */
+  function revealSigAfterWork(aiMsg, sigMsg) {
+    afterWorkFloor(aiMsg, function () {
+      if (!sigMsg.pending) return;
+      sigMsg.pending = false;
+      renderMessages();
+    });
   }
   /* 실 도구 호출 — 도구 이름을 사람 말로 바꿔 한 줄로 세운다.
      EZTools.labelOf는 「목표·KR 조회」처럼 일하는 사람 말이 아니라서 여기서 다시 쓴다. */
@@ -2234,20 +2282,27 @@
     var sigM = signalHit(userText);
     var sigId = (sigM && sigM.id) ? String(sigM.id) : "";
     if (state.followSig) { sigId = state.followSig; state.followSig = null; }
-    if (sigId && !sigShown(sigId)) pushMessage({ role: "sig", id: sigId, at: Date.now() });
     /* 실 에이전트 가능(연결+키+도구) → 라이브 카드(실 도구 호출 표시),
-       그 외 라이브 → 기존 연출 카드, 오프라인 → 카드 없음 */
+       그 외 라이브 → 기존 연출 카드, 오프라인 → 신호 턴에만 카드 */
     var agentReady = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
-    /* 신호 답변을 이미 냈으면 「확인 중」 연출 카드는 넣지 않는다 (20-3차) —
-       답이 먼저 떠 있는데 뒤에서 찾는 척하면 순서가 거짓말이 된다.
-       실제 도구를 호출하는 라이브 카드는 그대로 둔다(실행 내역이라 뒤에 와도 맞다). */
+    /* 20-6차 — 순서를 바로잡는다. 예전에는 신호 답을 **먼저** 앉히고 확인 카드를
+       아예 넣지 않았다(20-3차). 그래서 룰베이스 답이 「띡」 하고 통째로 떨어졌고,
+       사용자에게는 아무것도 알아보지 않고 뱉은 말로 보였다. 이제는
+       확인 카드 → (스텝을 다 세운 뒤) 신호 답 → 이어가는 말 순서로 간다.
+       카드가 세우는 줄은 그 신호가 실제로 읽은 기록이다(sigWorkPlan). */
     var workMsg = agentReady ? pushMessage(makeLiveWorkMsg())
-      : (aiMode() !== "offline" && !sigId) ? pushMessage(makeWorkMsg(state.perspective)) : null;
+      : sigId ? pushMessage(makeSigWorkMsg(sigId, state.perspective))
+      : (aiMode() !== "offline") ? pushMessage(makeWorkMsg(state.perspective)) : null;
+    /* 신호 답 말풍선은 카드 뒤에 놓고 pending 으로 재워 둔다 — 카드가 제 몫을
+       다 보여 준 뒤 깨운다(아래 revealSig). pending 인 동안은 그려지지 않는다. */
+    var sigMsg = (sigId && !sigShown(sigId))
+      ? pushMessage({ role: "sig", id: sigId, at: Date.now(), pending: true }) : null;
     /* _q = 원문 질문. 영수증 제목·What-if 가정 파싱이 완료 시점에 필요하다(SSE 경로 포함) */
-    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText, _sigId: sigId };
+    var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText, _sigId: sigId, _sigNew: !!sigMsg };
     pushMessage(aiMsg);
     renderMessages();
     if (workMsg && !workMsg.live) animateWork(workMsg);
+    if (sigMsg) revealSigAfterWork(aiMsg, sigMsg);
 
     state.streaming = true;
     el.send.disabled = true;
@@ -2289,6 +2344,8 @@
         if (!m.note) m.note = "생성 중지됨";
       }
       if (m.role === "work" && !m.done) completeWork({ _work: m });
+      /* 중지해도 이미 계산된 신호 답은 감추지 않는다 — 감추면 확인 내역만 남는다 */
+      if (m.role === "sig" && m.pending) m.pending = false;
     }
     finishStreaming();
     renderMessages();
@@ -3110,13 +3167,11 @@
     /* 20-3차 — 그 신호의 답(알림 문구·근거·기준값)이 이미 말풍선으로 떠 있으면
        같은 말을 문장으로 다시 쓰지 않는다. 이어받을 한 줄만 남긴다. */
     if (sid && sigShown(sid)) {
-      /* 후속 칩을 눌렀다 — 같은 말을 되풀이하지 않고 카탈로그의 다른 칸으로 답한다 */
-      var fu = "";
-      if (window.EZSignalChat && EZSignalChat.followAnswer) {
-        try { fu = String(EZSignalChat.followAnswer(sid, q, rk) || ""); } catch (e3) { fu = ""; }
-      }
-      if (fu) return { text: fu, note: "" };
-      return { text: "위에 정리해 둔 내용부터 보시고, 고치고 싶은 곳이 있으면 말씀해 주세요.", note: "" };
+      /* 20-6차 — 이 턴이 그 답을 막 냈으면(_sigNew) 다음 한 걸음을 묻고,
+         이미 냈던 주제를 다시 물었으면 카탈로그의 다른 칸으로 답한다. 두 갈래 모두
+         오프라인 경로와 같은 함수(sigContinue)를 쓴다 — 연결 여부로 말이 달라지지 않게. */
+      var sc = sigContinue({ _sigId: sid, _sigNew: !!aiMsg._sigNew, _q: q });
+      return { text: sc.text, note: "" };
     }
     if (sid && window.EZSignalChat && EZSignalChat.answerText) {
       var t = "";
@@ -3137,7 +3192,15 @@
       };
     }
 
-    /* ③ 사람 말 한 문장 */
+    /* ③ 이야기 중인 신호가 있으면 거기서 이어 간다 (20-6차) — 방금 신호 답을 받은
+       사람이 자기 말로 되물었을 때 「연결되어 있지 않아요」로 끊기던 자리 */
+    var tid = liveTopicId();
+    if (tid) {
+      var scT = sigContinue({ _sigId: tid, _sigNew: false, _q: q });
+      if (scT.text) return { text: scT.text, note: "" };
+    }
+
+    /* ④ 사람 말 한 문장 */
     return { text: DEAD_END, note: "" };
   }
 
@@ -3179,8 +3242,61 @@
     return CONFIG_LEAK.test(t);
   }
 
+  /* ---- 신호 턴의 이어가는 말 (20-6차) ------------------------------------
+     신호 답은 위 말풍선이 이미 다 했다. 여기서는 같은 말을 되풀이하지 않고
+     **다음 한 걸음**만 묻는다 — 그 신호가 들고 있는 처리(actions) 가운데 첫째 것.
+     예전에는 오프라인 경로가 이 질문을 의도 분기에 넣어 「무엇을 도와드릴까요」
+     안내문을 뱉었다. 신호를 묻고 신호 답을 받은 사람에게는 대화가 끊긴 것으로 읽혔다. */
+  function eulReul(w) {
+    var c = String(w || "").charCodeAt(String(w).length - 1);
+    if (!(c >= 0xac00 && c <= 0xd7a3)) return "를";
+    return ((c - 0xac00) % 28) ? "을" : "를";
+  }
+  function sigNextLine(sid) {
+    var sig = null, i;
+    try {
+      var all = (window.EZSignalCatalog && EZSignalCatalog.signals) || [];
+      for (i = 0; i < all.length; i++) if (all[i].id === sid) { sig = all[i]; break; }
+    } catch (e) { sig = null; }
+    var acts = ((sig && sig.actions) || []).slice().sort(function (a, b) { return (a.rank || 9) - (b.rank || 9); });
+    var first = null;
+    for (i = 0; i < acts.length; i++) if (acts[i].type !== "A5") { first = acts[i]; break; }
+    if (!first) first = acts[0] || null;
+    var label = first ? String(first.label || "").replace(/\s*\([^)]*\)\s*$/, "") : "";
+    if (window.EZSignalChat && EZSignalChat.scrub) {
+      try { label = String(EZSignalChat.scrub(label) || label); } catch (e2) { /* 원문 유지 */ }
+    }
+    if (!label) return "여기까지가 지금 기록으로 확인한 내용이에요. 이어서 무엇을 도와드릴까요?";
+    return "여기까지가 지금 기록으로 확인한 내용이에요. 이어서 「" + label + "」" + eulReul(label)
+      + " 제가 잡아 드릴까요? 아래 버튼으로 바로 말씀하셔도 돼요.";
+  }
+  /* 지금 이야기 중인 신호 — EZSignalChat 이 걸어 둔 주제 */
+  function liveTopicId() {
+    try {
+      var t = window.EZSignalChat && EZSignalChat.topic && EZSignalChat.topic();
+      return (t && t.id) ? String(t.id) : "";
+    } catch (e) { return ""; }
+  }
+  function sigContinue(aiMsg) {
+    var sid = aiMsg._sigId, text = "";
+    if (!aiMsg._sigNew) {
+      /* 답을 이미 낸 주제를 다시 물었다 — 카탈로그의 다른 칸으로 답한다 */
+      if (window.EZSignalChat && EZSignalChat.followAnswer) {
+        try { text = String(EZSignalChat.followAnswer(sid, aiMsg._q || "", roleKey()) || ""); } catch (e) { text = ""; }
+      }
+      if (!text) text = "위에 정리해 둔 내용부터 보시고, 고치고 싶은 곳이 있으면 말씀해 주세요.";
+    } else {
+      text = sigNextLine(sid);
+    }
+    return { text: text, recos: [], receipt: null, intent: "signal" };
+  }
+
   function offlineRespond(body, aiMsg, userText) {
-    var built = offlineReceipt(body, userText);
+    var built = (aiMsg && aiMsg._sigId) ? sigContinue(aiMsg) : offlineReceipt(body, userText);
+    /* 못 알아들은 말인데 이야기 중인 신호가 있으면 거기서 이어 간다 (20-6차) */
+    if (built.intent === "unknown" && liveTopicId()) {
+      built = sigContinue({ _sigId: liveTopicId(), _sigNew: false, _q: userText });
+    }
     var full = built.text;
     var idx = 0;
     var step = Math.max(6, Math.round(full.length / 40));
@@ -3207,7 +3323,13 @@
         renderMessages();
       }
     }
-    setTimeout(tick, 120);
+    /* 확인 카드가 스텝을 다 세운 뒤에 말을 시작한다 (20-6차).
+       카드가 없는 턴은 floor 가 0이라 예전과 똑같이 120ms 뒤 시작한다. */
+    afterWorkFloor(aiMsg, function () {
+      if (aiMsg._stopped) return;
+      completeWork(aiMsg);
+      setTimeout(tick, 120);
+    });
   }
 
   /* ---------------- 실AI 응답의 수치 서술자 (F16) ----------------
