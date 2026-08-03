@@ -272,7 +272,7 @@
                 src: s.srcOrg + ' / evalStatus ' + scopeEmpIds.length + '건' };
     spec[1] = { m: [['8개', unitRows.length + '개'], ['2개', badTeams.length + '개']], emph: badTeams.length + '개 팀',
                 src: (badTeams.map(function (r) { return r.org; }).join(' · ') || '해당 없음') + ' / 1차 미제출' };
-    spec[2] = { m: [['17건', missSum + '건']], emph: missSum + '건',
+    spec[2] = { m: [['두 팀', badTeams.length + '개 팀'], ['17건', missSum + '건']], emph: missSum + '건',
                 src: (badTeams.map(function (r) { return r.org; }).join(' · ') || '해당 없음') + ' / evalStatus 미제출' };
     spec[3] = { m: [['74%', scopeRate + '%']], emph: scopeRate + '%', src: s.srcOrgIncl + ' / evalStatus ' + scopeEmpIds.length + '건' };
     return {
@@ -308,11 +308,27 @@
     else if (noReason.length === gh.length) phrase = '제출 뒤 등급이 바뀐 ' + gh.length + '건 모두 변경 사유 기록이 비어 있어요';
     else if (!noReason.length) phrase = '제출 뒤 등급이 바뀐 ' + gh.length + '건 모두 변경 사유가 채워져 있어요';
     else phrase = '제출 뒤 등급이 바뀐 ' + gh.length + '건 중 ' + noReason.length + '건은 변경 사유 기록이 비어 있어요';
+    /* 원문 "두 건 다 B에서 A로"도 예시값이라 실제 변경 방향·건수로 다시 쓴다 */
+    var RANK = { S: 4, A: 3, B: 2, C: 1, D: 0 };
+    var upOneN = 0, pairCnt = {}, pairKeys = [];
+    gh.forEach(function (g) {
+      if (RANK[g.before] != null && RANK[g.after] != null && RANK[g.after] - RANK[g.before] === 1) upOneN++;
+      var k = g.before + '에서 ' + g.after;
+      if (!has(pairCnt, k)) { pairCnt[k] = 0; pairKeys.push(k); }
+      pairCnt[k]++;
+    });
+    var pairTxt = pairKeys.map(function (k) { return k + ' ' + pairCnt[k] + '건'; }).join(' · ');
+    var dirPhrase;
+    if (!gh.length) dirPhrase = '변경 이력이 없어 변경 내용을 확인할 대상이 없어요';
+    else if (upOneN === gh.length) dirPhrase = '변경 내용은 ' + gh.length + '건 다 한 단계 올린 것으로 ' + pairTxt + '이에요';
+    else dirPhrase = '변경 내용은 ' + gh.length + '건 가운데 한 단계 상향이 ' + upOneN + '건이고 ' + pairTxt + '이에요';
     var spec = {};
     spec[0] = { m: [['1차 평가자 한 명이 제출한 평가 11건', s.scopeOrg.org_id + ' 범위의 평가 변경 ' + gh.length + '건']],
                 emph: gh.length + '건', src: s.srcOrgIncl + ' / gradeHistory ' + gh.length + '건' };
     spec[1] = { m: [[origPhrase, phrase]], emph: noReason.length + '건',
                 src: s.scopeOrg.org_id + ' / gradeHistory 사유 공백 ' + noReason.length + '건' };
+    spec[2] = { m: [['변경 내용은 두 건 다 B에서 A로 한 단계 올린 것이에요', dirPhrase]], emph: gh.length + '건',
+                src: s.scopeOrg.org_id + ' / gradeHistory ' + gh.length + '건' };
     spec[3] = { m: [['82%', scopeTopPct + '%']], emph: scopeTopPct + '%', src: s.scopeOrg.org_id + ' / evaluations 등급' };
     return {
       hit: hit, facts: facts,

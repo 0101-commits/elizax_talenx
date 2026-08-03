@@ -284,7 +284,7 @@
     spec[0] = { m: [['8개', s.unitN + '개'], ['62명', totTarget + '명']], emph: totTarget + '명', src: s.srcOrg };
     spec[1] = { m: [['2개', zero.length + '개'], ['0건', '0건']], emph: zero.length + '개',
                 src: (zero.map(function (r) { return r.org; }).join(' · ') || '없음') + ' / meetingStore' };
-    spec[2] = { m: [['17명', zeroTargetSum + '명']], emph: zeroTargetSum + '명', src: '면담 0건 조직 대상자 집계' };
+    spec[2] = { m: [['두 팀', zero.length + '개 팀'], ['17명', zeroTargetSum + '명']], emph: zeroTargetSum + '명', src: '면담 0건 조직 대상자 집계' };
     if (avgRate != null) spec[3] = { m: [['63%', avgRate + '%']], emph: avgRate + '%', src: s.srcOrg + ' / meetingStore ' + totDone + '건' };
     return {
       hit: hit, facts: facts,
@@ -318,7 +318,7 @@
     spec[0] = { m: [['8개', s.unitN + '개'], ['62명', totTarget + '명']], emph: s.unitN + '개 팀', src: s.srcOrg };
     spec[1] = { m: [['88%', hi.rate + '%'], ['30%', lo.rate + '%']], emph: lo.rate + '%',
                 src: hi.org + ' / ' + lo.org + ' / meetingStore' };
-    spec[2] = { m: [['세 곳', halfN + '곳']], emph: halfN + '곳', src: s.srcOrg + ' / meetingStore' };
+    spec[2] = { m: [['여덟 곳', rows.length + '곳'], ['세 곳', halfN + '곳']], emph: halfN + '곳', src: s.srcOrg + ' / meetingStore' };
     if (avgRate != null) spec[3] = { m: [['63%', avgRate + '%'], ['33%p', (diffFromAvg == null ? '?' : diffFromAvg) + '%p']],
                 emph: (diffFromAvg == null ? '?' : diffFromAvg) + '%p', src: s.srcOrg + ' / meetingStore ' + totDone + '건' };
     return {

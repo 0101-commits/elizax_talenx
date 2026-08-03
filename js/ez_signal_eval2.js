@@ -311,7 +311,7 @@
                 src: badSrc + ' / OBJ 집계' };
     spec[2] = { m: [['3개 팀', bad.length + '개 팀'], ['21명', badZero + '명']], emph: badZero + '명',
                 src: badSrc + ' / 구성원 ' + badHc + '명' };
-    spec[3] = { m: [['62%', orgAvg + '%'], ['32%p', Math.abs(orgAvg - badAvgRate) + '%p']], emph: orgAvg + '%',
+    spec[3] = { m: [['62%', orgAvg + '%'], ['세 팀', bad.length + '개 팀'], ['32%p', Math.abs(orgAvg - badAvgRate) + '%p']], emph: orgAvg + '%',
                 src: s.scopeOrg.org_id + ' / OBJ ' + s.unitObjN + '건' };
     return {
       hit: hit, facts: facts,

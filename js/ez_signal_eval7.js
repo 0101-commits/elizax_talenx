@@ -274,7 +274,10 @@
                 emph: topLabelN + '건', src: 'checkins(캐노니컬) ' + CK.length + '건 / blocker 집계' };
     return {
       hit: hit, facts: facts,
-      notice: [['2회', streak + '회'], ['32일째', (fixed == null ? '?' : fixed) + '일째']],
+      notice: (streak > 0)
+        ? [['2회', streak + '회'], ['32일째', (fixed == null ? '?' : fixed) + '일째']]
+        : [['체크인 2회 연속 진척 증감이 0%p인데', '체크인 진척 증감은 아직 멈추지 않았지만'],
+           ['32일째', (fixed == null ? '?' : fixed) + '일째']],
       ev: spec,
       th: { 'TH-진척정체-연속': streak + '회', 'TH-현재값고정-일수': (fixed == null ? '?' : fixed) + '일' }
     };
@@ -598,7 +601,8 @@
     var spec = {};
     spec[0] = { m: [['{{팀원명}}', w.emp.name], ['3회', w.recent.length + '회'], ['2회', w.blks.length + '회']],
                 emph: w.blks.length + '회', src: w.emp.emp_id + ' / ' + w.recent.map(function (c) { return c.checkin_id; }).join(', ') };
-    if (b1) spec[1] = { m: [['외부 API 연동 이슈로 일정 지연', b1], ['내부 의사결정 대기 중', b2]], emph: '「' + b2 + '」',
+    if (b1) spec[1] = { m: [['외부 API 연동 이슈로 일정 지연', b1], ['」과 「', '」' + josa(b1, '과', '와') + ' 「'],
+                             ['내부 의사결정 대기 중', b2], ['」이에요', '」' + josa(b2, '이에요', '예요')]], emph: '「' + b2 + '」',
                 src: w.blks.map(function (c) { return c.checkin_id; }).join(', ') + ' / 막힌 지점' };
     spec[2] = { m: [['70.3%', pn(coPct) + '%'], ['세 번', w.recent.length + '번'], ['두 번', w.blks.length + '번']],
                 emph: pn(coPct) + '%', src: '전사 체크인(캐노니컬) ' + CK.length + '건 집계' };
@@ -771,15 +775,17 @@
               ['핵심결과 2건의 진척이 각각 28%·22%예요',
                '핵심결과 1건의 진척이 ' + r0(lows[0].progress || 0) + '%예요']],
           emph: r0(lows[0].progress || 0) + '%', src: best.emp.emp_id + ' / ' + lows[0].kr_id };
-    spec[1] = { m: [['2026년 7월 30일', fmtDate(w.endDate)], ['14일 남았어요', leftKr]], emph: leftKr,
-                src: objs[0].objective_id + ' / 기간 ' + objs[0].period };
-    spec[2] = { m: [['30%', THlow + '%'], ['두 항목', lows.length + '개 항목']], emph: THlow + '%',
-                src: '핵심결과 진척률 기준값' };
+    spec[1] = { m: [['2026년 7월 30일', fmtDate(w.endDate)], ['까지 14일 남았어요', (daysLeft >= 0 ? '까지 ' : '이 ') + leftKr]],
+                emph: leftKr, src: objs[0].objective_id + ' / 기간 ' + objs[0].period };
+    spec[2] = { m: [['30%', THlow + '%'], ['두 항목 모두', lows.length === 1 ? '그 한 항목은' : (lows.length + '개 항목 모두')]],
+                emph: THlow + '%', src: '핵심결과 진척률 기준값' };
     if (d2 != null) spec[3] = { m: [['+2%p', signed(d1 == null ? d2 : d1) + '%p'], ['+1%p', signed(d2) + '%p']],
                 emph: signed(d2) + '%p', src: best.emp.emp_id + ' / 최근 체크인 증감' };
     return {
       hit: hit, facts: facts,
-      notice: [['14일', daysLeft + '일'], ['{{팀원명}}', best.emp.name], ['2건', lows.length + '건'], ['30%', THlow + '%']],
+      notice: [['목표 기간이 14일 남았는데',
+                daysLeft >= 0 ? ('목표 기간이 ' + daysLeft + '일 남았는데') : ('목표 기간이 ' + Math.abs(daysLeft) + '일 전에 끝났는데')],
+               ['{{팀원명}}', best.emp.name], ['2건', lows.length + '건'], ['30%', THlow + '%']],
       ev: spec,
       th: { 'TH-기간종료임박-도래': daysLeft + '일', 'TH-저진척-미달': r0(lows[0].progress || 0) + '%' }
     };
@@ -841,7 +847,8 @@
                 src: s.scopeOrg.org_id + ' / checkins(캐노니컬) ' + CK.length + '건' };
     return {
       hit: hit, facts: facts,
-      notice: [['3일', daysLeft + '일'], ['두 팀', bad.length + '개 팀'], ['20%', (worst ? worst.rate : TH) + '%']],
+      /* 「20% 아래」의 20%는 기준선이다 — 최저 팀의 실측(0%)을 넣으면 「0% 아래」가 된다 */
+      notice: [['3일', daysLeft + '일'], ['두 팀', bad.length + '개 팀'], ['20%', TH + '%']],
       ev: spec,
       th: { 'TH-마감임박-중간점검': daysLeft + '일', 'TH-팀체크인율-저조': (worst ? worst.rate : scopeRate) + '%' }
     };
@@ -950,7 +957,9 @@
                 src: s.srcOrg + ' / OBJ ' + unitObjN + '건 · 내 조직 OBJ ' + ownObjs.length + '건' };
     spec[1] = { m: [['18%p', pn(sub) + '%p'], ['2%p', pn(own) + '%p']], emph: pn(own) + '%p',
                 src: s.scopeOrg.org_id + ' / krProgress week ' + (mw - 3) + '~' + mw };
-    spec[2] = { m: [['15%p', TH1 + '%p'], ['5%p', TH2 + '%p']], emph: pn(sub) + '%p', src: '상하 진척 괴리 기준값 두 갈래' };
+    spec[2] = { m: [['15%p', TH1 + '%p'], ['를 넘었는데', sub >= TH1 ? '를 넘었는데' : '에 못 미쳤고'],
+                    ['5%p', TH2 + '%p'], ['에 못 미쳐요', own <= TH2 ? '에 못 미쳐요' : '를 넘어요']],
+                emph: pn(sub) + '%p', src: '상하 진척 괴리 기준값 두 갈래' };
     if (ratio != null) spec[3] = { m: [['2.4배', pn(ratio) + '배']], emph: pn(ratio) + '배',
                 src: s.scopeOrg.org_id + ' / krProgress week ' + (mw - 7) + '~' + mw };
     spec[4] = { m: [['두 차례', ownWeekN + '차례'], ['1%p', pn(Math.abs(ownWeekMax)) + '%p']], emph: pn(Math.abs(ownWeekMax)) + '%p',
@@ -958,6 +967,7 @@
     spec[5] = { m: [['3건', ownObjs.length + '건'], ['11건', ownKrs.length + '건'], ['4건', linkN + '건']], emph: linkN + '건',
                 src: '내 조직 OBJ ' + ownObjs.length + '건 / KR ' + ownKrs.length + '건' };
     if (tk) spec[6] = { m: [['제품 경쟁력·품질 강화', tk.name], ['핵심 기능 정시 출시율', tk.kpi.name],
+                            ['」은 목표', '」' + josa(tk.kpi.name, '은', '는') + ' 목표'],
                             ['90%', String(tk.kpi.target)], ['82%', String(tk.kpi.current)]],
                 emph: String(tk.kpi.current), src: tk.id + ' / KPI 1' };
     return {
@@ -1132,9 +1142,14 @@
     spec[3] = { m: [['68건', lowN + '건']], emph: lowN + '건',
                 calcm: [['68건', lowN + '건'], ['360건', CK.length + '건'], ['18.9%', pn(CK.length ? lowN / CK.length * 100 : 0) + '%']],
                 src: 'checkins(캐노니컬) ' + CK.length + '건 / confidence' };
-    spec[4] = { m: [['2%p', pn(w.d8) + '%p']], emph: pn(w.d8) + '%p',
+    var THd8 = thv(SID, 'TH-진척정체-증감합', 5);
+    spec[4] = { m: [['2%p', pn(w.d8) + '%p'],
+                    ['로 사실상 멈춰 있어요', Math.abs(w.d8) <= THd8 ? '로 사실상 멈춰 있어요' : '로 아직 움직이고 있어요']],
+                emph: pn(w.d8) + '%p',
                 src: w.org + ' / krProgress week ' + (mw - 7) + '~' + mw + ' (핵심결과 1건당)' };
-    if (tk) spec[5] = { m: [['제품 경쟁력·품질 강화', tk.name], ['90%', String(tk.kpi.target)], ['82%', String(tk.kpi.current)]],
+    if (tk) spec[5] = { m: [['제품 경쟁력·품질 강화', tk.name], ['정시 출시율', tk.kpi.name],
+                            ['90%와', String(tk.kpi.target) + josa(String(tk.kpi.target), '과', '와')],
+                            ['82%', String(tk.kpi.current)]],
                 emph: String(tk.kpi.current), src: tk.id + ' / kpis / ' + w.org + ' OBJ ' + w.objN + '건' };
     return {
       hit: hit, facts: facts,
@@ -1178,8 +1193,10 @@
     };
     var hit = bad.length >= thv(SID, 'TH-어긋난조직-건수', 3);
     var spec = {};
+    /* 기준을 넘은 조직이 0곳이면 「0곳에서」라고 쓸 수 없다 — 가장 벌어진 한 곳을 표본으로 밝힌다 */
+    var orgLabel = bad.length ? (bad.length + '곳') : '가장 벌어진 1곳';
     spec[0] = { ok: 1, src: 'objectives ' + C.objTotal + '건 / parent_objective_id' };
-    spec[1] = { m: [['세 조직', bad.length + '곳'], ['18%p', pn(sub) + '%p'], ['1%p', pn(own) + '%p']], emph: pn(own) + '%p',
+    spec[1] = { m: [['세 조직', orgLabel], ['18%p', pn(sub) + '%p'], ['1%p', pn(own) + '%p']], emph: pn(own) + '%p',
                 src: 'krProgress week ' + (mw - 3) + '~' + mw + ' / 조직 ' + pick.length + '곳' };
     spec[2] = { m: [['40건', C.objTotal + '건'], ['11.1%p', pn(C.wdiffAvg) + '%p']], emph: pn(C.wdiffAvg) + '%p',
                 src: 'objectives ' + C.objTotal + '건 / keyResults ' + arr('keyResults').length + '건' };
@@ -1189,7 +1206,7 @@
     spec[4] = { ok: 1, src: 'objectives / keyResults target_value' };
     return {
       hit: hit, facts: facts,
-      notice: [['세 조직', bad.length + '곳'], ['18%p', pn(sub) + '%p'], ['1%p', pn(own) + '%p']],
+      notice: [['세 조직', orgLabel], ['18%p', pn(sub) + '%p'], ['1%p', pn(own) + '%p']],
       ev: spec,
       th: { 'TH-하위진척상승-폭': pn(sub) + '%p', 'TH-상위진척정체-폭': pn(own) + '%p', 'TH-어긋난조직-건수': bad.length + '곳' }
     };
@@ -1274,7 +1291,7 @@
     spec[4] = { ok: 1, src: 'checkins(캐노니컬) / emp_id → orgs ' + orgN + '곳' };
     return {
       hit: hit, facts: facts,
-      notice: [['외부 연동 지연', cut(top.label, 13)], ['45건', top.n + '건']],
+      notice: [['외부 연동 지연', top.label], ['45건', top.n + '건']],
       ev: spec,
       th: { 'TH-장애요인반복-건수': top.n + '건', 'TH-장애요인확산-조직수': orgN + '곳' }
     };
