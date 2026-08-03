@@ -550,6 +550,31 @@ for k in krs:
         added += 1
 print('체크인 %d건 보강 → 총 %d건' % (added, len(cks)))
 
+# ================= 데모 표본 심기 — 대표 인물 기준으로 알림이 실제로 뜨게 =======
+# 엔진 subject() 는 currentUser._role 이 맞을 때만 그 사람을 쓰고, 아니면 역할 대표
+# 인물로 고정한다(ROLE_EMP). 역할 스위처도 그 4명으로 화면을 바꾸므로 **데모에서
+# 보이는 것은 이 4명 기준의 판정 결과**다. 판정 함수를 붙여도 이 4명의 데이터가
+# 조건을 만족하지 않으면 사람이 보는 것은 늘 「지금은 뜰 상태가 아니에요」다.
+# 그래서 각 단계·역할에서 알림이 최소 한 건은 뜨도록 결핍을 심는다.
+# 심는 것은 「없는 것을 있다고 하기」가 아니라 「있을 수 있는 상황을 하나 만들기」다.
+DEMO_ROLE = {'member': 'EMP-0078', 'leader': 'EMP-0030', 'hr': 'EMP-0005', 'exec': 'EMP-0001'}
+me = DEMO_ROLE['member']
+
+# ① 체크인 공백 — 이번 달 기록을 지난달로 물러 앉힌다
+#    (중간점검-구성원-01 마지막 기록 뒤 경과일 · 06 이번 달 기록 없음, 두 신호가 함께 켜진다)
+mine = [c for c in cks if c.get('emp_id') == me]
+moved = 0
+for c in mine:
+    if str(c.get('checkin_date', ''))[:7] == '2026-07':
+        c['checkin_date'] = dshift(c['checkin_date'], -21)
+        moved += 1
+
+# ② 마지막 두 회차는 확신도가 낮았다 (중간점검-구성원-09 확신도 낮음 연속)
+mine.sort(key=lambda c: c.get('checkin_date') or '')
+for c in mine[-2:]:
+    c['confidence'] = '낮음'
+print('데모 표본 — 구성원 대표 체크인 %d건을 지난달로, 마지막 2회 확신도 낮음' % moved)
+
 # ---------------------------------------------------------------- meta 표기
 COLLS = ['periods', 'objectiveHistory', 'krProgress', 'evaluatorMap', 'evalStatus',
          'selfEval', 'gradeHistory', 'policy', 'notifyLog', 'requestLog',
