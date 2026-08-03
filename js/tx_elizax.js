@@ -996,8 +996,11 @@
     return wrap;
   }
 
-  function openCatalog() {
+  /* focusId 를 주면 그 신호를 펼친 채로 연다 — 답변 말풍선의 「자세히」가 쓴다 (20-3차).
+     걸러 놓은 조건이 그 신호를 숨기면 펼칠 것이 없으므로 조건을 함께 푼다. */
+  function openCatalog(focusId) {
     closeCatalog();
+    if (focusId) catFilter = { stage: "", live: false, mine: false, q: "" };
     var role = roleKey();
     var rows = [];
     if (window.EZSignalChat && EZSignalChat.catalogQuestions) {
@@ -1038,7 +1041,7 @@
     var cap = h("div", "ezx-cat-cap");
     box.appendChild(cap);
     var bd = h("div", "ezx-cat-bd");
-    var openId = "";
+    var openId = focusId ? String(focusId) : "";
 
     function keep(r) {
       if (!r || !r.q) return false;
@@ -1719,6 +1722,71 @@
     return node;
   }
 
+  /* ---------------- 신호 답변 말풍선 (20-3차) ----------------
+     카탈로그가 만든 답을 모델을 거치지 않고 그대로 그린다. 순서가 뜻이다 —
+     ① 알림 문구(그 신호가 화면에 내보내는 한 문장) ② 그것을 받치는 근거 줄
+     ③ 견줘 본 기준값 ④ 그 자리에서 할 수 있는 일.
+     카드 크롬은 쓰지 않는다(18-2차 「전부 대화로」) — 말풍선 안의 글 계층뿐이다. */
+  function buildSigNode(m) {
+    var node = h("div", "ezx-msg ai");
+    var bubble = h("div", "ezx-bubble");
+    var b = null;
+    if (window.EZSignalChat && EZSignalChat.answerBlocks) {
+      try { b = EZSignalChat.answerBlocks(m.id, roleKey()); } catch (e) { b = null; }
+    }
+    if (!b) {
+      bubble.textContent = "이 알림을 불러오지 못했어요.";
+      node.appendChild(bubble);
+      m._node = node;
+      return node;
+    }
+    var wrap = h("div", "ezx-sig-ans");
+    if (b.off) wrap.appendChild(h("div", "sg-off", { text: b.off }));
+    if (b.lead) wrap.appendChild(h("div", "sg-lead", { text: b.lead }));
+    if (b.notice) wrap.appendChild(h("div", "sg-notice", { text: b.notice }));
+    if (b.asof) wrap.appendChild(h("div", "sg-asof", { text: "기준 시점 · " + b.asof }));
+
+    function lines(list, cls, tail) {
+      (list || []).forEach(function (t) {
+        wrap.appendChild(h("div", "sg-l " + cls, { text: t + (tail || "") }));
+      });
+    }
+    lines(b.sure, "");
+    lines(b.soft, "soft", " (추정)");
+    lines(b.demo, "demo");
+    lines(b.th, "th");
+    if (b.note) wrap.appendChild(h("div", "sg-note", { text: b.note }));
+
+    /* 할 수 있는 일 — 카탈로그 처리를 기존 배선(EZSignalAct)으로 그대로 태운다 */
+    var row = h("div", "sg-acts");
+    (b.actions || []).forEach(function (a) {
+      var btn = h("button", "sg-act", { type: "button", text: a.label });
+      btn.addEventListener("click", function () { runSigAction(b.id, a.idx); });
+      row.appendChild(btn);
+    });
+    var more = h("button", "sg-act ghost", { type: "button", text: "이 알림 자세히" });
+    more.addEventListener("click", function () { openCatalog(b.id); });
+    row.appendChild(more);
+    wrap.appendChild(row);
+
+    bubble.appendChild(wrap);
+    node.appendChild(bubble);
+    m._node = node;
+    return node;
+  }
+  /* 처리 실행 — 신호 인스턴스를 만들어 EZSignalAct.run 에 넘긴다.
+     모듈이 없으면 조용히 아무 것도 하지 않는다(가짜 성공을 만들지 않는다). */
+  function runSigAction(id, idx) {
+    var inst = null;
+    try { if (window.EZSignalEngine) inst = EZSignalEngine.instance(id, roleKey()); } catch (e) { inst = null; }
+    if (!inst || !(window.EZSignalAct && EZSignalAct.run)) {
+      pushMessage({ role: "sysline", text: "이 처리를 아직 연결하지 못했어요." });
+      renderMessages();
+      return;
+    }
+    try { EZSignalAct.run(inst, idx, ""); } catch (e2) { /* 배선 실패 — 화면은 그대로 */ }
+  }
+
   function buildMsgNode(m) {
     if (m.role === "work") {
       var wnode = h("div", "ezx-msg work ezx-work");
@@ -1740,6 +1808,7 @@
       m._node = lnode;
       return lnode;
     }
+    if (m.role === "sig") return buildSigNode(m);
     if (m.role === "nav") return buildNavNode(m);
     if (m.role === "navask") return buildNavAskNode(m);
     if (m.role === "scn") {
@@ -1964,7 +2033,15 @@
     if (window.EZSignalChat && EZSignalChat.contextFor) {
       try { sigCtx = String(EZSignalChat.contextFor(userText) || ""); } catch (e) { sigCtx = ""; }
     }
-    if (sigCtx) line += "\n" + sigCtx;
+    if (sigCtx) {
+      line += "\n" + sigCtx;
+      /* 20-3차 — 알림 문구·근거·기준값은 이미 화면에 그려서 사용자가 보고 있다.
+         모델이 같은 말을 다시 하면 같은 답이 두 번 뜬다. 이어지는 한두 문장만 받는다. */
+      line += "\n[이미 화면에 보여 준 것 — 다시 말하지 마세요]\n"
+        + "위 참고 자료의 상황 문구·근거 줄·기준값은 화면에 그대로 적혀 사용자가 보고 있습니다.\n"
+        + "그 내용을 되풀이하지 말고, 이어서 무엇부터 하면 좋은지만 한두 문장으로 말하세요.\n"
+        + "숫자를 다시 늘어놓지 않습니다. 사용자가 물으면 그때 자세히 답합니다.";
+    }
     return line + "\n" + userText;
   }
 
@@ -2067,11 +2144,22 @@
     pushMessage({ role: "user", text: userText });
     var picked = setSubjectByName(userText);
     if (picked) pushMessage({ role: "sysline", text: picked.name + "님 기준으로 볼게요." });
+
+    /* 20-3차 — 아는 신호를 부르는 말이면 카탈로그가 만든 답을 **먼저 그대로** 낸다.
+       예전에는 근거를 payload 에만 실어 보내서, 모델이 자기 문장으로 녹이면 카탈로그의
+       알림 문구가 화면에서 사라졌다. 이제 알림 문구·근거·기준값은 모델을 거치지 않고
+       화면에 남고, 모델은 그 뒤에 덧붙이는 말만 한다. */
+    var sigM = signalHit(userText);
+    var sigId = (sigM && sigM.id) ? String(sigM.id) : "";
+    if (sigId) pushMessage({ role: "sig", id: sigId, at: Date.now() });
     /* 실 에이전트 가능(연결+키+도구) → 라이브 카드(실 도구 호출 표시),
        그 외 라이브 → 기존 연출 카드, 오프라인 → 카드 없음 */
     var agentReady = !!(window.EZAI && EZAI.agent && EZAI.ready && EZAI.ready() && window.EZTools);
+    /* 신호 답변을 이미 냈으면 「확인 중」 연출 카드는 넣지 않는다 (20-3차) —
+       답이 먼저 떠 있는데 뒤에서 찾는 척하면 순서가 거짓말이 된다.
+       실제 도구를 호출하는 라이브 카드는 그대로 둔다(실행 내역이라 뒤에 와도 맞다). */
     var workMsg = agentReady ? pushMessage(makeLiveWorkMsg())
-      : (aiMode() !== "offline") ? pushMessage(makeWorkMsg(state.perspective)) : null;
+      : (aiMode() !== "offline" && !sigId) ? pushMessage(makeWorkMsg(state.perspective)) : null;
     /* _q = 원문 질문. 영수증 제목·What-if 가정 파싱이 완료 시점에 필요하다(SSE 경로 포함) */
     var aiMsg = { role: "ai", text: "", streaming: true, _work: workMsg, _q: userText };
     pushMessage(aiMsg);
@@ -2914,6 +3002,15 @@
      환경변수 이름·URL·상태코드·스택은 console.warn 으로만 남고 화면에 닿지 않는다. */
   var DEAD_END = "지금은 elizax가 회사 데이터에 연결되어 있지 않아 확인해 드리지 못했어요. 잠시 뒤 다시 물어봐 주세요.";
 
+  /* 이 턴에 그 신호의 답 말풍선을 이미 그렸는가 (20-3차) */
+  function sigShown(sid) {
+    var arr = msgs(), i, stop = Math.max(0, arr.length - 6);
+    for (i = arr.length - 1; i >= stop; i--) {
+      if (arr[i] && arr[i].role === "sig" && String(arr[i].id) === String(sid)) return true;
+    }
+    return false;
+  }
+
   /* 무엇으로 답할지만 정한다 — 화면에는 아직 쓰지 않는다 */
   function pickFallbackAnswer(aiMsg) {
     var q = aiMsg._q || "";
@@ -2922,6 +3019,11 @@
     /* ① 이 질문이 부른 신호의 답 */
     var hit = signalHit(q);
     var sid = hit && (hit.id || (hit.sig && hit.sig.id));
+    /* 20-3차 — 그 신호의 답(알림 문구·근거·기준값)이 이미 말풍선으로 떠 있으면
+       같은 말을 문장으로 다시 쓰지 않는다. 이어받을 한 줄만 남긴다. */
+    if (sid && sigShown(sid)) {
+      return { text: "위에 정리해 둔 내용부터 보시고, 고치고 싶은 곳이 있으면 말씀해 주세요.", note: "" };
+    }
     if (sid && window.EZSignalChat && EZSignalChat.answerText) {
       var t = "";
       try { t = String(EZSignalChat.answerText(sid, rk) || ""); } catch (e) { t = ""; }

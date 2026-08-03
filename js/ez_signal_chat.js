@@ -1002,6 +1002,69 @@
     return !!(sig && sig.now === 1 && inst.ready);
   }
 
+  /* ============ 6-4. 화면에 그대로 나가는 신호 답변 (20-3차) ============
+     여태 신호는 「보이지 않는 참고 자료」로만 모델에 실렸다. 그래서 모델이 자기
+     문장으로 녹여 버리면 카탈로그의 알림 문구가 화면에서 사라졌다 —
+     「질문을 넣었는데 그 알림이 안 보인다」는 말이 그것이다.
+     이 함수는 모델을 거치지 않고 카탈로그·엔진 값만으로 답의 뼈대를 만든다.
+     화면(tx_elizax)이 이것을 말풍선으로 그리고, 모델은 그 뒤에 덧붙이는 말만 한다.
+
+     세 갈래를 반드시 가른다 — 셋을 섞으면 없는 문제를 있다고 말하게 된다.
+       ① 실계산 + 참  → 알림 문구를 실측 그대로 (`notice`)
+       ② 실계산 + 거짓 → 「지금은 뜰 상태가 아니에요」 + 언제 뜨는 알림인지
+       ③ 실계산 못 함  → 예시라고 밝히고, 먼저 남아야 하는 기록을 말한다        */
+  var EDIT_TAIL = /\s*\([^)]*(?:할 수 있어요|가능)\)\s*$/;
+  function answerBlocks(x, role) {
+    var inst = instOf(x);
+    if (!inst) return null;
+    var sig = inst.sig || inst, rk = roleKey(role);
+    var live = isLive(inst), hit = !!inst.hit;
+    var ev = live ? pickEvidence(inst) : { sure: [], soft: [] };
+    var out = {
+      id: sig.id, live: live, hit: hit, stage: sig.stage, actor: sig.actor,
+      lead: '', notice: '', asof: live ? S(inst.asof) : '',
+      sure: ev.sure, soft: ev.soft,
+      th: live ? thresholdLines(inst) : [],
+      demo: [],   /* 실계산 못 하는 신호의 「예시 근거」 — 실측과 절대 섞지 않는다 */
+      note: '', off: offRoleLine(sig, rk) || '', actions: []
+    };
+    if (live && hit) {
+      out.notice = scrub(inst.notice);
+    } else if (live) {
+      out.notice = '지금은 이 알림이 뜰 상태가 아니에요.';
+      out.note = '이 알림이 뜨는 때 : ' + phrase(sig.principle);
+    } else {
+      out.lead = '아직 회사 기록으로 실제 수를 세지 못하는 알림이라, 아래 문구의 숫자는 예시예요.';
+      out.notice = phrase(inst.notice || sig.notice);
+      var miss = missingThing(sig);
+      out.note = miss ? '먼저 남아야 하는 기록 : ' + cut(miss, 90) : (watchLine(sig, '') || '');
+      /* 뒷받침이 아예 없으면 알림 문구만 떠서 근거 없는 단정처럼 읽힌다.
+         카탈로그가 적어 둔 근거 줄을 「예시」로 밝혀 두 줄까지 보인다 (실측이 아니다). */
+      var cev = (sig.evidence || []), basic = [], rest = [];
+      for (var ci = 0; ci < cev.length; ci++) {
+        var ct = phrase(cev[ci].text);
+        if (!ct) continue;
+        (cev[ci].show === '기본' ? basic : rest).push(ct);
+      }
+      out.demo = basic.concat(rest).slice(0, 2);
+    }
+    /* 처리 단추 — 참일 때만 쓰는 처리를 내놓는다. 그 밖에는 보기만 하는 처리 하나.
+       `idx` 는 `sig.actions` 원본 자리번호다(EZSignalAct.run 이 그 번호로 찾는다). */
+    var acts = (sig.actions || []).map(function (a, i) { return { a: a, i: i }; });
+    acts.sort(function (p, q) { return (p.a.rank || 9) - (q.a.rank || 9); });
+    var pick = [];
+    if (live && hit) pick = acts.slice(0, 2);
+    else {
+      for (var k = 0; k < acts.length; k++) if (acts[k].a.type === 'A5') { pick = [acts[k]]; break; }
+    }
+    for (var j = 0; j < pick.length; j++) {
+      var nm = scrub(S(pick[j].a.label).replace(EDIT_TAIL, ''));
+      if (!nm) continue;
+      out.actions.push({ idx: pick[j].i, label: cut(nm, 28) });
+    }
+    return out;
+  }
+
   /* ===================== 7. 근거 블록 (보이지 않게 실린다) ===================== */
 
   /* 답변 방식 규칙 (R4) — 그대로 프롬프트에 붙는다 */
@@ -1062,9 +1125,9 @@
       var nm = scrub(th[i].name);
       if (!nm) continue;
       if (th[i].actual != null) {
-        out.push(nm + ' — 회사가 보는 잠정 기준 ' + scrub(th[i].value) + ', 지금 측정값 ' + scrub(th[i].actual));
+        out.push(nm + ' : 회사가 보는 잠정 기준 ' + scrub(th[i].value) + ', 지금 측정값 ' + scrub(th[i].actual));
       } else {
-        out.push(nm + ' — 회사 기준이 아직 확정되지 않아 잠정으로 ' + scrub(th[i].value) + '로 봤어요');
+        out.push(nm + ' : 회사 기준이 아직 확정되지 않아 잠정으로 ' + scrub(th[i].value) + '로 봤어요');
       }
     }
     return out;
@@ -1275,6 +1338,7 @@
     catalogQuestions: catalogQuestions,
     ask: ask,
     contextFor: contextFor,
+    answerBlocks: answerBlocks,   /* 화면이 그대로 그리는 신호 답변 (20-3차) */
     answerText: answerText,
     chips: chips,
     topic: topic,
