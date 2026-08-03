@@ -130,6 +130,14 @@
   }
 
   /* 카탈로그 처리 코드 → 1~6 숫자. 코드 문자열을 화면·분기 어디에도 남기지 않는다. */
+  /* 실계산 가능 여부는 엔진에게 묻는다 — 카탈로그 `now` 는 설계 시점 판단이다 (20-4차) */
+  function canEval(sig) {
+    var id = (sig && (sig.id || (sig.sig && sig.sig.id))) || '';
+    try {
+      if (window.EZSignalEngine && EZSignalEngine.hasEval) return !!EZSignalEngine.hasEval(id);
+    } catch (e) { /* 구버전 엔진 */ }
+    return !!(sig && sig.now === 1);
+  }
   function actNo(act) {
     var n = parseInt(String((act && act.type) || "").replace(/[^0-9]/g, ""), 10);
     return isNaN(n) ? 0 : n;
@@ -1595,7 +1603,7 @@
     var rc = reach(inst, idx);
     return {
       no: actNo(act), cls: cls, s: scr.s, p: scr.p, how: how,
-      live: sig.now === 1, reachable: rc.ok, why: rc.why
+      live: canEval(sig), reachable: rc.ok, why: rc.why
     };
   }
 
@@ -1616,7 +1624,7 @@
       return { ok: false, chat: false, why: "이건 아직 화면에서 처리할 방법이 없어요. 여기서 같이 정리해 볼게요." };
     }
     /* 라이브가 아닌 신호로 화면을 열어 주면 빈 화면에 데려다 놓는 셈이 된다 */
-    if (sig.now !== 1 && n !== 5) {
+    if (!canEval(sig) && n !== 5) {
       return { ok: false, chat: false, why: "이건 데이터가 더 모여야 화면에서 고칠 수 있어요. 지금은 여기서 내용만 볼 수 있어요." };
     }
     /* 피드백을 새로 쓰거나 고치는 자리가 이 화면에는 없다(카드·상세만 있다) */
@@ -1711,7 +1719,7 @@
       return null;
     }
     /* 라이브 신호가 아니면 화면 열기만 — 거짓 작동을 만들지 않는다 */
-    if (sig.now !== 1 && actNo(act) !== 5) {
+    if (!canEval(sig) && actNo(act) !== 5) {
       toast("이 알림은 데이터가 더 모여야 처리할 수 있어요. 지금은 내용만 볼 수 있어요.", "warn");
       return null;
     }

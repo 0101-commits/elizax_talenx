@@ -46,9 +46,11 @@ global.localStorage = {
 
 var path = require('path');
 var JS = path.join(__dirname, '..', 'js');
-['talenx_data.js', 'ez_kit.js', 'ez_signals.js', 'ez_signal_engine.js'].forEach(function (f) {
-  require(path.join(JS, f));
-});
+['talenx_data.js', 'ez_kit.js', 'ez_signals.js', 'ez_signal_engine.js',
+ 'ez_signal_eval2.js', 'ez_signal_eval3.js', 'ez_signal_eval4.js', 'ez_signal_eval5.js']
+  .forEach(function (f) {
+    try { require(path.join(JS, f)); } catch (e) { /* 아직 없는 판정 파일은 건너뛴다 */ }
+  });
 
 var cat = window.EZSignalCatalog;
 var E = window.EZSignalEngine;
@@ -57,7 +59,10 @@ if (!cat || !E || !E.evaluate || !E.flush) {
   process.exit(1);
 }
 
-var live = cat.signals.filter(function (s) { return s.now === 1; });
+/* 대상 = 엔진이 실제로 셀 수 있는 신호 (카탈로그 `now` 가 아니다 — 20-4차) */
+var live = cat.signals.filter(function (s) {
+  return E.hasEval ? E.hasEval(s.id) : s.now === 1;
+});
 
 function num(v) { var m = /(-?\d+(\.\d+)?)/.exec(String(v == null ? '' : v)); return m ? parseFloat(m[1]) : null; }
 /* 값의 단위(%·건·일·%p·곳·개·회)는 지키고 수만 바꾼다 */

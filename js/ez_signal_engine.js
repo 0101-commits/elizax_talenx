@@ -1216,7 +1216,7 @@
     var rk = roleKey(role);
     var out = [];
     forRole(rk).forEach(function (s) {
-      if (s.now !== 1) return;
+      if (!EVAL[s.id]) return;         /* 실계산되는 것만 — 카탈로그 `now` 는 보지 않는다 (20-4차) */
       var inst = instance(s.id, rk);
       if (inst && inst.hit) out.push(inst);
     });

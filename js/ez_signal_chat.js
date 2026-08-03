@@ -700,6 +700,13 @@
   }
 
   /* 카탈로그 뒤지기 — 라이브가 아니어도 신호 원본은 늘 찾을 수 있다 */
+  /* 실계산 가능 여부 — 엔진이 판정 함수를 갖고 있는가 (20-4차) */
+  function canEval(id) {
+    var e = ENG();
+    try { if (e && e.hasEval) return !!e.hasEval(id); } catch (e0) { /* 구버전 */ }
+    var s = sigById(id);
+    return !!(s && s.now === 1);
+  }
   function allSignals() {
     var e = ENG(), cat = e && e.catalog && e.catalog();
     return (cat && cat.signals) ? cat.signals : [];
@@ -889,7 +896,7 @@
     if (!best) return null;
     return {
       id: best.id, sig: best, inst: instOfSig(best.id, rk),
-      score: bestSc, live: best.now === 1, mine: inRole(best, rk)
+      score: bestSc, live: canEval(best.id), mine: inRole(best, rk)
     };
   }
 
@@ -900,7 +907,7 @@
     for (i = 0; i < list.length; i++) {
       sig = list[i];
       rows.push({
-        id: sig.id, q: questionFor(sig.id), live: sig.now === 1,
+        id: sig.id, q: questionFor(sig.id), live: canEval(sig.id),
         mine: inRole(sig, rk), stage: sig.stage, actor: sig.actor,
         stageNo: sig.stageNo || 0, actorNo: sig.actorNo || 0, no: sig.no || 0
       });
@@ -934,12 +941,12 @@
     var mine = [], list = allSignals();
     for (i = 0; i < list.length; i++) if (inRole(list[i], rk)) mine.push(list[i]);
     mine.sort(function (x, y) {
-      if ((x.now === 1) !== (y.now === 1)) return (x.now === 1) ? -1 : 1;
+      if (canEval(x.id) !== canEval(y.id)) return canEval(x.id) ? -1 : 1;
       if (helpOf(x) !== helpOf(y)) return helpOf(y) - helpOf(x);
       if ((x.stageNo || 0) !== (y.stageNo || 0)) return (x.stageNo || 0) - (y.stageNo || 0);
       return (x.no || 0) - (y.no || 0);
     });
-    for (i = 0; i < mine.length && out.length < 6; i++) take(mine[i].id, mine[i].now === 1);
+    for (i = 0; i < mine.length && out.length < 6; i++) take(mine[i].id, canEval(mine[i].id));
     return out;
   }
 

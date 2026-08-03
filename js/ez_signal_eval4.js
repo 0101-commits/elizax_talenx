@@ -300,15 +300,23 @@
     var TH = thv(SID, 'TH-등급변경-사유공백', 1);
     var hit = noReason.length >= TH;
     var facts = { ghN: gh.length, noReasonN: noReason.length, scopeTopPct: scopeTopPct };
+    /* 원문 "바뀐 2건 모두 ~ 비어 있어요"는 noReason===gh 일 때만 성립하는 문장이라
+       건수가 어긋나면(0건·일부만) 문장 자체를 실제 상태로 다시 쓴다 */
+    var origPhrase = '제출 뒤 등급이 바뀐 2건 모두 변경 사유 기록이 비어 있어요';
+    var phrase;
+    if (!gh.length) phrase = '변경 이력이 없어 등급 변경 사유를 확인할 대상이 없어요';
+    else if (noReason.length === gh.length) phrase = '제출 뒤 등급이 바뀐 ' + gh.length + '건 모두 변경 사유 기록이 비어 있어요';
+    else if (!noReason.length) phrase = '제출 뒤 등급이 바뀐 ' + gh.length + '건 모두 변경 사유가 채워져 있어요';
+    else phrase = '제출 뒤 등급이 바뀐 ' + gh.length + '건 중 ' + noReason.length + '건은 변경 사유 기록이 비어 있어요';
     var spec = {};
     spec[0] = { m: [['1차 평가자 한 명이 제출한 평가 11건', s.scopeOrg.org_id + ' 범위의 평가 변경 ' + gh.length + '건']],
                 emph: gh.length + '건', src: s.srcOrgIncl + ' / gradeHistory ' + gh.length + '건' };
-    spec[1] = { m: [['2건', noReason.length + '건']], emph: noReason.length + '건',
+    spec[1] = { m: [[origPhrase, phrase]], emph: noReason.length + '건',
                 src: s.scopeOrg.org_id + ' / gradeHistory 사유 공백 ' + noReason.length + '건' };
     spec[3] = { m: [['82%', scopeTopPct + '%']], emph: scopeTopPct + '%', src: s.scopeOrg.org_id + ' / evaluations 등급' };
     return {
       hit: hit, facts: facts,
-      notice: [['2건', noReason.length + '건'], ['모두', (noReason.length === gh.length && gh.length > 0) ? '모두' : (noReason.length + '건이')]],
+      notice: [[origPhrase, phrase]],
       ev: spec,
       th: { 'TH-등급변경-사유공백': noReason.length + '건' }
     };

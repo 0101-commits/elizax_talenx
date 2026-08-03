@@ -914,6 +914,14 @@
   var catFilter = { stage: "", live: false, mine: false, q: "" };
   var CAT_STAGE_CHIPS = [["", "전체"], ["목표수립", "목표수립"], ["중간점검", "중간점검"],
     ["평가", "평가"], ["피드백", "피드백"]];
+  /* 실계산 가능 여부는 카탈로그 `now`(설계 시점 판단)가 아니라 엔진에게 묻는다 (20-4차) */
+  function canEval(id) {
+    try {
+      if (window.EZSignalEngine && EZSignalEngine.hasEval) return !!EZSignalEngine.hasEval(id);
+    } catch (e) { /* 구버전 엔진 */ }
+    var s = catSig(id);
+    return !!(s && s.now === 1);
+  }
   function catSig(id) {
     var cat = window.EZSignalCatalog;
     var list = (cat && cat.signals) || [];
@@ -947,7 +955,7 @@
     [sig.stage,
       sig.actor === "HR경영진" ? "HR·경영진" : (sig.actor === "상위조직장" ? "상위 조직장" : sig.actor),
       sig.level,
-      sig.now === 1 ? "지금 확인 가능" : "기록이 더 쌓여야 확인 가능"
+      canEval(sig.id) ? "지금 확인 가능" : "기록이 더 쌓여야 확인 가능"
     ].forEach(function (t) { if (t) meta.appendChild(h("span", "ezx-cd-chip", { text: String(t) })); });
     wrap.appendChild(meta);
 
@@ -977,7 +985,7 @@
       m.clear ? "그만 보내는 때 : " + m.clear : ""
     ]);
 
-    if (sig.now !== 1) {
+    if (!canEval(sig.id)) {
       catBlock(wrap, "켜기 전에 남은 일", [
         sig.todoDecide ? "사람이 정할 것 : " + catClean(sig.todoDecide) : "",
         sig.todoCreate ? "새로 만들 기록 : " + catClean(sig.todoCreate) : "",
@@ -992,7 +1000,7 @@
     });
     wrap.appendChild(go);
     wrap.appendChild(h("div", "ezx-cd-note", {
-      text: sig.now === 1
+      text: canEval(sig.id)
         ? "지금 이 질문을 보내면 실제 기록으로 센 답이 옵니다."
         : "지금 보내면 예시 숫자로 답합니다. 무엇이 없어서 못 셌는지도 같이 말해 줍니다."
     }));
