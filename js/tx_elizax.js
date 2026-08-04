@@ -3517,50 +3517,36 @@
   function rcSrcOf(name) {
     return (window.EZTools && EZTools.srcOf) ? EZTools.srcOf(name) : "talenx";
   }
-  /* 도구 결과 → 메트릭 행. 결과에 실제로 있는 값만 쓴다(없으면 행을 만들지 않는다). */
+  /* 도구 결과 → 메트릭 행. 결과에 실제로 있는 값만 쓴다(없으면 행을 만들지 않는다).
+     ------------------------------------------------------------------
+     20-6차 — 타일은 「그 답의 결론이 되는 수」만 올린다.
+     머릿수·모집단 크기·총건수(팀원 N명 · 인원 N명 · 성과 기록 N건 · 전략 테마 N건 …)
+     는 질문에 답하지 않으면서 자리를 차지하고, 옆의 규칙 영수증이 말하는 수와
+     달라 보여 답이 갈라진 것처럼 읽혔다. 조회한 범위를 밝히는 일은 영수증의
+     「대상 범위」 줄이 이미 한다 — 타일이 한 번 더 할 일이 아니다.
+     남기는 것 = 등급·점수·평균 진척·마지막 기록일·시뮬 결과·검색 적중 수. */
   function rcMetricsOf(name, res) {
     var out = [];
     if (!res || typeof res !== "object" || res.error || res.blocked) return out;
-    var i, s, n, o;
+    var i, s, n;
     if (name === "get_objectives") {
       var objs = res.objectives || [];
-      out.push({ k: "담당 목표", v: (res.count != null ? res.count : objs.length) + "건" });
       s = 0; n = 0;
       for (i = 0; i < objs.length; i++) { if (rcNum(objs[i].progress) != null) { s += objs[i].progress; n++; } }
       if (n) out.push({ k: "평균 진척", v: (Math.round(s / n * 10) / 10) + "%" });
     } else if (name === "get_checkins") {
       var cs = res.checkins || [];
-      out.push({ k: "체크인", v: (res.count != null ? res.count : cs.length) + "건" });
-      if (cs.length && cs[0].date) out.push({ k: "마지막", v: String(cs[0].date) });
+      if (cs.length && cs[0].date) out.push({ k: "마지막 기록", v: String(cs[0].date) });
     } else if (name === "get_employee_profile") {
       var ev = res.evaluation;
       if (ev && ev.grade != null) out.push({ k: "등급", v: String(ev.grade) });
       if (ev && rcNum(ev.weighted_score) != null) out.push({ k: "종합 점수", v: ev.weighted_score + "/100" });
       if (ev && ev.period) out.push({ k: "기간", v: String(ev.period) });
     } else if (name === "get_team_status") {
-      /* 「팀원 N명」 타일은 폐지 — 머릿수는 어떤 질문에도 답하지 않는다(20-6차) */
       var mem = res.members || [];
       s = 0; n = 0;
       for (i = 0; i < mem.length; i++) { if (rcNum(mem[i].avg_progress) != null) { s += mem[i].avg_progress; n++; } }
       if (n) out.push({ k: "평균 진척", v: (Math.round(s / n * 10) / 10) + "%" });
-    } else if (name === "get_org_overview") {
-      if (res.employees != null) out.push({ k: "인원", v: res.employees + "명" });
-      var d = res.grade_distribution || {}, tot = 0, top = 0;
-      for (var g in d) { if (Object.prototype.hasOwnProperty.call(d, g)) { tot += d[g]; if (g === "S" || g === "A") top += d[g]; } }
-      if (tot) out.push({ k: "상위등급(S+A)", v: (Math.round(top * 1000 / tot) / 10) + "%" });
-    } else if (name === "get_job_profile") {
-      o = res.profile || {};
-      if ((o.task_areas || []).length) out.push({ k: "과업 영역", v: o.task_areas.length + "개" });
-      if ((o.competency_profile || []).length) out.push({ k: "기준 역량", v: o.competency_profile.length + "종" });
-      if ((o.skills || []).length) out.push({ k: "기대 스킬", v: o.skills.length + "종" });
-    } else if (name === "get_context_ledger") {
-      if (res.count != null) out.push({ k: "성과 기록", v: res.count + "건" });
-    } else if (name === "get_upward_feedback") {
-      if (res.count != null) out.push({ k: "상향 피드백", v: res.count + "건" });
-    } else if (name === "get_org_objectives") {
-      if (res.count != null) out.push({ k: "상위 목표 후보", v: res.count + "건" });
-    } else if (name === "get_strategy_themes") {
-      if (res.count != null) out.push({ k: "전략 테마", v: res.count + "건" });
     } else if (name === "get_prev_cycle") {
       if (res.first_cycle) out.push({ k: "이전 사이클", v: "없음" });
       else if (res.prev_evaluation && res.prev_evaluation.grade != null) out.push({ k: "직전 등급", v: String(res.prev_evaluation.grade) });
