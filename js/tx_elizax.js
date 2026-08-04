@@ -1331,7 +1331,9 @@
     if (m.done) {
       html = '<button type="button" class="ezx-work-hd done" aria-expanded="' + (m.collapsed ? "false" : "true") + '">' +
         '<span class="ezx-work-ar">' + (m.collapsed ? "▸" : "▾") + "</span>" +
-        "<span>확인 끝 · " + esc(secText(elapsed)) + " · 근거 " + doneN + "건</span></button>";
+        /* 도구를 한 번도 안 부른 답에 「근거 0건」이라고 적으면, 바로 아래 규칙
+           영수증에 근거가 여러 줄 보이는 것과 싸운다. 그럴 때는 건수를 뺀다. */
+        "<span>확인 끝 · " + esc(secText(elapsed)) + (doneN ? " · 근거 " + doneN + "건" : "") + "</span></button>";
     } else {
       html = '<div class="ezx-work-hd">' +
         '<span class="ezx-work-mk">✦</span><span>elizax가 확인하는 중</span>' +
