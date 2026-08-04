@@ -2668,9 +2668,7 @@
       receipt: offRc({
         title: sname + " · 목표 진척",
         metrics: [
-          { k: "담당 목표", v: objs.length + "건" },
-          { k: "평균 진척", v: avg + "%" },
-          { k: "KR", v: krCount + "개" }
+          { k: "평균 진척", v: avg + "%" }
         ],
         srcs: [offSrc("talenx", "talenx 목표·KR"), offSrc("erp", "체크인 진척 스냅샷")],
         whatif: { emp_id: sid, name: sname }
@@ -2698,8 +2696,7 @@
       receipt: offRc({
         title: sname + " · 체크인 기록",
         metrics: [
-          { k: "최근 체크인", v: cs.length + "건" },
-          { k: "마지막", v: cs[0].date || "-" },
+          { k: "마지막 기록", v: cs[0].date || "-" },
           { k: "장애요인", v: blockers.length + "건" }
         ],
         srcs: [offSrc("erp", "체크인 원장"), offSrc("talenx", "talenx KR 연결")]
@@ -2767,7 +2764,6 @@
       receipt: offRc({
         title: "팀 현황",
         metrics: [
-          { k: "팀원", v: rows.length + "명" },
           { k: "평균 진척", v: (avg == null ? "-" : avg + "%") },
           { k: "장애요인", v: blk.length + "명" }
         ],
@@ -2802,9 +2798,7 @@
       receipt: offRc({
         title: "전사 성과 조망",
         metrics: [
-          { k: "인원", v: r.employees + "명" },
-          { k: "상위등급(S+A)", v: topPct + "%" },
-          { k: "전사 목표", v: cobj.length + "건" }
+          { k: "상위등급(S+A)", v: topPct + "%" }
         ],
         srcs: [offSrc("talenx", "전사 평가기록"), offSrc("rule", "강제배분 상한 30%"), offSrc("erp", "사업 실적")],
         whatif: { cap_pct: 30 }
@@ -2827,7 +2821,6 @@
           text: md0,
           receipt: offRc({
             title: "상향 피드백",
-            metrics: [{ k: "기록", v: uf.items.length + "건" }],
             srcs: [offSrc("talenx", "상향 피드백"), offSrc("rule", "응답자 보호 정책 v3.1")]
           })
         };
@@ -2845,7 +2838,6 @@
       text: md,
       receipt: offRc({
         title: sname + " · 피드백 이력",
-        metrics: [{ k: "피드백", v: fb.length + "건" }],
         srcs: [offSrc("talenx", "피드백 이력")]
       })
     };
@@ -2869,7 +2861,6 @@
       text: md,
       receipt: offRc({
         title: "1:1 기록",
-        metrics: [{ k: "기록", v: list.length + "건" }],
         srcs: [offSrc("talenx", "성과 기록 원장")]
       })
     };
@@ -2901,11 +2892,6 @@
       text: md,
       receipt: offRc({
         title: sname + " · 직무 기준",
-        metrics: [
-          { k: "과업 영역", v: areas.length + "개" },
-          { k: "기준 역량", v: comps.length + "종" },
-          { k: "기대 스킬", v: (p.skills || []).length + "종" }
-        ],
         srcs: [offSrc("talenx", "직무 프로파일 " + (p.job_id || "")), offSrc("rule", "역량 사전")]
       })
     };
@@ -3010,7 +2996,6 @@
       receipt: offRc({
         title: (r.scope || "조직") + " · 연차 집계",
         metrics: [
-          { k: "대상", v: r.headcount + "명" },
           { k: "평균 잔여", v: dayNum(r.avg_remaining_days) },
           { k: "촉진 대상", v: r.promotion_target_count + "명" }
         ],
@@ -3045,8 +3030,7 @@
         title: sname + " · 근태 " + (c.period || ""),
         metrics: [
           { k: "근무 / 소정", v: dayNum(c.actual_days) + " / " + dayNum(c.work_days) },
-          { k: "초과근로", v: hourNum(c.overtime_hours) },
-          { k: "일별 기록", v: ((r.daily || []).length) + "일" }
+          { k: "초과근로", v: hourNum(c.overtime_hours) }
         ],
         srcs: [offSrc("erp", "근태 원장 " + (c.period || "")),
           offSrc("rule", "판정 기준 — 초과근로 월 52시간(주 12시간 환산)")]
@@ -3065,7 +3049,6 @@
       receipt: offRc({
         title: (r.scope || "조직") + " · 근태 집계 " + (r.period || ""),
         metrics: [
-          { k: "대상", v: r.headcount + "명" },
           { k: "평균 초과근로", v: hourNum(r.avg_overtime_hours) },
           { k: "상한 도달", v: r.over_limit_count + "명" }
         ],
