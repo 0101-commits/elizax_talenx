@@ -360,14 +360,22 @@
     var spec = {};
     spec[0] = { m: [['221명', empTotal + '명'], ['38개', orgTotal + '개']], emph: empTotal + '명', src: 'EMP 전수 ' + empTotal + '명 / ORG 전수 ' + orgTotal + '개' };
     spec[1] = { m: [['221명', empTotal + '명'], ['147명', withCkN + '명']], emph: withCkN + '명', src: 'CHK(캐노니컬) ' + canon.length + '건' };
-    spec[2] = { m: [['74명', (empTotal - withCkN) + '명']], emph: (empTotal - withCkN) + '명', src: 'CHK(캐노니컬) ' + canon.length + '건 / EMP 전수 ' + empTotal + '명' };
+    /* 건수·인당 건수도 실측으로 — 예시값 「360건 · 1.63건」이 남아 실제 건수와 싸웠다 */
+    var perPerson = empTotal ? r1(canon.length / empTotal) : 0;
+    spec[2] = { m: [['360건', canon.length + '건'], ['1.63건', perPerson + '건'],
+                    ['74명', (empTotal - withCkN) + '명']],
+                emph: (empTotal - withCkN) + '명', src: 'CHK(캐노니컬) ' + canon.length + '건 / EMP 전수 ' + empTotal + '명' };
     /* 예시 문장은 경과율 100%(기간 종료)를 전제한 「이미 다 지나」다 — 아직 안 끝난
        기간이면 그 구절째 바꿔야 경과율 실측과 어긋나지 않는다 */
     var elapsedPair = (elapsed != null && elapsed < 100)
       ? ['이미 다 지나 기간 경과율 100%', '기간 경과율 ' + elapsed + '%']
       : ['100%', elapsed + '%'];
     if (elapsed != null) spec[3] = { m: [['2026년 2분기(4~6월)', per.label], elapsedPair, ['33.5%p', Math.abs(gap) + '%p']], emph: Math.abs(gap) + '%p', src: per.period_id };
-    return { hit: hit, facts: facts, notice: [['66.5%', pn(participRate) + '%']], ev: spec, th: { 'TH-체크인참여율-기간대비격차': (gap == null ? null : pn(gap) + '%p'), 'TH-체크인0건조직-건수': zeroOrgN + '곳' } };
+    /* 알림 문구도 경과율에 맞춘다 — 96%인데 「다 지났는데」라고 말하면 근거 줄과 어긋난다 */
+    var noticePairs = [];
+    if (elapsed != null && elapsed < 100) noticePairs.push(['다 지났는데', '거의 다 지났는데']);
+    noticePairs.push(['66.5%', pn(participRate) + '%']);
+    return { hit: hit, facts: facts, notice: noticePairs, ev: spec, th: { 'TH-체크인참여율-기간대비격차': (gap == null ? null : pn(gap) + '%p'), 'TH-체크인0건조직-건수': zeroOrgN + '곳' } };
   });
 
   /* --- 중간점검-HR경영진-06 : 전사 확신도 낮음 비중 ----------------------- */
