@@ -366,6 +366,24 @@
     return s;
   }
 
+  /* 초안·Agent 안내 치환 — 근거 줄과 달리 같은 낱말이 여러 문장에 흩어져 있어
+     커서를 두지 않고 나오는 자리마다 바꾼다. 카탈로그 예시 낱말은 구분되게 골라 둔다. */
+  function substAll(text, pairs) {
+    var s = String(text == null ? '' : text), i, from, to, at;
+    if (!pairs) return s;
+    for (i = 0; i < pairs.length; i++) {
+      from = pairs[i][0];
+      if (from == null || from === '') continue;
+      to = String(pairs[i][1] == null ? '' : pairs[i][1]);
+      at = s.indexOf(from);
+      while (at >= 0) {
+        s = s.slice(0, at) + to + s.slice(at + from.length);
+        at = s.indexOf(from, at + to.length);
+      }
+    }
+    return s;
+  }
+
   /* 근거 줄 조립 — spec[i] 가 없으면 계산 못 한 줄이므로 assumed:1 로 남긴다 */
   function buildEvidence(sig, spec) {
     var src = sig.evidence || [], out = [], A = asof(), i;
@@ -378,6 +396,7 @@
         r.assumed = s.assumed ? 1 : 0;
       } else if (s && s.ok) {
         r.assumed = s.assumed ? 1 : (e.assumed ? 1 : 0);
+        if (s.emph != null) r.emph = String(s.emph);   /* text 를 통째로 갈아끼운 줄의 강조 자리 */
       } else {
         r.assumed = 1;                   /* 카탈로그 예시값 그대로 → 화면에 (추정) */
       }
@@ -1168,6 +1187,7 @@
           hit: !!r.hit, ready: true, facts: r.facts || {},
           notice: subst(sig.notice, r.notice),
           evidence: buildEvidence(sig, r.ev), thresholds: buildThresholds(sig, r.th),
+          dr: r.dr || null,
           asof: A
         };
       }
@@ -1190,6 +1210,15 @@
     inst.hit = ev.hit;
     inst.ready = ev.ready;
     inst.asof = ev.asof;
+    /* 초안·안내도 실측으로 — 근거 줄만 갈아끼우고 초안은 예시값이던 어긋남을 없앤다 */
+    if (ev.dr) {
+      inst.actions = (sig.actions || []).map(function (a) {
+        var b = copy(a);
+        if (b.draft) b.draft = substAll(b.draft, ev.dr);
+        return b;
+      });
+      if (sig.agent) inst.agent = substAll(sig.agent, ev.dr);
+    }
     inst.role = roleKey(role);
     inst.scopeLabel = (sig.actor === '상위조직장') ? '상위 조직 관점' : '';
     inst.evBasic = ev.evidence.filter(function (e) { return e.show === '기본'; });

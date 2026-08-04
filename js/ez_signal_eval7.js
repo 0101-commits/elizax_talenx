@@ -875,7 +875,9 @@
                pct: krs.length ? r0(stale.length / krs.length * 100) : null };
     }).filter(function (r) { return r.krN > 0; });
     if (!rows.length) return NONE;
-    rows.sort(function (a, b) { return b.pct - a.pct || b.staleN - a.staleN; });
+    /* 순위는 「오래 멈춘 순서」다 — 팀 핵심결과가 4건뿐이라 비율은 100%에서 겹쳐
+       아무것도 가르지 못한다. 질문(「오래 멈춘 …많은 팀」)도 기간을 먼저 묻는다. */
+    rows.sort(function (a, b) { return b.maxGap - a.maxGap || b.pct - a.pct || b.staleN - a.staleN; });
     var w = rows[0];
     var over = rows.filter(function (r) { return r.pct >= THp; });
     /* 조직 평균 체크인 간격 — 사람별 연속 체크인 간격의 평균 */
@@ -888,26 +890,52 @@
       for (var i = 1; i < ds.length; i++) gapsAll.push(Math.round((dnum(ds[i]) - dnum(ds[i - 1])) / 86400000));
     }
     var avgGap = gapsAll.length ? r0(avg(gapsAll)) : null;
+    var totKr = 0, totStale = 0, prevTot = 0;
+    rows.forEach(function (r) { totKr += r.krN; totStale += r.staleN; prevTot += r.prev; });
+    /* 순위표 — 서술(AI)과 근거(규칙)가 같은 팀을 가리키게 하는 단일 원천 */
+    var rank = (over.length ? over : rows).map(function (r) {
+      return { name: r.name, org: r.org, krN: r.krN, staleN: r.staleN, pct: r.pct, gap: r.maxGap };
+    });
+    var next = rank.slice(1, 4).map(function (r) { return r.name; });
     var facts = {
       teamName: w.name, teamOrg: w.org, krN: w.krN, staleN: w.staleN, pct: w.pct, maxGap: w.maxGap,
-      prevN: w.prev, avgGap: avgGap, unitN: s.unitN, overTeamN: over.length
+      prevN: w.prev, avgGap: avgGap, unitN: s.unitN, overTeamN: over.length,
+      totKr: totKr, totStale: totStale, prevTot: prevTot, rank: rank.slice(0, 6),
+      widened: !!s.widened, scopeOrgName: s.scopeOrg.name
     };
     var hit = w.pct != null && w.pct >= THp && w.maxGap >= THd;
+    /* 범위 말 — 내 조직에 하위 팀이 없어 한 단계 위로 넓힌 경우(widened)에는
+       「내 조직 하위」가 거짓이다. 그 팀들은 내 팀의 형제이지 부하가 아니다. */
+    var SCOPE = s.widened ? '같은 본부' : '내 조직 하위';
     var spec = {};
-    spec[0] = { m: [['12건', w.krN + '건']], emph: w.krN + '건', src: w.org + ' / KR ' + w.krN + '건' };
-    spec[1] = { m: [['12건', w.krN + '건'], ['9건', w.staleN + '건'], ['21일', THd + '일']], emph: w.staleN + '건',
-                src: w.org + ' / KR ' + w.staleN + '건 · CHK 최종일' };
-    spec[2] = { m: [['9건', w.staleN + '건'], ['75%', w.pct + '%']], emph: w.pct + '%', src: w.org + ' / KR ' + w.krN + '건' };
-    if (avgGap != null) spec[3] = { m: [['8개', s.unitN + '개'], ['8일', avgGap + '일']], emph: avgGap + '일',
+    spec[0] = { m: [['같은 본부', SCOPE], ['8개 팀', s.unitN + '개 팀'], ['32건', totKr + '건']], emph: totKr + '건',
+                src: s.srcOrg + ' / KR ' + totKr + '건' };
+    spec[1] = { m: [['32건', totKr + '건'], ['18건', totStale + '건'], ['21일', THd + '일']], emph: totStale + '건',
+                src: s.srcOrg + ' / KR ' + totStale + '건 · CHK 최종일' };
+    spec[2] = (over.length === rows.length)
+      ? { text: '기준을 넘긴 팀은 ' + s.unitN + '개 팀 전부예요', emph: s.unitN + '개 팀 전부', ok: 1,
+          src: s.srcOrg + ' / KR 팀별 집계' }
+      : { m: [['8개 팀', s.unitN + '개 팀'], ['6개 팀', over.length + '개 팀']], emph: over.length + '개 팀',
+          src: s.srcOrg + ' / KR 팀별 집계' };
+    spec[3] = { m: [['PPA Chapter', w.name], ['4건 가운데', w.krN + '건 가운데'],
+                    ['4건이', w.staleN + '건이'], ['74일째', w.maxGap + '일째']],
+                emph: w.name, src: w.org + ' / KR ' + w.staleN + '건 · CHK 최종일' };
+    spec[4] = next.length
+      ? { text: '그 뒤로는 ' + next.join(' · ') + ' 순으로 오래 멈춰 있어요', emph: next[0], ok: 1,
+          src: s.srcOrg + ' / KR 팀별 집계' }
+      : { text: '기준을 넘긴 다른 팀은 없어요', emph: w.name, ok: 1, src: s.srcOrg + ' / KR 팀별 집계' };
+    if (avgGap != null) spec[5] = { m: [['같은 본부', SCOPE], ['8개 팀', s.unitN + '개 팀'], ['8일', avgGap + '일']],
+                emph: avgGap + '일',
                 src: s.scopeOrg.org_id + ' / checkins(캐노니컬) ' + CK.length + '건' };
-    spec[4] = { m: [['30%', THp + '%'], ['8개', s.unitN + '개'],
-                    ['이 팀뿐', over.length === 1 ? '이 팀뿐' : over.length + '개 팀']],
-                emph: over.length === 1 ? '이 팀뿐' : over.length + '개 팀', src: s.srcOrg + ' / KR 팀별 집계' };
-    spec[5] = { m: [['2건', w.prev + '건']], emph: w.prev + '건', src: w.org + ' / CHK 직전 4주' };
+    spec[6] = { m: [['12건', prevTot + '건']], emph: prevTot + '건', src: s.srcOrg + ' / CHK 직전 4주' };
     return {
       hit: hit, facts: facts,
-      notice: [['8일', (avgGap == null ? '?' : avgGap) + '일'], ['9건', w.staleN + '건'], ['21일째', w.maxGap + '일째']],
+      notice: [['6개 팀', over.length + '개 팀'], ['74일째', w.maxGap + '일째']],
       ev: spec,
+      /* 초안·Agent 안내도 같은 실측으로 갈아끼운다 — 근거는 4건인데 초안은 9건이던 어긋남 */
+      dr: [['같은 본부', SCOPE], ['6개 팀', over.length + '개 팀'], ['8개 팀', s.unitN + '개 팀'], ['PPA Chapter', w.name],
+           ['74일째', w.maxGap + '일째'], ['18건', totStale + '건'], ['21일', THd + '일'],
+           ['8일', (avgGap == null ? '?' : avgGap) + '일']],
       th: { 'TH-체크인공백-일수': w.maxGap + '일', 'TH-체크인공백-팀비율': w.pct + '%' }
     };
   });

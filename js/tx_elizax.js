@@ -3532,7 +3532,7 @@
       if (ev && rcNum(ev.weighted_score) != null) out.push({ k: "종합 점수", v: ev.weighted_score + "/100" });
       if (ev && ev.period) out.push({ k: "기간", v: String(ev.period) });
     } else if (name === "get_team_status") {
-      if (res.team_size != null) out.push({ k: "팀원", v: res.team_size + "명" });
+      /* 「팀원 N명」 타일은 폐지 — 머릿수는 어떤 질문에도 답하지 않는다(20-6차) */
       var mem = res.members || [];
       s = 0; n = 0;
       for (i = 0; i < mem.length; i++) { if (rcNum(mem[i].avg_progress) != null) { s += mem[i].avg_progress; n++; } }

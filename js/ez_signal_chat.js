@@ -1226,6 +1226,12 @@
     if (src.length) L.push('살펴본 자료(물어볼 때만 사람 말로 밝히세요): ' + src.join(' · '));
     if (help) L.push('이어서 도울 수 있는 일: ' + cut(help, 140));
     if (!inst.ready) L.push('주의: 이 주제는 아직 실제 값을 다 세지 못했습니다. 단정하지 말고 무엇을 더 채워야 하는지만 말하세요.');
+    /* 규칙이 이미 센 것을 모델이 다시 긁어 「다른 대상」을 지목하던 사고를 막는다.
+       예) 남의 팀 이야기인데 도구로 자기 팀원 명단을 불러와 자기 팀이라고 단정했다. */
+    L.push('[대상을 바꾸지 마세요]');
+    L.push('1. 위 자료에 적힌 팀·사람·조직만 지목합니다. 여기에 없는 대상을 도구로 새로 불러오지 않습니다.');
+    L.push('2. 보는 사람 본인의 팀이라고 단정하지 않습니다. 위 자료가 팀 이름을 밝혔다면 그 이름을 그대로 씁니다.');
+    L.push('3. 위 자료가 팀 단위로 센 것이면 팀 단위로 답합니다. 개인 이름으로 바꿔 말하지 않습니다.');
     L.push(styleRules());
     return tidy2(L.join('\n'));
   }
@@ -1301,7 +1307,7 @@
     if (th && th.actual != null && out.length < 4) {
       var nm = scrub(th.name);
       if (nm) out.push(sent('「' + nm + '」 기준으로는 회사가 잠정으로 두는 값이 ' + scrub(th.value)
-        + '인데 지금 측정값은 ' + scrub(th.actual) + '네요'));
+        + '인데 지금 측정값은 ' + scrub(th.actual) + '이에요'));
     }
     if (ev.soft.length && out.length < 5) {
       out.push(sent(ev.soft[0] + '. 이 부분은 아직 확인되지 않아 잠정으로 봤어요'));
