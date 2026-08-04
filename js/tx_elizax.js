@@ -6,6 +6,10 @@
 (function () {
   "use strict";
 
+  /* 확신도는 기록에 영문으로 담기고 화면에는 사람 말로 나간다 (tx_ctx_ledger 와 같은 규칙) */
+  var CONF_KR = { low: "낮음", medium: "보통", high: "높음" };
+  function confKR(v) { return CONF_KR[v] || v; }
+
   /* ---------------- API base resolution ---------------- */
   function resolveApiBase() {
     if (typeof window.ELIZAX_API_BASE === "string") return window.ELIZAX_API_BASE;
@@ -2685,7 +2689,7 @@
     cs.forEach(function (c) {
       md += "- **" + (c.date || "-") + "** · 진척 " + pctOf(c.progress) +
         (c.delta != null ? " (" + (c.delta > 0 ? "+" : "") + c.delta + "%p)" : "") +
-        (c.confidence ? " · 확신 " + c.confidence : "") +
+        (c.confidence ? " · 확신 " + confKR(c.confidence) : "") +
         (c.blocker ? " · 장애요인 " + c.blocker : "") +
         (c.comment ? " — " + c.comment : "") + "\n";
     });

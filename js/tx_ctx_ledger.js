@@ -81,6 +81,12 @@
 (function () {
   "use strict";
 
+  /* 확신도는 기록에 영문으로 담긴다(low/medium/high). 화면에는 사람 말로 옮긴다.
+     예전에는 손으로 쓴 기록만 영문이고 자동 생성분은 한글이라 한 화면에
+     「medium」과 「보통」이 섞여 나왔다. 기록을 영문으로 통일하고 표시만 옮긴다. */
+  var CONF_KR = { low: "낮음", medium: "보통", high: "높음" };
+  function confKR(v) { return CONF_KR[v] || v; }
+
   var LS_PREFIX = "elizax_ctx_v1:";
   var STORE_V = 4;           /* 스토어 스키마 버전 (v3 = source 조인 키 규약 · v4 = 규칙 제목 사람 말로) */
   var MAX_ITEMS = 80;
@@ -520,7 +526,7 @@
       out.push(mkSeed(slot.mon, slot.day, slot.hh, slot.mm, "checkin",
         "perf.checkin." + ((c && c.checkin_id) || ("local." + z2(slot.mon) + z2(slot.day))),
         "주간 체크인 (" + slot.mon + "/" + slot.day + ")",
-        c ? c.comment + (c.confidence ? " · 확신도 " + c.confidence : "") : "진행률 업데이트 · 장애 요인 없음",
+        c ? c.comment + (c.confidence ? " · 확신도 " + confKR(c.confidence) : "") : "진행률 업데이트 · 장애 요인 없음",
         2));
     }
 
